@@ -8,7 +8,7 @@ Nexus-based HTTP service implementing the A2A protocol with EATP
 trust extensions for secure agent-to-agent communication.
 
 Endpoints:
-- GET /.well-known/agent.json - Agent Card (public)
+- GET /.well-known/agent-card.json - Agent Card (public)
 - POST /a2a/jsonrpc - JSON-RPC 2.0 handler
 - GET /a2a/health - Health check
 
@@ -31,6 +31,7 @@ from typing import Any, List, Optional
 
 from kailash.trust.a2a.agent_card import AgentCardCache, AgentCardGenerator
 from kailash.trust.a2a.auth import A2AAuthenticator, extract_token_from_header
+from kailash.trust.a2a.authorization import A2AAuthorizer
 from kailash.trust.a2a.exceptions import (
     A2AError,
     AuthenticationError,
@@ -75,6 +76,7 @@ class A2AService:
         base_url: Optional[str] = None,
         cors_origins: Optional[List[str]] = None,
         card_cache_ttl: int = 300,
+        authorizer: Optional["A2AAuthorizer"] = None,
     ):
         """
         Initialize the A2A service.
@@ -88,6 +90,11 @@ class A2AService:
             capabilities: List of agent capabilities.
             description: Optional agent description.
             base_url: Base URL for the service (for endpoint URLs in Agent Card).
+            authorizer: A2AAuthorizer wrapping a PACT GovernanceEngine +
+                AgentRoleMapping. REQUIRED for protected methods: without it
+                trust.delegate / audit.query / agent.invoke refuse, because
+                authenticating a caller establishes who they are and never what
+                they may do.
             cors_origins: Allowed CORS origins (default: ["*"]).
             card_cache_ttl: Agent Card cache TTL in seconds (default: 5 minutes).
         """
@@ -112,13 +119,22 @@ class A2AService:
             agent_id=agent_id,
             private_key=private_key,
         )
-        self._jsonrpc_handler = JsonRpcHandler()
+        # The handler VERIFIES every bearer token on a protected method. Passing
+        # the authenticator here is what makes authentication real; without it
+        # the handler fails closed rather than accepting any non-empty string.
+        # `expected_audience` pins tokens to THIS agent, so one minted for a
+        # different agent cannot be replayed against us.
+        self._jsonrpc_handler = JsonRpcHandler(
+            token_verifier=self._authenticator,
+            expected_audience=agent_id,
+        )
 
         # Register default method handlers
         self._method_handlers = A2AMethodHandlers(
             trust_operations=trust_operations,
             agent_id=agent_id,
             capabilities=self._capabilities,
+            authorizer=authorizer,
         )
         self._method_handlers.register_all(self._jsonrpc_handler)
 
@@ -138,24 +154,43 @@ class A2AService:
             cors_allow_methods=["*"],
             cors_allow_headers=["*"],
             cors_allow_credentials=True,
+            # Durability enables Nexus's response deduplication cache, which
+            # fingerprints a request on (method, path, query, body) — its
+            # `include_headers` defaults to empty, so `Authorization` is NOT
+            # part of the key. On this service every response is caller-specific,
+            # so a cached reply to an authenticated request was replayable to a
+            # caller with NO token: the cache hit short-circuits routing, and
+            # `JsonRpcHandler._authenticate` never runs.
+            #
+            # Fingerprinting the auth header would not be sufficient either —
+            # two callers bearing different tokens with different rights would
+            # still share an entry. A shared response cache does not belong in
+            # front of a per-caller authorization boundary at all, so it is off.
+            enable_durability=False,
         )
 
         # Register routes
         self._register_routes(nexus_app)
 
-        # Add startup/shutdown handlers via the underlying ASGI app
-        fastapi_app = nexus_app.fastapi_app
-
-        @fastapi_app.on_event("startup")
+        # Lifecycle handlers go through Nexus, which owns the FastAPI lifespan
+        # and dispatches these from inside it. Reaching for
+        # `nexus_app.fastapi_app.on_event(...)` here would be wrong twice over:
+        # FastAPI deprecated `on_event` in favour of lifespan handlers, and the
+        # `fastapi_app` property returns None until `register()`/`start()`
+        # triggers lazy gateway init — so the registration silently depended on
+        # call order. Nexus.add_startup_handler names that trap explicitly, and
+        # pyright flags the same thing as `on_event` on `None`.
         async def startup():
             self._started_at = datetime.now(timezone.utc)
             logger.info("a2a_service.started", extra={"agent_id": self._agent_id})
 
-        @fastapi_app.on_event("shutdown")
         async def shutdown():
             logger.info("a2a_service.shutdown", extra={"agent_id": self._agent_id})
 
-        return fastapi_app
+        nexus_app.add_startup_handler(startup)
+        nexus_app.add_shutdown_handler(shutdown)
+
+        return nexus_app.fastapi_app
 
     def _register_routes(self, app: Nexus) -> None:
         """Register all routes on the Nexus app."""
@@ -172,7 +207,7 @@ class A2AService:
                 ),
             }
 
-        @app.endpoint("/.well-known/agent.json", methods=["GET"])
+        @app.endpoint("/.well-known/agent-card.json", methods=["GET"])
         async def get_agent_card(request: Request):
             """
             Serve the Agent Card.

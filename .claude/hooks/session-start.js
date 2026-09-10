@@ -46,6 +46,8 @@ const {
 const {
   computeUnlandedState,
   formatUnlandedBlock,
+  computePromotionGap,
+  formatPromotionGapBlock,
   openPrHeadsFrom,
 } = require("./lib/unlanded-work-surface");
 const {
@@ -181,6 +183,18 @@ process.stdin.on("end", () => {
     const ctxParts = [];
     if (openPrBlock) ctxParts.push(openPrBlock);
     if (unlandedBlock) ctxParts.push(unlandedBlock);
+
+    // Promotion gap (dev..main). Rendered right after the unlanded block
+    // because it is that block's COMPLEMENT under the trunk model: once
+    // "landed" means "in dev", trunk-but-not-main work vanishes from the
+    // unlanded surface, and this is the only place it stays countable.
+    // Fail-open: any error leaves the block null and the session proceeds.
+    try {
+      const gapBlock = formatPromotionGapBlock(computePromotionGap(data.cwd));
+      if (gapBlock) ctxParts.push(gapBlock);
+    } catch {
+      /* never block session start */
+    }
     if (deferralBlock) ctxParts.push(deferralBlock);
     if (result.sessionNotesContext) ctxParts.push(result.sessionNotesContext);
     if (trustGate) ctxParts.push(trustGate);

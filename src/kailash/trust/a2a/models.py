@@ -81,7 +81,7 @@ class AgentCard:
     A2A Agent Card with EATP trust extensions.
 
     The Agent Card is the public identity of an agent, served at
-    /.well-known/agent.json according to the A2A specification.
+    /.well-known/agent-card.json according to the A2A specification.
     """
 
     # Required A2A fields

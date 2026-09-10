@@ -100,14 +100,49 @@ class AuthenticationError(A2AError):
 
 
 class AuthorizationError(A2AError):
-    """Authorization failed - insufficient capabilities."""
+    """Authorization failed.
 
-    def __init__(self, required_capability: str, data: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            f"Authorization failed: missing capability '{required_capability}'",
-            code=-40003,
-            data={"required_capability": required_capability, **(data or {})},
-        )
+    Two shapes, because not every denial is about a missing capability. The
+    original positional form is preserved for callers that have one:
+
+        AuthorizationError("analyze")
+            -> "Authorization failed: missing capability 'analyze'"
+
+    A governance denial has no single missing capability to name — the reason is
+    a policy verdict, an unmapped role, or an absent envelope — so passing a
+    sentence positionally produced the nonsense
+    "missing capability 'No governance org is configured…'". Use ``reason=``:
+
+        AuthorizationError(reason="no governance envelope in effect")
+            -> "Authorization failed: no governance envelope in effect"
+    """
+
+    def __init__(
+        self,
+        required_capability: Optional[str] = None,
+        data: Optional[Dict[str, Any]] = None,
+        *,
+        reason: Optional[str] = None,
+    ):
+        if reason is not None and required_capability is not None:
+            raise ValueError("pass either required_capability or reason, not both")
+
+        if reason is not None:
+            message = f"Authorization failed: {reason}"
+            details: Dict[str, Any] = {"reason": reason}
+        elif required_capability is not None:
+            message = (
+                f"Authorization failed: missing capability '{required_capability}'"
+            )
+            details = {"required_capability": required_capability}
+        else:
+            # Never silently produce a denial with no stated cause: an
+            # unexplained refusal is as hard to action as a silent allow.
+            raise ValueError(
+                "AuthorizationError requires required_capability or reason"
+            )
+
+        super().__init__(message, code=-40003, data={**details, **(data or {})})
 
 
 class DelegationError(A2AError):

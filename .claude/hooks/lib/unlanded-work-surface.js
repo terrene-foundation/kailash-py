@@ -106,7 +106,9 @@ function isDemoted(name) {
  * Resolve the upstream default ref in ONE git call.
  *
  * Asks for every candidate at once and takes the first that exists, in priority
- * order. `origin/HEAD` is the correct answer when set, but it is set only by
+ * order. `COC_LANDED_TARGET` wins outright; then `origin/dev` (the integration
+ * trunk -- see the DEV INTEGRATION TRUNK note in the body); then the original
+ * chain. `origin/HEAD` is the correct answer when no trunk exists, but it is set only by
  * `git clone` and is frequently absent or stale in long-lived working clones —
  * so main/master/develop and an `upstream` fork remote follow it. Returning null
  * (rather than defaulting to "origin/main") is deliberate: a wrong base ref
@@ -135,12 +137,26 @@ function resolveBaseRef(cwd) {
   try {
     const gitBin = resolveGitBinary();
     if (!gitBin) return null;
+    // DEV INTEGRATION TRUNK (2026-09-10 directive). "Landed" means "in dev",
+    // because reaching `main` costs a CI run on a shared pool and that cost is
+    // what made every session rationally defer closing a branch. An explicit
+    // env override comes first so a repo or a one-off audit can retarget
+    // without editing code.
+    //
+    // INERT WHERE THERE IS NO `dev`: when neither the override nor
+    // refs/remotes/origin/dev exists, this falls through to the ORIGINAL
+    // origin/HEAD -> main/master/develop chain unchanged. A repo that never
+    // adopts the trunk sees no behaviour change at all, which is what makes
+    // this safe to sync.
+    const override = (process.env.COC_LANDED_TARGET || "").trim();
+    if (override) return override;
     const out = execFileSync(
       gitBin,
       [
         "for-each-ref",
         "--format=%(refname:short)|%(symref:short)",
         "refs/remotes/origin/HEAD",
+        "refs/remotes/origin/dev",
         "refs/remotes/origin/main",
         "refs/remotes/origin/master",
         "refs/remotes/origin/develop",
@@ -168,6 +184,11 @@ function resolveBaseRef(cwd) {
       }
       rows.set(name, true);
     }
+    // `origin/dev` outranks BOTH the origin/HEAD symref and the main/master
+    // chain: origin/HEAD points at the repo's DEFAULT branch (main), which is
+    // the promotion target, not the integration trunk. Landing is measured
+    // against the trunk.
+    if (rows.has("origin/dev")) return "origin/dev";
     if (symrefTarget) return symrefTarget;
     for (const cand of ["origin/main", "origin/master", "origin/develop"]) {
       if (rows.has(cand)) return cand;
@@ -498,8 +519,87 @@ function computeUnlandedState(cwd, openPrHeads) {
   }
 }
 
+
+/**
+ * Count commits on the integration trunk that have NOT been promoted to the
+ * repository's default branch — the `dev..main` gap, stated as a number.
+ *
+ * THIS EXISTS BECAUSE THE TRUNK MODEL RELOCATES A RISK RATHER THAN REMOVING IT.
+ * Once "landed" means "in dev", work sitting in dev but not in main stops
+ * reading as unlanded and becomes invisible to the very surface that used to
+ * report it. Without a counter the promotion gap grows silently, main rots, and
+ * the first promotion after a long gap is a large, hard-to-review merge — the
+ * same bottleneck in a new place. The 2026-09-10 directive names this as the
+ * one honest cost of the model and requires exactly this counter as one of the
+ * two things that keep it honest.
+ *
+ * Returns null (silent skip) when there is no trunk, when trunk and default are
+ * the same ref, or on any error — the same fail-open disposition every other
+ * read in this file takes. A null is NOT "zero"; it is "not measured".
+ *
+ * @param {string} cwd
+ * @returns {{ahead: number, trunk: string, target: string}|null}
+ */
+function computePromotionGap(cwd) {
+  try {
+    const gitBin = resolveGitBinary();
+    if (!gitBin) return null;
+    const trunk = "origin/dev";
+    const target = "origin/main";
+    const run = (args) =>
+      execFileSync(gitBin, args, {
+        cwd,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+        timeout: BASE_REF_TIMEOUT_MS,
+        killSignal: "SIGKILL",
+        env: gitEnv(),
+      }).trim();
+    for (const ref of [trunk, target]) {
+      try {
+        run(["rev-parse", "--verify", "--quiet", ref]);
+      } catch {
+        return null; // no trunk (or no main) => nothing to report
+      }
+    }
+    const ahead = parseInt(run(["rev-list", "--count", `${target}..${trunk}`]), 10);
+    if (!Number.isFinite(ahead)) return null;
+    return { ahead, trunk, target };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Render the promotion gap, or null when unmeasured / already promoted.
+ * @param {{ahead: number, trunk: string, target: string}|null} gap
+ * @returns {string|null}
+ */
+function formatPromotionGapBlock(gap) {
+  if (!gap) return null;
+  if (gap.ahead === 0) {
+    return (
+      `# ✓ Promotion Gap Clear\n\n` +
+      `\`${gap.trunk}\` and \`${gap.target}\` are level — every landed commit is promoted. ` +
+      `Measured at session start with \`git rev-list --count ${gap.target}..${gap.trunk}\`.`
+    );
+  }
+  return (
+    `# ⚠ Promotion Gap: ${gap.ahead} commit(s) in \`${gap.trunk}\` not in \`${gap.target}\`\n\n` +
+    `Landing is measured against the integration trunk, so this work reads as **landed** ` +
+    `and will NOT appear in the unlanded-branches block above. That is the trunk model's ` +
+    `one honest cost, and this counter is what keeps it visible.\n\n` +
+    `\`dev\` → \`main\` is ONE deliberate promotion PR costing ONE gate run. It is not ` +
+    `automatic and it is not urgent — but a gap left to grow makes the eventual ` +
+    `promotion a large, hard-to-review merge.\n\n` +
+    `Re-measure: \`git rev-list --count ${gap.target}..${gap.trunk}\``
+  );
+}
+
 module.exports = {
   resolveBaseRef,
+  computePromotionGap,
+  formatPromotionGapBlock,
   getUnmergedBranches,
   computeUnlandedSummary,
   formatUnlandedBlock,

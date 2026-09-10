@@ -207,7 +207,16 @@ def trust_operations(
     ops.get_public_key = mock_get_public_key
 
     # Mock verify (VerificationResult uses 'violations' not 'errors')
-    async def mock_verify(agent_id: str, level=None):
+    # Signature MUST mirror the real TrustOperations.verify:
+    #   verify(agent_id, action, resource=None, level=STANDARD, context=None)
+    # It previously omitted `action`, so the production call
+    #   verify(agent_id, "trust_verify", level=level)
+    # bound "trust_verify" to `level` positionally AND passed level= again,
+    # raising TypeError -> JSON-RPC -32603. The handler was correct; the mock
+    # had drifted from the contract it stands in for.
+    async def mock_verify(
+        agent_id: str, action: str = None, resource=None, level=None, context=None
+    ):
         from kaizen.trust import VerificationLevel, VerificationResult
 
         if agent_id == "agent-001":
@@ -281,7 +290,7 @@ def auth_token(a2a_service, event_loop):
 
 class TestAgentCardEndpoint:
     """
-    Test the /.well-known/agent.json endpoint.
+    Test the /.well-known/agent-card.json endpoint.
 
     Intent: Verify that agents can discover other agents' capabilities
     and trust information via the standard Agent Card endpoint.
@@ -289,7 +298,7 @@ class TestAgentCardEndpoint:
 
     def test_agent_card_returns_correct_structure(self, test_client):
         """Agent Card should return A2A-compliant JSON structure."""
-        response = test_client.get("/.well-known/agent.json")
+        response = test_client.get("/.well-known/agent-card.json")
 
         assert response.status_code == 200
         card = response.json()
@@ -304,7 +313,7 @@ class TestAgentCardEndpoint:
 
     def test_agent_card_includes_eatp_trust_extensions(self, test_client):
         """Agent Card should include EATP trust extensions."""
-        response = test_client.get("/.well-known/agent.json")
+        response = test_client.get("/.well-known/agent-card.json")
         card = response.json()
 
         # EATP trust extensions
@@ -316,7 +325,7 @@ class TestAgentCardEndpoint:
 
     def test_agent_card_has_etag_for_caching(self, test_client):
         """Agent Card response should include ETag for caching."""
-        response = test_client.get("/.well-known/agent.json")
+        response = test_client.get("/.well-known/agent-card.json")
 
         assert response.status_code == 200
         assert "ETag" in response.headers
@@ -325,19 +334,19 @@ class TestAgentCardEndpoint:
     def test_agent_card_conditional_get(self, test_client):
         """Agent Card should support conditional GET with If-None-Match."""
         # First request to get ETag
-        response1 = test_client.get("/.well-known/agent.json")
+        response1 = test_client.get("/.well-known/agent-card.json")
         etag = response1.headers["ETag"]
 
         # Conditional request with same ETag
         response2 = test_client.get(
-            "/.well-known/agent.json", headers={"If-None-Match": etag}
+            "/.well-known/agent-card.json", headers={"If-None-Match": etag}
         )
 
         assert response2.status_code == 304  # Not Modified
 
     def test_agent_card_endpoint_url_in_card(self, test_client):
         """Agent Card should include JSON-RPC endpoint URL."""
-        response = test_client.get("/.well-known/agent.json")
+        response = test_client.get("/.well-known/agent-card.json")
         card = response.json()
 
         assert card["endpoint"] == "http://localhost:8000/a2a/jsonrpc"
@@ -371,6 +380,167 @@ class TestJsonRpcHandler:
         result = response.json()
         assert "error" in result
         assert result["error"]["code"] == -32600  # Invalid Request
+
+    @pytest.mark.regression
+    def test_authenticated_response_is_not_served_to_an_unauthenticated_caller(
+        self, test_client, auth_token
+    ):
+        """A cached response MUST NOT bypass authentication.
+
+        Nexus enables durability (response dedup/caching) by default, and
+        `RequestDeduplicator` fingerprints a request on (method, path, query,
+        body) with `include_headers` defaulting to empty -- so `Authorization`
+        is NOT part of the cache key. A response produced for an authenticated
+        caller can then be replayed to a caller with no token at all, and
+        `JsonRpcHandler._authenticate` never runs on the cache hit.
+
+        This is the gap that made the token-verification fix insufficient at
+        the DEPLOYED surface: the fix was verified against `JsonRpcHandler`
+        and generalized to `A2AService`, which sits behind this cache.
+        """
+        body = {
+            "jsonrpc": "2.0",
+            "method": "agent.invoke",
+            "params": {"probe": "cache-bypass"},
+            "id": 4242,
+        }
+
+        first = test_client.post(
+            "/a2a/jsonrpc",
+            json=body,
+            headers={"Authorization": f"Bearer {auth_token}"},
+        )
+        assert first.status_code == 200
+
+        # Byte-identical body, NO Authorization header at all.
+        replay = test_client.post("/a2a/jsonrpc", json=body)
+        payload = replay.json()
+
+        # A cache hit is recognisable by the deduplicator's envelope.
+        assert "cached" not in payload, (
+            "unauthenticated replay was served from the response cache: " f"{payload}"
+        )
+        assert (
+            "data" not in payload or "error" in payload
+        ), f"unauthenticated replay returned a cached body: {payload}"
+        assert "error" in payload, (
+            "an unauthenticated request must be refused, not served a cached "
+            f"authenticated response: {payload}"
+        )
+        assert (
+            payload["error"]["code"] == -40002
+        ), f"expected an authentication failure, got {payload['error']}"
+
+    @pytest.mark.regression
+    def test_protected_method_refuses_without_a_governance_org(
+        self, test_client, auth_token
+    ):
+        """Authentication is not authorization.
+
+        This fixture configures no PACT governance org, so every protected
+        method MUST refuse even for a genuinely authenticated caller.
+
+        Asserting the AUTHORIZATION code specifically (-40003) is load-bearing:
+        the pre-existing tests around this one assert only that "an error" came
+        back, which any error satisfies -- which is exactly why they all stayed
+        green when authorization was introduced and started refusing calls they
+        previously allowed.
+        """
+        response = test_client.post(
+            "/a2a/jsonrpc",
+            json={
+                "jsonrpc": "2.0",
+                "method": "trust.delegate",
+                "params": {
+                    "delegatee_agent_id": "attacker-agent",
+                    "task_id": "task-1",
+                    "capabilities": ["analyze"],
+                },
+                "id": 1,
+            },
+            headers={"Authorization": f"Bearer {auth_token}"},
+        )
+        result = response.json()
+        assert "error" in result
+        assert (
+            result["error"]["code"] == -40003
+        ), f"expected an AUTHORIZATION failure, got {result['error']}"
+        assert "governance org" in result["error"]["message"]
+
+    @pytest.mark.regression
+    @pytest.mark.parametrize(
+        "bogus_token",
+        ["AAAA", " ", "not-a-jwt-at-all", "a.b.c", "Bearer"],
+    )
+    def test_unsigned_bearer_token_is_rejected_end_to_end(
+        self, test_client, bogus_token
+    ):
+        """An unsigned string MUST NOT authenticate against the REAL verifier.
+
+        Regression for the pre-existing hole where `handle` tested the bearer
+        token for truthiness and discarded it: `A2AAuthenticator.verify_token`
+        had no call site in the request path, so any non-empty string
+        authenticated every protected method -- including `trust.delegate` and
+        `audit.query`.
+
+        This drives the real Ed25519 path through the real HTTP surface, which
+        the Tier 1 suite (a deterministic Protocol adapter) cannot do.
+        """
+        response = test_client.post(
+            "/a2a/jsonrpc",
+            json={
+                "jsonrpc": "2.0",
+                "method": "trust.delegate",
+                "params": {
+                    "delegatee_agent_id": "attacker-agent",
+                    "task_id": "task-1",
+                    "capabilities": ["analyze"],
+                },
+                "id": 1,
+            },
+            headers={"Authorization": f"Bearer {bogus_token}"},
+        )
+
+        result = response.json()
+        assert "error" in result, (
+            f"{bogus_token!r} authenticated against the real verifier -- "
+            "token verification is bypassed"
+        )
+        # Assert the AUTHENTICATION code specifically (-40002), never merely
+        # that "an error" came back. Under the pre-fix wiring a bogus token
+        # authenticated and `trust.delegate` then failed downstream with
+        # -40004, so an `"error" in result` check passes under BOTH the fixed
+        # and the vulnerable code -- a non-discriminating assertion that is
+        # green for the wrong reason (instrument-discipline.md MUST-1).
+        assert result["error"]["code"] == -40002, (
+            f"{bogus_token!r} produced {result['error']} -- expected an "
+            "authentication failure (-40002). A non-auth error code means the "
+            "token AUTHENTICATED and failed somewhere downstream."
+        )
+        assert "result" not in result or result.get("result") is None
+
+    @pytest.mark.regression
+    def test_genuine_token_still_reaches_a_protected_method(
+        self, test_client, auth_token
+    ):
+        """Negative control for the rejection test above.
+
+        Without this, a verifier that refused everything would satisfy the
+        bypass test and the pair could not distinguish "verification works"
+        from "auth is broken shut".
+        """
+        response = test_client.post(
+            "/a2a/jsonrpc",
+            json={"jsonrpc": "2.0", "method": "unknown.method", "id": 1},
+            headers={"Authorization": f"Bearer {auth_token}"},
+        )
+
+        result = response.json()
+        # Reaching method-dispatch (-32601) proves authentication SUCCEEDED;
+        # an auth failure would have short-circuited before dispatch.
+        assert (
+            result["error"]["code"] == -32601
+        ), f"genuine token failed to authenticate: {result['error']}"
 
     def test_jsonrpc_method_not_found(self, test_client, auth_token):
         """Unknown methods should return method not found error (with auth)."""
@@ -903,7 +1073,7 @@ class TestServiceConfiguration:
         client = TestClient(service.create_app())
 
         # Agent Card shows trust-attested capabilities from trust chain
-        card_response = client.get("/.well-known/agent.json")
+        card_response = client.get("/.well-known/agent-card.json")
         card = card_response.json()
         # Trust chain has "analyze" capability
         assert "analyze" in [c.get("name") for c in card.get("capabilities", [])]
@@ -999,7 +1169,7 @@ class TestA2AWorkflows:
         makes an authenticated call.
         """
         # Step 1: Discover agent via Agent Card
-        card_response = test_client.get("/.well-known/agent.json")
+        card_response = test_client.get("/.well-known/agent-card.json")
         assert card_response.status_code == 200
         card = card_response.json()
 

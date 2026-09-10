@@ -1,225 +1,121 @@
-# Session Notes — 2026-09-01 (cont-25: CI/local-gate parsimony; #2203 plan STILL unapproved)
+# Session Notes — 2026-09-10 (cont-26: dev is the trunk; #2203 approved, W1A landed)
 
 ## Where we are
 
-main — green, PR queue empty, working tree clean, one local branch.
+**`dev` IS THE INTEGRATION TRUNK. The primary checkout tracks `dev`, not `main`.**
+Lane work merges into `dev` the same session it is finished — no PR, no gate, no
+wait. `dev` → `main` is ONE deliberate promotion PR, **cadence: WEEKLY**. Deploy
+runs off a pinned `dev` commit, never `main`. Contract:
+`rules/dev-integration-trunk.md`.
 
-**cont-25 (2026-09-01) landed the iteration/juncture split (PR #2213).** Two lanes
-now: ITERATION (PR, feature push, local commit) runs floor-Python/ubuntu/scoped;
-CRITICAL JUNCTURE (schedule, workflow_dispatch, merge_group, push to main,
-release) runs the full matrix. Measured: PR-time jobs 53 -> 35, docs-only
-pre-commit 82s -> 3s, CI settle ~9min -> 3min.
+"Landed" now means "in `dev`". `unlanded-work-surface.js` and `worktree-reap.mjs`
+both resolve `COC_LANDED_TARGET` → `origin/dev` → the old chain. Set
+`COC_LANDED_TARGET=origin/main` to see the pre-trunk view.
 
-**#2203 is UNBLOCKED but its wave plan is STILL AWAITING APPROVAL** — unchanged
-since cont-23. It is the top item and nothing has moved on it for three sessions.
+**#2203 plan is APPROVED. Wave 1 Shard A is LANDED. Shard 1B is the next work.**
 
-
-main — green, PR queue empty, working tree clean, ONE local branch.
-
-**cont-24 (2026-08-28) landed two enforcement waves and a docker cleanup:**
-PR #2207 (loom#1877 CI job-budget + the duplicate-run fix) and PR #2208
-(docker no-sprawl group discipline). Both ship a structural guard with bipolar
-fixtures. Docker went 491 volumes → 35 (25.8GB reclaimed), with every NAMED
-volume preserved.
-
-**#2203 is UNBLOCKED but its wave plan is STILL AWAITING APPROVAL** — that is
-the top item and nothing has moved on it since cont-23.
-
-
-main — green, PR queue empty, working tree clean. The sweep-5 orphan corpus, carried on
-the ledger since cont-20 as "52 orphans / 18 coverage gaps", is now **22 orphans / 0
-coverage gaps** — not because anything was suppressed, but because the scanner had two
-mechanical defects. Fixed and merged (PR #2205).
-
-**#2203 remains the top item and is STILL BLOCKED on D-A and D-B.** Re-verified this
-session, not assumed: `gh issue view 2203 --json comments` → `ncomments: 0`.
-
-Verify state with `gh pr list` and `git status --porcelain` rather than trusting this
-line; no SHA is pinned here because one goes stale the moment these notes are merged.
+Verify state with live commands rather than trusting this line; no SHA is pinned
+because one goes stale the moment these notes are themselves merged.
 
 ## Read first
 
-1. § Next-session directives below — the only imperative surface in this file
-2. `sweep-cont22-report.md` — still current for #2203 scope (D-A/D-B/D-C unchanged).
-   Its § 4 orphan figures are now SUPERSEDED; see § Sweep-5 below.
+1. § Next-session directives — the only imperative surface in this file
+2. `02-plans/03-2203-protocol-drift-waves.md` — the approved 3-wave / 8-shard plan
+   (its W1A row carries a measured scope correction; the original table is left
+   as the historical record)
 3. § Traps — measured, do not rediscover
 
 ---
 
 ## Next-session directives
 
-1. **#2203 is UNBLOCKED — D-A/D-B/D-C were ratified 2026-08-21 and recorded durably**
-   at `#2203#issuecomment-5363864384`. Targets: **MCP Modern (`2026-07-28`)**,
-   **A2A 1.0**, **TCK hook env-gated fail-closed + security-reviewed**.
-   The wave plan is `02-plans/03-2203-protocol-drift-waves.md` and is **AWAITING
-   APPROVAL** — `/todos` plan approval is a structural human gate, so no shard starts
-   without it. Get the plan approved, then run Wave 1.
-   re-validate: `gh issue view 2203 --json comments -q '.comments|length'` → `1`.
-   `gh issue view 2203 --comments` renders EMPTY text on this repo even at exit 0 —
-   that is a renderer quirk, not an absence of comments. Use the `--json` form; it
-   discriminates and the text form does not.
+1. **Start #2203 W1B — the A2A 1.0 method set.** Register `message/send` and
+   `tasks/get`; the current set is 0.2.x dot-notation (`agent.capabilities`,
+   `agent.invoke`, `trust.verify`, `trust.delegate`, `audit.query`) registered in
+   `src/kailash/trust/a2a/jsonrpc.py::A2AMethodHandlers.register_all`.
+   re-validate: `grep -rc "message/send" src/kailash/trust/a2a/` → `0` ⇒ still to
+   do. A non-zero count ⇒ W1B has started; read the diff before re-implementing.
 
-2. **The remaining 22 sweep-5 orphans are candidate-REAL. Triage them, do not re-count
-   them.** Three are already confirmed by hand and are the honest starting set:
-   - `TrackerMCPServer` — `ml-tracking.md` §11.1 MUST; no `kailash_ml/tracker/`
-     package exists at all. Genuinely unimplemented. **Adjacent to #2203** — it is an
-     MCP surface, so building it before D-A picks a revision would build on an
-     unratified protocol target. Hold with #2203, do not start independently.
-   - `SQLiteStorageDriver` — §2.3 mandates `kailash_ml._storage.sqlite_driver`; the
-     implementation shipped as `tracking.storage.sqlite.SqliteTrackerStore`. The spec
-     is stale, the code is fine. Spec edit, not code.
-   - `diff_runs` — §5.3 requires it module-level at `engines.experiment_tracker`;
-     it ships as an async METHOD on the tracker and `km.diff_runs` is not exported.
-     The spec's own Origin note already conceded "grep currently empty".
-   re-validate the corpus figure: run per-spec over `specs/*.md` and count; do NOT use
-   `--all` (see Traps).
+2. **Land in `dev`, never open a PR against it.** A PR to `dev` reintroduces the
+   per-landing CI cost the trunk exists to remove.
+   re-validate: `git rev-parse --abbrev-ref HEAD` → `dev` ⇒ the checkout is
+   correct. `gh run list --branch dev --limit 20 --json databaseId -q '.|length'`
+   → `0` ⇒ the trunk is still CI-free.
 
-3. **#2206 is a durability defect, not a flaky test — do not quarantine it.**
-   `#1548`'s fix is still in the tree and its failure still reproduces, so a residual
-   window survives. re-validate: `grep -rn "MigrationNotAppliedError" packages/kailash-dataflow/src/dataflow --include="*.py"`
-   → non-empty ⇒ the fix IS present and #2206 is a hole in it, not a regression.
+3. **Promote `dev` → `main` if a week has passed.** One PR, one gate run.
+   re-validate: `git rev-list --count origin/main..origin/dev` → `0` ⇒ already
+   promoted. Non-zero ⇒ that many commits await the next weekly promotion.
 
-4. **Check the next loom Gate-2 sync for the path regression BEFORE merging it.**
-   Unchanged. re-validate: `git ls-tree -r --name-only <sync-branch> -- codex gemini`
-   → empty ⇒ fixed. Non-empty ⇒ loom#1826 has not landed; repair as in PR #2198.
-   Checking `.codex/` is populated does NOT discriminate — it was populated throughout.
+4. **Do not implement #2141, #2166, or #2194 without the co-owner's schema
+   decision.** Unchanged for six sessions.
+   re-validate: `gh issue view 2166 --json comments -q '.comments|length'` →
+   non-zero AND a co-owner comment naming the schema ⇒ unblocked. The text form
+   `gh issue view --comments` renders EMPTY here even at exit 0 — use `--json`.
 
-5. **Do not implement #2141, #2166, or #2194 without the co-owner's schema decision.**
-   Unchanged. re-validate with the `--json` comment-count form from directive 1.
-   Measured this session: 2141 has ONE comment and it is our own recommendation, not
-   a decision; 2166 and 2194 have zero.
-
----
-
-## Sweep-5 — what actually changed (supersedes cont-22 § 4)
-
-The corpus was measured before and after over all 85 specs, per-spec. The counts and
-the delta live in the durable receipt — PR #2205's body and commit `d915b42d6` — not
-here: `.session-notes` is memory-only and carries no verified figures
-(`burn-down-reporting.md` MUST-3). Re-derive by running the tool per-spec over
-`specs/*.md`; do NOT use `--all` (see Traps).
-
-Two scanner defects, both fixed in PR #2205:
-
-- **The Tier-2 coverage scan read ONE test root** (`<root>/tests/integration`). This
-  repo has NINE; the other eight are `packages/*/tests/integration`. kailash-ml keeps
-  all 82 of its Tier-2 tests there. **Every one of the 18 coverage gaps was this.**
-- **`ClassName.member` citations resolved to zero candidate FILES**, because the
-  resolver looked for a MODULE named e.g. `FeatureField`. Now resolved against an AST
-  class index that walks methods, nested classes, plain assignments AND `AnnAssign` —
-  the last being how every dataclass field is spelled, and the largest single source.
-
-Resolution is member-by-member and cannot pass by blanket suppression: an absent member
-on a real class, and an absent class, both still orphan. Three regression tests, each
-paired with a control; the two fix-dependent ones were verified to FAIL against the
-pre-fix tool.
+5. **Triage the 22 sweep-5 spec orphans before adding more spec surface.** Three
+   are already hand-classified (`TrackerMCPServer` unimplemented;
+   `SQLiteStorageDriver` spec-stale; `diff_runs` location drift).
+   re-validate: run `tools/sweep-redteam.py --json` per-spec over `specs/*.md` and
+   count — NEVER `--all` (see Traps).
 
 ---
 
 ## In-play branches and worktrees
 
-**The forest is empty. 1 local branch (main), 1 remote branch (main), 1 worktree,
-0 open PRs.** Verified after the 2026-08-21 sweep, not asserted:
-`git for-each-ref refs/heads | wc -l` -> 1.
+**None at risk.** 2 local refs (`dev`, `main`), 2 remote heads, 0 open PRs, 0
+stale remote-tracking refs, 1 worktree (the primary checkout).
 
-- **169 local branches were audited and removed.** 51 carried commits not upstream
-  by `git cherry`; every one sampled proved LANDED (content in main under a moved
-  path) or obsolete against a codebase now at 2.63.0. All 51 are preserved as
-  `archive/2026-08-21/<branch>` tags before deletion — **zero loss, and the tags
-  are LOCAL ONLY** (49 of the 51 were never pushed, so a local tag preserves
-  exactly what existed; they are deliberately NOT pushed, because this repo uses
-  the tag namespace for releases).
-  re-check a specific one: `git log --oneline -1 archive/2026-08-21/<branch>`
-- **The two remote branches were deleted** after verification: `docs/notes-cont18-execution`
-  (touched only `.session-notes`, since rewritten five times) and
-  `fix/2070-logging-hook-redaction-defeat` (superseded by merged PR #2101 — all
-  three of its commits have counterparts in main's #2084 lineage, which went
-  further with audit-trail hardening and #2111 checkpointing).
-- **Do not re-audit from the branch count alone.** `git cherry` matches by
-  patch-id, so a squashed or conflict-resolved rebase reads as unlanded long
-  after its content shipped. The W5 audit cluster proved it: 7 branches read
-  "unlanded", all 7 were byte-identical to files already in main under
-  `workspaces/_archive/` (one differed by a single trailing newline).
+- re-check at-risk content (an ahead-count does NOT discriminate — a rebased
+  branch reads ahead long after its content landed):
+  `for b in $(git for-each-ref --format='%(refname:short)' refs/heads); do git cherry origin/dev $b | grep -q '^+' && echo "AT RISK $b"; done`
+- **Worktrees** — 1 tree, verdict 1 KEEP (the primary checkout; never reapable).
+  Removing a worktree deletes a DIRECTORY, never a branch
+  (`rules/worktree-isolation.md` Rule 8).
+  re-check: `node .claude/bin/worktree-reap.mjs`
+- **51 `archive/2026-08-21/*` tags** preserve every commit from the 169-branch
+  sweep at cont-24. LOCAL ONLY and deliberately not pushed (the tag namespace is
+  used for releases). Losing this clone loses them; the branches they preserve
+  were never pushed either.
+
+---
 
 ## Executed this session (external — not recoverable from git log)
 
-- Merged PR #2205 (sweep-redteam scanner fix); branch deleted.
-- Filed #2206 (dataflow #1548 residual durability window).
-- Re-verified #2203 / #2166 / #2194 comment counts = 0; #2141 = 1 (our own).
-- Co-owner ratified D-A/D-B/D-C; recorded at #2203 (comment count 0 → 1).
-- Wrote `02-plans/03-2203-protocol-drift-waves.md` (3 waves, 8 shards, awaiting approval).
-- Merged PR #2207: loom#1877 ci-job-budget incorporation + the duplicate-run fix
-  + one stale kaizen trust test corrected.
-- Swept 169 local / 3 remote branches to 1 each; 51 archive tags written.
+- Created `dev`, pushed it, retargeted the landed predicate, switched the primary
+  checkout to it. Merged PR #2214 (dependabot `mcp` cap `<2.0`→`<3.0`).
+- Posted the #2203 W1A scope correction (`#2203#issuecomment-5613952429`).
+- Pruned 6 stale remote-tracking refs.
+- Four `dev` landings, each verified zero-CI against a pinned run-id baseline.
 
 ---
 
 ## Traps (measured — do not rediscover)
 
-- **`gh issue view <N> --comments` prints NOTHING on this repo, at exit 0, for issues
-  that exist and are OPEN.** Measured: #2203/#2166/#2194 → 0 bytes; #2141 → 5138 bytes.
-  An empty render is NOT an absent issue and NOT zero comments. Use
-  `--json comments -q '.comments|length'`, which discriminates.
-- **`tools/sweep-redteam.py --all` returns `specs=0 … OK` on this repo.** It scans
-  `workspaces/*/specs/**/*.md`, which is empty — spec authority is at repo-root
-  `specs/`. That OK sentinel is a vacuous green. Run it per-spec instead.
-- **The sweep tool refuses spec paths outside the repo root** (`spec path escapes repo
-  root`). Put throwaway control fixtures INSIDE the tree, not in a scratch dir.
-- **A CI failure on this repo may be a duplicate-run artifact.** Two runs fire per push;
-  the SAME job on the SAME SHA can be failure in one and success in the other (measured:
-  runs 32402148738 vs 32402192881 on `d915b42d6`). Compare both before calling it broken.
-- **Only THREE contexts are required here**: `CodeQL`, `Analyze Python`,
-  `test-with-infrastructure` (`enforce_admins: false`). A red non-required job does not
-  block merge — but it still gets fixed or filed (#2206), never ignored.
-- **`kailash_sdk` is a compose project name SHARED with kailash-rs.** A
-  `kailash_sdk_*` volume may belong to either repo. NEVER delete one assuming it
-  is this repo's, and treat concurrent py+rs stack runs as sharing state.
-  Unresolved: renaming one side orphans ~31.9GB.
-- **NEVER `docker volume prune` / `docker system prune -a` on this machine.**
-  Both delete by *dangling*, not by *ownership*. This daemon hosts at least five
-  other projects' named volumes (`arbor_*`, `impact_verse_*`, `marineinsure_*`,
-  `astra_test_*`). The safe form is removing only ANONYMOUS 64-hex 0-link
-  volumes, which is what cont-24 did.
-- **A loop that removes volumes miscounts its own failures.** The list is
-  captured once; as removals cascade, later `docker volume rm` calls hit
-  already-gone volumes and return non-zero. cont-24 read 315 such as
-  "refused (in-use)" — they were "already removed". Re-measure with
-  `docker volume ls -q | wc -l`, never trust the loop's error tally.
-- **The local gate is 29s, not "tens of minutes".** Measured: `tests/unit` with the
-  pre-commit marker filter is 4891 passed / 27.20s. If a session reports the gate
-  as slow, the cause is TRIGGERING, not size — re-measure before optimising.
-- **`--cov` and whole-tree pytest are CRITICAL-JUNCTURE-ONLY** (`rules/test-parsimony.md`
-  MUST-1). Agent artifacts prescribed them as defaults; that is where the broad
-  `tests/unit tests/regression tests/deployment tests/security --cov` invocation
-  came from, NOT the pre-commit config.
-- **Matrix breadth is keyed on the EVENT, never on `event_name == 'pull_request'`.**
-  The negated form INVERTS: a push to a feature branch is not a pull_request, so it
-  would earn the FULL matrix. Caught during implementation; pinned by MUST-3.
-- **Before narrowing any CI lane, verify the juncture arm EXISTS**
-  (`schedule:` / `branches: [main]` / `merge_group:`). ml and align had neither, so
-  narrowing alone would have DELETED four Python versions. Both got a nightly.
-- **Cancelled duplicate CI runs surface as `fail` in `gh pr checks`.** After the
-  #2207 dedup fix, the push run is cancelled by the PR run, and every job in it
-  reports `fail`. Measured on PR #2207 head `8e4edc026`: 8 "fail" checks, **0**
-  genuine `failure` runs. Classify with
-  `gh run list --commit <sha> --json conclusion` before believing a red board.
-- **A zsh glob that matches nothing aborts the WHOLE command**, so
-  `ls a/*.yml b/*.yaml | wc -l` printed `0` when only the second pattern missed —
-  a fabricated zero, not an empty set. Guard with `setopt NULL_GLOB` or avoid
-  multi-pattern globs.
-- **`grep --include=*.py` is glob-expanded by zsh and errors out.** Quote it:
-  `--include="*.py"`. A "no matches found" from this is an ERRORED command and zero
-  evidence, not an absence.
-- **`curl` is NOT in `ollama/ollama:latest`** (nor `wget`). Health now gates on
-  `ollama list | grep -q <model>`.
-- **A compose file's `volumes:` names are ALIASES.** Resolve with `docker compose config`.
-- **In zsh, `"$var:src/..."` applies a `:s///` history modifier**; brace it as
-  `"${var}:path"`. Backticks inside a double-quoted `git commit -m` are command
-  substitution — use `-F` with a quoted heredoc.
-- **`pre-commit run --from-ref X --to-ref Y --files ...` checks NOTHING** — every hook
-  prints `(no files to check) Skipped`. Use `--files <paths>` alone.
-- **A validator failing identically on both sides is not a regression.** Diff the FAIL
-  SETS, not the counts.
+- **Pushing `dev` fires ZERO workflow runs — verify via the runs API, never by
+  reading `on:` blocks.** Four `dev` pushes this session, each checked against a
+  pinned pre-push run-id baseline: 0 every time.
+- **The 2026-09-10 trunk directive's file table does NOT match this repo.** It
+  names `.claude/bin/branch-landed-check.mjs` and
+  `.claude/hooks/wip-closure-guard.js` — NEITHER EXISTS HERE. The live surfaces
+  are `unlanded-work-surface.js` (resolves from `origin/HEAD`, not a constant) and
+  `worktree-reap.mjs`.
+- **A plan's site count is a hypothesis.** #2203 said the A2A well-known path was
+  4 sites / 3 files; it was **16 sites / 6 files** — the original grep was scoped
+  to `src/kailash/trust/a2a/` and could not see the integration test (9 sites) or
+  the docs. Re-derive repo-wide before any rename.
+- **A failing Tier-2 test may be a drifted MOCK, not broken production.**
+  `mock_verify` omitted the real API's `action` parameter, so the correct
+  production call raised `TypeError` → `-32603`. Check the REAL signature before
+  changing production to satisfy a test.
+- **`tools/sweep-redteam.py --all` returns `specs=0 … OK`** — it scans
+  `workspaces/*/specs`, empty here. That sentinel is a vacuous green; run per-spec.
+- **Cancelled duplicate CI runs surface as `fail` in `gh pr checks`.** Classify
+  with `gh run list --commit <sha> --json conclusion` before believing a red board.
+- **The local gate is ~29s, and fires only on Python/dep changes.** A report of it
+  being slow points at TRIGGERING, not size.
+- **zsh does not word-split unquoted variables**, so `$FILES` in a `cp`/`git
+  checkout` is ONE filename and the command fails. A failing glob aborts the whole
+  command, fabricating a `0`.
 
 ---
 
@@ -227,18 +123,16 @@ pre-fix tool.
 
 | id | workstream | state | receipt |
 | --- | --- | --- | --- |
-| `proto-drift` | #2203 MCP + A2A superseded revisions | **TOP PRIORITY**, UNBLOCKED; plan awaiting approval | #2203 comment, `02-plans/03-2203-*` |
-| `sweep5-orphans` | was 52/18 → now **22 orphans, 0 gaps**; 3 triaged by hand | open, scanner fixed | PR #2205, § Sweep-5 above |
-| `ci-local-parsimony` | iteration/juncture split; 53->35 jobs, 82s->3s gate | **CLOSED** — merged | PR #2213, `rules/test-parsimony.md` |
-| `docker-sprawl` | one compose group + guard; 491→35 volumes | **CLOSED** — merged | PR #2208, `rules/docker-no-sprawl.md` |
-| `dataflow-durability` | #1548 residual uncommitted-DDL window | **NEW**, filed with evidence | #2206 |
-| `gate2-regression` | loom Gate-2 path mapping | filed upstream, awaiting loom | loom#1826, local #2199 |
-| `auth-semantics` | #2141 `--auth` + kailash-ml release | blocked on co-owner (D1) | #2141 comment |
-| `authz-schema` | #2166 + #2194 actor/authz schema | blocked on co-owner (D2) | #2194 |
-| `mcp-health` | `mcp_channel.py:961` non-discriminating check | blocked on co-owner (D3) | cont-22 report D3 |
-| `ci-job-budget` | loom#1877 incorporation + duplicate-run fix | **CLOSED** — merged | PR #2207, `rules/ci-job-budget.md` |
-| `hist-branches` | 169 unexamined local branches | **CLOSED** — swept to 1; 51 archive tags | this file § In-play branches |
+| `2203-w1b` | A2A 1.0 method set (`message/send`, `tasks/get`) | **OPEN — next actionable** | plan § Wave 1 |
+| `2203-w2` | MCP → Modern `2026-07-28` (4 shards, architectural) | OPEN, approved, not started | plan § Wave 2 |
+| `2203-w3` | Conformance suites gated per-requirement by name | OPEN, approved, not started | plan § Wave 3 |
+| `promotion` | `dev` → `main`, weekly | OPEN — recurring, gap counted at SessionStart | `rules/dev-integration-trunk.md` MUST-4 |
+| `sweep5-orphans` | 22 spec orphans (3 hand-classified) | open, stable since the scanner fix | PR #2205 |
+| `dataflow-durability` | #1548 residual uncommitted-DDL window | open, filed with evidence | #2206 |
+| `authz-schema` | #2166 + #2194 actor/authz schema | blocked on co-owner | #2194 |
+| `auth-semantics` | #2141 `--auth` + kailash-ml release | blocked on co-owner | #2141 |
+| `mcp-health` | `mcp_channel.py:961` non-discriminating check | blocked on co-owner | cont-22 report D3 |
 
-Closed this session: `ci-job-budget` (PR #2207) and `hist-branches` (forest swept to
-empty). `sweep5-orphans` shrank and its scanner is fixed, but its survivors are
-unresolved and it stays open.
+Closed this session: `dev-trunk` (trunk live, guards retargeted),
+`promotion-cadence` (WEEKLY ratified), `2203-w1a` (16 sites migrated, landed),
+`stale-refs` (6 pruned).

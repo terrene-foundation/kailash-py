@@ -18,8 +18,12 @@ from typing import TYPE_CHECKING, Any, Callable, Coroutine, Dict, List, Optional
 if TYPE_CHECKING:
     from kailash.trust.operations import TrustOperations
 
+from kailash.trust.a2a.auth import CallerIdentity, TokenVerifier
+from kailash.trust.a2a.authorization import A2AAuthorizer
 from kailash.trust.a2a.exceptions import (
     A2AError,
+    AuthenticationError,
+    AuthorizationError,
     JsonRpcInternalError,
     JsonRpcInvalidParamsError,
     JsonRpcInvalidRequestError,
@@ -39,8 +43,16 @@ from kailash.trust.a2a.models import (
 
 logger = logging.getLogger(__name__)
 
-# Type alias for JSON-RPC method handlers
-MethodHandler = Callable[[Dict[str, Any], Optional[str]], Coroutine[Any, Any, Any]]
+# Type alias for JSON-RPC method handlers.
+#
+# The second argument is the VERIFIED caller identity, never a raw token. That
+# is deliberate and is the whole point of this signature: a handler cannot
+# accidentally treat "a non-empty string arrived" as "a caller is
+# authenticated", because the string is no longer what it receives. `None` means
+# the method is public and the caller is anonymous.
+MethodHandler = Callable[
+    [Dict[str, Any], Optional[CallerIdentity]], Coroutine[Any, Any, Any]
+]
 
 
 class JsonRpcHandler:
@@ -63,9 +75,32 @@ class JsonRpcHandler:
     # Methods that don't require authentication
     PUBLIC_METHODS = {"agent.capabilities", "trust.verify"}
 
-    def __init__(self):
-        """Initialize the JSON-RPC handler."""
+    def __init__(
+        self,
+        token_verifier: Optional[TokenVerifier] = None,
+        expected_audience: Optional[str] = None,
+    ):
+        """Initialize the JSON-RPC handler.
+
+        Args:
+            token_verifier: Verifies bearer tokens on every protected method.
+                Its ``verify_token`` MUST raise on an invalid token.
+            expected_audience: This agent's id. Passed to ``verify_token`` as
+                ``expected_audience`` so a token minted for a DIFFERENT agent is
+                rejected here rather than replayed across agents.
+
+        There is deliberately NO opt-out. With no verifier configured, protected
+        methods FAIL CLOSED. An "accept unverified tokens" escape hatch was
+        considered and rejected: it can only hand handlers a ``None`` caller,
+        which is indistinguishable from the ``None`` a genuine PUBLIC method
+        receives — so a handler reading ``caller is None`` as "this is the
+        public method" would serve protected data. A migration flag whose safe
+        use depends on every handler distinguishing two identical values is not
+        a migration path.
+        """
         self._methods: Dict[str, MethodHandler] = {}
+        self._token_verifier = token_verifier
+        self._expected_audience = expected_audience
 
     def register_method(self, name: str, handler: MethodHandler) -> None:
         """
@@ -118,21 +153,17 @@ class JsonRpcHandler:
             # Validate request
             self._validate_request(request)
 
-            # Check authentication for protected methods
-            if request.method not in self.PUBLIC_METHODS:
-                if not auth_token:
-                    from kailash.trust.a2a.exceptions import AuthenticationError
-
-                    raise AuthenticationError(
-                        f"Authentication required for method: {request.method}"
-                    )
+            # Authenticate protected methods. This VERIFIES the token — it does
+            # not merely check that one was supplied. Presence-only checking is
+            # what let any non-empty string authenticate.
+            caller = await self._authenticate(request.method, auth_token)
 
             # Dispatch to handler
             if request.method not in self._methods:
                 raise JsonRpcMethodNotFoundError(request.method)
 
             handler = self._methods[request.method]
-            result = await handler(request.params or {}, auth_token)
+            result = await handler(request.params or {}, caller)
 
             elapsed_ms = (time.time() - start_time) * 1000
             logger.info(f"JSON-RPC {request.method} completed in {elapsed_ms:.1f}ms")
@@ -152,6 +183,61 @@ class JsonRpcHandler:
                 -32603,
                 "Internal error",
             )
+
+    async def _authenticate(
+        self, method: str, auth_token: Optional[str]
+    ) -> Optional[CallerIdentity]:
+        """Resolve the VERIFIED caller for a request, or refuse it.
+
+        Returns ``None`` for a public method. For a protected method the token
+        is cryptographically verified and a :class:`CallerIdentity` returned;
+        anything short of that raises.
+        """
+        from kailash.trust.a2a.exceptions import AuthenticationError, InvalidTokenError
+
+        if method in self.PUBLIC_METHODS:
+            return None
+
+        if not auth_token:
+            raise AuthenticationError(f"Authentication required for method: {method}")
+
+        if self._token_verifier is None:
+            # FAIL CLOSED. A handler with no verifier cannot distinguish a signed
+            # token from an arbitrary string, so it refuses rather than accepting
+            # one (security.md § Secure-Default).
+            raise AuthenticationError(
+                f"Token verification is not configured; refusing method: {method}"
+            )
+
+        # Raises InvalidTokenError / TokenExpiredError / TrustVerificationError,
+        # each an A2AError, so `handle` maps it to a JSON-RPC error rather than
+        # a 500. The audience check is what stops a token minted for a
+        # DIFFERENT agent being replayed here.
+        if not self._expected_audience:
+            # A verifier with no audience to pin against cannot reject a token
+            # minted for a DIFFERENT agent -- `verify_token` skips the check on a
+            # falsy audience. Refuse rather than verify a signature and call it
+            # authentication (security.md § Secure-Default).
+            raise AuthenticationError(
+                "expected_audience is not configured; refusing method: " + method
+            )
+
+        claims = await self._token_verifier.verify_token(
+            auth_token, expected_audience=self._expected_audience
+        )
+
+        # Re-assert the audience HERE, independently. The verifier is a Protocol
+        # a deployment may implement itself, and one that ignores the kwarg would
+        # silently disable the pin with nothing else to catch it -- a single
+        # enforcement surface for a fail-closed control
+        # (security.md § Enforcement-Surface Parity).
+        if claims.aud != self._expected_audience:
+            raise InvalidTokenError(
+                f"Token audience mismatch: expected {self._expected_audience}, "
+                f"got {claims.aud}"
+            )
+
+        return CallerIdentity(agent_id=claims.sub, claims=claims, token=auth_token)
 
     async def handle_batch(
         self,
@@ -242,6 +328,7 @@ class A2AMethodHandlers:
         agent_id: str,
         capabilities: List[str],
         invoke_handler: Optional[MethodHandler] = None,
+        authorizer: Optional[A2AAuthorizer] = None,
     ):
         """
         Initialize A2A method handlers.
@@ -258,11 +345,35 @@ class A2AMethodHandlers:
         self._agent_id = agent_id
         self._capabilities = capabilities
         self._invoke_handler = invoke_handler
+        # Authorization is REQUIRED for protected methods. None here means
+        # every protected method refuses -- authenticating a caller says who
+        # they are, never what they may do (security.md § Secure-Default).
+        self._authorizer = authorizer
+
+    def _authz(self, caller: Optional[CallerIdentity]) -> A2AAuthorizer:
+        """Return the authorizer, or refuse.
+
+        A configured governance org is a HARD requirement, mirroring
+        `JsonRpcHandler`'s refusal when no token verifier is wired. Authorizing
+        only when an org happens to exist is the silent no-op default
+        `security.md` § Secure-Default blocks.
+        """
+        if caller is None:
+            raise AuthenticationError("Authentication required")
+        if self._authorizer is None:
+            raise AuthorizationError(
+                reason=(
+                    "no governance org is configured; refusing the protected "
+                    "method. Supply an A2AAuthorizer (PACT GovernanceEngine + "
+                    "AgentRoleMapping)."
+                )
+            )
+        return self._authorizer
 
     async def handle_capabilities(
         self,
         params: Dict[str, Any],
-        auth_token: Optional[str],
+        caller: Optional[CallerIdentity],
     ) -> Dict[str, Any]:
         """
         Handle agent.capabilities method.
@@ -277,7 +388,7 @@ class A2AMethodHandlers:
     async def handle_verify(
         self,
         params: Dict[str, Any],
-        auth_token: Optional[str],
+        caller: Optional[CallerIdentity],
     ) -> Dict[str, Any]:
         """
         Handle trust.verify method.
@@ -302,9 +413,17 @@ class A2AMethodHandlers:
         result = await self._trust_ops.verify(agent_id, "trust_verify", level=level)
         latency_ms = (time.time() - start_time) * 1000
 
-        # Build trust chain summary if valid
+        # Build trust chain summary if valid.
+        #
+        # `trust.verify` is PUBLIC, so an unauthenticated caller may name ANY
+        # agent_id. The verdict itself is this method's purpose and stays public;
+        # the CHAIN METADATA does not -- `genesis_authority`, capability count and
+        # delegation count describe the subject's org structure, and handing that
+        # to an anonymous caller is an enumeration oracle. Once caller identity
+        # became a fail-closed control on audit.query, this independent surface
+        # had to learn it too (security.md § Enforcement-Surface Parity).
         chain_summary = None
-        if result.valid:
+        if result.valid and caller is not None:
             try:
                 chain = await self._trust_ops.get_chain(agent_id)
                 if chain:
@@ -314,7 +433,15 @@ class A2AMethodHandlers:
                         "delegations_count": len(chain.delegations),
                     }
             except Exception:
-                pass
+                # The verification verdict is already decided; the chain summary
+                # is optional enrichment, so a failure here degrades the response
+                # rather than invalidating it. Log and continue with
+                # chain_summary=None (zero-tolerance.md Rule 3).
+                logger.warning(
+                    "a2a.verify.chain_summary_unavailable",
+                    exc_info=True,
+                    extra={"agent_id": agent_id},
+                )
 
         # VerificationResult uses 'violations' and 'reason', not 'errors'
         errors = []
@@ -334,7 +461,7 @@ class A2AMethodHandlers:
     async def handle_delegate(
         self,
         params: Dict[str, Any],
-        auth_token: Optional[str],
+        caller: Optional[CallerIdentity],
     ) -> Dict[str, Any]:
         """
         Handle trust.delegate method.
@@ -343,8 +470,9 @@ class A2AMethodHandlers:
         """
         from kailash.trust.a2a.exceptions import AuthenticationError
 
-        if not auth_token:
+        if caller is None:
             raise AuthenticationError("Authentication required for delegation")
+        authz = self._authz(caller)
 
         # Extract parameters
         delegatee_id = params.get("delegatee_agent_id")
@@ -361,10 +489,28 @@ class A2AMethodHandlers:
         if not capabilities:
             raise JsonRpcInvalidParamsError("Missing required parameter: capabilities")
 
+        # Capability bounding is PACT's: `intersect_envelopes` already implements
+        # intersection with monotonic tightening. The token's own `capabilities`
+        # list is NOT a grant -- it is self-issued (sub == iss, populated from the
+        # caller's own argument at mint time), so it proves only what the caller
+        # asserts about itself.
+        authz.require_action(
+            caller,
+            "trust.delegate",
+            {
+                "delegatee_agent_id": delegatee_id,
+                "task_id": task_id,
+                "requested_capabilities": capabilities,
+            },
+        )
+
         # Create delegation
         try:
             delegation = await self._trust_ops.delegate(
-                delegator_id=self._agent_id,
+                # The DELEGATOR is the authenticated caller, never this
+                # agent. Passing self._agent_id let any caller spend THIS
+                # agent's authority on a delegatee of their choosing.
+                delegator_id=caller.agent_id,
                 delegatee_id=delegatee_id,
                 task_id=task_id,
                 capabilities=capabilities,
@@ -391,7 +537,7 @@ class A2AMethodHandlers:
     async def handle_audit_query(
         self,
         params: Dict[str, Any],
-        auth_token: Optional[str],
+        caller: Optional[CallerIdentity],
     ) -> Dict[str, Any]:
         """
         Handle audit.query method.
@@ -400,12 +546,19 @@ class A2AMethodHandlers:
         """
         from kailash.trust.a2a.exceptions import AuthenticationError
 
-        if not auth_token:
+        if caller is None:
             raise AuthenticationError("Authentication required for audit query")
+        authz = self._authz(caller)
 
         agent_id = params.get("agent_id")
         if not agent_id:
             raise JsonRpcInvalidParamsError("Missing required parameter: agent_id")
+
+        # The caller may name ANY agent here, so the subject is
+        # attacker-chosen. PACT decides whether this caller may read that
+        # subject's trail; a same-agent equality check would permanently
+        # foreclose the compliance-officer and supervisor cases.
+        authz.require_audit_access(caller, agent_id)
 
         # Build query
         from datetime import datetime
@@ -457,7 +610,14 @@ class A2AMethodHandlers:
                         for d in chain.delegations
                     ]
             except Exception:
-                pass
+                # Same shape as trust.verify above: the audit actions are already
+                # retrieved and the delegation chain is optional enrichment.
+                # Degrade to delegation_chain=None, loudly.
+                logger.warning(
+                    "a2a.audit_query.delegation_chain_unavailable",
+                    exc_info=True,
+                    extra={"agent_id": agent_id},
+                )
 
             return AuditQueryResponse(
                 agent_id=agent_id,
@@ -472,7 +632,7 @@ class A2AMethodHandlers:
     async def handle_invoke(
         self,
         params: Dict[str, Any],
-        auth_token: Optional[str],
+        caller: Optional[CallerIdentity],
     ) -> Dict[str, Any]:
         """
         Handle agent.invoke method.
@@ -481,11 +641,12 @@ class A2AMethodHandlers:
         """
         from kailash.trust.a2a.exceptions import AuthenticationError
 
-        if not auth_token:
+        if caller is None:
             raise AuthenticationError("Authentication required for agent invocation")
+        self._authz(caller).require_action(caller, "agent.invoke", dict(params))
 
         if self._invoke_handler:
-            return await self._invoke_handler(params, auth_token)
+            return await self._invoke_handler(params, caller)
 
         # Default: return method not implemented
         raise JsonRpcMethodNotFoundError("agent.invoke not implemented for this agent")

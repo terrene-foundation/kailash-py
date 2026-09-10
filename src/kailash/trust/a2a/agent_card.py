@@ -206,7 +206,7 @@ class AgentCardCache:
     In-memory cache for Agent Cards with TTL support.
 
     Caches generated Agent Cards to reduce trust chain lookups
-    and improve response times for /.well-known/agent.json.
+    and improve response times for /.well-known/agent-card.json.
     """
 
     def __init__(self, ttl_seconds: int = 300):

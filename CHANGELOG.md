@@ -13,9 +13,78 @@ such as `>=2.0`.
 
 ## [Unreleased]
 
+### Fixed — `import kailash.trust.a2a` failed on a `[trust]`-only install (#2203)
+
+`kailash/trust/a2a/__init__.py` eagerly imported `service.py`, which imports `nexus` at module scope — but `nexus` ships in the `[nexus]` extra while this package is gated by `[trust]`. So `pip install kailash[trust]` followed by `import kailash.trust.a2a` raised `ModuleNotFoundError: No module named 'nexus'`, taking down **every** symbol in the package, including the ones with no HTTP dependency at all (`A2AAuthenticator`, `JsonRpcHandler`, `CallerIdentity`).
+
+`A2AService` and `create_a2a_app` are now served through a PEP 562 `__getattr__`, with a `TYPE_CHECKING` block so `__all__`, Sphinx, pyright and CodeQL still resolve them. Accessing either without `nexus` installed raises an actionable error naming the extra, instead of making the package unimportable.
+
+This is `dependencies.md`'s module-scope-import rule — an unconditional import of a sibling the package does not declare. It survived because a monorepo dev environment has `nexus` editable-installed, so it could only ever fail on a clean install; it surfaced when new trust tests became the first thing under `tests/trust/unit/` to import the package in a `[trust]`-only CI job.
+
+### Security (BREAKING) — A2A protected methods now require authorization (#2203)
+
+Authentication established WHO is calling; nothing established WHAT they could do. `audit.query` and `agent.invoke` took their target from request params, and `trust.delegate` delegated **the serving agent's own authority** to a caller-chosen delegatee with a caller-chosen capability list.
+
+Authorization now routes to PACT (`framework-first`: governance/RBAC/policy belongs to PACT, and PACT's governance core ships in this same wheel behind the same `[trust]` extra — no new dependency). `A2AAuthorizer` wraps a `GovernanceEngine` + `AgentRoleMapping`; `trust.delegate` and `agent.invoke` go through `verify_action`, and `audit.query` through `check_access` against a knowledge item owned by the **subject's** role address, so PACT's containment algorithm decides cross-agent access rather than a hardcoded rule.
+
+**`trust.delegate` no longer delegates from the serving agent.** `delegator_id` is now the authenticated caller. This was a plain bug, not a policy choice.
+
+**BREAKING — protected methods require a configured governance org.** `A2AService(..., authorizer=...)` is now effectively mandatory: without it `trust.delegate`, `audit.query` and `agent.invoke` refuse with `-40003`. Authorizing only when an org happens to be configured is the silent no-op default `security.md` § Secure-Default blocks, and it is the shape that produced the authentication hole in the first place.
+
+Three fail-OPEN behaviours are converted into refusals, each measured with a control rather than assumed:
+
+- **A `None` PACT envelope is maximally permissive** — measured, `impersonate_president` returned `auto_approved` with no envelope and `blocked` once one existed. A verdict with no `effective_envelope_snapshot` is a non-answer, and is now refused.
+- **`AgentRoleMapping.resolve()` passes unknown ids through** — `resolve('agent-002-Rogue')` returns the string unchanged, because the passthrough tests only whether the id contains a `D`, `T` or `R`. The authorizer uses `get_address()` exclusively, and its `RoleMappingLike` Protocol does not expose `resolve` at all. *The `resolve()` fail-open itself is NOT fixed here — see Known issues.*
+- **A missing authorizer** refuses rather than allows.
+
+Verdict handling is a positive allowlist (`auto_approved` only); a deny-list would admit any level PACT gains later.
+
+**Enforcement-surface parity:** `trust.verify` is public and accepts an arbitrary `agent_id`. Its verdict stays public — that is the method's purpose — but the trust-chain metadata (`genesis_authority`, capability and delegation counts) is now withheld from unauthenticated callers, since handing an anonymous caller another agent's org structure is an enumeration oracle.
+
+`AuthorizationError` gains a `reason=` form. It previously took only a capability name, so a governance denial rendered as the nonsensical `missing capability 'No governance org is configured…'`; it now refuses to construct with neither a capability nor a reason.
+
+### Known issues (not fixed in this release)
+
+- **`AgentRoleMapping.resolve()` is fail-open** — any identifier containing a `D`, `T` or `R` is passed through as a role address. It has zero call sites in PACT and is not reachable from the A2A path, but it is public API. Not fixed here because the correct repair needs the real D/T/R address grammar, and a wrong fix to an identity resolver is worse than the current state.
+- No `jti` replay cache and no maximum token TTL; a long-dated token remains valid until expiry.
+- A2A verification failures are distinguishable from one another and two handlers surface internal exception text on the wire.
+
+### Security (BREAKING) — A2A bearer tokens are now actually verified (#2203)
+
+`A2AAuthenticator.verify_token` — which checks the Ed25519 signature, expiry, audience and trust chain — **had no call site in the request path**. `JsonRpcHandler.handle` tested the bearer token for truthiness and discarded it, so **any non-empty string authenticated every protected method**, including `trust.delegate`, which grants capabilities. (An earlier revision of this entry also named `audit.query` as reading the audit trail. That is **withdrawn as inaccurate**: `AuditQueryService.query_actions` and `TrustOperations._audit_store` do not exist — `git grep 'def query_actions'` finds no definition, against a control where `def get_agent_history` matches — so `audit.query` returns `-32603` regardless of authentication. It was reachable without authentication, but it read nothing.). Measured: `'AAAA'`, `' '` and `'not-a-jwt-at-all'` all authenticated. Supplying no token at all was correctly refused — the check existed and could refuse, it simply could not tell a signed token from arbitrary bytes.
+
+`JsonRpcHandler` now takes a `token_verifier` and an `expected_audience`, verifies every token on a protected method, and passes handlers a **verified `CallerIdentity`** instead of the raw string. The audience pin means a token minted for a _different_ agent can no longer be replayed against this one. `A2AService` wires its existing authenticator automatically — deployments using `A2AService` need no code change to get the fix.
+
+**Two further holes, found by an adversarial review of the fix itself and closed in the same entry.**
+
+*The fix did not reach the deployed surface.* Nexus enables durability by default, which puts `RequestDeduplicator` in front of the routes. It fingerprints a request on `(method, path, query, body)` and its `include_headers` defaults to empty, so `Authorization` was **not** part of the cache key: a response produced for an authenticated caller was replayed verbatim to a caller sending no token at all, and `_authenticate` never ran on the cache hit. The reverse also held — an attacker could pre-seed a `-40002` for a guessable body and have it served to the legitimate caller. `A2AService` now constructs `Nexus(enable_durability=False)`. Fingerprinting the auth header would not have been sufficient: two callers bearing different tokens with different rights would still share an entry, so a shared response cache does not belong in front of a per-caller authorization boundary at all.
+
+*The audience pin was a silent no-op by default.* `verify_token` skips the audience check when `expected_audience` is falsy, and `JsonRpcHandler` defaulted it to `None` — so the documented `JsonRpcHandler(token_verifier=auth)` construction verified signatures while accepting a token minted for **any** agent. The handler also never re-checked `claims.aud` itself, leaving one enforcement surface: a third-party `TokenVerifier` that ignored the kwarg disabled the pin silently. A missing audience now fails closed, and the handler re-asserts `claims.aud` after the verifier returns.
+
+**Fail-closed, with no opt-out.** A `JsonRpcHandler` constructed with no verifier REFUSES protected methods rather than accepting anything. An `allow_unverified_tokens` migration flag was briefly present and has been removed: it could only hand handlers a `None` caller, which is *identical* to what a genuine public method receives, so a handler reading `caller is None` as "this is the public method" would have served protected data under it. A migration path whose safe use depends on every handler distinguishing two identical values is not a migration path. Deployments that cannot yet mint signed tokens must supply their own `TokenVerifier`.
+
+**Migration for callers registering custom JSON-RPC handlers.** `MethodHandler`'s second argument changed from `Optional[str]` (raw token) to `Optional[CallerIdentity]` (verified identity, `None` for public methods). The same applies to a custom `invoke_handler`. This is deliberately a hard break rather than a shim: the old signature's whole problem was that a handler could treat "a non-empty string arrived" as "a caller is authenticated", and any compatibility shim would preserve exactly that.
+
+```python
+# before — `auth_token` is an UNVERIFIED string
+async def my_handler(params, auth_token):
+    if not auth_token:            # presence only; any string passed
+        raise AuthenticationError(...)
+
+# after — `caller` is verified, or None for a public method
+async def my_handler(params, caller):
+    if caller is None:
+        raise AuthenticationError(...)
+    agent_id = caller.agent_id    # authenticated `sub` claim
+```
+
+Regression coverage: `tests/trust/unit/test_a2a_token_verification.py` (21 tests) and two end-to-end cases in the kaizen A2A integration suite that drive the real Ed25519 path over HTTP. Restoring the pre-fix semantics reds 12 of the 21 unit tests and 4 of the 6 integration cases; the survivors are deliberate controls — a genuine token must still authenticate, and a whitespace token is caught by a separate guard. The integration assertion checks the authentication error code specifically (`-40002`) rather than merely that an error came back, because under the vulnerable code a bogus token authenticated and then failed _downstream_ with a different code, which an `"error" in result` check cannot distinguish.
+
+**Not fixed here, and tracked separately:** `trust.delegate` still delegates from the serving agent's own identity, so any _validly authenticated_ peer can ask this agent to delegate its capabilities. That is an authorization question, distinct from the authentication hole closed above.
+
 ### Fixed — two mechanisms reported success without having measured anything (#2189)
 
-A sweep for the class *an absence rendered as a success* — a mechanism that learned NOTHING returning the same value as one that checked and passed. Both instances produced their vacuous value exactly when the machinery was misconfigured or the input was hostile, which is when a caller most needs the truth.
+A sweep for the class _an absence rendered as a success_ — a mechanism that learned NOTHING returning the same value as one that checked and passed. Both instances produced their vacuous value exactly when the machinery was misconfigured or the input was hostile, which is when a caller most needs the truth.
 
 - **`MultiDimensionEvaluator.evaluate` reported a constraint set it never evaluated as `satisfied=True`.** An unregistered dimension was appended to `warnings` and then `continue`d — dropped from both `dimension_results` and `failed_dimensions`. With every dimension unknown (a typo'd name, a registry missing a plugin), the result was `satisfied=True`, `failed_dimensions=[]`, `dimension_results={}` — **identical, on the field every caller gates on, to an evaluation that ran and passed.** The partial case was worse: `CONJUNCTIVE` "ALL must pass" was computed over the silently shrunk subset, so one known-good dimension plus one unknown returned `True`. An unknown dimension is now recorded as a failed dimension with a reason, and `_compute_satisfaction` fails closed on an empty result map instead of returning `True` (that branch also guarded `HIERARCHICAL`, which indexes the map and would otherwise raise). Warnings are unchanged — the point is that the truth now reaches the field callers read, not only the one they don't.
 
