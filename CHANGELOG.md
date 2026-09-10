@@ -13,6 +13,8 @@ such as `>=2.0`.
 
 ## [Unreleased]
 
+## [2.64.0] — 2026-09-10 — A2A protected methods verify and authorize their callers; eight un-gated HTTP servers closed; no component invents its own signing or encryption key (#2203, #2072, #2112, #2083, #2092)
+
 ### Fixed — `import kailash.trust.a2a` failed on a `[trust]`-only install (#2203)
 
 `kailash/trust/a2a/__init__.py` eagerly imported `service.py`, which imports `nexus` at module scope — but `nexus` ships in the `[nexus]` extra while this package is gated by `[trust]`. So `pip install kailash[trust]` followed by `import kailash.trust.a2a` raised `ModuleNotFoundError: No module named 'nexus'`, taking down **every** symbol in the package, including the ones with no HTTP dependency at all (`A2AAuthenticator`, `JsonRpcHandler`, `CallerIdentity`).
@@ -34,7 +36,7 @@ Authorization now routes to PACT (`framework-first`: governance/RBAC/policy belo
 Three fail-OPEN behaviours are converted into refusals, each measured with a control rather than assumed:
 
 - **A `None` PACT envelope is maximally permissive** — measured, `impersonate_president` returned `auto_approved` with no envelope and `blocked` once one existed. A verdict with no `effective_envelope_snapshot` is a non-answer, and is now refused.
-- **`AgentRoleMapping.resolve()` passes unknown ids through** — `resolve('agent-002-Rogue')` returns the string unchanged, because the passthrough tests only whether the id contains a `D`, `T` or `R`. The authorizer uses `get_address()` exclusively, and its `RoleMappingLike` Protocol does not expose `resolve` at all. *The `resolve()` fail-open itself is NOT fixed here — see Known issues.*
+- **`AgentRoleMapping.resolve()` passes unknown ids through** — `resolve('agent-002-Rogue')` returns the string unchanged, because the passthrough tests only whether the id contains a `D`, `T` or `R`. The authorizer uses `get_address()` exclusively, and its `RoleMappingLike` Protocol does not expose `resolve` at all. _The `resolve()` fail-open itself is NOT fixed here — see Known issues._
 - **A missing authorizer** refuses rather than allows.
 
 Verdict handling is a positive allowlist (`auto_approved` only); a deny-list would admit any level PACT gains later.
@@ -57,11 +59,11 @@ Verdict handling is a positive allowlist (`auto_approved` only); a deny-list wou
 
 **Two further holes, found by an adversarial review of the fix itself and closed in the same entry.**
 
-*The fix did not reach the deployed surface.* Nexus enables durability by default, which puts `RequestDeduplicator` in front of the routes. It fingerprints a request on `(method, path, query, body)` and its `include_headers` defaults to empty, so `Authorization` was **not** part of the cache key: a response produced for an authenticated caller was replayed verbatim to a caller sending no token at all, and `_authenticate` never ran on the cache hit. The reverse also held — an attacker could pre-seed a `-40002` for a guessable body and have it served to the legitimate caller. `A2AService` now constructs `Nexus(enable_durability=False)`. Fingerprinting the auth header would not have been sufficient: two callers bearing different tokens with different rights would still share an entry, so a shared response cache does not belong in front of a per-caller authorization boundary at all.
+_The fix did not reach the deployed surface._ Nexus enables durability by default, which puts `RequestDeduplicator` in front of the routes. It fingerprints a request on `(method, path, query, body)` and its `include_headers` defaults to empty, so `Authorization` was **not** part of the cache key: a response produced for an authenticated caller was replayed verbatim to a caller sending no token at all, and `_authenticate` never ran on the cache hit. The reverse also held — an attacker could pre-seed a `-40002` for a guessable body and have it served to the legitimate caller. `A2AService` now constructs `Nexus(enable_durability=False)`. Fingerprinting the auth header would not have been sufficient: two callers bearing different tokens with different rights would still share an entry, so a shared response cache does not belong in front of a per-caller authorization boundary at all.
 
-*The audience pin was a silent no-op by default.* `verify_token` skips the audience check when `expected_audience` is falsy, and `JsonRpcHandler` defaulted it to `None` — so the documented `JsonRpcHandler(token_verifier=auth)` construction verified signatures while accepting a token minted for **any** agent. The handler also never re-checked `claims.aud` itself, leaving one enforcement surface: a third-party `TokenVerifier` that ignored the kwarg disabled the pin silently. A missing audience now fails closed, and the handler re-asserts `claims.aud` after the verifier returns.
+_The audience pin was a silent no-op by default._ `verify_token` skips the audience check when `expected_audience` is falsy, and `JsonRpcHandler` defaulted it to `None` — so the documented `JsonRpcHandler(token_verifier=auth)` construction verified signatures while accepting a token minted for **any** agent. The handler also never re-checked `claims.aud` itself, leaving one enforcement surface: a third-party `TokenVerifier` that ignored the kwarg disabled the pin silently. A missing audience now fails closed, and the handler re-asserts `claims.aud` after the verifier returns.
 
-**Fail-closed, with no opt-out.** A `JsonRpcHandler` constructed with no verifier REFUSES protected methods rather than accepting anything. An `allow_unverified_tokens` migration flag was briefly present and has been removed: it could only hand handlers a `None` caller, which is *identical* to what a genuine public method receives, so a handler reading `caller is None` as "this is the public method" would have served protected data under it. A migration path whose safe use depends on every handler distinguishing two identical values is not a migration path. Deployments that cannot yet mint signed tokens must supply their own `TokenVerifier`.
+**Fail-closed, with no opt-out.** A `JsonRpcHandler` constructed with no verifier REFUSES protected methods rather than accepting anything. An `allow_unverified_tokens` migration flag was briefly present and has been removed: it could only hand handlers a `None` caller, which is _identical_ to what a genuine public method receives, so a handler reading `caller is None` as "this is the public method" would have served protected data under it. A migration path whose safe use depends on every handler distinguishing two identical values is not a migration path. Deployments that cannot yet mint signed tokens must supply their own `TokenVerifier`.
 
 **Migration for callers registering custom JSON-RPC handlers.** `MethodHandler`'s second argument changed from `Optional[str]` (raw token) to `Optional[CallerIdentity]` (verified identity, `None` for public methods). The same applies to a custom `invoke_handler`. This is deliberately a hard break rather than a shim: the old signature's whole problem was that a handler could treat "a non-empty string arrived" as "a caller is authenticated", and any compatibility shim would preserve exactly that.
 
@@ -516,6 +518,70 @@ node.run(action="revoke", user_id="alice", actor_session_id=caller_session)
   **Administrative MFA actions now require `admin_override=True`:** `revoke`, `disable`, `reset`, admin recovery, and re-enrolment over an already-verified factor. Note that `admin_override` is an ordinary parameter, **not** an authentication control — `MultiFactorAuthNode` has no notion of a caller, and the host application must authorise the `(actor, action, subject)` triple before dispatch. That gap is tracked separately in #2047.
 
   **Also fixed:** LDAPS certificate validation now defaults to `CERT_REQUIRED` across all three connection sites (one was `CERT_OPTIONAL`, one had no TLS configuration at all, so a `use_ssl` deployment sent bind passwords in cleartext); a two-call permanent deadlock of all MFA operations (`revoke` re-acquired a non-reentrant lock); authorization _denials_ being reported as `success: True` and audited as successes; MFA recovery tokens being returned to the caller instead of delivered; and `_log_security_event` calling a method `SecurityEventNode` does not define, which made every successful async SSO operation raise `AttributeError` after doing its work and meant no SSO security event was ever recorded.
+
+### Security — five read endpoints returned raw exception text to the caller (#2015)
+
+Five client-facing sites rendered a caught exception straight into a response body. The issue's own
+grep looked for `detail=str(e)`, and **not one of these five matches that spelling** — the leak is
+identical, only the wording differs, which is why a grep-scoped fix would have closed none of them:
+
+- **`GET /metrics` and `GET /pools`** — `ConnectionMetricsProvider.collect()` put `str(e)` into the
+  per-pool result dict, and both routes return that dict unmodified. This is the site most likely to
+  carry a credential in practice: the exception comes from a database driver, and driver connect
+  failures quote the connection string — **password included** — in their message.
+- **`GET /mcp/tools`** — `list_mcp_tools` built `{"error": str(exc)}` per server and returned it as
+  the body. An MCP server's connection failure names its transport endpoint; an auth failure names
+  the header it sent.
+- **The SSE error frame** — `_stream_workflow` emitted `{"error": str(e)}` as an `event: error`
+  frame. A streamed frame is a response body, so a driver error surfacing through a workflow node
+  shipped its DSN to whoever held the stream open.
+- **`/enterprise/health` and the async execution handler** — the handler returned
+  `WorkflowResponse(error=str(e))` and then `.to_dict()`, making `error` a response field;
+  `_check_resource_health` leaked twice more (per-resource and enumeration). Registered resources
+  _are_ databases and caches, so an unhealthy one fails with a driver error quoting its DSN.
+
+All five now route through the shared `safe_http_detail` helper: the caller gets generic text plus a
+correlation reference, and the full exception goes to the log where it belongs.
+
+**Three further leaks an adversarial review found in the first pass, worth naming because two of them
+were introduced by the fix itself.** In `gateway/api.py::get_workflow_status`, `safe_types=(ValueError,)`
+sat under an `except ValueError`, so every exception reaching the helper was inside the allowlist _by
+construction_ and the fail-closed default was **unreachable**. The `try:` also spanned
+`WorkflowResponseModel(**response.to_dict())`, and pydantic's `ValidationError` subclasses
+`ValueError` — so a validation failure returned the **offending input values** as a 404. The `try` is
+now scoped to the lookup alone and the allowlist is gone.
+
+### Security — an untrusted spawn command is no longer captured in errors or logs (#2004)
+
+A local-server spawn command is untrusted input — it arrives from agent output, a registry entry, or
+a discovery response — and it routinely carries a credential as a CLI flag:
+
+```
+npx -y @vendor/mcp-server --token=<secret>
+```
+
+`SpawnSecurityError` captured that command verbatim, so the secret reached every sink the exception
+touched. **Routing it through the existing credential masker would have looked like a fix and leaked
+unchanged**: `mask_error_text` covers URL userinfo and query parameters only, and a `--token=` flag is
+neither.
+
+New `kailash.utils.command_safety.safe_command_ref` stores a `"<launcher>#<fingerprint>"` reference
+instead — `npx -y @vendor/server --token=s3cret` becomes `npx#<fingerprint>`. The return value
+**never contains any substring of the command's arguments**, so no sink can leak what was never
+captured. A non-string yields a sentinel rather than raising, because callers validate untrusted input
+whose type is not yet established. Applied at the three sites that rendered a spawn command:
+`kailash_mcp/discovery/discovery.py`, `kailash_mcp/security.py`, and `kailash/channels/mcp/stdio.py`.
+
+### Changed — internal: one isort configuration instead of five competing ones (#1995)
+
+Five separate declarations of isort's first-party package list disagreed, so formatting was not
+convergent — running the hooks could produce a different result depending on which config won, and the
+pre-commit gate could not reach a fixed point. Unified to a single declaration. Five broken hook gates
+were repaired and 262 lint findings cleared in the same pass, of which **eight were real bugs** rather
+than style; those are covered by their own entries above where they were user-facing.
+
+No API change. Recorded because the commit touches a large number of source files and would otherwise
+look like an unexplained mass edit in the diff.
 
 ## [2.63.0] — 2026-08-05 — Dialect identifier budgets are fail-closed; bare install no longer breaks on the trust-plane MCP import; workflow `parameters` envelope binding restored on HTTP/CLI (#1971, #1996)
 
