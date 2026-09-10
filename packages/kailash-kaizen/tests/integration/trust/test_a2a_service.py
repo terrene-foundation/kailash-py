@@ -207,7 +207,16 @@ def trust_operations(
     ops.get_public_key = mock_get_public_key
 
     # Mock verify (VerificationResult uses 'violations' not 'errors')
-    async def mock_verify(agent_id: str, level=None):
+    # Signature MUST mirror the real TrustOperations.verify:
+    #   verify(agent_id, action, resource=None, level=STANDARD, context=None)
+    # It previously omitted `action`, so the production call
+    #   verify(agent_id, "trust_verify", level=level)
+    # bound "trust_verify" to `level` positionally AND passed level= again,
+    # raising TypeError -> JSON-RPC -32603. The handler was correct; the mock
+    # had drifted from the contract it stands in for.
+    async def mock_verify(
+        agent_id: str, action: str = None, resource=None, level=None, context=None
+    ):
         from kaizen.trust import VerificationLevel, VerificationResult
 
         if agent_id == "agent-001":
@@ -281,7 +290,7 @@ def auth_token(a2a_service, event_loop):
 
 class TestAgentCardEndpoint:
     """
-    Test the /.well-known/agent.json endpoint.
+    Test the /.well-known/agent-card.json endpoint.
 
     Intent: Verify that agents can discover other agents' capabilities
     and trust information via the standard Agent Card endpoint.
@@ -289,7 +298,7 @@ class TestAgentCardEndpoint:
 
     def test_agent_card_returns_correct_structure(self, test_client):
         """Agent Card should return A2A-compliant JSON structure."""
-        response = test_client.get("/.well-known/agent.json")
+        response = test_client.get("/.well-known/agent-card.json")
 
         assert response.status_code == 200
         card = response.json()
@@ -304,7 +313,7 @@ class TestAgentCardEndpoint:
 
     def test_agent_card_includes_eatp_trust_extensions(self, test_client):
         """Agent Card should include EATP trust extensions."""
-        response = test_client.get("/.well-known/agent.json")
+        response = test_client.get("/.well-known/agent-card.json")
         card = response.json()
 
         # EATP trust extensions
@@ -316,7 +325,7 @@ class TestAgentCardEndpoint:
 
     def test_agent_card_has_etag_for_caching(self, test_client):
         """Agent Card response should include ETag for caching."""
-        response = test_client.get("/.well-known/agent.json")
+        response = test_client.get("/.well-known/agent-card.json")
 
         assert response.status_code == 200
         assert "ETag" in response.headers
@@ -325,19 +334,19 @@ class TestAgentCardEndpoint:
     def test_agent_card_conditional_get(self, test_client):
         """Agent Card should support conditional GET with If-None-Match."""
         # First request to get ETag
-        response1 = test_client.get("/.well-known/agent.json")
+        response1 = test_client.get("/.well-known/agent-card.json")
         etag = response1.headers["ETag"]
 
         # Conditional request with same ETag
         response2 = test_client.get(
-            "/.well-known/agent.json", headers={"If-None-Match": etag}
+            "/.well-known/agent-card.json", headers={"If-None-Match": etag}
         )
 
         assert response2.status_code == 304  # Not Modified
 
     def test_agent_card_endpoint_url_in_card(self, test_client):
         """Agent Card should include JSON-RPC endpoint URL."""
-        response = test_client.get("/.well-known/agent.json")
+        response = test_client.get("/.well-known/agent-card.json")
         card = response.json()
 
         assert card["endpoint"] == "http://localhost:8000/a2a/jsonrpc"
@@ -903,7 +912,7 @@ class TestServiceConfiguration:
         client = TestClient(service.create_app())
 
         # Agent Card shows trust-attested capabilities from trust chain
-        card_response = client.get("/.well-known/agent.json")
+        card_response = client.get("/.well-known/agent-card.json")
         card = card_response.json()
         # Trust chain has "analyze" capability
         assert "analyze" in [c.get("name") for c in card.get("capabilities", [])]
@@ -999,7 +1008,7 @@ class TestA2AWorkflows:
         makes an authenticated call.
         """
         # Step 1: Discover agent via Agent Card
-        card_response = test_client.get("/.well-known/agent.json")
+        card_response = test_client.get("/.well-known/agent-card.json")
         assert card_response.status_code == 200
         card = card_response.json()
 

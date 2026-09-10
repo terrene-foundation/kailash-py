@@ -65,7 +65,7 @@ app = create_a2a_app(
 
 ## Endpoints
 
-### Agent Card: `GET /.well-known/agent.json`
+### Agent Card: `GET /.well-known/agent-card.json`
 
 Returns the agent's public identity including capabilities and EATP trust extensions.
 
@@ -469,7 +469,7 @@ from fastapi.testclient import TestClient
 client = TestClient(service.create_app())
 
 # Test Agent Card
-response = client.get("/.well-known/agent.json")
+response = client.get("/.well-known/agent-card.json")
 assert response.status_code == 200
 card = response.json()
 assert card["agent_id"] == "agent-001"
