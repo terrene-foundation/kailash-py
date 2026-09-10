@@ -13,6 +13,251 @@ range such as `>=2.0`.
 
 ## [Unreleased]
 
+### Fixed — `enable_observability()` no longer crashes on a default-constructed agent
+
+`BaseAgent.enable_observability()` raised `AttributeError: 'NoneType' object has no
+attribute 'register_hook'` on any agent built without `hooks_enabled=True` — which is
+the default. Because `enable_tracing` defaults `True`, the crash landed on **every**
+caller of the method, including ones asking only for metrics or only for logging: it
+failed before any component-specific code ran. Calling `enable_observability()` is
+itself the opt-in, so the hook manager is now created on demand when one is not
+already present. No signature change; the method simply works where it previously
+raised. (Pre-existing since the method was introduced, not a regression from the
+2.46.0 observability wiring.)
+
+### Changed (BREAKING, originates in `kailash` core 2.64.0) — the A2A HTTP surface re-exported by `kaizen.trust.a2a` now authenticates and authorizes
+
+`kaizen.trust.a2a` re-exports `A2AService`, `create_a2a_app`, `JsonRpcHandler` and
+`A2AMethodHandlers` from `kailash.trust.a2a`. No kaizen source changed, but the
+behaviour of these names changes for anyone moving to `kailash` core 2.64.0, so it is
+recorded here rather than left to be discovered at runtime. In brief: bearer tokens
+are now actually verified rather than tested for non-emptiness; a token's audience is
+enforced; protected JSON-RPC methods require an authorizer and refuse without one; the
+Agent Card moved to the A2A 1.0 well-known path; and custom method handlers receive a
+verified caller identity in place of the raw token string, which is a signature change
+for anyone who registered one. **See the `kailash` core CHANGELOG for the authoritative
+entry, the migration steps and the required wiring** — this note exists only so kaizen
+users who import from `kaizen.trust.a2a` are not surprised.
+
+## [2.46.0] — 2026-08-17 — Fail-closed provider detection and hook isolation; checkpointing that actually checkpoints; encryption keys no longer self-generated; broad credential- and payload-disclosure sweep across logs
+
+> **Published to PyPI 2026-08-17.** This release accumulated two batches of work either
+> side of its version bump. Everything from here down to the next `##` heading shipped
+> in 2.46.0.
+
+### Security — agent inputs and results are no longer written into logs (#2030, #2070)
+
+Agent I/O was rendered into log messages at INFO and attached to the ERROR record,
+gated only by `logging_enabled`, which defaults `True`. Default stdlib formatters drop
+the extra attributes, but structured handlers — JSON loggers, structlog, OTLP log
+export — render them, which is precisely the class of pipeline that ships records
+off-host. A reader of aggregated logs could reconstruct whole agent payloads: user
+prompts, retrieved document text, and credentials for agents that take them as
+parameters.
+
+Lifecycle logging now emits key **names** and a field count, never values, and the
+names themselves are bounded and scrubbed because result keys can be model-controlled.
+The same defect and the same fix applied to the public `LoggingMixin`, to the
+`LoggingHook` / `SecureLoggingHook` pair (merely registering either hook published
+payloads — for `SecureLoggingHook` the redactor stripped credential and PII *shapes*,
+so what survived was the prose, under a class name promising the opposite), and to an
+"LLM returned unexpected response" branch that logged the entire model response at
+WARNING and now logs a non-reversible fingerprint.
+
+- **New config key `BaseAgentConfig.log_full_payloads`, default `False`.** Full payload
+  logging now requires this opt-in **and** the logger at DEBUG, and is truncated and
+  credential-scrubbed even then. `LoggingHook` and `SecureLoggingHook` gained a matching
+  `log_full_payloads=False` keyword.
+- **BREAKING: `LoggingHook.redact_sensitive` changed from `bool = False` to
+  `Optional[bool] = None`.** `None` enables redaction but tolerates the redactor being
+  unavailable; `True` is now an explicit opt-in that **raises** if the redactor cannot
+  be imported, instead of silently continuing to log at full fidelity behind a warning.
+- **Structured log field names changed** — `inputs` → `input_keys` + `input_count`,
+  `result` → `result_keys` + `result_count`, and on the hooks `context` / `metadata` →
+  `context_keys` / `context_field_count` / `metadata_keys`. Downstream log queries
+  keyed on the old names need updating.
+- The error string returned to callers on the non-raising path is now scrubbed, so it
+  may contain `[REDACTED]`.
+
+### Security — exception text and tracebacks removed from the framework's log and return surfaces
+
+A rendered traceback repeats the exception message verbatim on its last line, and again
+for each chained cause — so scrubbing a message while emitting `exc_info` beside it
+protected nothing. Provider keys, database connection strings and credential-bearing
+URLs reaching exception text could therefore still be recovered from logs. Sinks across
+the audit forwarders, hook manager (including the hook *loading* path, which imports
+caller-supplied modules), interrupt manager, control protocol, tracing hook, approval
+manager, orchestration runtime, tool registry, MCP catalog server, RAG query classifier
+and the A2A provider seams now log scrubbed text with the traceback dropped.
+
+`SkillTool` is called out because its audience is wider than the log: the raw exception
+reached `SkillCompleteEvent.error_message`, `SkillResult.from_error` and
+`NativeToolResult.from_error` — that is, the model and the transcript. All three are now
+scrubbed. **Operator impact: these records no longer carry a stack trace**; the
+exception class name is preserved in the message and in `error_type`.
+
+Two DEBUG sinks probing for an optional dependency are deliberately left as they were,
+and now say so in place, because no credential channel exists there and the traceback is
+the whole diagnostic.
+
+### Security — caller-supplied callables no longer reach logs, or `get_stats()`, through their `repr`
+
+Hook registration, unregistration and failure, rate-limit audit records, isolation, and
+the L3 event bus all rendered `repr(handler)`. A `functools.partial` renders its bound
+keyword arguments verbatim and a callable object's generated `__repr__` renders every
+field, so a handler holding a credential disclosed it. This was not log-only: the same
+value became a dictionary **key** returned verbatim by the public
+`HookManager.get_stats()`. New helper `safe_handler_name()` (exported from
+`kaizen.core.autonomy.hooks.manager`) unwraps partial chains and renders a short
+identifier. **`get_stats()` keys change** for handlers without a `.name`.
+
+### Security — credential scrubbing covered fewer keys and vendors than documented (#1997)
+
+`secret_key` and `passphrase` were absent from the credential key-name vocabulary, so
+those values passed through in full under **both** scrub presets. Coverage was also
+preset-dependent rather than per-vendor: the rules claiming Groq, Cohere and Together
+were shape-based and therefore switched off at the conservative preset used by most
+sinks, and Mistral was uncovered at both. Added: the two missing key names, a Groq
+prefix rule, vendor-qualified key names, and a prefix-less mixed-alphabet opaque-key
+rule that fires on both presets. Stated cost, rather than absorbed silently:
+base64-JSON blobs now survive to 32 characters instead of 40, and long mixed-case
+identifiers containing a digit can be blanked in local error prose.
+
+### Changed (BREAKING) — hook isolation fails closed, is spawn-pinned, and no longer deserializes hook output in the agent process (#2014)
+
+- **It was not isolating anything on macOS or Windows.** The isolation worker was
+  defined as a closure, and the `spawn` start method transfers the target by pickle, so
+  process creation raised on every call. The failure was caught, the hook was run
+  **in-process with full agent privileges**, and a successful-looking result was returned
+  to the caller. spawn is the default on macOS and Windows, so on those platforms
+  isolation silently never happened; only Linux isolated anything. An isolation failure
+  now raises `HookIsolationError` and the hook does **not** run.
+- **`HookIsolationError` is now exported** from `kaizen.core.autonomy.hooks.security`,
+  and its base changed from `RuntimeError` to `Exception` so that unrelated
+  `except RuntimeError` control flow elsewhere cannot swallow it. Callers catching
+  `RuntimeError` will no longer catch it.
+- **The start method is pinned to `spawn` on every platform**, so hook handlers must be
+  picklable — defined at module scope. Lambdas, closures and locally-defined functions
+  now raise rather than silently running unisolated. On Linux this is a behaviour change:
+  spawn re-imports the entry-point module per isolated invocation, so unguarded
+  module-level side effects re-run.
+- **Hook results are no longer unpickled in the agent process.** Results crossed a queue
+  that unpickles in the *receiving* process, so a hook returning an object with a hostile
+  `__reduce__` had its payload constructed inside the parent — before status or worker
+  identity were inspected — and the call still reported success. The channel now carries
+  JSON primitives only. **Consequence: `HookResult.data` from an isolated hook must be
+  JSON-primitive** (nesting capped, message size capped); anything else is rejected
+  rather than coerced.
+- **`ResourceLimits.apply()` returns `list[str]`** (the limits it could not enforce)
+  instead of `None`, applies limits independently rather than all-or-nothing, and clamps
+  a requested cap down to the environment's hard limit instead of raising — so isolation
+  no longer breaks inside an already-hardened container. Limits are applied before the
+  ready signal, so readiness now means the sandbox exists.
+- The module's docstring previously promised containment of *malicious* hooks. It now
+  states what is delivered (crash containment, cross-hook independence, CPU and
+  file-size caps on Unix, a loud typed failure) and what is not (the child inherits the
+  parent's environment, credentials, working directory, filesystem and network; no
+  memory cap on macOS; no limits on Windows).
+
+### Changed (BREAKING) — provider detection fails closed instead of guessing (#2069)
+
+`AgentConfig` resolved an unspecified provider through a private substring table that
+ended in `else: return "openai"`. Any unrecognised model was dispatched to OpenAI under
+whatever credential happened to be configured, carrying the prompt with it, with no
+signal to the caller. The allowlist gate also sat structurally above the auto-detect
+assignment, so an auto-detected provider could never be validated.
+
+Detection now delegates to a shared resolver in which the **model beats the
+environment** — a `claude-*` model no longer dispatches to OpenAI merely because
+`OPENAI_API_KEY` is set — and one allowlist gate sits below detection, reached by both
+the explicit and the auto-detected path.
+
+- An unresolvable model now raises `kaizen.config.ConfigurationError` naming the fix,
+  rather than silently becoming `openai`.
+- **`llama*`, `mistral*` and `bakllava*` no longer imply `ollama`**; pass
+  `llm_provider="ollama"` explicitly. The shared resolver cannot carry an Ollama rule
+  because Ollama serves arbitrary model names.
+- Bare-substring matches are gone: a model named e.g. `cashflow-gpt5` no longer matches
+  on `gpt`.
+- New public helpers `kaizen.core.resolve_agent_provider()` and
+  `kaizen.core.detect_provider_from_env()`.
+- `deepseek` added to `AgentConfig.VALID_PROVIDERS`, which is now exactly:
+  `anthropic`, `azure`, `cohere`, `deepseek`, `docker`, `gemini`, `google`,
+  `huggingface`, `mock`, `ollama`, `openai`, `perplexity`, `pplx` (13 entries).
+
+### Changed (BREAKING) — configuration errors surface as errors instead of as bad model output (#2022)
+
+An unwired provider previously produced a failed-looking result dictionary, which
+downstream validation then rejected as a malformed model response — so a missing API key
+was reported to the user as the model misbehaving. Configuration-class errors now
+propagate out of `run()` / `execute()`. New public predicates in `kaizen.errors`:
+`configuration_error_types()`, `unwrap_configuration_error()` and
+`raise_if_configuration_error()` (the last handles the runtime returning a failed-node
+record rather than raising). Enforced across the single-shot, async single-shot and
+multi-cycle strategies, `BaseAgent`, and the `Kaizen.execute` framework path.
+
+### Fixed — `enable_checkpointing` now actually checkpoints (#2111)
+
+The checkpointing factory imported a module that does not exist anywhere in the tree, so
+the `ImportError` fired on every construction and the feature returned nothing:
+`enable_checkpointing=True` saved no state, made no run resumable, and accepted and
+ignored `checkpoint_path`, with a single warning as the only signal. It now builds a
+real state manager, so checkpoint, resume and fork work.
+
+- The `Agent` facade defaults `enable_checkpointing=True` (the `AgentConfig` field
+  itself still defaults `False`), so **this newly-real behaviour reaches every `Agent`
+  user**: constructing one now creates `.kaizen/checkpoints/` on disk where previously
+  it created nothing.
+- `checkpoint_interval` is documented and wired in **iterations**, deliberately not
+  mapped onto the state manager's seconds-based cadence, so nothing checkpoints on a
+  schedule nobody asked for.
+- An unwritable `checkpoint_path` degrades to no checkpointing with a one-time warning
+  naming the flag and the path, rather than aborting agent construction.
+
+### Fixed — agent-as-MCP-server was completely broken, and leaked an internal parameter
+
+- **Every agent method failed to register.** `expose_as_mcp_server` raised
+  `ValueError: Functions with **kwargs are not supported as tools` for every method
+  under current FastMCP, so exposing an agent as an MCP server did not work at all. The
+  generated wrapper now carries the method's real signature, so registration succeeds
+  **and** the published schema advertises the method's actual parameters instead of an
+  empty or bogus one.
+- **A method that cannot be published is now skipped with a warning when it was reached
+  by auto-discovery**, and still raises when it was named explicitly in `tools=[...]`.
+  One un-publishable method no longer takes the whole server down.
+- **`_bound_method` was advertised to every MCP client as a tool argument.** The wrapper
+  bound its target as a default parameter, so an implementation detail appeared in the
+  published schema — and because it bound by name, any client supplying it displaced the
+  method being called. It no longer appears in the schema.
+
+### Fixed — labelled histogram percentiles are scrapeable again
+
+The Prometheus exporter appended the percentile suffix after the labels, producing
+`name{label="v"}_p50` — a form the Prometheus exposition format rejects. Every labelled
+histogram's p50/p95/p99 were unscrapeable; counters, gauges and unlabelled histograms
+were unaffected, which is why it went unnoticed. Now emitted as `name_p50{label="v"}`.
+Anything that parsed the old (invalid) form will need updating.
+
+### Changed — SSRF rejection reason codes are more specific (#2137, follow-up)
+
+Verdicts are unchanged and nothing was widened; the reason *bucket* moved for nine
+cases across the two enforcement surfaces. At parse time, `file://`, `javascript:` and
+unparseable input now report a scheme rejection rather than a malformed-URL rejection.
+At connect time, the IPv6-wrapped metadata-service forms now report as metadata-service
+or link-local rather than a generic mapped-address code, and IPv4 loopback and
+link-local are reported as such rather than as the coarser private-range code. This is
+the point of the change: metadata-exfiltration attempts are now separable at both
+surfaces. Dashboards counting the old buckets will see those counts shift.
+
+### Changed — trust constraint evaluation fails closed on an unknown dimension (#2189)
+
+Originates in `kailash` core and is surfaced here because `kaizen.trust.constraints`
+re-exports the evaluator. A constraint naming a dimension that is not registered was
+previously dropped from the result set with a warning nothing consulted, so a constraint
+set could be reported as satisfied without that dimension ever being evaluated. An
+unregistered dimension is now recorded as unsatisfied with a reason naming it, and a
+satisfaction verdict over zero results returns false rather than true.
+
 ### Security (BREAKING) — `VectorMemory` no longer ships a mock embedder as its default (#2174)
 
 **Read the migration note below. Any code that constructed `VectorMemory` without `embedding_fn` will stop constructing.** That is the intended behaviour.
@@ -363,9 +608,9 @@ The tenant-namespace boundary is now pinned by tests in all four directions
 (no-tenant↔no-tenant, no-tenant vs tenant-scoped, tenant-scoped vs no-tenant, and
 tenant A vs tenant B) — the coverage #2005 correctly identified as missing.
 
-## [2.46.0] — 2026-08-05 — Credential-sanitization hardening completed; A2A capability matching fixed (#1970, #1973, #1974, #1981)
+### Earlier in the same release — credential-sanitization hardening completed; A2A capability matching fixed (#1970, #1973, #1974, #1981)
 
-**Upgrade note: this release does NOT include the discovery-permission fail-open fix.** That fix lives in the separate `kaizen-agents` package (`UserFilteredAgentDiscovery`, not part of `kailash-kaizen`) and ships in `kaizen-agents` 0.13.0. `kaizen-agents` 0.12.0 declares `kailash-kaizen>=2.36.0` with no upper cap, so upgrading `kailash-kaizen` to 2.46.0 satisfies that floor and gives a dependency resolver no reason to also upgrade `kaizen-agents` — an environment can report `kailash-kaizen` upgraded while `kaizen-agents` silently stays on 0.12.0 with its fail-open permission checker still live. If your deployment uses `kaizen-agents`, upgrade it explicitly to `>=0.13.0` alongside this release; see the `kaizen-agents` CHANGELOG for the fix itself.
+**Upgrade note: this release does NOT include the agent-discovery permission fixes.** Those live in the separate `kaizen-agents` package (`UserFilteredAgentDiscovery`, not part of `kailash-kaizen`) and ship in `kaizen-agents` 0.13.0 — both the fail-open permission checker and the partial-identity discovery bypass. `kaizen-agents` 0.12.0 declares `kailash-kaizen>=2.36.0` with no upper cap, so upgrading `kailash-kaizen` to 2.46.0 satisfies that floor and gives a dependency resolver no reason to also upgrade `kaizen-agents` — an environment can report `kailash-kaizen` upgraded while `kaizen-agents` silently stays on 0.12.0 with both defects still live. If your deployment uses `kaizen-agents`, upgrade it explicitly to `>=0.13.0` alongside this release; see the `kaizen-agents` CHANGELOG for the fixes themselves.
 
 ### Changed (behavior — potentially breaking)
 
