@@ -23,6 +23,19 @@ such as `>=2.0`.
 
 This is `dependencies.md`'s module-scope-import rule — an unconditional import of a sibling the package does not declare. It survived because a monorepo dev environment has `nexus` editable-installed, so it could only ever fail on a clean install; it surfaced when new trust tests became the first thing under `tests/trust/unit/` to import the package in a `[trust]`-only CI job.
 
+### Changed (BREAKING) — the Agent Card moved to the A2A 1.0 well-known path (#2203)
+
+> Documented after the fact. This change shipped in 2.64.0 and this entry did not, so a reader
+> checking why their discovery broke found nothing. No artifact is re-published; only these notes
+> are corrected — the same treatment applied to the kaizen notes on the same date.
+
+A2A moves to the 1.0 line, so the Agent Card is served at **`/.well-known/agent-card.json`**
+instead of the 0.2.x **`/.well-known/agent.json`**. This is a **hard cutover with no dual-serving
+shim** — the old path is gone, not deprecated alongside — so any client, crawler, service-discovery
+probe or health check still requesting `/.well-known/agent.json` now gets a 404. Update the path;
+there is no compatibility window. Anyone consuming the card through `kaizen.trust.a2a`, which
+re-exports these names, is affected identically.
+
 ### Security (BREAKING) — A2A protected methods now require authorization (#2203)
 
 Authentication established WHO is calling; nothing established WHAT they could do. `audit.query` and `agent.invoke` took their target from request params, and `trust.delegate` delegated **the serving agent's own authority** to a caller-chosen delegatee with a caller-chosen capability list.

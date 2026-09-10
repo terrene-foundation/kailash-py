@@ -357,42 +357,60 @@ class TestAsyncNodePerformance:
     async def test_concurrent_execution_performance(self):
         """Test that concurrent execution is non-blocking.
 
-        Asserts RELATIVE speedup (concurrent measurably faster than
-        sequential) rather than absolute wall-clock — the absolute
-        `< 0.1s` threshold was flaky on shared CI runners where
-        import + loop-startup overhead could push 10× async-sleep(1ms)
-        calls past 100ms despite async working correctly. The relative
-        check catches the real regression (serialization) without
-        measuring runner load.
+        Asserts INTERLEAVING, not wall-clock. Two prior versions of this
+        test measured time and both were flaky, for the same reason in
+        two disguises: an absolute `< 0.1s` budget, then a relative "3×
+        faster than sequential" ratio. The ratio form still fails on a
+        loaded machine — measured here, `asyncio.sleep(0.025)` took
+        0.235s because the event loop was starved by other processes, so
+        a correctly-parallel run looked serial. A timing assertion cannot
+        distinguish "the runtime serialized" from "the CPU was busy",
+        which is the one distinction this test exists to make.
+
+        The interleaving check is deterministic and load-independent. If
+        the runtime is truly concurrent, all ten nodes ENTER before any
+        of them EXITS, because every one is parked in its sleep at the
+        same moment. If the runtime serializes, entries and exits strictly
+        alternate. That property holds whatever the wall-clock does, so
+        the test is immune to runner load while failing loudly on the
+        real regression. The sequential arm below is kept as a control:
+        it must exhibit the alternating pattern, which proves the
+        assertion can still return the other verdict.
         """
-        # Each node sleeps 1ms. 10 nodes sequentially ≥ 10ms sleep time.
-        # Concurrently ≥ 1ms. We require concurrent to be at least 3×
-        # faster than sequential — a margin that survives runner noise
-        # while still failing loudly if the runtime serializes.
-        nodes_concurrent = [ConcreteTestAsyncNode() for _ in range(10)]
-        nodes_sequential = [ConcreteTestAsyncNode() for _ in range(10)]
+        events: list[str] = []
 
-        import time
+        class _TracingNode(AsyncNode):
+            """Records entry/exit ordering — no wall-clock involved."""
 
-        start = time.time()
+            def get_parameters(self):
+                return {}
+
+            async def async_run(self, **kwargs):
+                events.append("enter")
+                await asyncio.sleep(0.001)
+                events.append("exit")
+                return {"result": "success", **kwargs}
+
         results = await asyncio.gather(
-            *[node.execute_async() for node in nodes_concurrent]
+            *[_TracingNode().execute_async() for _ in range(10)]
         )
-        concurrent_duration = time.time() - start
 
-        start = time.time()
-        for node in nodes_sequential:
-            await node.execute_async()
-        sequential_duration = time.time() - start
-
-        assert concurrent_duration * 3 < sequential_duration, (
-            f"concurrent execution should be at least 3x faster than "
-            f"sequential; got concurrent={concurrent_duration:.3f}s vs "
-            f"sequential={sequential_duration:.3f}s — async path "
-            f"appears to be serializing."
+        assert events[:10] == ["enter"] * 10, (
+            "async path appears to be serializing: with true concurrency all "
+            "10 nodes enter before any exits, but the observed order was "
+            f"{events[:12]}"
         )
+        assert events[10:] == ["exit"] * 10
         assert len(results) == 10
         assert all(r["result"] == "success" for r in results)
+
+        # Control: the same instrument must report the OPPOSITE pattern for
+        # genuinely sequential execution. Without this, a vacuous assertion
+        # that passed for any input would be indistinguishable from a real one.
+        events.clear()
+        for _ in range(10):
+            await _TracingNode().execute_async()
+        assert events == ["enter", "exit"] * 10
 
     @pytest.mark.asyncio
     async def test_async_logging_doesnt_block(self):
