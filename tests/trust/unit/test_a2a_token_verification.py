@@ -336,33 +336,32 @@ async def test_no_verifier_still_serves_public_methods():
     assert seen == [None]
 
 
-@pytest.mark.asyncio
-async def test_unverified_opt_in_is_explicit_and_warns_once(caplog):
-    """The escape hatch works, is opt-in, and is loud."""
-    rpc, seen = _handler(allow_unverified_tokens=True)
+@pytest.mark.regression
+def test_there_is_no_unverified_escape_hatch():
+    """No opt-out may reintroduce presence-only authentication.
 
-    with caplog.at_level("WARNING"):
-        first = await rpc.handle(_request("trust.delegate"), "anything")
-        second = await rpc.handle(_request("trust.delegate"), "anything-else")
+    An `allow_unverified_tokens` flag existed briefly and was removed: it could
+    only pass handlers a `None` caller, identical to what a genuine PUBLIC
+    method receives, so a handler treating `caller is None` as "public method"
+    would have served protected data under it.
+    """
+    import inspect
 
-    assert first.error is None, "explicit opt-in should permit the call"
-    assert second.error is None
-    assert len(seen) == 2
-    assert seen == [None, None], "unverified mode must not fabricate an identity"
-
-    warnings = [
-        r for r in caplog.records if r.message == "a2a.auth.unverified_tokens_enabled"
-    ]
-    assert len(warnings) == 1, f"expected exactly one warning, got {len(warnings)}"
+    params = inspect.signature(JsonRpcHandler.__init__).parameters
+    assert "allow_unverified_tokens" not in params, (
+        "the unverified-token escape hatch is back; it makes an unauthenticated "
+        "caller indistinguishable from a public-method caller"
+    )
 
 
 @pytest.mark.asyncio
-async def test_unverified_opt_in_still_requires_a_token():
-    """The escape hatch relaxes VERIFICATION, never the requirement itself."""
-    rpc, seen = _handler(allow_unverified_tokens=True)
-    response = await rpc.handle(_request("trust.delegate"), None)
+async def test_no_verifier_refuses_even_a_genuine_looking_token():
+    """Fail-closed is unconditional — there is no flag that relaxes it."""
+    rpc, seen = _handler()
+    response = await rpc.handle(_request("trust.delegate"), VALID_TOKEN)
 
     assert response.error is not None
+    assert "verification is not configured" in response.error["message"]
     assert seen == []
 
 

@@ -76,8 +76,6 @@ class JsonRpcHandler:
         self,
         token_verifier: Optional[TokenVerifier] = None,
         expected_audience: Optional[str] = None,
-        *,
-        allow_unverified_tokens: bool = False,
     ):
         """Initialize the JSON-RPC handler.
 
@@ -87,22 +85,19 @@ class JsonRpcHandler:
             expected_audience: This agent's id. Passed to ``verify_token`` as
                 ``expected_audience`` so a token minted for a DIFFERENT agent is
                 rejected here rather than replayed across agents.
-            allow_unverified_tokens: Explicit, loud opt-out that restores the
-                pre-verification behaviour (any non-empty token authenticates).
-                Defaults to ``False`` — with no verifier configured, protected
-                methods FAIL CLOSED. Provided only as a migration path for a
-                deployment that cannot yet mint signed tokens; it is not a
-                supported production mode and warns once per handler.
 
-        Fail-closed is the default per ``security.md`` § Secure-Default For A New
-        Security Feature: an enabling flag whose default makes the protection a
-        silent no-op is exactly the shape that rule blocks.
+        There is deliberately NO opt-out. With no verifier configured, protected
+        methods FAIL CLOSED. An "accept unverified tokens" escape hatch was
+        considered and rejected: it can only hand handlers a ``None`` caller,
+        which is indistinguishable from the ``None`` a genuine PUBLIC method
+        receives — so a handler reading ``caller is None`` as "this is the
+        public method" would serve protected data. A migration flag whose safe
+        use depends on every handler distinguishing two identical values is not
+        a migration path.
         """
         self._methods: Dict[str, MethodHandler] = {}
         self._token_verifier = token_verifier
         self._expected_audience = expected_audience
-        self._allow_unverified_tokens = allow_unverified_tokens
-        self._warned_unverified = False
 
     def register_method(self, name: str, handler: MethodHandler) -> None:
         """
@@ -204,28 +199,12 @@ class JsonRpcHandler:
             raise AuthenticationError(f"Authentication required for method: {method}")
 
         if self._token_verifier is None:
-            if not self._allow_unverified_tokens:
-                # FAIL CLOSED. A handler with no verifier cannot distinguish a
-                # signed token from an arbitrary string, so it refuses rather
-                # than accepting one. Silently accepting here is the exact
-                # fail-open default `security.md` blocks.
-                raise AuthenticationError(
-                    f"Token verification is not configured; refusing method: {method}"
-                )
-            if not self._warned_unverified:
-                self._warned_unverified = True
-                logger.warning(
-                    "a2a.auth.unverified_tokens_enabled",
-                    extra={
-                        "expected_audience": self._expected_audience,
-                        "detail": (
-                            "allow_unverified_tokens=True — bearer tokens are NOT "
-                            "verified; any non-empty token authenticates. Migration "
-                            "escape hatch only, never a production mode."
-                        ),
-                    },
-                )
-            return None
+            # FAIL CLOSED. A handler with no verifier cannot distinguish a signed
+            # token from an arbitrary string, so it refuses rather than accepting
+            # one (security.md § Secure-Default).
+            raise AuthenticationError(
+                f"Token verification is not configured; refusing method: {method}"
+            )
 
         # Raises InvalidTokenError / TokenExpiredError / TrustVerificationError,
         # each an A2AError, so `handle` maps it to a JSON-RPC error rather than
