@@ -89,16 +89,29 @@ class TestHTTPServer:
 
     __test__ = False  # Exclude from pytest collection (utility class, not a test)
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 8765):
+    def __init__(self, host: str = "127.0.0.1", port: int = 0):
         """
         Initialize HTTP test server.
 
         Args:
             host: Host to bind to (default: "127.0.0.1")
-            port: Port to bind to (default: 8765)
+            port: Port to bind to. Defaults to 0, meaning the OS assigns a free
+                ephemeral port, which :meth:`start` then reads back so
+                :attr:`base_url` reports the real address. Pass an explicit port
+                only when a test genuinely needs a fixed one.
 
         Example:
-            server = TestHTTPServer(host="127.0.0.1", port=8765)
+            server = TestHTTPServer(host="127.0.0.1")
+            await server.start()
+            url = server.base_url  # e.g. http://127.0.0.1:53412
+
+        Note:
+            The default used to be a hardcoded 8765, and callers hardcoded
+            8765-8771 alongside it. A fixed port makes the test depend on
+            whether ANY other process on the machine holds it -- a second run of
+            the same suite, a parallel CI job, or a sibling agent -- which
+            surfaces as ``OSError: [Errno 48] address already in use`` rather
+            than as a real failure. Ephemeral ports remove that shared state.
         """
         self._host = host
         self._port = port
@@ -154,7 +167,22 @@ class TestHTTPServer:
         self._site = web.TCPSite(self._runner, self._host, self._port)
         await self._site.start()
 
+        # Read the port the OS actually bound. Required when self._port is 0
+        # (ephemeral), so base_url reports the real address rather than "0".
+        self._port = self._bound_port(default=self._port)
+
         self._running = True
+
+    def _bound_port(self, default: int) -> int:
+        """Return the port the running site is actually listening on."""
+        server = getattr(self._site, "_server", None)
+        sockets = getattr(server, "sockets", None) or ()
+        for sock in sockets:
+            try:
+                return sock.getsockname()[1]
+            except (OSError, IndexError):
+                continue
+        return default
 
     async def stop(self) -> None:
         """

@@ -99,7 +99,7 @@ class TestHTTPServerLifecycle:
         if TestHTTPServer is None:
             pytest.skip("TestHTTPServer not yet implemented")
 
-        server = TestHTTPServer(host="127.0.0.1", port=8765)
+        server = TestHTTPServer(host="127.0.0.1")
 
         # Start server
         await server.start()
@@ -114,7 +114,7 @@ class TestHTTPServerLifecycle:
         if TestHTTPServer is None:
             pytest.skip("TestHTTPServer not yet implemented")
 
-        server = TestHTTPServer(host="127.0.0.1", port=8766)
+        server = TestHTTPServer(host="127.0.0.1")
 
         await server.start()
         assert server.is_running()
@@ -130,7 +130,7 @@ class TestHTTPServerLifecycle:
         if TestHTTPServer is None:
             pytest.skip("TestHTTPServer not yet implemented")
 
-        server = TestHTTPServer(host="127.0.0.1", port=8767)
+        server = TestHTTPServer(host="127.0.0.1")
 
         await server.start()
         await server.stop()
@@ -145,7 +145,7 @@ class TestHTTPServerLifecycle:
         if TestHTTPServer is None:
             pytest.skip("TestHTTPServer not yet implemented")
 
-        server = TestHTTPServer(host="127.0.0.1", port=8768)
+        server = TestHTTPServer(host="127.0.0.1")
 
         async with server:
             assert server.is_running()
@@ -169,7 +169,7 @@ class TestHTTPServerControlEndpoint:
 
         import aiohttp
 
-        server = TestHTTPServer(host="127.0.0.1", port=8769)
+        server = TestHTTPServer(host="127.0.0.1")
 
         async with server:
             # Send message to /control endpoint
@@ -177,7 +177,7 @@ class TestHTTPServerControlEndpoint:
                 test_data = {"test": "message", "request_id": "req_123"}
 
                 async with session.post(
-                    "http://127.0.0.1:8769/control",
+                    f"{server.base_url}/control",
                     json={"data": json.dumps(test_data)},
                 ) as response:
                     assert response.status == 200
@@ -189,7 +189,7 @@ class TestHTTPServerControlEndpoint:
 
         import aiohttp
 
-        server = TestHTTPServer(host="127.0.0.1", port=8770)
+        server = TestHTTPServer(host="127.0.0.1")
 
         async with server:
             async with aiohttp.ClientSession() as session:
@@ -205,7 +205,7 @@ class TestHTTPServerControlEndpoint:
                 }
 
                 async with session.post(
-                    "http://127.0.0.1:8770/control", json=payload
+                    f"{server.base_url}/control", json=payload
                 ) as response:
                     assert response.status == 200
 
@@ -225,11 +225,11 @@ class TestHTTPServerStreamEndpoint:
 
         import aiohttp
 
-        server = TestHTTPServer(host="127.0.0.1", port=8771)
+        server = TestHTTPServer(host="127.0.0.1")
 
         async with server:
             async with aiohttp.ClientSession() as session:
-                async with session.get("http://127.0.0.1:8771/stream") as response:
+                async with session.get(f"{server.base_url}/stream") as response:
                     # Should have SSE headers
                     assert response.status == 200
                     assert response.headers.get("Content-Type") == "text/event-stream"
@@ -243,7 +243,7 @@ class TestHTTPServerStreamEndpoint:
 
         import aiohttp
 
-        server = TestHTTPServer(host="127.0.0.1", port=8772)
+        server = TestHTTPServer(host="127.0.0.1")
 
         async with server:
             async with aiohttp.ClientSession() as session:
@@ -256,7 +256,7 @@ class TestHTTPServerStreamEndpoint:
                     try:
                         with anyio.fail_after(3.0):
                             async with session.get(
-                                "http://127.0.0.1:8772/stream"
+                                f"{server.base_url}/stream"
                             ) as response:
                                 async for line_bytes in response.content.iter_any():
                                     line = line_bytes.decode("utf-8").strip()
@@ -278,7 +278,7 @@ class TestHTTPServerStreamEndpoint:
 
                     # Post to control
                     await session.post(
-                        "http://127.0.0.1:8772/control",
+                        f"{server.base_url}/control",
                         json={"data": json.dumps(test_message)},
                     )
 
@@ -307,7 +307,7 @@ class TestHTTPServerRequestResponsePairing:
 
         import aiohttp
 
-        server = TestHTTPServer(host="127.0.0.1", port=8773)
+        server = TestHTTPServer(host="127.0.0.1")
 
         async with server:
             async with aiohttp.ClientSession() as session:
@@ -323,7 +323,7 @@ class TestHTTPServerRequestResponsePairing:
                     try:
                         with anyio.fail_after(3.0):
                             async with session.get(
-                                "http://127.0.0.1:8773/stream"
+                                f"{server.base_url}/stream"
                             ) as response:
                                 async for line_bytes in response.content.iter_any():
                                     line = line_bytes.decode("utf-8").strip()
@@ -342,7 +342,7 @@ class TestHTTPServerRequestResponsePairing:
 
                     # Send request
                     await session.post(
-                        "http://127.0.0.1:8773/control",
+                        f"{server.base_url}/control",
                         json={"data": json.dumps(request_data)},
                     )
 
@@ -359,7 +359,7 @@ class TestHTTPServerRequestResponsePairing:
 
         import aiohttp
 
-        server = TestHTTPServer(host="127.0.0.1", port=8774)
+        server = TestHTTPServer(host="127.0.0.1")
 
         async with server:
             async with aiohttp.ClientSession() as session:
@@ -378,7 +378,7 @@ class TestHTTPServerRequestResponsePairing:
                     try:
                         with anyio.fail_after(4.0):
                             async with session.get(
-                                "http://127.0.0.1:8774/stream"
+                                f"{server.base_url}/stream"
                             ) as response:
                                 async for line_bytes in response.content.iter_any():
                                     line = line_bytes.decode("utf-8").strip()
@@ -400,7 +400,7 @@ class TestHTTPServerRequestResponsePairing:
                     # Post all requests
                     for req in requests:
                         await session.post(
-                            "http://127.0.0.1:8774/control",
+                            f"{server.base_url}/control",
                             json={"data": json.dumps(req)},
                         )
                         await anyio.sleep(0.2)
@@ -426,13 +426,13 @@ class TestHTTPServerErrorHandling:
 
         import aiohttp
 
-        server = TestHTTPServer(host="127.0.0.1", port=8775)
+        server = TestHTTPServer(host="127.0.0.1")
 
         async with server:
             async with aiohttp.ClientSession() as session:
                 # Send invalid JSON (missing 'data' field)
                 async with session.post(
-                    "http://127.0.0.1:8775/control", json={"invalid": "structure"}
+                    f"{server.base_url}/control", json={"invalid": "structure"}
                 ) as response:
                     # Server should handle gracefully (might accept or reject)
                     # At minimum, should not crash
@@ -445,12 +445,12 @@ class TestHTTPServerErrorHandling:
 
         import aiohttp
 
-        server = TestHTTPServer(host="127.0.0.1", port=8776)
+        server = TestHTTPServer(host="127.0.0.1")
 
         async with server:
             async with aiohttp.ClientSession() as session:
                 try:
-                    async with session.get("http://127.0.0.1:8776/health") as response:
+                    async with session.get(f"{server.base_url}/health") as response:
                         # If health endpoint exists, should return 200
                         assert response.status == 200
                 except aiohttp.ClientResponseError:
