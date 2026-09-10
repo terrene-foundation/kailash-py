@@ -253,6 +253,64 @@ async def test_missing_token_still_rejected():
 
 
 # --------------------------------------------------------------------------
+# Audience pin — needs its OWN enforcement surface
+# --------------------------------------------------------------------------
+
+
+class AudienceIgnoringVerifier:
+    """A conformant-looking verifier that ignores `expected_audience`.
+
+    Legitimate shape: `TokenVerifier` is a Protocol a deployment may implement
+    itself. If the audience pin lives ONLY inside the verifier, such an
+    implementation silently disables it with nothing else to catch it.
+    """
+
+    async def verify_token(
+        self,
+        token: str,
+        expected_audience: str | None = None,
+        verify_trust: bool = True,
+    ) -> A2AToken:
+        return _claims("caller-agent", "a-completely-different-agent")
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_audience_reasserted_even_if_the_verifier_ignores_it():
+    """Enforcement-surface parity: the handler re-checks `aud` itself."""
+    rpc, seen = _handler(
+        token_verifier=AudienceIgnoringVerifier(), expected_audience=THIS_AGENT
+    )
+    response = await rpc.handle(_request("trust.delegate"), VALID_TOKEN)
+
+    assert response.error is not None, (
+        "a token for another audience was accepted because the only audience "
+        "check lived inside the verifier"
+    )
+    assert "audience mismatch" in response.error["message"]
+    assert seen == []
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+@pytest.mark.parametrize("audience", [None, ""])
+async def test_missing_expected_audience_fails_closed(audience):
+    """No audience to pin against means the pin cannot fire — so refuse.
+
+    `verify_token` skips the audience check on a falsy `expected_audience`,
+    so verifying a signature without one is not authentication for THIS agent.
+    """
+    rpc, seen = _handler(
+        token_verifier=DeterministicVerifier(), expected_audience=audience
+    )
+    response = await rpc.handle(_request("trust.delegate"), VALID_TOKEN)
+
+    assert response.error is not None
+    assert "expected_audience is not configured" in response.error["message"]
+    assert seen == []
+
+
+# --------------------------------------------------------------------------
 # Fail-closed default (security.md § Secure-Default)
 # --------------------------------------------------------------------------
 

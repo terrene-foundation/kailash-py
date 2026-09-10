@@ -146,6 +146,19 @@ class A2AService:
             cors_allow_methods=["*"],
             cors_allow_headers=["*"],
             cors_allow_credentials=True,
+            # Durability enables Nexus's response deduplication cache, which
+            # fingerprints a request on (method, path, query, body) — its
+            # `include_headers` defaults to empty, so `Authorization` is NOT
+            # part of the key. On this service every response is caller-specific,
+            # so a cached reply to an authenticated request was replayable to a
+            # caller with NO token: the cache hit short-circuits routing, and
+            # `JsonRpcHandler._authenticate` never runs.
+            #
+            # Fingerprinting the auth header would not be sufficient either —
+            # two callers bearing different tokens with different rights would
+            # still share an entry. A shared response cache does not belong in
+            # front of a per-caller authorization boundary at all, so it is off.
+            enable_durability=False,
         )
 
         # Register routes

@@ -382,6 +382,56 @@ class TestJsonRpcHandler:
         assert result["error"]["code"] == -32600  # Invalid Request
 
     @pytest.mark.regression
+    def test_authenticated_response_is_not_served_to_an_unauthenticated_caller(
+        self, test_client, auth_token
+    ):
+        """A cached response MUST NOT bypass authentication.
+
+        Nexus enables durability (response dedup/caching) by default, and
+        `RequestDeduplicator` fingerprints a request on (method, path, query,
+        body) with `include_headers` defaulting to empty -- so `Authorization`
+        is NOT part of the cache key. A response produced for an authenticated
+        caller can then be replayed to a caller with no token at all, and
+        `JsonRpcHandler._authenticate` never runs on the cache hit.
+
+        This is the gap that made the token-verification fix insufficient at
+        the DEPLOYED surface: the fix was verified against `JsonRpcHandler`
+        and generalized to `A2AService`, which sits behind this cache.
+        """
+        body = {
+            "jsonrpc": "2.0",
+            "method": "agent.invoke",
+            "params": {"probe": "cache-bypass"},
+            "id": 4242,
+        }
+
+        first = test_client.post(
+            "/a2a/jsonrpc",
+            json=body,
+            headers={"Authorization": f"Bearer {auth_token}"},
+        )
+        assert first.status_code == 200
+
+        # Byte-identical body, NO Authorization header at all.
+        replay = test_client.post("/a2a/jsonrpc", json=body)
+        payload = replay.json()
+
+        # A cache hit is recognisable by the deduplicator's envelope.
+        assert "cached" not in payload, (
+            "unauthenticated replay was served from the response cache: " f"{payload}"
+        )
+        assert (
+            "data" not in payload or "error" in payload
+        ), f"unauthenticated replay returned a cached body: {payload}"
+        assert "error" in payload, (
+            "an unauthenticated request must be refused, not served a cached "
+            f"authenticated response: {payload}"
+        )
+        assert (
+            payload["error"]["code"] == -40002
+        ), f"expected an authentication failure, got {payload['error']}"
+
+    @pytest.mark.regression
     @pytest.mark.parametrize(
         "bogus_token",
         ["AAAA", " ", "not-a-jwt-at-all", "a.b.c", "Bearer"],

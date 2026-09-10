@@ -195,7 +195,7 @@ class JsonRpcHandler:
         is cryptographically verified and a :class:`CallerIdentity` returned;
         anything short of that raises.
         """
-        from kailash.trust.a2a.exceptions import AuthenticationError
+        from kailash.trust.a2a.exceptions import AuthenticationError, InvalidTokenError
 
         if method in self.PUBLIC_METHODS:
             return None
@@ -231,9 +231,30 @@ class JsonRpcHandler:
         # each an A2AError, so `handle` maps it to a JSON-RPC error rather than
         # a 500. The audience check is what stops a token minted for a
         # DIFFERENT agent being replayed here.
+        if not self._expected_audience:
+            # A verifier with no audience to pin against cannot reject a token
+            # minted for a DIFFERENT agent -- `verify_token` skips the check on a
+            # falsy audience. Refuse rather than verify a signature and call it
+            # authentication (security.md § Secure-Default).
+            raise AuthenticationError(
+                "expected_audience is not configured; refusing method: " + method
+            )
+
         claims = await self._token_verifier.verify_token(
             auth_token, expected_audience=self._expected_audience
         )
+
+        # Re-assert the audience HERE, independently. The verifier is a Protocol
+        # a deployment may implement itself, and one that ignores the kwarg would
+        # silently disable the pin with nothing else to catch it -- a single
+        # enforcement surface for a fail-closed control
+        # (security.md § Enforcement-Surface Parity).
+        if claims.aud != self._expected_audience:
+            raise InvalidTokenError(
+                f"Token audience mismatch: expected {self._expected_audience}, "
+                f"got {claims.aud}"
+            )
+
         return CallerIdentity(agent_id=claims.sub, claims=claims, token=auth_token)
 
     async def handle_batch(
