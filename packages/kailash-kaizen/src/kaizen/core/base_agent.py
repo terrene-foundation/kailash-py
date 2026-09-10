@@ -783,6 +783,26 @@ class BaseAgent(MCPMixin, A2AMixin, OutputExtractionMixin, ControlProtocolMixin,
                 tracing_manager=self._observability_manager.tracing,
                 events_to_trace=events_to_trace,
             )
+            # Calling enable_observability() IS the opt-in, so create the hook
+            # manager rather than assuming __init__ already did. `hooks_enabled`
+            # defaults to False (core/config.py), so on a default-constructed
+            # agent `_hook_manager` is None and this line raised
+            # `AttributeError: 'NoneType' object has no attribute
+            # 'register_hook'` -- crashing the whole method before any
+            # component-specific code ran, which is why metrics- and
+            # logging-only tests failed too (`enable_tracing` defaults True).
+            #
+            # The sibling wrapper `register_hook()` already guards this exact
+            # attribute (#2084); this call site was never routed through it.
+            # Pre-existing since the genesis commit, not a #2084 regression.
+            if self._hook_manager is None:
+                from kaizen.core.autonomy.hooks.manager import HookManager
+
+                self._hook_manager = HookManager()
+                # __init__ keeps these two names pointing at one object; hold
+                # that invariant so a later `self.hook_manager` read does not
+                # silently see None while hooks are registered on the other.
+                self.hook_manager = self._hook_manager
             self._hook_manager.register_hook(tracing_hook)
 
         if enable_tracing:
