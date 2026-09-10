@@ -36,7 +36,75 @@ if [ "${COC_DEV_PUSH_SKIP:-0}" = "1" ]; then
     exit 0
 fi
 
-echo "dev-push-stopgap: checking $(git rev-parse --short HEAD) (stopgap; not the canonical preflight)"
+# --- Determine WHAT is being pushed -----------------------------------------
+# As a pre-push hook git delivers one line per ref on stdin:
+#   <local-ref> <local-sha> <remote-ref> <remote-sha>
+# Ignoring stdin and checking HEAD is a FAIL-OPEN: `git push origin
+# other:dev` pushes `other` while the guard validates HEAD. Two further
+# fail-opens are pinned here because they shipped in a sibling repo's guard:
+#
+#  1. Splitting on /\s+/ (or unquoted word-splitting) accepts U+00A0, which
+#     `git check-ref-format` PERMITS in a ref name -- so a crafted branch name
+#     splits into five fields and the destination binds to the wrong token.
+#     git emits single ASCII spaces and forbids a space in a ref name, so an
+#     exact 4-field ASCII split is precise, not heuristic.
+#  2. Empty stdin read as "nothing to push". git never invokes pre-push with
+#     zero refs, so empty always means the delivery path failed -> REFUSE.
+GATED_REFS="refs/heads/dev refs/heads/main"
+TARGET_SHA=""
+TARGET_DESC=""
+
+if [ -t 0 ]; then
+    # Manual invocation: no stdin contract, check HEAD and say so.
+    TARGET_SHA=$(git rev-parse HEAD)
+    TARGET_DESC="HEAD (manual run; not a pre-push invocation)"
+else
+    STDIN_CONTENT=$(cat)
+    if [ -z "$STDIN_CONTENT" ]; then
+        echo "dev-push-stopgap: REFUSED — empty stdin."
+        echo "  git never invokes pre-push with zero refs, so this means the"
+        echo "  delivery path failed. Treating it as 'nothing to push' would be"
+        echo "  a fail-open."
+        exit 1
+    fi
+    while IFS= read -r raw; do
+        [ -z "$raw" ] && continue
+        # Exact ASCII-space split. NOT $(...) word-splitting, NOT /\s+/.
+        OLDIFS=$IFS; IFS=' '; set -f; set -- $raw; set +f; IFS=$OLDIFS
+        if [ "$#" -ne 4 ] || [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ]; then
+            echo "dev-push-stopgap: REFUSED — malformed ref line ($# fields, expected 4)."
+            echo "  A ref name containing a non-ASCII space would split wrong here."
+            exit 1
+        fi
+        LOCAL_SHA="$2"; REMOTE_REF="$3"
+        case " $GATED_REFS " in
+            *" $REMOTE_REF "*)
+                if [ "$LOCAL_SHA" = "0000000000000000000000000000000000000000" ]; then
+                    echo "dev-push-stopgap: REFUSED — deletion of gated ref $REMOTE_REF."
+                    exit 1
+                fi
+                TARGET_SHA="$LOCAL_SHA"; TARGET_DESC="$REMOTE_REF"
+                ;;
+        esac
+    done <<EOF
+$STDIN_CONTENT
+EOF
+    if [ -z "$TARGET_SHA" ]; then
+        echo "dev-push-stopgap: OK — no gated ref in this push (nothing to check)."
+        exit 0
+    fi
+fi
+
+echo "dev-push-stopgap: checking $(git rev-parse --short "$TARGET_SHA") -> $TARGET_DESC"
+
+# The commit being pushed MUST be the one we test. Checking HEAD while a
+# different SHA is pushed is the fail-open this block exists to close.
+if [ "$TARGET_SHA" != "$(git rev-parse HEAD)" ]; then
+    note "pushed SHA vs HEAD" "MISMATCH — refusing (would test the wrong tree)"
+    echo "dev-push-stopgap: REFUSED — pushing $TARGET_SHA but HEAD is $(git rev-parse HEAD)."
+    echo "  Check out the commit you intend to push, or push HEAD."
+    exit 1
+fi
 
 # --- 0. The interpreter must be the venv one, not a pyenv/asdf shim ---------
 if [ ! -x "$PY" ]; then
