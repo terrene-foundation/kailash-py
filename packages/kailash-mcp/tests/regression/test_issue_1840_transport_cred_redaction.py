@@ -38,6 +38,23 @@ HTTP_URL = "https://http_user:S3cr3tHTTP@mcp.example:8443/base?token=httptok123"
 WS_URL = "wss://ws_user:S3cr3tWS@mcp.example:8443/ws?token=wstok123"
 
 
+def _legacy_http_transport(**kwargs) -> StreamableHTTPTransport:
+    """Construct the deprecated StreamableHTTPTransport, asserting its warning.
+
+    ``StreamableHTTPTransport.__init__`` deliberately emits a
+    ``DeprecationWarning`` (it is a NON-SPEC legacy transport). These redaction
+    regressions must keep exercising it — a deprecated transport that still
+    leaks credentials is still a leak — so the warning is EXPECTED here.
+
+    Asserting it via ``pytest.warns`` rather than filtering it keeps the suite
+    free of warning noise (``zero-tolerance.md`` Rule 1) while additionally
+    pinning the deprecation contract: if the warning is ever dropped, these
+    tests fail rather than silently passing.
+    """
+    with pytest.warns(DeprecationWarning, match="NON-SPEC legacy transport"):
+        return StreamableHTTPTransport(HTTP_URL, **kwargs)
+
+
 # --- Boundary fakes ----------------------------------------------------------
 
 
@@ -153,9 +170,7 @@ async def test_sse_send_raise_masks_credentials():
 @pytest.mark.asyncio
 async def test_http_connect_log_masks_url(monkeypatch, caplog):
     monkeypatch.setattr(T.aiohttp, "ClientSession", _SuccessSession)
-    t = StreamableHTTPTransport(
-        HTTP_URL, session_management=False, skip_security_validation=True
-    )
+    t = _legacy_http_transport(session_management=False, skip_security_validation=True)
     with caplog.at_level(logging.INFO, logger="kailash_mcp.transports.transports"):
         await t.connect()
     logged = "\n".join(r.getMessage() for r in caplog.records)
@@ -169,9 +184,7 @@ async def test_http_connect_log_masks_url(monkeypatch, caplog):
 async def test_http_connect_raise_masks_credentials(monkeypatch):
     exc = Exception(f"handshake failed for {HTTP_URL}")
     monkeypatch.setattr(T.aiohttp, "ClientSession", _make_raising_session(exc))
-    t = StreamableHTTPTransport(
-        HTTP_URL, session_management=True, skip_security_validation=True
-    )
+    t = _legacy_http_transport(session_management=True, skip_security_validation=True)
     with pytest.raises(TransportError) as ei:
         await t.connect()
     msg = str(ei.value)
@@ -182,9 +195,7 @@ async def test_http_connect_raise_masks_credentials(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_http_send_raise_masks_credentials():
-    t = StreamableHTTPTransport(
-        HTTP_URL, session_management=False, skip_security_validation=True
-    )
+    t = _legacy_http_transport(session_management=False, skip_security_validation=True)
     t._connected = True
     t.session = _make_raising_session(Exception(f"POST error {HTTP_URL}"))()
     with pytest.raises(TransportError) as ei:
@@ -198,9 +209,7 @@ async def test_http_send_raise_masks_credentials():
 async def test_http_close_server_session_log_masks_credentials(caplog):
     # _close_server_session swallows aiohttp errors in its own try/except and
     # logs them — the {e} there embeds base_url via urljoin(self.base_url, ...).
-    t = StreamableHTTPTransport(
-        HTTP_URL, session_management=True, skip_security_validation=True
-    )
+    t = _legacy_http_transport(session_management=True, skip_security_validation=True)
     t.session = _make_raising_session(Exception(f"DELETE failed to {HTTP_URL}"))()
     t.session_id = "sess-123"
     with caplog.at_level(logging.ERROR, logger="kailash_mcp.transports.transports"):
