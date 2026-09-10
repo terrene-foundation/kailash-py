@@ -1,121 +1,157 @@
-# Session Notes — 2026-09-10 (cont-27: A2A auth+authz landed, dev→main promoted)
+# Session Notes — 2026-09-10 (cont-28: kailash 2.64.0 RELEASED + advisory PUBLISHED)
 
 ## Where we are
 
-**`dev` IS THE INTEGRATION TRUNK.** Lane work merges into `dev` the same session,
-no PR, no gate. `dev` → `main` is ONE deliberate promotion PR. Contract:
-`rules/dev-integration-trunk.md`.
+**kailash 2.64.0 is on PyPI and GHSA-c792-qq6h-mm9q is PUBLISHED.** The A2A
+authentication bypass that sat in published 2.63.0 for five weeks is closed and
+disclosed. Installability was verified from a clean venv BEFORE the advisory
+went out — publish-workflow success was not treated as the release gate.
 
-**PR #2216 MERGED** (`29f561ed7`). Promotion gap is **0**. Reverse divergence is
-**1** — main carries the merge commit, dev does not. Absorb it before the next
-promotion or that one conflicts.
+**`dev` IS THE INTEGRATION TRUNK** and now carries 2.64.0 (main was merged back
+after the release, so the two no longer disagree about the version).
 
-**A pre-push guard now exists** at `scripts/ci/dev-push-stopgap.sh`. It is NOT
-installed — a git hook is per-clone and not committable. Install with:
-`ln -sf ../../scripts/ci/dev-push-stopgap.sh .git/hooks/pre-push`
-(the agent cannot do this; the state-file guard blocks writes into `.git`).
+**Promotion cadence CHANGED: WEEKLY → DUAL TRIGGER.** Promote when EITHER fires:
+10 independent landings unpromoted, OR 72 hours with anything unpromoted, OR
+immediately for a security/deploy-affecting change. The gap counter is now
+`--first-parent`, not raw. Contract: `rules/dev-integration-trunk.md` MUST-4.
 
 Verify state with live commands; no SHA is pinned because it goes stale.
 
 ## Read first
 
 1. § Next-session directives — the only imperative surface here
-2. `02-plans/03-2203-protocol-drift-waves.md` — sequence is now
-   1A ✅ → 1-AUTH ✅ → **1B' (re-land, blocked)** → 1C
+2. `rules/dev-integration-trunk.md` MUST-4 — the dual trigger, and the
+   PROVISIONAL label on its thresholds
 3. § Traps — measured, do not rediscover
 
 ---
 
 ## Next-session directives
 
-1. **`/release` has NOT run. It is the immediate next step.** kailash 2.63.0 is
-   the published version; main now carries A2A auth + authz breaking changes and
-   an import fix. Enumerate EVERY sibling package whose main version is ahead of
-   PyPI before releasing — `build-repo-release-discipline.md` MUST-1/3 — because
-   `packages/kailash-kaizen/` tests changed here too.
-   re-validate: compare each `packages/*/pyproject.toml::version` against
-   `curl -s https://pypi.org/pypi/<pkg>/json`.
+1. **Eight sibling packages are still overdue for release.** Core shipped;
+   kaizen, kaizen-agents, ml, dataflow, nexus, align, mcp, pact all have source
+   changes since their own last version bump and have never been published.
+   Release them ONE AT A TIME — a red nine-package batch tells you nothing about
+   which package caused it, and a PyPI publish can only be yanked, not undone.
+   re-validate: for each, diff `<its own version-bump commit>..origin/dev`
+   over `packages/<pkg>/src/`.
 
-2. **Publish `GHSA-c792-qq6h-mm9q` ONLY after the fix release is installable.**
-   Draft advisory, private, severity high, covers both auth bypasses. The
-   co-owner ratified: promote → release → publish. Promotion is done.
-   re-validate: `gh api /repos/terrene-foundation/kailash-py/security-advisories`
-   → state must still be `draft` until the release lands.
+2. **Anchor a package's release scope at ITS OWN last version bump.** Not at the
+   core `v2.63.0` tag. Measured against the core tag, dataflow showed 1 changed
+   src file; against its own anchor the true figure is 36. Same instrument, wrong
+   question, badly wrong answer.
 
-3. **#2084 is REOPENED and its fix does NOT cherry-pick.** 3 commits at
-   `refs/archive/2026-08-21/fix/2070-logging-hook-redaction-defeat` conflict in
-   8 hunks across 4 files against current dev, concentrated in
-   `smart_defaults.py` (branch rewrites 189 lines; dev has 7 newer commits).
-   Re-land is a re-implementation shard with its own review — NOT a merge.
+3. **The 10/72 promotion thresholds are PROVISIONAL — re-derive before trusting
+   them.** They were adapted from a sibling repo measured at ~5 independent
+   landings/day. This repo's `dev` trunk was created 2026-09-10, so at writing it
+   had ONE day of steady-state data — not enough to set a count threshold from.
+   The rule carries the re-derivation command; do not cite 10/72 as
+   measured-for-this-repo until ≥14 days of trunk history exist.
 
-4. **Do not implement #2141, #2166, #2194 without the co-owner's schema
-   decision.** Unchanged for seven sessions.
+4. **#2084 is REOPENED and its fix does NOT cherry-pick.** The 3 commits at
+   `refs/archive/2026-08-21/fix/2070-logging-hook-redaction-defeat` conflict in 8
+   hunks across 4 files, concentrated in `smart_defaults.py`. A drain lane found
+   the branch name is misleading — those commits address #2084, not #2070, and
+   trunk re-solved #2084 independently via PR #2101. Re-land is a
+   re-implementation shard with its own review, NOT a merge — confirm against
+   trunk before assuming anything is still open.
+
+5. **Do not implement #2141, #2166, #2194 without the co-owner's schema
+   decision.** Unchanged for eight sessions.
    re-validate: `gh issue view 2166 --json comments -q '.comments|length'` → 0
    means still blocked. The text form renders EMPTY here even at exit 0.
 
-5. **Owner authorization is owed for three preserved containers.** KILLED
-   requires explicit owner-authorized discard; agent judgment that work is old
-   is not discard authority. Nothing has been dropped:
-   - 5 stashes (`{0}`/`{3}` in dev; `{1}`/`{2}` ~1800-file cruft snapshots;
-     `{4}` is a `.session-notes` change, NOT the #768 fix)
+6. **Owner authorization is still owed for three preserved containers.** KILLED
+   requires explicit owner-authorized discard; agent judgment that work is old is
+   not discard authority. Nothing has been dropped:
+   - 5 stashes (a `drain-stash` lane was adjudicating these read-only)
    - `refs/original/refs/heads/feat/1125-from-brief-analyze` (filter-branch
      backup — a history rewrite happened here)
    - `.kailash-py-wt` — empty stray worktree dir
 
-6. **Rule amendments from the landing-discipline procedure are UNSTARTED and
+7. **The pre-push guard is still NOT installed.** `scripts/ci/dev-push-stopgap.sh`
+   is committed; a git hook is per-clone and not committable. The agent cannot
+   install it — the state-file guard blocks writes into `.git`. Run:
+   `ln -sf ../../scripts/ci/dev-push-stopgap.sh .git/hooks/pre-push`
+
+8. **Rule amendments from the landing-discipline procedure are UNSTARTED and
    budget-blocked.** The always-on `rules/git.md` clause is the highest-value
-   item left: the discipline exists in `wip-discipline.md`, which is path-scoped
+   item left: the discipline lives in `wip-discipline.md`, which is path-scoped
    and matches NONE of `git checkout -b` / `git push` / session end, so it never
    loads at the moment of the decision.
-   re-validate: `node .claude/bin/emit.mjs --all --dry-run` → headroom was
-   11.8% against a 10% floor, inside the 15% proximity band. Needs paired
-   extraction or a named rationale, and measurement after EVERY attempt.
+   re-validate: `node .claude/bin/emit.mjs --all --dry-run` → headroom was 11.8%
+   against a 10% floor, inside the 15% proximity band. Needs paired extraction or
+   a named rationale, and re-measurement after EVERY attempt.
 
 ---
 
-## In-play branches and worktrees
+## In-flight state
 
-2 local refs (`dev`, `main`), 3 remote, 0 open PRs, 1 worktree (primary).
-**51 archive refs are now backed up** at `refs/archive/*` on origin — they were
-local-only and would have died with this clone. They do NOT match `v*`, so they
-fire no release workflow.
+Six named lanes were dispatched to drain the 51 archived refs and 5 stashes:
+`drain-audit` (DELIVERED — all 7 spec-audit refs SUPERSEDED, byte-identical to
+trunk's `_archive/` copies, findings already fixed via merged PR #637),
+`drain-fix` (delivered partially — 11 `fix/*` refs, all SUPERSEDED or RETIRE,
+report truncated in transit), `drain-release`, `drain-feat`, `drain-stash`,
+`release-scope`.
 
-- re-check at-risk content (an ahead-count does NOT discriminate):
-  `for b in $(git for-each-ref --format='%(refname:short)' refs/heads); do git cherry origin/dev $b | grep -q '^+' && echo "AT RISK $b"; done`
-- **A branch-scoped census is NOT a census.** Enumerate refs/heads, ALL of
-  refs/remotes, worktrees registered AND stray-on-disk, stashes, detached HEAD,
-  and every other namespace. Mine missed 3 classes.
+**Named agents do NOT auto-return.** All six needed an explicit
+SendMessage-the-orchestrator contract, added after a dispatch-contract hook caught
+that the original briefs used a one-shot "return your findings" wording — a no-op
+against the mailbox shape that would have left every lane reading as idle. If a
+lane looks silent, READ ITS TRANSCRIPT before re-dispatching: a resume recovers
+its work, a re-dispatch throws it away.
+
+A `pact-cap-scout` lane from earlier context also reported: PACT has **no**
+first-class capability-grant primitive; `operational.allowed_actions` is a string
+allowlist, and empty-list has THREE incompatible meanings across enforcement
+surfaces (fail-closed at `engine.py:1537`, fail-open at `gradient.py:220`). That
+is a live inconsistency worth its own issue — its report was also truncated.
 
 ---
 
 ## Traps (measured — do not rediscover)
 
-- **`grep -q` under `set -o pipefail` silently inverts.** grep exits on first
-  match, the producer dies with SIGPIPE (141), pipefail surfaces the producer's
-  status, and the `if` takes the ELSE branch ON A MATCH. It is a RACE, so it is
-  intermittent. Use `grep -c` and compare the count.
+- **A truncated read produces a confidently wrong count.** Reading `[Unreleased]`
+  over lines 14–110 of a 570-line section reported "3 of 30 issues documented".
+  The true figure over the full section was 42 documented, 3 genuinely missing.
+  That wrong number reached the user and drove a decision before being caught.
+  Read a section to its next `## [` boundary. A hook now BLOCKS truncated reads
+  of `.session-notes` for exactly this reason.
+- **Version parity is NOT content parity.** Comparing declared versions against
+  PyPI reported "nothing to release" for all nine packages while five weeks of src
+  changes sat unpublished — because the version was never bumped.
+- **`git cherry` overstates unlanded work by roughly 18×.** All 51 archived refs
+  flagged unlanded; every adjudicated one so far is SUPERSEDED or RETIRE. Patch-id
+  cannot distinguish "unlanded" from "rebased or reimplemented". Supersession is
+  settled by reading the trunk and cannot be mechanized.
+- **A branch thousands of commits behind is archaeology, not unlanded work.** The
+  archived refs sit 3,187–6,212 commits behind a repo now at 2.64.0.
+- **A branch name is not evidence of what its commits do.**
+  `fix/2070-logging-hook-redaction-defeat` actually carries #2084 work.
+- **A control that cannot discriminate proves nothing.** Verifying the
+  `--first-parent` change where raw and first-parent both equalled 2 was a
+  non-discriminating run; it had to be re-checked on a range where they differ
+  (1944 vs 6401) before the change could be called verified.
+- **The `framework-first` hook false-positives on `.claude/hooks/lib/*.js`**,
+  reporting "raw SQL string detected" on JavaScript containing no SQL. Lexical
+  misfire — ignore it there, but do not generalise that to the hook overall.
+- **Cancelled duplicate CI runs read as `fail`.** Classify with
+  `gh run list --commit <sha> --json conclusion` before believing a red board.
+  The 2.64.0 release PR had one `build` CANCELLED and one SUCCEEDED — same
+  workflow, superseded duplicate.
+- **`release/v*` branches auto-skip the PR-gate matrix.** Correct and intended
+  for a metadata-only diff; the skips are not a broken gate.
+- **`grep -q` under `set -o pipefail` silently inverts** (SIGPIPE 141 → ELSE
+  branch on a match). It is a race, so it is intermittent. Use `grep -c`.
 - **`git merge-tree` cleanliness predicts neither conflicts nor correctness.**
-  It reported 0 conflict markers for a cherry-pick that then conflicted in 8
-  hunks. It answers "do the texts conflict", and here it answered wrong.
-- **A dirty tree makes every guard case pass for the wrong reason.** The first
-  pole-table run "passed" six refusal cases purely because the tree was dirty.
-- **Pyright via PATH is 1.1.411; `pyproject.toml` pins 1.1.371, which CI runs.**
-  Verify with `npx -y pyright@1.1.371 <file>` before "fixing" anything.
-- **The kaizen integration suite asserts only that "an error" came back.** It
-  stayed green when authorization was added and started refusing calls it used
-  to allow. Assert the specific error CODE.
 - **Root `tests/` and `packages/*/tests/` cannot share one pytest process** —
   `ImportPathMismatchError` on conftest. Run per-package.
-- **`pip install kailash[trust]` did not import `kailash.trust.a2a`** until this
-  session — `__init__` eagerly imported `service.py`, which needs `nexus` from
-  the `[nexus]` extra. Monorepo dev envs hide this; only a clean install fails.
-- **zsh: unmatched glob aborts the whole command block**, and the absent output
-  of later lines reads as an empty result. Unquoted `$VAR` does not word-split.
-- **`cmd | tail; echo $?` captures tail's status.** Redirect to a file first.
+- **Pyright via PATH is 1.1.411; `pyproject.toml` pins 1.1.371, which CI runs.**
 - Tests: ALWAYS `.venv/bin/python -m pytest`.
 - `.env` `OPENAI_API_KEY` is INVALID (live 401). Anthropic works.
-- Cancelled duplicate CI runs read as `fail`; classify with
-  `gh run list --commit <sha> --json conclusion` before believing a red board.
+- **zsh: unmatched glob aborts the whole command block**, and the absent output of
+  later lines reads as an empty result. Unquoted `$VAR` does not word-split.
+- **`cmd | tail; echo $?` captures tail's status.** Redirect to a file first.
 
 ---
 
@@ -123,21 +159,27 @@ fire no release workflow.
 
 | id | workstream | state | receipt |
 | --- | --- | --- | --- |
-| `release` | `/release` + sibling-package sweep | **OPEN — next actionable** | directive 1 |
-| `advisory` | publish GHSA-c792-qq6h-mm9q after release | OPEN, gated on release | directive 2 |
+| `pkg-releases` | 8 sibling packages overdue, one at a time | **OPEN — next actionable** | directive 1 |
+| `ref-drain` | 51 archived refs + 5 stashes | audit + fix families closed; rest with lanes | § In-flight state |
+| `promo-thresholds` | re-derive 10/72 from ≥14d trunk data | OPEN — dated, not urgent | directive 3 |
+| `pact-empty-list` | `allowed_actions=[]` means 3 different things | OPEN — file an issue | § In-flight state |
 | `2203-1b'` | A2A 1.0 SendMessage/GetTask re-land + owner_id | OPEN — re-implementation | plan § Wave 1 |
 | `2203-1c` | remaining 9 v1.0 JSON-RPC methods (2 are SSE) | OPEN, size at /todos | plan § Wave 1 |
 | `2203-w2` | MCP → Modern 2026-07-28 (4 shards) | OPEN, approved, not started | plan § Wave 2 |
 | `2203-w3` | conformance suites gated per-requirement | OPEN, approved, not started | plan § Wave 3 |
-| `2084` | observability flags — reopened, fix unlanded | OPEN | #2084 |
-| `landing-rules` | git.md always-on clause + wip enumerator | OPEN, budget-blocked | directive 6 |
+| `2084` | observability flags — reopened, fix unlanded | OPEN | directive 4 |
+| `container-authz` | stashes / refs/original / stray dir | OPEN — owner decision | directive 6 |
+| `dev-preflight` | pre-push guard committed, NOT installed | OPEN — user-run one-liner | directive 7 |
+| `landing-rules` | git.md always-on clause + wip enumerator | OPEN, budget-blocked | directive 8 |
 | `three-verdict` | landed-predicate needs UNDETERMINED | OPEN | procedure Step 5 |
 | `preflight-scope` | guard narrower than CI | OPEN | procedure Step 6 |
-| `container-authz` | stashes / refs/original / stray dir | OPEN — owner decision | directive 5 |
 | `a2a-residuals` | trust.verify oracle, error oracle, jti replay, TTL cap | OPEN | adversarial review |
+| `sweep5-orphans` | 22 spec orphans (3 hand-classified) | open, stable | PR #2205 |
 | `authz-schema` | #2166 + #2194 actor/authz schema | blocked on co-owner | #2194 |
 | `auth-semantics` | #2141 `--auth` + kailash-ml release | blocked on co-owner | #2141 |
 
-Closed this session: `promotion` (gap 10 → 0, PR #2216 merged), `1-auth`
-(A2A authentication + authorization, fail-closed), `archive-backup` (51 refs),
-`dev-preflight` (guard committed; install pending).
+Closed this session: `release` (kailash 2.64.0 published + verified installable),
+`advisory` (GHSA-c792-qq6h-mm9q published), `changelog-gap` (3 missing entries
+authored after correcting a truncated-read measurement), `promotion-cadence`
+(weekly → dual trigger; counter to first-parent), `trunk-reconcile` (dev carries
+2.64.0), `drain-audit` (7 refs SUPERSEDED), `drain-fix` (11 refs adjudicated).
