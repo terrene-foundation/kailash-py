@@ -15,7 +15,7 @@
 # on red.
 #
 # Usage:
-#   scripts/ci/dev-push-stopgap.sh            # check HEAD
+#   scripts/ci/dev-push-stopgap.sh --manual   # check HEAD (no stdin contract)
 #   COC_DEV_PUSH_SKIP=1 git push origin dev   # documented, loud escape
 #
 # Install as a git hook:
@@ -54,10 +54,15 @@ GATED_REFS="refs/heads/dev refs/heads/main"
 TARGET_SHA=""
 TARGET_DESC=""
 
-if [ -t 0 ]; then
-    # Manual invocation: no stdin contract, check HEAD and say so.
+# `--manual` is EXPLICIT, not inferred. Relying on `[ -t 0 ]` alone makes the
+# guard unrunnable wherever stdin is a non-tty pipe (CI, `cmd >log 2>&1`,
+# most automation) -- it would take the hook path, see empty stdin and refuse.
+# The tempting "fix" for that is deleting the empty-stdin refusal, which
+# reinstates the fail-open it exists to close. So manual mode gets its own
+# flag and the hook path keeps its contract intact.
+if [ "${1:-}" = "--manual" ] || { [ -t 0 ] && [ $# -eq 0 ]; }; then
     TARGET_SHA=$(git rev-parse HEAD)
-    TARGET_DESC="HEAD (manual run; not a pre-push invocation)"
+    TARGET_DESC="HEAD (manual run; NOT a pre-push invocation -- the ref-line contract was not exercised)"
 else
     STDIN_CONTENT=$(cat)
     if [ -z "$STDIN_CONTENT" ]; then
