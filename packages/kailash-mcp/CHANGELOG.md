@@ -40,6 +40,10 @@ A verify-only resource server needs `KAILASH_MCP_JWT_PUBLIC_KEY` (or `public_key
 
 - **`allow_ephemeral_key` is accepted by `AuthorizationServer` and `ResourceServer`, not only by `JWTManager`.** Both default-construct a `JWTManager`, so without it a caller who wanted the development-only ephemeral-key behaviour had no way to reach it through the server constructors they actually use. Verified: `AuthorizationServer(issuer=...)` with no key raises `JWTKeyNotConfiguredError` at the signing boundary, and the `allow_ephemeral_key=True` path emits the one-time ERROR naming the wiring.
 
+### Packaging (REQUIRED for the #2004 fix to import) — the `kailash` floor is raised to `>=2.63.0`
+
+- **`kailash>=2.56.0` → `kailash>=2.63.0`.** The spawn-command disclosure fix above imports `kailash.utils.command_safety.safe_command_ref` at **module** scope in `security.py`, and `security.py` is itself imported at module scope by `client.py`, `transports/transports.py` and `discovery/discovery.py`. That module does not exist in any `kailash` before 2.63.0. Measured against the published wheels: on `kailash==2.62.0`, `import kailash_mcp.client` raises `ModuleNotFoundError: No module named 'kailash.utils.command_safety'`; on `kailash==2.63.0` every `from kailash.` import in this package resolves. Under the old floor `pip check` reported **no broken requirements** while the import still failed, so the raise converts a runtime `ImportError` into a resolver error at install time. **If you pin `kailash` below 2.63.0, `kailash-mcp` 0.6.0 will not install** — that is deliberate, and upgrading `kailash` is the fix. 2.63.0 rather than 2.64.0 because 2.63.0 is the lowest release that satisfies every core import this package makes.
+
 ## [0.5.1] — 2026-08-09 — Cap mcp<2.0 (packaging only)
 
 ### Fixed
