@@ -7,6 +7,7 @@ from .connection_metrics import (
     MetricPoint,
     MetricsAggregator,
     MetricType,
+    get_metrics_aggregator,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "MetricPoint",
     "MetricType",
     "MetricsAggregator",
+    "get_metrics_aggregator",
 ]

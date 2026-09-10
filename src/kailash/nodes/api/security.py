@@ -300,6 +300,13 @@ class SecurityScannerNode(Node):
                 import ssl
 
                 context = ssl.create_default_context()
+                # Pin the floor explicitly (#2175, CodeQL py/insecure-protocol
+                # 6180). create_default_context() happens to default to TLS 1.2
+                # on current CPython, but that is a property of the
+                # interpreter, not of this code — on an older or
+                # differently-configured runtime the permitted floor drops to
+                # TLS 1.0/1.1 and nothing here would notice.
+                context.minimum_version = ssl.TLSVersion.TLSv1_2
                 with socket.create_connection(
                     (hostname, port), timeout=timeout
                 ) as sock:

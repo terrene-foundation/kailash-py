@@ -96,11 +96,16 @@ class TenantResolver:
                     reason="Admin tenant override is disabled",
                 )
 
-        # 2. Check JWT claim (check both token_payload and token_claims for compatibility)
+        # 2. Check JWT claim.
+        #
+        # `token_payload` is the only spelling: nexus/auth/jwt.py sets it for
+        # API keys (:175) and for JWTs (:219). A second `token_claims` fallback
+        # used to be OR-ed in here "for compatibility" — nothing in this repo
+        # has ever assigned that name, so it was dead (#2057 site 4). Dropped
+        # rather than kept, so this line stops implying a second authenticated
+        # source that does not exist.
         if tenant_id is None:
-            claims = getattr(request.state, "token_payload", None) or getattr(
-                request.state, "token_claims", None
-            )
+            claims = getattr(request.state, "token_payload", None)
             if claims and isinstance(claims, dict):
                 tenant_id = claims.get(self.config.jwt_claim)
                 if tenant_id:
