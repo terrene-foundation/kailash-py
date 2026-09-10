@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -34,7 +35,49 @@ from kailash.trust.plane.models import DecisionRecord, MilestoneRecord, ProjectM
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["FileSystemTrustPlaneStore"]
+__all__ = ["FileSystemTrustPlaneStore", "anchor_sequence_key", "sort_anchor_files"]
+
+#: Anchor files are written by ``TrustProject`` as
+#: ``anchors/{audit_seq:04d}-{anchor_id}.json``.
+_ANCHOR_SEQ_RE = re.compile(r"^(\d+)-")
+
+
+def anchor_sequence_key(filename: str) -> tuple[int, int, str]:
+    """Chronological sort key for a TrustProject anchor filename.
+
+    Anchor files carry the audit sequence as a zero-padded filename prefix
+    (``{audit_seq:04d}-{anchor_id}.json``). ``{:04d}`` stops padding once the
+    sequence needs five digits, so a plain lexicographic sort places
+    ``"10000-…"`` *before* ``"9999-…"`` and silently reorders the chain. The
+    sequence is therefore parsed and compared numerically, which keeps the
+    order chronological at any anchor count and needs no cap.
+
+    Files with no numeric prefix — anchors written through
+    :meth:`FileSystemTrustPlaneStore.store_anchor`, which keys on the bare
+    anchor id — carry no sequence. They sort *before* every sequenced file,
+    ordered by name, so the resulting order is total, stable and independent
+    of directory-iteration order.
+
+    Args:
+        filename: The anchor file name (``path.name``), not a full path.
+
+    Returns:
+        A tuple ``(has_sequence, sequence, filename)`` suitable as a
+        ``sorted``/``max`` key.
+    """
+    match = _ANCHOR_SEQ_RE.match(filename)
+    if match is None:
+        return (0, 0, filename)
+    return (1, int(match.group(1)), filename)
+
+
+def sort_anchor_files(paths: Any) -> list[Path]:
+    """Return *paths* ordered oldest-first by audit sequence.
+
+    The single ordering used everywhere anchor files are walked as a chain,
+    so no call site can regress to lexicographic order independently.
+    """
+    return sorted(paths, key=lambda p: anchor_sequence_key(p.name))
 
 
 class FileSystemTrustPlaneStore:
@@ -285,11 +328,32 @@ class FileSystemTrustPlaneStore:
         if not anchors_dir.exists():
             return []
         records: list[dict] = []
-        for path in sorted(anchors_dir.glob("*.json")):
+        for path in sort_anchor_files(anchors_dir.glob("*.json")):
             if len(records) >= limit:
                 break
             records.append(safe_read_json(path))
         return records
+
+    def latest_anchor(self) -> dict | None:
+        """Return the newest anchor by audit sequence, or ``None`` if empty.
+
+        Reads exactly one file. The tip is selected by taking the maximum
+        audit sequence over the whole directory, so it is correct at any
+        anchor count — unlike indexing the tail of a ``list_anchors`` page,
+        which returns the *limit*-th oldest record once the anchor count
+        exceeds ``limit``.
+        """
+        anchors_dir = self._dir / "anchors"
+        if not anchors_dir.exists():
+            return None
+        newest = max(
+            anchors_dir.glob("*.json"),
+            key=lambda p: anchor_sequence_key(p.name),
+            default=None,
+        )
+        if newest is None:
+            return None
+        return safe_read_json(newest)
 
     # ------------------------------------------------------------------
     # WAL (Write-Ahead Log)

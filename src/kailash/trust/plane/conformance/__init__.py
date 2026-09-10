@@ -25,6 +25,11 @@ from enum import Enum
 from typing import Any, Awaitable, Callable
 
 from kailash.trust._locking import safe_read_json as _safe_read_json
+from kailash.trust.plane.store.filesystem import sort_anchor_files
+
+#: The verification gradient levels a report may declare. A report carrying
+#: anything else is malformed, not merely at an unexpected level.
+VERIFICATION_LEVELS = ("QUICK", "STANDARD", "FULL")
 
 
 class RequirementLevel(Enum):
@@ -340,7 +345,10 @@ class ConformanceSuite:
             [
                 ConformanceTest(
                     name="verification_standard",
-                    description="STANDARD verification validates constraints and capabilities",
+                    description=(
+                        "STANDARD verification validates the chain, the "
+                        "constraint envelope and capability enforcement"
+                    ),
                     element="verification",
                     level=RequirementLevel.MUST,
                     min_level=ConformanceLevel.CONFORMANT,
@@ -436,7 +444,10 @@ class ConformanceSuite:
         self._tests.append(
             ConformanceTest(
                 name="verification_quick",
-                description="QUICK verification produces verification reports",
+                description=(
+                    "QUICK verification produces a well-formed, project-bound "
+                    "verification report"
+                ),
                 element="verification",
                 level=RequirementLevel.SHOULD,
                 min_level=ConformanceLevel.CONFORMANT,
@@ -747,7 +758,7 @@ class ConformanceSuite:
         anchors_dir = project._dir / "anchors"
         if not anchors_dir.exists():
             return False
-        files = sorted(anchors_dir.glob("*.json"))
+        files = sort_anchor_files(anchors_dir.glob("*.json"))
         if len(files) < 2:
             return False
         # Check that later anchors reference earlier ones
@@ -814,17 +825,80 @@ class ConformanceSuite:
         )
 
     async def _test_verification_quick(self, project: Any) -> bool:
-        """QUICK verification: project produces verification reports."""
+        """QUICK verification: project produces a well-formed report.
+
+        Asserts the report's *values*, not the presence of a key. A key-
+        presence check cannot return False against ``_verify_locked``, whose
+        single return is an unconditional dict literal that always carries
+        ``verification_level`` — so it reported PASS for every input.
+        """
         report = await project.verify()
-        return "verification_level" in report
+        # The level must be one the gradient actually defines. An
+        # unrecognised or missing level is not a verification report.
+        if report.get("verification_level") not in VERIFICATION_LEVELS:
+            return False
+        # The report must name the project it verified, cross-checked
+        # against the manifest rather than against the report's own fields.
+        if report.get("project_id") != project.manifest.project_id:
+            return False
+        # ...and carry a parseable verification timestamp.
+        verified_at = report.get("verified_at")
+        if not isinstance(verified_at, str):
+            return False
+        try:
+            datetime.fromisoformat(verified_at)
+        except ValueError:
+            return False
+        return True
 
     async def _test_verification_standard(self, project: Any) -> bool:
-        """STANDARD verification: constraint and capability validation."""
+        """STANDARD verification: constraint and capability validation.
+
+        Fails closed on an invalid chain, then validates the two things the
+        registered description names — constraints and capabilities.
+
+        The previous body was ``report.get("chain_valid") is not None``,
+        which is True *when chain_valid is False*: a project whose chain this
+        very report marks broken passed this MUST.
+        """
+        from kailash.trust.enforce.strict import Verdict
+
+        # --- Chain: fail closed ---------------------------------------
         report = await project.verify()
-        return (
-            report.get("chain_valid") is not None
-            and report.get("total_decisions", -1) >= 0
-        )
+        if report.get("chain_valid") is not True:
+            return False
+        # chain_valid and integrity_issues must agree. A missing key reads
+        # as None here, which is not a list, so the absence is caught too.
+        issues = report.get("integrity_issues")
+        if not isinstance(issues, list) or issues:
+            return False
+
+        # Counters must be well-formed, and the manifest's decision counter
+        # must not exceed the anchors actually on disk — two independent
+        # sources, so an inflated counter cannot pass unnoticed.
+        total_decisions = report.get("total_decisions")
+        total_anchors = report.get("total_anchors")
+        if not isinstance(total_decisions, int) or total_decisions < 0:
+            return False
+        if not isinstance(total_anchors, int) or total_decisions > total_anchors:
+            return False
+
+        # --- Constraints ----------------------------------------------
+        envelope = project.constraint_envelope
+        if envelope is None:
+            return False
+
+        # --- Capabilities ---------------------------------------------
+        # The gate must still refuse everything the envelope blocks and
+        # admit what it allows; without this the "capability validation"
+        # in the registered description is unbacked.
+        for blocked in envelope.operational.blocked_actions:
+            if project.check(blocked) is not Verdict.BLOCKED:
+                return False
+        for allowed in envelope.operational.allowed_actions:
+            if project.check(allowed) is Verdict.BLOCKED:
+                return False
+        return True
 
     async def _test_verification_full(self, project: Any) -> bool:
         """FULL verification: cryptographic chain integrity verified."""
@@ -847,7 +921,7 @@ class ConformanceSuite:
         anchors_dir = project._dir / "anchors"
         if not anchors_dir.exists():
             return False
-        files = sorted(anchors_dir.glob("*.json"))
+        files = sort_anchor_files(anchors_dir.glob("*.json"))
         if not files:
             return False
         data = _safe_read_json(files[-1])
@@ -876,7 +950,7 @@ class ConformanceSuite:
         anchors_dir = project._dir / "anchors"
         if not anchors_dir.exists():
             return False
-        files = sorted(anchors_dir.glob("*.json"))
+        files = sort_anchor_files(anchors_dir.glob("*.json"))
         if not files:
             return False
         # Check the most recent anchor has a non-empty reasoning trace
@@ -916,7 +990,7 @@ class ConformanceSuite:
         anchors_dir = project._dir / "anchors"
         if not anchors_dir.exists():
             return False
-        files = sorted(anchors_dir.glob("*.json"))
+        files = sort_anchor_files(anchors_dir.glob("*.json"))
         if not files:
             return False
 
@@ -1159,7 +1233,7 @@ class ConformanceSuite:
             return False
         # Verify the anchor file contains mirror_record
         anchors_dir = project._dir / "anchors"
-        files = sorted(anchors_dir.glob("*.json"))
+        files = sort_anchor_files(anchors_dir.glob("*.json"))
         data = _safe_read_json(files[-1])
         return data.get("mirror_record", {}).get("record_type") == "execution"
 
@@ -1181,7 +1255,7 @@ class ConformanceSuite:
         if project.manifest.total_audits <= initial_audits:
             return False
         anchors_dir = project._dir / "anchors"
-        files = sorted(anchors_dir.glob("*.json"))
+        files = sort_anchor_files(anchors_dir.glob("*.json"))
         data = _safe_read_json(files[-1])
         return data.get("mirror_record", {}).get("record_type") == "escalation"
 
@@ -1202,7 +1276,7 @@ class ConformanceSuite:
         if project.manifest.total_audits <= initial_audits:
             return False
         anchors_dir = project._dir / "anchors"
-        files = sorted(anchors_dir.glob("*.json"))
+        files = sort_anchor_files(anchors_dir.glob("*.json"))
         data = _safe_read_json(files[-1])
         return data.get("mirror_record", {}).get("record_type") == "intervention"
 
