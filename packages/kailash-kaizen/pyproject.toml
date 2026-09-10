@@ -52,14 +52,24 @@ dependencies = [
     # floor, which already happened to be high enough, this one was genuinely
     # too low and would have shipped a broken clean install.
     #
-    # RELEASE ORDERING, load-bearing: `network_guard` exists in NO released
-    # kailash (PyPI latest is 2.62.0; 2.63.0 unpublished at time of writing).
-    # Core kailash 2.63.0 MUST publish BEFORE the kaizen release carrying
-    # this, or `pip install kailash-kaizen` resolves an older core and
-    # `import kaizen.llm` raises ModuleNotFoundError on a clean install. The
-    # floor is what turns that into a resolver error at install time rather
-    # than an ImportError in production.
-    "kailash>=2.63.0",  # mask_error_text (2.56.0); kailash.utils.network_guard (#2091)
+    # RELEASE ORDERING, load-bearing: core kailash 2.63.0 MUST publish BEFORE
+    # any kaizen release carrying this floor, or `pip install kailash-kaizen`
+    # resolves an older core and `import kaizen.llm` raises ModuleNotFoundError
+    # on a clean install. The floor turns that into a resolver error at install
+    # time rather than an ImportError in production.
+    #
+    # RESOLVED as of 2026-09-10: kailash 2.63.0 AND 2.64.0 are both published,
+    # so the ordering constraint above is satisfied. (An earlier revision of
+    # this comment said "PyPI latest is 2.62.0; 2.63.0 unpublished at time of
+    # writing" -- true when written, false now, and it sat three lines above
+    # the floor it was justifying.)
+    #
+    # TWO independent reasons for 2.63.0, not one. `network_guard` is the one
+    # named below, but `kaizen/llm/url_safety.py` imports
+    # `kailash.utils.url_credentials.fingerprint_value` at module scope and
+    # that symbol is equally new in 2.63.0 -- so removing the network_guard
+    # dependency would NOT license lowering this floor.
+    "kailash>=2.63.0",  # mask_error_text (2.56.0); network_guard + url_credentials.fingerprint_value (2.63.0, #2091)
     # FLOOR RAISED TO 0.5.0, FROM 0.2.4 — release-blocking, not housekeeping.
     # kaizen constructs kailash_mcp.MCPServer directly (core/mcp_mixin.py:732,
     # mcp/builtin_server/server.py's KaizenMCPServer subclass, mcp/catalog_server),
@@ -122,6 +132,22 @@ observability = [
     "prometheus-client>=0.19.0",
     "opentelemetry-api>=1.20.0",
     "opentelemetry-sdk>=1.20.0",
+    # `kaizen.core.autonomy.observability.tracing_manager` imports
+    # `opentelemetry.exporter.otlp.proto.grpc.trace_exporter` at MODULE scope,
+    # and that lives in its OWN distribution -- neither the api nor the sdk
+    # package ships it. Without this line `pip install kailash-kaizen[observability]`
+    # produced exactly the state in which `enable_observability()` raises
+    # `ModuleNotFoundError: No module named 'opentelemetry.exporter'`.
+    #
+    # It went unnoticed because the monorepo dev/CI environment is NOT the
+    # environment this extra produces: the ROOT `kailash` package's own
+    # `[telemetry]` extra (pyproject.toml, root) declares
+    # `opentelemetry-exporter-otlp`, so a developer checkout always has the
+    # exporter and `enable_observability()` works there. Only a clean
+    # `pip install kailash-kaizen[observability]`, which pulls api+sdk and
+    # stops, produced the broken partially-present state -- the
+    # editable-install-stays-green shape `deployment.md` names.
+    "opentelemetry-exporter-otlp>=1.20.0",
     "structlog>=23.0.0",
 ]
 

@@ -13,14 +13,22 @@ range such as `>=2.0`.
 
 ## [Unreleased]
 
-## [2.46.1] — 2026-09-10 — `enable_observability()` no longer crashes on a default-constructed agent
+## [2.46.1] — 2026-09-10 — Observability that works end to end: the crash fix, the extra that could not import, and the endpoint settings that went nowhere
 
-> **One source fix, in one method.** No API changed and nothing was removed, so this is a
-> patch. It also carries one advisory that is **not** a kaizen change: `kaizen.trust.a2a`
-> re-exports names from `kailash` core, and core 2.64.0 changed their behaviour. Because
-> this package requires `kailash>=2.63.0`, a fresh `pip install kailash-kaizen==2.46.1`
-> resolves core 2.64.0 and you get that behaviour — which is why it is recorded here
-> rather than left to be found at runtime.
+> **A patch: nothing was removed and no signature changed.** One source commit had landed
+> since 2.46.0 was published — the `enable_observability()` crash fix. Verifying it at the
+> release gate surfaced two more defects standing between that fix and any user reaching
+> it: the `observability` extra was missing a distribution, so installing it and calling
+> the method still raised; and `jaeger_host` / `jaeger_port` / `insecure` were documented
+> but never forwarded, so spans always went to localhost. All three are fixed together,
+> because shipping the first alone would have changed nothing observable.
+>
+> Also carries two notes that are **not** kaizen changes: an advisory that span attributes
+> carry payload values, and one about `kaizen.trust.a2a`, which re-exports names from
+> `kailash` core whose behaviour changed in core 2.64.0. Because this package requires
+> `kailash>=2.63.0`, a fresh `pip install kailash-kaizen==2.46.1` resolves core 2.64.0 and
+> you get that behaviour — which is why it is recorded here rather than left to be found
+> at runtime.
 
 ### Fixed — `enable_observability()` no longer crashes on a default-constructed agent
 
@@ -34,7 +42,23 @@ already present. No signature change; the method simply works where it previousl
 raised. (Pre-existing since the method was introduced, not a regression from the
 2.46.0 observability wiring.)
 
-### Changed (BREAKING, originates in `kailash` core 2.64.0) — the A2A HTTP surface re-exported by `kaizen.trust.a2a` now authenticates and authorizes
+### Fixed — `pip install kailash-kaizen[observability]` produced an extra that could not import
+
+The `observability` extra declared `opentelemetry-api` and `opentelemetry-sdk` but **not** `opentelemetry-exporter-otlp`, which is a separate distribution — and `kaizen.core.autonomy.observability.tracing_manager` imports `opentelemetry.exporter.otlp.proto.grpc.trace_exporter` at **module** scope. So installing the extra and calling `enable_observability()` raised `ModuleNotFoundError: No module named 'opentelemetry.exporter'`.
+
+This is why it stayed hidden: the monorepo development environment is not the environment this extra produces. The root `kailash` package's own `[telemetry]` extra declares `opentelemetry-exporter-otlp`, so any developer checkout already has the exporter and the method works there. Only a clean `pip install kailash-kaizen[observability]` — which pulls the api and the sdk and stops — produced the broken partially-present state, and no test ever ran against the dependency set the extra actually declares. Without this fix, the crash fix above would have been unreachable for exactly the users who install the extra in order to use it.
+
+### Fixed — `jaeger_host`, `jaeger_port` and `insecure` now actually reach the exporter
+
+`BaseAgent.enable_observability()` documents all three as controlling the OTLP endpoint, and passed none of them on: `ObservabilityManager` neither accepted nor forwarded them, and constructed `TracingManager(service_name)` positionally. `jaeger_host` reached nothing but a `jaeger_ui` string in a log line. A caller setting `jaeger_host="jaeger.internal"` silently exported to `localhost:4317` and saw no spans at their collector, with nothing reported. All three are now threaded through to `TracingManager`; defaults are unchanged, so existing callers see no difference. (`zero-tolerance.md` Rule 3c — a documented kwarg with no effect on the body.)
+
+### Note for anyone enabling tracing — span attributes carry payload values
+
+Raised by the pre-release security review, and recorded here rather than left to be discovered. 2.46.0 stopped agent inputs and results being written into **logs**. That sweep did not cover **spans**: `TracingHook` registers for every hook event by default, and `TracingManager` copies every primitive (`str`, `int`, `float`, `bool`) in the hook context's `data` onto the span as an attribute. Prompts, tool arguments and results therefore reach your tracing backend verbatim.
+
+That behaviour is unchanged in 2.46.1 — but it is newly **reachable**, because before the crash fix above, `enable_observability()` died on a default-constructed agent before the hook was ever registered. If your collector is a lower-trust destination than your logs, pass `events_to_trace=[...]` to scope what is traced, and treat span data as carrying the same payloads the 2.46.0 log fix removed from log records.
+
+### Changed (BREAKING) — originates in `kailash` core 2.64.0: the A2A HTTP surface re-exported by `kaizen.trust.a2a` now authenticates and authorizes
 
 `kaizen.trust.a2a` re-exports `A2AService`, `create_a2a_app`, `JsonRpcHandler` and
 `A2AMethodHandlers` from `kailash.trust.a2a`. No kaizen source changed, but the

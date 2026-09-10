@@ -776,6 +776,13 @@ class BaseAgent(MCPMixin, A2AMixin, OutputExtractionMixin, ControlProtocolMixin,
             enable_logging=enable_logging,
             enable_tracing=enable_tracing,
             enable_audit=enable_audit,
+            # These three are documented above as controlling the OTLP endpoint
+            # but were not forwarded, so `jaeger_host` reached nothing but the
+            # `jaeger_ui` log string below and spans always went to
+            # localhost:4317 (`zero-tolerance.md` Rule 3c).
+            jaeger_host=jaeger_host,
+            jaeger_port=jaeger_port,
+            insecure=insecure,
         )
 
         if enable_tracing and self._observability_manager.tracing:

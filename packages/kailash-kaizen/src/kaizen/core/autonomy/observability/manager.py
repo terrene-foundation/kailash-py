@@ -63,6 +63,9 @@ class ObservabilityManager:
         enable_logging: bool = True,
         enable_tracing: bool = True,
         enable_audit: bool = True,
+        jaeger_host: str = "localhost",
+        jaeger_port: int = 4317,
+        insecure: bool = True,
     ):
         """
         Initialize observability manager.
@@ -73,6 +76,9 @@ class ObservabilityManager:
             enable_logging: Enable structured logging
             enable_tracing: Enable distributed tracing
             enable_audit: Enable audit trail recording
+            jaeger_host: Jaeger OTLP endpoint host, forwarded to TracingManager
+            jaeger_port: Jaeger OTLP gRPC port, forwarded to TracingManager
+            insecure: Use an insecure gRPC connection, forwarded to TracingManager
 
         Example:
             >>> # Full observability
@@ -90,7 +96,23 @@ class ObservabilityManager:
         # Initialize components based on flags
         self.metrics = MetricsCollector() if enable_metrics else None
         self.logging = LoggingManager() if enable_logging else None
-        self.tracing = TracingManager(service_name) if enable_tracing else None
+        # Forward the endpoint configuration. It used to stop here:
+        # `TracingManager(service_name)` dropped host/port/insecure, and
+        # `BaseAgent.enable_observability()` documented all three as controlling
+        # the OTLP endpoint while passing none of them on. A caller who set
+        # `jaeger_host="jaeger.internal"` silently exported to localhost:4317
+        # and saw no spans at their collector -- a documented kwarg with zero
+        # effect on the body (`zero-tolerance.md` Rule 3c).
+        self.tracing = (
+            TracingManager(
+                service_name,
+                jaeger_host=jaeger_host,
+                jaeger_port=jaeger_port,
+                insecure=insecure,
+            )
+            if enable_tracing
+            else None
+        )
 
         # `AuditTrailManager()` with no storage falls back to a
         # `FileAuditStorage` on a CWD-relative path, so this is the only
