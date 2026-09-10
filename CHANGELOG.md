@@ -13,6 +13,50 @@ such as `>=2.0`.
 
 ## [Unreleased]
 
+### Fixed — the idle-pool reaper no longer closes a pool that is actively serving queries (#697)
+
+A long-lived process that keeps querying the same PostgreSQL/MySQL DSN could see its
+connection pool closed underneath an in-flight call, surfacing as:
+
+```
+asyncpg.exceptions._base.InterfaceError: pool is closing
+kailash.sdk_exceptions.NodeExecutionError: Database query failed: pool is closing
+```
+
+The DPI-B3 reaper decides whether a pool is idle from
+`EnterpriseConnectionPool._last_activity_at`. That timestamp was refreshed in exactly one
+place — `EnterpriseConnectionPool.get_connection()` — and **nothing on the node's query path
+calls it**: `async_run()` reaches the driver through `adapter.begin_transaction()`, and the
+non-transaction path through `adapter.execute()`, both of which acquire from the driver pool
+directly. So the clock only ever held the pool's *creation* time, and a pool serving a query
+every 0.5s still aged past `idle_timeout` and became reapable. Measured before the fix, with a
+successful query on every iteration and `idle_timeout=2`:
+
+```
+iter  age_s   is_idle  query
+0     0.48    False    ok
+3     2.00    False    ok
+4     2.50    True     ok      <-- reapable while actively serving
+5     3.91    True     ok
+```
+
+`age_s` never resets — the query path never touched the clock. After the fix it holds flat at
+the inter-query interval and `is_idle` stays `False`.
+
+Every acquisition in every adapter ends at one raw driver pool, so the fix wraps that pool once
+(`_ActivityTrackingPool`) rather than re-spelling a touch at each of the nine `acquire()` call
+sites. Delegation is total: only `acquire` is intercepted.
+
+The exposure was proportional to how *idle-tuned* a deployment was: the shorter the configured
+`idle_timeout`, the wider the window. Defaults made it rare, which is why it surfaced as an
+intermittent CI failure rather than a reported outage.
+
+`tests/regression/test_issue_697_pool_leak.py::test_active_pools_not_reaped` pinned this
+behaviourally but could only catch it when the reaper's tick happened to land on one of its
+queries — so it passed for weeks against a pool whose clock was never refreshed at all. A new
+`test_query_path_refreshes_the_idle_clock` pins the invariant directly, so a regression fails
+deterministically instead of as a flake.
+
 ### Security (BREAKING) — an empty `allowed_actions` now denies at EVERY enforcement surface (#2218)
 
 `operational.allowed_actions` defaults to `[]`, and the enforcement surfaces disagreed about what that meant. Measured, on one envelope, one action:
