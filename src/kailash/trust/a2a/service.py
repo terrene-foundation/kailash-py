@@ -8,7 +8,7 @@ Nexus-based HTTP service implementing the A2A protocol with EATP
 trust extensions for secure agent-to-agent communication.
 
 Endpoints:
-- GET /.well-known/agent.json - Agent Card (public)
+- GET /.well-known/agent-card.json - Agent Card (public)
 - POST /a2a/jsonrpc - JSON-RPC 2.0 handler
 - GET /a2a/health - Health check
 
@@ -172,7 +172,7 @@ class A2AService:
                 ),
             }
 
-        @app.endpoint("/.well-known/agent.json", methods=["GET"])
+        @app.endpoint("/.well-known/agent-card.json", methods=["GET"])
         async def get_agent_card(request: Request):
             """
             Serve the Agent Card.

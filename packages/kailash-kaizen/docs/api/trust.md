@@ -670,7 +670,7 @@ class A2AService:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/.well-known/agent.json` | GET | Agent Card |
+| `/.well-known/agent-card.json` | GET | Agent Card |
 | `/a2a/jsonrpc` | POST | JSON-RPC 2.0 |
 
 **JSON-RPC Methods:**
