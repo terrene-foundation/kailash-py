@@ -13,6 +13,34 @@ such as `>=2.0`.
 
 ## [Unreleased]
 
+### Security (BREAKING) — A2A protected methods now require authorization (#2203)
+
+Authentication established WHO is calling; nothing established WHAT they could do. `audit.query` and `agent.invoke` took their target from request params, and `trust.delegate` delegated **the serving agent's own authority** to a caller-chosen delegatee with a caller-chosen capability list.
+
+Authorization now routes to PACT (`framework-first`: governance/RBAC/policy belongs to PACT, and PACT's governance core ships in this same wheel behind the same `[trust]` extra — no new dependency). `A2AAuthorizer` wraps a `GovernanceEngine` + `AgentRoleMapping`; `trust.delegate` and `agent.invoke` go through `verify_action`, and `audit.query` through `check_access` against a knowledge item owned by the **subject's** role address, so PACT's containment algorithm decides cross-agent access rather than a hardcoded rule.
+
+**`trust.delegate` no longer delegates from the serving agent.** `delegator_id` is now the authenticated caller. This was a plain bug, not a policy choice.
+
+**BREAKING — protected methods require a configured governance org.** `A2AService(..., authorizer=...)` is now effectively mandatory: without it `trust.delegate`, `audit.query` and `agent.invoke` refuse with `-40003`. Authorizing only when an org happens to be configured is the silent no-op default `security.md` § Secure-Default blocks, and it is the shape that produced the authentication hole in the first place.
+
+Three fail-OPEN behaviours are converted into refusals, each measured with a control rather than assumed:
+
+- **A `None` PACT envelope is maximally permissive** — measured, `impersonate_president` returned `auto_approved` with no envelope and `blocked` once one existed. A verdict with no `effective_envelope_snapshot` is a non-answer, and is now refused.
+- **`AgentRoleMapping.resolve()` passes unknown ids through** — `resolve('agent-002-Rogue')` returns the string unchanged, because the passthrough tests only whether the id contains a `D`, `T` or `R`. The authorizer uses `get_address()` exclusively, and its `RoleMappingLike` Protocol does not expose `resolve` at all. *The `resolve()` fail-open itself is NOT fixed here — see Known issues.*
+- **A missing authorizer** refuses rather than allows.
+
+Verdict handling is a positive allowlist (`auto_approved` only); a deny-list would admit any level PACT gains later.
+
+**Enforcement-surface parity:** `trust.verify` is public and accepts an arbitrary `agent_id`. Its verdict stays public — that is the method's purpose — but the trust-chain metadata (`genesis_authority`, capability and delegation counts) is now withheld from unauthenticated callers, since handing an anonymous caller another agent's org structure is an enumeration oracle.
+
+`AuthorizationError` gains a `reason=` form. It previously took only a capability name, so a governance denial rendered as the nonsensical `missing capability 'No governance org is configured…'`; it now refuses to construct with neither a capability nor a reason.
+
+### Known issues (not fixed in this release)
+
+- **`AgentRoleMapping.resolve()` is fail-open** — any identifier containing a `D`, `T` or `R` is passed through as a role address. It has zero call sites in PACT and is not reachable from the A2A path, but it is public API. Not fixed here because the correct repair needs the real D/T/R address grammar, and a wrong fix to an identity resolver is worse than the current state.
+- No `jti` replay cache and no maximum token TTL; a long-dated token remains valid until expiry.
+- A2A verification failures are distinguishable from one another and two handlers surface internal exception text on the wire.
+
 ### Security (BREAKING) — A2A bearer tokens are now actually verified (#2203)
 
 `A2AAuthenticator.verify_token` — which checks the Ed25519 signature, expiry, audience and trust chain — **had no call site in the request path**. `JsonRpcHandler.handle` tested the bearer token for truthiness and discarded it, so **any non-empty string authenticated every protected method**, including `trust.delegate`, which grants capabilities. (An earlier revision of this entry also named `audit.query` as reading the audit trail. That is **withdrawn as inaccurate**: `AuditQueryService.query_actions` and `TrustOperations._audit_store` do not exist — `git grep 'def query_actions'` finds no definition, against a control where `def get_agent_history` matches — so `audit.query` returns `-32603` regardless of authentication. It was reachable without authentication, but it read nothing.). Measured: `'AAAA'`, `' '` and `'not-a-jwt-at-all'` all authenticated. Supplying no token at all was correctly refused — the check existed and could refuse, it simply could not tell a signed token from arbitrary bytes.

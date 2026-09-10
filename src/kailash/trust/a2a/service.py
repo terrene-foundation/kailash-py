@@ -31,6 +31,7 @@ from typing import Any, List, Optional
 
 from kailash.trust.a2a.agent_card import AgentCardCache, AgentCardGenerator
 from kailash.trust.a2a.auth import A2AAuthenticator, extract_token_from_header
+from kailash.trust.a2a.authorization import A2AAuthorizer
 from kailash.trust.a2a.exceptions import (
     A2AError,
     AuthenticationError,
@@ -75,6 +76,7 @@ class A2AService:
         base_url: Optional[str] = None,
         cors_origins: Optional[List[str]] = None,
         card_cache_ttl: int = 300,
+        authorizer: Optional["A2AAuthorizer"] = None,
     ):
         """
         Initialize the A2A service.
@@ -88,6 +90,11 @@ class A2AService:
             capabilities: List of agent capabilities.
             description: Optional agent description.
             base_url: Base URL for the service (for endpoint URLs in Agent Card).
+            authorizer: A2AAuthorizer wrapping a PACT GovernanceEngine +
+                AgentRoleMapping. REQUIRED for protected methods: without it
+                trust.delegate / audit.query / agent.invoke refuse, because
+                authenticating a caller establishes who they are and never what
+                they may do.
             cors_origins: Allowed CORS origins (default: ["*"]).
             card_cache_ttl: Agent Card cache TTL in seconds (default: 5 minutes).
         """
@@ -127,6 +134,7 @@ class A2AService:
             trust_operations=trust_operations,
             agent_id=agent_id,
             capabilities=self._capabilities,
+            authorizer=authorizer,
         )
         self._method_handlers.register_all(self._jsonrpc_handler)
 

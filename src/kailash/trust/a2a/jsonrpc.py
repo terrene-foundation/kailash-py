@@ -19,8 +19,11 @@ if TYPE_CHECKING:
     from kailash.trust.operations import TrustOperations
 
 from kailash.trust.a2a.auth import CallerIdentity, TokenVerifier
+from kailash.trust.a2a.authorization import A2AAuthorizer
 from kailash.trust.a2a.exceptions import (
     A2AError,
+    AuthenticationError,
+    AuthorizationError,
     JsonRpcInternalError,
     JsonRpcInvalidParamsError,
     JsonRpcInvalidRequestError,
@@ -325,6 +328,7 @@ class A2AMethodHandlers:
         agent_id: str,
         capabilities: List[str],
         invoke_handler: Optional[MethodHandler] = None,
+        authorizer: Optional[A2AAuthorizer] = None,
     ):
         """
         Initialize A2A method handlers.
@@ -341,6 +345,30 @@ class A2AMethodHandlers:
         self._agent_id = agent_id
         self._capabilities = capabilities
         self._invoke_handler = invoke_handler
+        # Authorization is REQUIRED for protected methods. None here means
+        # every protected method refuses -- authenticating a caller says who
+        # they are, never what they may do (security.md § Secure-Default).
+        self._authorizer = authorizer
+
+    def _authz(self, caller: Optional[CallerIdentity]) -> A2AAuthorizer:
+        """Return the authorizer, or refuse.
+
+        A configured governance org is a HARD requirement, mirroring
+        `JsonRpcHandler`'s refusal when no token verifier is wired. Authorizing
+        only when an org happens to exist is the silent no-op default
+        `security.md` § Secure-Default blocks.
+        """
+        if caller is None:
+            raise AuthenticationError("Authentication required")
+        if self._authorizer is None:
+            raise AuthorizationError(
+                reason=(
+                    "no governance org is configured; refusing the protected "
+                    "method. Supply an A2AAuthorizer (PACT GovernanceEngine + "
+                    "AgentRoleMapping)."
+                )
+            )
+        return self._authorizer
 
     async def handle_capabilities(
         self,
@@ -385,9 +413,17 @@ class A2AMethodHandlers:
         result = await self._trust_ops.verify(agent_id, "trust_verify", level=level)
         latency_ms = (time.time() - start_time) * 1000
 
-        # Build trust chain summary if valid
+        # Build trust chain summary if valid.
+        #
+        # `trust.verify` is PUBLIC, so an unauthenticated caller may name ANY
+        # agent_id. The verdict itself is this method's purpose and stays public;
+        # the CHAIN METADATA does not -- `genesis_authority`, capability count and
+        # delegation count describe the subject's org structure, and handing that
+        # to an anonymous caller is an enumeration oracle. Once caller identity
+        # became a fail-closed control on audit.query, this independent surface
+        # had to learn it too (security.md § Enforcement-Surface Parity).
         chain_summary = None
-        if result.valid:
+        if result.valid and caller is not None:
             try:
                 chain = await self._trust_ops.get_chain(agent_id)
                 if chain:
@@ -436,6 +472,7 @@ class A2AMethodHandlers:
 
         if caller is None:
             raise AuthenticationError("Authentication required for delegation")
+        authz = self._authz(caller)
 
         # Extract parameters
         delegatee_id = params.get("delegatee_agent_id")
@@ -452,10 +489,28 @@ class A2AMethodHandlers:
         if not capabilities:
             raise JsonRpcInvalidParamsError("Missing required parameter: capabilities")
 
+        # Capability bounding is PACT's: `intersect_envelopes` already implements
+        # intersection with monotonic tightening. The token's own `capabilities`
+        # list is NOT a grant -- it is self-issued (sub == iss, populated from the
+        # caller's own argument at mint time), so it proves only what the caller
+        # asserts about itself.
+        authz.require_action(
+            caller,
+            "trust.delegate",
+            {
+                "delegatee_agent_id": delegatee_id,
+                "task_id": task_id,
+                "requested_capabilities": capabilities,
+            },
+        )
+
         # Create delegation
         try:
             delegation = await self._trust_ops.delegate(
-                delegator_id=self._agent_id,
+                # The DELEGATOR is the authenticated caller, never this
+                # agent. Passing self._agent_id let any caller spend THIS
+                # agent's authority on a delegatee of their choosing.
+                delegator_id=caller.agent_id,
                 delegatee_id=delegatee_id,
                 task_id=task_id,
                 capabilities=capabilities,
@@ -493,10 +548,17 @@ class A2AMethodHandlers:
 
         if caller is None:
             raise AuthenticationError("Authentication required for audit query")
+        authz = self._authz(caller)
 
         agent_id = params.get("agent_id")
         if not agent_id:
             raise JsonRpcInvalidParamsError("Missing required parameter: agent_id")
+
+        # The caller may name ANY agent here, so the subject is
+        # attacker-chosen. PACT decides whether this caller may read that
+        # subject's trail; a same-agent equality check would permanently
+        # foreclose the compliance-officer and supervisor cases.
+        authz.require_audit_access(caller, agent_id)
 
         # Build query
         from datetime import datetime
@@ -581,6 +643,7 @@ class A2AMethodHandlers:
 
         if caller is None:
             raise AuthenticationError("Authentication required for agent invocation")
+        self._authz(caller).require_action(caller, "agent.invoke", dict(params))
 
         if self._invoke_handler:
             return await self._invoke_handler(params, caller)

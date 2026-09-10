@@ -38,7 +38,13 @@ Example:
 """
 
 from kailash.trust.a2a.agent_card import AgentCardCache, AgentCardGenerator
-from kailash.trust.a2a.auth import A2AAuthenticator, extract_token_from_header
+from kailash.trust.a2a.auth import (
+    A2AAuthenticator,
+    CallerIdentity,
+    TokenVerifier,
+    extract_token_from_header,
+)
+from kailash.trust.a2a.authorization import A2AAuthorizer
 from kailash.trust.a2a.exceptions import (
     A2AError,
     A2AServiceError,
@@ -89,6 +95,9 @@ __all__ = [
     "JsonRpcResponse",
     # Authentication
     "A2AAuthenticator",
+    "CallerIdentity",
+    "TokenVerifier",
+    "A2AAuthorizer",
     "extract_token_from_header",
     "A2AToken",
     # Request/Response Models

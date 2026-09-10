@@ -432,6 +432,42 @@ class TestJsonRpcHandler:
         ), f"expected an authentication failure, got {payload['error']}"
 
     @pytest.mark.regression
+    def test_protected_method_refuses_without_a_governance_org(
+        self, test_client, auth_token
+    ):
+        """Authentication is not authorization.
+
+        This fixture configures no PACT governance org, so every protected
+        method MUST refuse even for a genuinely authenticated caller.
+
+        Asserting the AUTHORIZATION code specifically (-40003) is load-bearing:
+        the pre-existing tests around this one assert only that "an error" came
+        back, which any error satisfies -- which is exactly why they all stayed
+        green when authorization was introduced and started refusing calls they
+        previously allowed.
+        """
+        response = test_client.post(
+            "/a2a/jsonrpc",
+            json={
+                "jsonrpc": "2.0",
+                "method": "trust.delegate",
+                "params": {
+                    "delegatee_agent_id": "attacker-agent",
+                    "task_id": "task-1",
+                    "capabilities": ["analyze"],
+                },
+                "id": 1,
+            },
+            headers={"Authorization": f"Bearer {auth_token}"},
+        )
+        result = response.json()
+        assert "error" in result
+        assert (
+            result["error"]["code"] == -40003
+        ), f"expected an AUTHORIZATION failure, got {result['error']}"
+        assert "governance org" in result["error"]["message"]
+
+    @pytest.mark.regression
     @pytest.mark.parametrize(
         "bogus_token",
         ["AAAA", " ", "not-a-jwt-at-all", "a.b.c", "Bearer"],
