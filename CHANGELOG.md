@@ -13,6 +13,14 @@ such as `>=2.0`.
 
 ## [Unreleased]
 
+### Fixed — `import kailash.trust.a2a` failed on a `[trust]`-only install (#2203)
+
+`kailash/trust/a2a/__init__.py` eagerly imported `service.py`, which imports `nexus` at module scope — but `nexus` ships in the `[nexus]` extra while this package is gated by `[trust]`. So `pip install kailash[trust]` followed by `import kailash.trust.a2a` raised `ModuleNotFoundError: No module named 'nexus'`, taking down **every** symbol in the package, including the ones with no HTTP dependency at all (`A2AAuthenticator`, `JsonRpcHandler`, `CallerIdentity`).
+
+`A2AService` and `create_a2a_app` are now served through a PEP 562 `__getattr__`, with a `TYPE_CHECKING` block so `__all__`, Sphinx, pyright and CodeQL still resolve them. Accessing either without `nexus` installed raises an actionable error naming the extra, instead of making the package unimportable.
+
+This is `dependencies.md`'s module-scope-import rule — an unconditional import of a sibling the package does not declare. It survived because a monorepo dev environment has `nexus` editable-installed, so it could only ever fail on a clean install; it surfaced when new trust tests became the first thing under `tests/trust/unit/` to import the package in a `[trust]`-only CI job.
+
 ### Security (BREAKING) — A2A protected methods now require authorization (#2203)
 
 Authentication established WHO is calling; nothing established WHAT they could do. `audit.query` and `agent.invoke` took their target from request params, and `trust.delegate` delegated **the serving agent's own authority** to a caller-chosen delegatee with a caller-chosen capability list.

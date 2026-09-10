@@ -37,6 +37,8 @@ Example:
     ... )
 """
 
+from typing import TYPE_CHECKING
+
 from kailash.trust.a2a.agent_card import AgentCardCache, AgentCardGenerator
 from kailash.trust.a2a.auth import (
     A2AAuthenticator,
@@ -76,7 +78,49 @@ from kailash.trust.a2a.models import (
     VerificationRequest,
     VerificationResponse,
 )
-from kailash.trust.a2a.service import A2AService, create_a2a_app
+
+if TYPE_CHECKING:  # pragma: no cover - import-time only for type checkers
+    # Declared here so `__all__`, Sphinx autodoc, pyright and CodeQL all resolve
+    # these names, while the runtime import stays lazy below
+    # (orphan-detection.md Rule 6b).
+    from kailash.trust.a2a.service import A2AService, create_a2a_app
+
+#: Symbols served lazily because importing them requires `nexus`, which is NOT
+#: in the `[trust]` extra that gates this package.
+_LAZY_SERVICE_EXPORTS = frozenset({"A2AService", "create_a2a_app"})
+
+
+def __getattr__(name: str):
+    """Import the Nexus-backed HTTP service on first access, not at import time.
+
+    `service.py` imports `nexus` at module scope, but `nexus` ships in the
+    `[nexus]` extra while this package is gated by `[trust]`. Importing it
+    eagerly meant `pip install kailash[trust]` followed by
+    `import kailash.trust.a2a` raised `ModuleNotFoundError: No module named
+    'nexus'` — for EVERY symbol in the package, including the ones with no HTTP
+    dependency at all (`A2AAuthenticator`, `JsonRpcHandler`, `CallerIdentity`).
+
+    That is the `dependencies.md` module-scope-import rule: an unconditional
+    import of a sibling this package does not declare. It went unnoticed
+    because a monorepo dev environment has `nexus` editable-installed, so it
+    only ever failed on a clean install.
+
+    Raising here — at the point of use — turns it into an actionable error
+    naming the missing extra, instead of making the whole package unimportable.
+    """
+    if name in _LAZY_SERVICE_EXPORTS:
+        try:
+            from kailash.trust.a2a import service as _service
+        except ModuleNotFoundError as exc:
+            raise ModuleNotFoundError(
+                f"kailash.trust.a2a.{name} requires the HTTP service layer, "
+                f"which needs the 'nexus' package: pip install 'kailash[nexus]'. "
+                f"The rest of kailash.trust.a2a (authentication, authorization, "
+                f"JSON-RPC) works without it. Original error: {exc}"
+            ) from exc
+        return getattr(_service, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     # Service
