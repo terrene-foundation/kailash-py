@@ -564,7 +564,10 @@ Appends row to `_policy_update_df`.
 
 ##### MUST: `track_exploration` Entry Point
 
+> **Implementation status: NOT SHIPPED.** `grep -rn 'track_exploration' packages/ src/` returns nothing; likewise `kl_estimator` and `logprob_old`. `RLDiagnostics` (`packages/kailash-ml/src/kailash_ml/diagnostics/rl.py`) defines `record_episode`, `record_policy_update`, `record_value_update`, `record_q_update`, `record_replay`, `record_eval_rollout`, `as_sb3_callback` and `report` — no exploration entry point and no `_exploration_df`. The shipped KL path is `RLDiagnostics.record_policy_update`, which accepts an already-computed `kl` float from the caller and emits it on `rl.policy.kl_from_ref` WITHOUT smoothing or an estimator tag, so the estimator-discipline guarantee in the paragraph above is not enforced anywhere today. `KL_SMOOTH_EPS = 1e-10` does ship, but only on the tabular drift path (`kailash_ml/drift/stats.py`), not the RL path. `ml-drift.md` §3 MUST 4 is the paired clause and carries the same status note.
+
 ```python
+# TARGET DESIGN — not present in source; see the status note above.
 def track_exploration(
     self,
     *,

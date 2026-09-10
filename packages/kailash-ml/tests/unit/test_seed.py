@@ -10,8 +10,9 @@ from __future__ import annotations
 import os
 import random
 
-import kailash_ml
 import pytest
+
+import kailash_ml
 from kailash_ml._seed import SeedReport, seed
 
 
@@ -123,3 +124,59 @@ def test_applied_list_order_deterministic():
     # python always second (when applied)
     if "python" in r.applied:
         assert r.applied[1] == "python"
+
+
+# --- blas_backend (ml-engines-v2.md §11.2 MUST 5) ---------------------------
+
+
+def test_seed_report_carries_blas_backend_field():
+    """The field exists, defaults to None, and does not break positional
+    construction of the pre-existing fields (it is appended last)."""
+    r = SeedReport(seed=42, applied=("python",))
+    assert r.blas_backend is None
+    assert "blas_backend" in SeedReport.__dataclass_fields__
+
+
+def test_blas_backend_detected_when_numpy_present():
+    """With numpy installed the probe MUST name a backend, not None.
+
+    Falsifying result: a None here would mean the probe never reads
+    numpy.show_config and the field is decorative.
+    """
+    from kailash_ml._seed import _detect_blas_backend
+
+    pytest.importorskip("numpy")
+    detected = _detect_blas_backend()
+    assert detected is not None
+    assert detected == detected.lower()
+
+
+def test_blas_backend_is_none_when_numpy_absent(monkeypatch):
+    """Negative control — the probe MUST return None rather than a stale
+    or hardcoded backend name when numpy cannot be imported."""
+    import kailash_ml._seed as seed_mod
+
+    monkeypatch.setattr(seed_mod, "_try_import", lambda _p: None)
+    assert seed_mod._detect_blas_backend() is None
+
+
+def test_blas_backend_probe_never_raises(monkeypatch):
+    """A reproducibility annotation MUST NOT be able to break seeding:
+    an exploding show_config degrades to None."""
+    import kailash_ml._seed as seed_mod
+
+    class _Exploding:
+        def show_config(self, *a, **k):
+            raise RuntimeError("probe blew up")
+
+    monkeypatch.setattr(
+        seed_mod, "_try_import", lambda p: _Exploding() if p == "numpy" else None
+    )
+    assert seed_mod._detect_blas_backend() is None
+
+
+def test_seed_populates_blas_backend_on_the_report():
+    """End-to-end: km.seed() MUST populate the field, not leave the default."""
+    pytest.importorskip("numpy")
+    r = seed(42, torch=False, lightning=False, sklearn=False)
+    assert r.blas_backend is not None

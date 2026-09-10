@@ -241,26 +241,22 @@ class FrameworkIntegration(ABC):
 
 ### 3.3 DDP / FSDP / DeepSpeed / TP Rank-0-Only Emission (Decision 4)
 
-**MUST**: Every framework integration MUST emit autolog events (metrics, params, models, figures, datasets) ONLY when the process is the global main process across ALL parallelism axes (DP rank-0 AND TP rank-0 AND PP rank-0). The gate MUST route through `DistributionEnv.is_main_process` (see `ml-diagnostics.md` §5.5) so Accelerate + DeepSpeed + tensor-parallel launchers are correctly detected.
+**MUST**: Every framework integration MUST emit autolog events (metrics, params, models, figures, datasets) ONLY when the process is the global main process across ALL parallelism axes (DP rank-0 AND TP rank-0 AND PP rank-0). The gate MUST route through the shipped `kailash_ml.autolog._distribution.is_main_process` helper so Accelerate + DeepSpeed + tensor-parallel launchers are correctly detected.
+
+**Deviation from the originally-specified surface (`rules/spec-accuracy.md` Rule 6).** This clause previously mandated `DistributionEnv.is_main_process`, a class-based gate specified at `ml-diagnostics.md` §5.5. **What changed:** no `DistributionEnv` class exists in `kailash-ml` — there is no `kailash_ml/diagnostics/distribution.py` module, and `DistributionEnv` resolves to zero definition sites across every source root. The gate shipped instead as a module-level function, `is_main_process()` at `packages/kailash-ml/src/kailash_ml/autolog/_distribution.py` (`__all__ = ["is_main_process"]`), which the rank-gated W23 integrations import directly — `grep -ln "from kailash_ml.autolog._distribution import is_main_process" packages/kailash-ml/src/kailash_ml/autolog/*.py` returns exactly `_lightning.py`, `_transformers.py`, `_statsmodels.py`, `_polars.py`. **Why:** the multi-axis gate was needed by autolog before the central diagnostics class was scoped, so it landed autolog-local; the module's own docstring records the intent to delegate to `DistributionEnv` if that class ever lands. **User impact:** none at the behavioural level — the shipped function performs the identical four-axis check this clause requires (torch DP rank → Accelerate `PartialState().is_main_process` → `TENSOR_PARALLEL_RANK`/`TP_RANK` → `PIPELINE_PARALLEL_RANK`/`PP_RANK`, short-circuiting on the first False, fail-open to rank-0 on probe error). Callers that wrote `from kailash_ml.diagnostics.distribution import DistributionEnv` against the older spec text get `ModuleNotFoundError`; the import below is the working form. `ml-diagnostics.md` §5.5 still describes `DistributionEnv` as a target design and is marked accordingly.
 
 ```python
-# DO — multi-axis rank gate routed through DistributionEnv
-from kailash_ml.diagnostics.distribution import DistributionEnv
-
-def _is_main_process() -> bool:
-    """Returns True only on (DP rank 0) AND (TP rank 0) AND (PP rank 0)
-    AND accelerator.is_main_process when Accelerate is active."""
-    env = DistributionEnv.detect()
-    return env.is_main_process
+# DO — multi-axis rank gate routed through the shipped helper
+from kailash_ml.autolog._distribution import is_main_process
 
 class TransformersAutologIntegration(FrameworkIntegration):
     def _on_log(self, args, state, control, logs, **kwargs):
-        if not _is_main_process():
+        if not is_main_process():
             return  # silent no-op on non-main-process workers
         self._run and self._run.log_metrics(logs, step=state.global_step)
 ```
 
-**TP + PP coverage.** Under `accelerate launch --num_processes=8 --tp_size=2 --pp_size=2`, Trainer instantiates ONE Trainer per DP rank (4 DP ranks × 1 instance each). Without multi-axis gating, every DP rank emits autolog events → 4× duplicate metric rows. `DistributionEnv.is_main_process` returns True only on global rank 0 across ALL axes.
+**TP + PP coverage.** Under `accelerate launch --num_processes=8 --tp_size=2 --pp_size=2`, Trainer instantiates ONE Trainer per DP rank (4 DP ranks × 1 instance each). Without multi-axis gating, every DP rank emits autolog events → 4× duplicate metric rows. `kailash_ml.autolog._distribution.is_main_process` returns True only on global rank 0 across ALL axes.
 
 **Both-axis check required for Accelerate.** An Accelerate-launched run with `num_processes > 1` on a single GPU per machine has `torch.distributed.is_initialized() == False` on each process. The gate MUST check BOTH `torch.distributed.get_rank() == 0` AND `accelerate.PartialState().is_main_process` — single-check fallback fails on Accelerate.
 
