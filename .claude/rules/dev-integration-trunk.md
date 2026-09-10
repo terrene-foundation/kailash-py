@@ -92,18 +92,57 @@ the permanent-backlog behaviour that trains everyone to ignore the surface.
 ### 4. `dev` → `main` Is ONE Deliberate Promotion, And The Gap Stays COUNTED
 
 Promotion is one PR, one gate run, on a chosen cadence. It MUST NOT be automatic.
-And because trunk-but-not-main work now reads as *landed*, the `dev..main` gap
+And because trunk-but-not-main work now reads as _landed_, the `dev..main` gap
 MUST be surfaced as a live count — it is invisible to the unlanded surface by
 construction.
 
 ```bash
-git rev-list --count origin/main..origin/dev     # the promotion gap
+git rev-list --count --first-parent origin/main..origin/dev   # the promotion gap
 ```
 
-**CADENCE: WEEKLY** (ratified 2026-09-10). One promotion PR per week,
-`dev` → `main`, one gate run. Weekly is small enough that the merge stays
-reviewable in a single pass; the gap counter is what shows when a week has
-been missed.
+**Count with `--first-parent`, never raw.** A raw count counts every commit a
+merge brought in; the promotion's review cost scales with INDEPENDENT LANDINGS,
+not with commits. Measured on this repo's `dev`: **6397 raw vs 1943 first-parent
+— a 3.3× overstatement**, with 77 merge commits in the last 30 days alone.
+Reporting the raw number inflates the batch and pushes toward promoting _less_
+often than the evidence supports, which is backwards.
+
+**CADENCE: DUAL TRIGGER — promote when EITHER fires, whichever comes first.**
+A single fixed cadence controls only one of two independent pressures:
+
+| trigger       | threshold (provisional)                                                           | what it caps                                                                                                                                                                                                                |
+| ------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Count**     | 10 independent landings unpromoted                                                | **debug-on-red.** A red 35-change promotion tells you nothing about which change caused it — and you paid the gate to learn that. This is the trigger a burst day hits, turning one huge promotion into several small ones. |
+| **Time**      | 72 hours with anything unpromoted                                                 | **production divergence.** Merging is gated by a required check; deploying is gated by nothing, so the two diverge silently regardless of volume.                                                                           |
+| **Immediate** | any security fix, deploy-affecting change, or anything a deploy-drift check flags | **risk, not volume.** These must not wait for a batch to fill.                                                                                                                                                              |
+
+**The thresholds above are PROVISIONAL and MUST be re-derived.** They are
+adapted from a sibling repo whose measured steady state was ~5 independent
+landings/day; this repo's `dev` trunk was created 2026-09-10 and has one day of
+steady-state data, which is not enough to set a count threshold from. Re-derive
+once ≥14 days of trunk history exist:
+
+```bash
+git log --first-parent origin/dev --since="21 days ago" --format='%ad' --date=short \
+  | sort | uniq -c        # independent landings per day -> take the median
+```
+
+Set the count trigger at roughly two days of the measured median. Until then the
+numbers above are a starting point, not a finding — do not cite them as measured
+for this repo.
+
+**Why not weekly** (the previous cadence, superseded): weekly controls elapsed
+time and leaves batch SIZE unbounded. At any meaningful landing rate it produces
+large promotions, and on a burst week it reproduces exactly the unbounded-batch
+failure the trunk model exists to avoid.
+
+**Honest cost of the dual trigger:** it is **not diarisable**. Nobody can put it
+in a calendar, because the count trigger fires on activity rather than on a date.
+A fixed weekly slot is easier to remember and worse on every measured axis. The
+mitigation is that the count is one command, so it is surfaced at SessionStart
+next to the promotion-gap banner. The second honest cost is more approvals — the
+alternative is not fewer approvals, it is one unbounded approval carrying every
+change since the last one.
 
 **This is the model's one honest cost, stated rather than hidden:** the risk is
 RELOCATED, not removed. Two things keep it honest — this counter, and a standing
@@ -184,7 +223,7 @@ constant and documents that as deliberate ("NO REPO-SHAPE ASSUMPTIONS"), and
 `worktree-reap.mjs`. Implementing the named paths verbatim would have created two
 dead files and left the live predicates pointed at `main`.
 
-The directive's own escape clause was checked before adopting: *"any repo whose
-gate does not trigger on main needs none of this."* Measured here — 16 workflows
+The directive's own escape clause was checked before adopting: _"any repo whose
+gate does not trigger on main needs none of this."_ Measured here — 16 workflows
 on `pull_request`, 4 on `push: branches:[main]` including CodeQL, a required
 context — so the constraint holds and the change is warranted.
