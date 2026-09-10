@@ -688,6 +688,73 @@ class ConnectionCircuitBreaker:
             }
 
 
+class _ActivityTrackingPool:
+    """Driver-pool wrapper that keeps the DPI-B3 idle clock honest.
+
+    The reaper decides whether a pool is idle from
+    ``EnterpriseConnectionPool._last_activity_at``, which was refreshed in
+    exactly ONE place: ``EnterpriseConnectionPool.get_connection()``. Nothing
+    on the node's query path calls it. ``async_run()`` reaches the driver via
+    ``_execute_with_transaction`` -> ``adapter.begin_transaction()`` ->
+    ``pool.acquire()``, and the non-transaction path
+    (``EnterpriseConnectionPool.execute_query``) delegates to
+    ``adapter.execute()``, which acquires directly too.
+
+    So the clock only ever held the pool's CREATION time, and a pool serving a
+    query every 0.5 s still aged past ``idle_timeout``. The reaper then closed
+    it under an in-flight caller, which surfaces as
+    ``asyncpg.InterfaceError: pool is closing`` -- exactly the invariant
+    ``tests/regression/test_issue_697_pool_leak.py::test_active_pools_not_reaped``
+    exists to pin. Measured before this fix, with a successful query on every
+    iteration and ``idle_timeout=2``::
+
+        iter  age_s   is_idle  query
+        0     0.48    False    ok
+        3     2.00    False    ok
+        4     2.50    True     ok      <-- reapable while actively serving
+        5     3.91    True     ok
+
+    ``age_s`` never resets: the query path never touched the clock.
+
+    Every acquisition in every adapter ends at ONE raw driver pool (the inner
+    adapter's ``_pool``, which ``EnterpriseConnectionPool._pool`` and the
+    production adapter's ``_pool`` are both aliases of), so wrapping it once
+    is the single point that fixes all of them -- rather than re-spelling a
+    touch at each of the nine ``acquire()`` sites, which is the per-call-site
+    shape that drifted in #2218.
+
+    Delegation is total: only ``acquire`` is intercepted, everything else
+    (``close``, ``terminate``, ``release``, ``size``, ``_holders``, ...) falls
+    through to the driver pool, and ``acquire()`` returns the driver's own
+    return value unchanged so both ``await pool.acquire()`` and
+    ``async with pool.acquire() as conn`` keep working.
+    """
+
+    __slots__ = ("_kailash_driver_pool", "_kailash_owner")
+
+    def __init__(self, driver_pool: Any, owner: "EnterpriseConnectionPool") -> None:
+        self._kailash_driver_pool = driver_pool
+        self._kailash_owner = owner
+
+    def acquire(self, *args, **kwargs):
+        # Refreshed BEFORE delegating, deliberately: an acquire that blocks
+        # waiting for a free connection is still activity, and must not let
+        # the reaper conclude the pool went idle during that wait.
+        self._kailash_owner._last_activity_at = time.monotonic()
+        return self._kailash_driver_pool.acquire(*args, **kwargs)
+
+    def __getattr__(self, name: str) -> Any:
+        # Only reached for names that are not slots on this wrapper.
+        return getattr(self._kailash_driver_pool, name)
+
+    def __bool__(self) -> bool:
+        # Faithful to the raw pool: call sites use `if adapter._pool:`.
+        return bool(self._kailash_driver_pool)
+
+    def __repr__(self) -> str:
+        return f"_ActivityTrackingPool({self._kailash_driver_pool!r})"
+
+
 class EnterpriseConnectionPool:
     """Enterprise-grade connection pool with monitoring, health checks, and adaptive sizing."""
 
@@ -806,6 +873,19 @@ class EnterpriseConnectionPool:
             if self._adapter is None:
                 self._adapter = self.adapter_class(self.database_config)
                 await self._adapter.connect()
+                # Wrap the driver pool ONCE, here: this is the only place a raw
+                # driver pool enters the enterprise pool, and every other
+                # reference to it (this pool's ``_pool``, and the production
+                # adapter's ``_pool``, which is assigned from it in
+                # ``connect()``) is an alias taken from this attribute. Wrapping
+                # here is therefore what keeps ``_last_activity_at`` truthful on
+                # BOTH the transaction path and the ``execute_query`` path.
+                # Guarded: an adapter whose ``connect()`` leaves ``_pool`` None
+                # (SQLite's file-backed path) is left exactly as it was.
+                if self._adapter._pool is not None:
+                    self._adapter._pool = _ActivityTrackingPool(
+                        self._adapter._pool, self
+                    )
                 self._pool = self._adapter._pool
 
                 # Update metrics

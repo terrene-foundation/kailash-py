@@ -28,6 +28,7 @@ from kailash.nodes.data.async_sql import (
     _PROCESS_POOL_REGISTRY,
     AsyncSQLDatabaseNode,
     EnterpriseConnectionPool,
+    _idle_target,
     set_pool_defaults,
 )
 from kailash.nodes.data.exceptions import PoolExhaustedError
@@ -313,3 +314,73 @@ def test_set_pool_defaults_rejects_unknown_kwargs():
     """
     with pytest.raises(TypeError):
         set_pool_defaults(foo=42, idle_timeout=300)  # type: ignore[call-arg]
+
+
+# ---------------------------------------------------------------------------
+# Test 7 — the query path refreshes the idle clock (DPI-B3 root invariant)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_query_path_refreshes_the_idle_clock(pg_dsn):
+    """Running a query MUST refresh the pool's ``_last_activity_at``.
+
+    Test 4 (``test_active_pools_not_reaped``) pins the same invariant
+    BEHAVIOURALLY, but it can only observe a violation when the reaper's tick
+    happens to land on one of its queries -- so it passed for weeks against a
+    pool whose clock was never refreshed at all, and then failed in CI as a
+    "flake" the moment a loaded runner shifted the timing.
+
+    This pins the invariant DIRECTLY, so the regression surfaces as a
+    deterministic failure instead of a race:
+
+      - ``_last_activity_at`` was refreshed in exactly one place,
+        ``EnterpriseConnectionPool.get_connection()``;
+      - nothing on the node's query path calls it (``async_run`` reaches the
+        driver through ``adapter.begin_transaction()``, and the non-transaction
+        path through ``adapter.execute()``);
+      - so the clock held the pool's CREATION time forever and the reaper
+        closed pools that were actively serving queries
+        (``asyncpg.InterfaceError: pool is closing``).
+
+    Neutralising the fix (``_ActivityTrackingPool`` -> identity) makes this
+    test fail on the ``after > before`` assertion.
+    """
+    set_pool_defaults(idle_timeout=2, max_pool_count_per_process=20)
+
+    node = AsyncSQLDatabaseNode(
+        name="idle_clock_probe",
+        database_type="postgresql",
+        connection_string=pg_dsn,
+        query="SELECT 1",
+        validate_queries=False,
+    )
+    await node.async_run()
+
+    targets = [
+        target
+        for target in (_idle_target(entry) for entry in _PROCESS_POOL_REGISTRY.values())
+        if target is not None
+    ]
+    assert targets, "no registry entry exposed an idle clock -- cannot observe"
+    pool = targets[0]
+
+    # Let the clock age WITHOUT crossing idle_timeout, so this test never
+    # depends on the reaper having (or not having) run.
+    await asyncio.sleep(1.0)
+    before = pool._last_activity_at
+
+    await node.async_run()
+    after = pool._last_activity_at
+
+    assert after > before, (
+        "the node's query path did not refresh the pool idle clock: "
+        f"_last_activity_at unchanged at {before!r} across a successful query. "
+        "The reaper will treat an actively-served pool as idle and close it "
+        "under the caller."
+    )
+    assert not pool.is_idle(), (
+        "pool reports is_idle() immediately after a successful query "
+        f"(age={time.monotonic() - pool._last_activity_at:.2f}s, "
+        f"idle_timeout={pool.idle_timeout}s)"
+    )
