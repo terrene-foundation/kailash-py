@@ -83,6 +83,38 @@ class TestWrapperBypassViaInner:
         with pytest.raises(AttributeError, match="Direct access to _inner is blocked"):
             _ = proxy._inner  # noqa: B018 -- intentional attribute access
 
+    def test_governed_inner_proxy_blocks_the_real_handle(self) -> None:
+        """#2224 sibling: the proxy blocked ``_inner`` and leaked ``_real_inner``.
+
+        ``__getattr__`` is a FALLBACK, consulted only when normal lookup FAILS.
+        The real agent was stored as ``_real_inner``, a plain instance
+        attribute, so ``proxy._real_inner.run()`` resolved normally, never
+        reached the guard, and ran the agent ungoverned. The guard blocked the
+        name the attacker was expected to try while leaving the actual handle
+        open.
+
+        Distinct from ``TestGovernanceBypassViaDirectRun`` below: that is the
+        documented Python limitation and needs an explicit
+        ``object.__getattribute__`` call. This was plain attribute access.
+        """
+        agent = _make_agent()
+        envelope = _make_envelope(posture_ceiling="delegated")
+        governed = L3GovernedAgent(agent, envelope, mcp_servers=[])
+        proxy = governed.inner
+
+        for handle in ("_real_inner", "_target", "__dict__"):
+            with pytest.raises(AttributeError):
+                getattr(proxy, handle)
+
+    def test_governed_inner_proxy_denies_by_default(self) -> None:
+        """A name on no list at all -- proves default-deny, not a blocklist."""
+        agent = _make_agent()
+        envelope = _make_envelope()
+        governed = L3GovernedAgent(agent, envelope, mcp_servers=[])
+
+        with pytest.raises(AttributeError, match="restricted"):
+            governed.inner.never_heard_of_this  # noqa: B018
+
     def test_governed_inner_proxy_blocks_run(self) -> None:
         """Cannot call run() through the inner proxy."""
         agent = _make_agent()

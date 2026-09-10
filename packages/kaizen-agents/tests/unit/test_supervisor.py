@@ -387,3 +387,61 @@ class TestGovernedSupervisorCostModel:
         """cost_model property returns None when not configured."""
         supervisor = GovernedSupervisor()
         assert supervisor.cost_model is None
+
+
+# ---------------------------------------------------------------------------
+# #2224 sibling: the Layer-3 read-only views were not read-only
+# ---------------------------------------------------------------------------
+
+
+class TestLayer3ReadOnlyViewsContainTheirSubsystem:
+    """The Layer-3 ``.audit`` / ``.budget`` / ... views are containment
+    boundaries, and shared the #2224 defect.
+
+    ``_ReadOnlyView`` guarded an allowlist in ``__getattr__``, which is a
+    FALLBACK consulted only when normal lookup FAILS. ``_target`` was a plain
+    instance attribute, so ``view._target`` resolved normally, never reached
+    the guard, and handed back the mutable subsystem -- as did
+    ``view.__dict__["_target"]``.
+    """
+
+    def test_allowed_query_method_still_works(self) -> None:
+        """The allowed pole. A deny-only suite cannot tell a working view from
+        a broken one."""
+        supervisor = GovernedSupervisor(model="test-model", budget_usd=5.0)
+        assert supervisor.audit.to_list() == []
+        assert supervisor.audit.verify_chain() is True
+        assert supervisor.budget.get_snapshot("no-such-agent") is None
+
+    def test_target_handle_is_denied(self) -> None:
+        supervisor = GovernedSupervisor(model="test-model", budget_usd=5.0)
+        for view in (supervisor.audit, supervisor.budget, supervisor.accountability):
+            with pytest.raises(AttributeError, match="has no attribute '_target'"):
+                view._target  # noqa: B018 -- intentional attribute access
+
+    def test_dict_handle_is_denied(self) -> None:
+        supervisor = GovernedSupervisor(model="test-model", budget_usd=5.0)
+        with pytest.raises(AttributeError):
+            supervisor.audit.__dict__  # noqa: B018
+
+    def test_unlisted_name_is_denied(self) -> None:
+        """Default-deny: a name on no list anywhere."""
+        supervisor = GovernedSupervisor(model="test-model", budget_usd=5.0)
+        with pytest.raises(AttributeError, match="has no attribute"):
+            supervisor.audit.never_heard_of_this  # noqa: B018
+
+    def test_mutation_on_the_subsystem_is_denied_through_the_view(self) -> None:
+        """``record_action`` exists on the real AuditTrail, but writes to it.
+
+        Asserted against the real subsystem so the denial is not merely a
+        missing attribute.
+        """
+        supervisor = GovernedSupervisor(model="test-model", budget_usd=5.0)
+        assert hasattr(supervisor._audit, "record_action")
+        with pytest.raises(AttributeError, match="has no attribute 'record_action'"):
+            supervisor.audit.record_action  # noqa: B018
+
+    def test_view_cannot_be_written_to(self) -> None:
+        supervisor = GovernedSupervisor(model="test-model", budget_usd=5.0)
+        with pytest.raises(AttributeError):
+            supervisor.audit.injected = "malicious"

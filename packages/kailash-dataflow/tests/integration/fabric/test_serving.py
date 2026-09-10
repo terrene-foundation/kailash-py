@@ -12,7 +12,11 @@ import pytest
 
 from dataflow.fabric.config import ProductMode, RateLimit, StalenessPolicy
 from dataflow.fabric.products import ProductRegistration
-from dataflow.fabric.serving import FabricServingLayer, validate_filter
+from dataflow.fabric.serving import (
+    _MAX_BATCH_PRODUCTS,
+    FabricServingLayer,
+    validate_filter,
+)
 
 
 def _make_product(
@@ -150,6 +154,40 @@ class TestFabricServingLayer:
         assert result["_status"] == 200
         assert "a" in result["data"]
         assert "b" in result["data"]
+
+    @pytest.mark.asyncio
+    async def test_batch_handler_rejects_over_cap(self):
+        """RT-SERVE-1: an uncapped ?products= fans out unbounded work.
+
+        The guard fires before any product lookup, so no products or cache
+        entries are needed.
+        """
+        serving = FabricServingLayer(products={}, pipeline_executor=_MockPipeline())
+        routes = serving.get_routes()
+        handler = next(r["handler"] for r in routes if r["path"] == "/fabric/_batch")
+
+        over = ",".join(f"p{i}" for i in range(_MAX_BATCH_PRODUCTS + 1))
+        result = await handler(products=over)
+
+        assert result["_status"] == 400
+        assert str(_MAX_BATCH_PRODUCTS) in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_batch_handler_allows_exactly_the_cap(self):
+        """The allowed pole: the boundary is inclusive, not off-by-one.
+
+        A reject-only test cannot distinguish a correct cap from one that
+        rejects everything.
+        """
+        serving = FabricServingLayer(products={}, pipeline_executor=_MockPipeline())
+        routes = serving.get_routes()
+        handler = next(r["handler"] for r in routes if r["path"] == "/fabric/_batch")
+
+        at_cap = ",".join(f"p{i}" for i in range(_MAX_BATCH_PRODUCTS))
+        result = await handler(products=at_cap)
+
+        assert result["_status"] != 400
+        assert len(result["data"]) == _MAX_BATCH_PRODUCTS
 
 
 class TestFilterValidation:
