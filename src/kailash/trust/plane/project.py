@@ -72,7 +72,10 @@ from kailash.trust.plane.models import (
 )
 from kailash.trust.plane.session import AuditSession
 from kailash.trust.plane.store import TrustPlaneStore
-from kailash.trust.plane.store.filesystem import FileSystemTrustPlaneStore
+from kailash.trust.plane.store.filesystem import (
+    FileSystemTrustPlaneStore,
+    sort_anchor_files,
+)
 from kailash.trust.posture.postures import (
     PostureStateMachine,
     PostureTransitionRequest,
@@ -615,11 +618,13 @@ class TrustProject:
                 constraints=manifest.constraints,
             )
 
-        # Reconstruct last_anchor_id from existing anchor files
-        last_anchor_id = None
-        anchors = tp_store.list_anchors()
-        if anchors:
-            last_anchor_id = anchors[-1].get("anchor_id")
+        # Reconstruct last_anchor_id from existing anchor files.
+        # Ask the store for the tip directly — NEVER `list_anchors()[-1]`,
+        # whose `limit` silently yields the limit-th oldest anchor once the
+        # chain outgrows the page, so the next anchor minted would chain to a
+        # mid-chain parent and break the tamper-evidence record.
+        tip = tp_store.latest_anchor()
+        last_anchor_id = tip.get("anchor_id") if tip else None
 
         project = cls(
             trust_dir=trust_path,
@@ -1060,7 +1065,9 @@ class TrustProject:
         # 2. Anchor parent chain verification
         anchors_dir = self._dir / "anchors"
         anchor_files = (
-            sorted(anchors_dir.glob("*.json")) if anchors_dir.exists() else []
+            sort_anchor_files(anchors_dir.glob("*.json"))
+            if anchors_dir.exists()
+            else []
         )
 
         expected_parent: str | None = None
@@ -1805,7 +1812,7 @@ class TrustProject:
         if not anchors_dir.exists():
             return result
 
-        for af in sorted(anchors_dir.glob("*.json")):
+        for af in sort_anchor_files(anchors_dir.glob("*.json")):
             data = _safe_read_json(af)
             mirror = data.get("mirror_record")
             if not mirror:
@@ -1908,7 +1915,7 @@ class TrustProject:
             # Check anchor file integrity
             anchors_dir = self._dir / "anchors"
             if anchors_dir.exists():
-                anchor_files = sorted(anchors_dir.glob("*.json"))
+                anchor_files = sort_anchor_files(anchors_dir.glob("*.json"))
                 prev_id = None
                 for af in anchor_files:
                     try:
@@ -1955,7 +1962,7 @@ class TrustProject:
 
             # Post-repair verification: re-verify parent chain after fixes
             if issues_fixed and anchors_dir.exists():
-                anchor_files_post = sorted(anchors_dir.glob("*.json"))
+                anchor_files_post = sort_anchor_files(anchors_dir.glob("*.json"))
                 prev_post = None
                 for af in anchor_files_post:
                     try:

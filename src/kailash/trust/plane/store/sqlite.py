@@ -725,6 +725,24 @@ class SqliteTrustPlaneStore:
         )
         return [json.loads(row["data"]) for row in cursor.fetchall()]
 
+    def latest_anchor(self) -> dict | None:
+        """Return the most recently appended anchor, or ``None`` if empty.
+
+        Ordered by ``rowid``, SQLite's monotonically increasing insertion
+        counter for rowid tables — the backend's own append order. It is
+        deliberately NOT ``ORDER BY anchor_id``: anchor ids are opaque, so
+        their collation says nothing about chain position, and it is
+        deliberately not a bounded listing indexed at the tail, which would
+        return the ``limit``-th oldest anchor once the chain outgrew the page.
+        """
+        conn = self._get_connection()
+        row = conn.execute(
+            "SELECT data FROM anchors ORDER BY rowid DESC LIMIT 1"
+        ).fetchone()
+        if row is None:
+            return None
+        return json.loads(row["data"])
+
     # ------------------------------------------------------------------
     # WAL (Write-Ahead Log for cascade revocation)
     # ------------------------------------------------------------------

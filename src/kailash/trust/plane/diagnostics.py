@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from kailash.trust._locking import safe_read_json
+from kailash.trust.plane.store.filesystem import sort_anchor_files
 
 
 def analyze_constraints(
@@ -39,7 +40,7 @@ def analyze_constraints(
     action_types: Counter[str] = Counter()
 
     if anchors_dir.exists():
-        for af in sorted(anchors_dir.glob("*.json")):
+        for af in sort_anchor_files(anchors_dir.glob("*.json")):
             data = safe_read_json(af)
             action = data.get("action", "")
             action_types[action] += 1

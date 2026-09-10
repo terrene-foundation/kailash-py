@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from kailash.trust._locking import safe_read_json
+from kailash.trust.plane.store.filesystem import sort_anchor_files
 from kailash.trust.reasoning.traces import ConfidentialityLevel
 
 logger = logging.getLogger(__name__)
@@ -114,7 +115,7 @@ class VerificationBundle:
         reasoning_traces: list[dict[str, Any]] = []
 
         if anchors_dir.exists():
-            for af in sorted(anchors_dir.glob("*.json")):
+            for af in sort_anchor_files(anchors_dir.glob("*.json")):
                 data = safe_read_json(af)
 
                 # Extract and filter reasoning trace
