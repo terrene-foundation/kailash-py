@@ -92,7 +92,10 @@ fi
 # (test-parsimony.md MUST-1). Add a mapping when you add a surface.
 declare -a SUITES=()
 # Counts, not `grep -q` — same pipefail/SIGPIPE race as above.
-[ "$(printf '%s\n' "$CHANGED" | grep -c '^src/kailash/trust/' || true)" -gt 0 ] \
+# Map SOURCE *and* TEST paths. Keying only on source was a real hole: a change
+# touching just a test file mapped to NO suite, so a broken test sailed through
+# (measured — the failing-suite pole exited 0 until this was added).
+[ "$(printf '%s\n' "$CHANGED" | grep -cE '^src/kailash/trust/|^tests/trust/' || true)" -gt 0 ] \
     && SUITES+=("tests/trust/unit/")
 [ "$(printf '%s\n' "$CHANGED" | grep -cE '^src/kailash/trust/a2a/|^packages/kailash-kaizen/' || true)" -gt 0 ] \
     && SUITES+=("packages/kailash-kaizen/tests/integration/trust/test_a2a_service.py")
