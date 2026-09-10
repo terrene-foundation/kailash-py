@@ -1338,9 +1338,26 @@ class _ReadOnlyGovernanceView(ReadOnlyAttributeProxy):
 
     __slots__ = ()
 
-    #: Read-only members of GovernanceEngine that are safe to proxy.
-    #: Everything else -- mutation methods, and the ``audit_chain`` /
-    #: ``audit_dispatcher`` handles onto mutable subsystems -- is denied.
+    #: Members of GovernanceEngine that do not CHANGE GOVERNANCE STATE and are
+    #: therefore proxied. Everything else -- every mutation method, and the
+    #: ``audit_chain`` / ``audit_dispatcher`` handles onto mutable subsystems --
+    #: is denied.
+    #:
+    #: "Read-only" here means "does not change what governance decides", NOT
+    #: "has no side effects". Stated explicitly because two entries do have
+    #: them, and exposing them is the deliberate purpose of this view:
+    #:   * ``verify_action`` is the primary decision method. Deciding consumes
+    #:     the role's rate-limit quota, may trip the circuit breaker, starts
+    #:     vacancy clocks, writes the envelope cache, and appends an audit
+    #:     record. A holder of this view can therefore exhaust a role's daily
+    #:     quota -- tracked in #2226, not silently accepted.
+    #:   * ``check_access`` emits an audit record on every path.
+    #: Neither can grant a permission or alter an envelope, which is the line
+    #: this allowlist draws.
+    #:
+    #: Separately: this allowlist governs which NAMES are reachable. It cannot
+    #: make the RETURN VALUES safe -- several of these still hand back live
+    #: mutable engine internals. That is #2226.
     _ALLOWED = frozenset(
         {
             "org_name",
@@ -1368,6 +1385,6 @@ class _ReadOnlyGovernanceView(ReadOnlyAttributeProxy):
             ),
         )
 
-    def __repr__(self) -> str:
-        engine = object.__getattribute__(self, "_target")
-        return f"<_ReadOnlyGovernanceView org='{engine.org_name}'>"
+    @staticmethod
+    def _repr_detail(target: Any) -> str:
+        return f" org='{target.org_name}'"

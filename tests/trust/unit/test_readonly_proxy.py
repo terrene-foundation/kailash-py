@@ -210,3 +210,84 @@ class TestGuardIsOnGetattributeNotGetattr:
         assert ReadOnlyAttributeProxy.__slots__
         with pytest.raises(AttributeError):
             object.__getattribute__(proxy, "__dict__")
+
+
+class TestTargetIsUnreachableByOrdinaryAttributeAccess:
+    """Adversarial regressions. Each of these DEFEATED the first version.
+
+    The first fix gated attribute NAMES and stored the target in a slot. That
+    left four routes that never touch a denied name, found by an adversarial
+    review of the fix itself. All four are pinned here.
+    """
+
+    def test_allowlisted_method_is_not_a_bound_method(
+        self, proxy: ReadOnlyAttributeProxy, target: _Target
+    ) -> None:
+        """``view.allowed_method.__self__`` was the target. Two plain reads.
+
+        This is the sharpest one: the caller never touches a denied name, so
+        every deny-assertion in this file passed while the allowlist was
+        completely defeated.
+        """
+        forwarder = proxy.read_value
+        assert getattr(forwarder, "__self__", None) is not target
+        assert getattr(forwarder, "__self__", None) is None
+        # and it still forwards
+        assert forwarder() == "read-ok"
+
+    def test_forwarder_closure_holds_no_reference_to_the_target(
+        self, proxy: ReadOnlyAttributeProxy, target: _Target
+    ) -> None:
+        """Closing over the bound method would move the leak, not close it."""
+        forwarder = proxy.read_value
+        cells = [c.cell_contents for c in (forwarder.__closure__ or ())]
+        assert target not in cells
+        assert not any(getattr(c, "__self__", None) is target for c in cells)
+
+    def test_super_does_not_yield_the_target(self, target: _Target) -> None:
+        """``super()`` walks the MRO and never consults __getattribute__.
+
+        Uses a SUBCLASS deliberately: ``super(cls, obj)`` starts AFTER ``cls``
+        in the MRO, so this route exists only when the proxy is subclassed --
+        which all three real proxies (_ReadOnlyGovernanceView, _ReadOnlyView,
+        _ProtectedInnerProxy) are. Testing it on the base class would find
+        ``object``, pass trivially, and prove nothing.
+        """
+
+        class _Sub(ReadOnlyAttributeProxy):
+            __slots__ = ()
+
+        proxy = _Sub(target, {"name"})
+        sealed = super(_Sub, proxy)._target
+        assert sealed is not target
+        with pytest.raises(ReadOnlyProxyError):
+            sealed("not-the-token")
+        assert proxy.name == "target-name"  # allowed pole intact
+
+    def test_slot_descriptor_does_not_yield_the_target(
+        self, proxy: ReadOnlyAttributeProxy, target: _Target
+    ) -> None:
+        """``__slots__`` installs a member descriptor on the always-reachable
+        class; ``type(x)`` needs no attribute access at all."""
+        descriptor = ReadOnlyAttributeProxy.__dict__["_target"]
+        sealed = descriptor.__get__(proxy)
+        assert sealed is not target
+        with pytest.raises(ReadOnlyProxyError):
+            sealed(object())
+
+    def test_reinitialisation_is_refused(
+        self, proxy: ReadOnlyAttributeProxy, target: _Target
+    ) -> None:
+        """__init__ writes via object.__setattr__, which __setattr__ cannot
+        police -- so re-invoking it would widen a live proxy in place."""
+        with pytest.raises(ReadOnlyProxyError, match="already initialised"):
+            type(proxy).__init__(proxy, target, {"name", "mutate"})
+        assert not hasattr(proxy, "mutate")
+
+    def test_no_allowlisted_member_yields_the_target(self, target: _Target) -> None:
+        """Sweep: no allowlisted member, nor its __self__, is the target."""
+        proxy = ReadOnlyAttributeProxy(target, {"name", "read_value", "mutations"})
+        for name in ("name", "read_value", "mutations"):
+            value = getattr(proxy, name)
+            assert value is not target
+            assert getattr(value, "__self__", None) is not target

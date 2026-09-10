@@ -25,7 +25,11 @@ from kailash.trust.envelope import (
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
 from kaizen_agents.events import StreamBufferOverflow
-from kaizen_agents.governed_agent import GovernanceRejectedError, L3GovernedAgent
+from kaizen_agents.governed_agent import (
+    GovernanceRejectedError,
+    L3GovernedAgent,
+    _ProtectedInnerProxy,
+)
 from kaizen_agents.monitored_agent import MonitoredAgent
 from kaizen_agents.streaming_agent import StreamingAgent
 from kaizen_agents.wrapper_base import DuplicateWrapperError
@@ -389,3 +393,46 @@ class TestGovernanceBypassViaDirectRun:
         # Calling run() on it bypasses governance -- documented limitation
         result = raw_inner.run()
         assert result == {"text": "stub-result"}
+
+
+class TestProxiesDoNotHandBackTheirTarget:
+    """#2224 redteam: gating attribute NAMES is not enough.
+
+    ``getattr(target, "allowed_method")`` returns a BOUND method, and
+    ``__self__`` is the target -- so an allowlisted method leaked the agent in
+    two plain attribute reads, without touching a single denied name.
+    """
+
+    def test_protected_inner_proxy_returns_no_bound_method(self) -> None:
+        agent = _make_agent()
+        envelope = _make_envelope()
+        governed = L3GovernedAgent(agent, envelope, mcp_servers=[])
+        proxy = governed.inner
+
+        for name in sorted(_ProtectedInnerProxy._ALLOWED_ATTRS):
+            member = getattr(proxy, name)
+            assert (
+                getattr(member, "__self__", None) is not agent
+            ), f"'{name}' hands back the raw agent via __self__"
+
+    def test_protected_inner_proxy_slot_is_sealed(self) -> None:
+        from kailash.trust.readonly_proxy import ReadOnlyProxyError
+
+        agent = _make_agent()
+        envelope = _make_envelope()
+        governed = L3GovernedAgent(agent, envelope, mcp_servers=[])
+        proxy = governed.inner
+
+        sealed = super(_ProtectedInnerProxy, proxy)._target
+        assert sealed is not agent
+        with pytest.raises(ReadOnlyProxyError):
+            sealed("not-the-token")
+
+    def test_protected_inner_proxy_cannot_be_reinitialised(self) -> None:
+        agent = _make_agent()
+        envelope = _make_envelope()
+        governed = L3GovernedAgent(agent, envelope, mcp_servers=[])
+        proxy = governed.inner
+
+        with pytest.raises(AttributeError, match="already initialised"):
+            type(proxy).__init__(proxy, agent)

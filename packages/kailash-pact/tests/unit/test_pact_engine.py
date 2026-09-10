@@ -925,6 +925,58 @@ class TestReadOnlyGovernanceViewIsActuallyReadOnly:
         with pytest.raises(AttributeError):
             gov.injected_attr = "malicious"
 
+    # --- Pole 3b: no allowlisted member hands the engine back -------------
+
+    def test_allowlisted_methods_are_not_bound_methods(
+        self, engine_from_yaml: PactEngine
+    ) -> None:
+        """``view.list_roles.__self__`` WAS the GovernanceEngine (#2224 redteam).
+
+        Two plain attribute reads, no denied name touched, full escalation:
+        ``view.list_roles.__self__.grant_clearance(...)``. Gating names is not
+        enough -- a bound method carries its receiver.
+        """
+        gov = engine_from_yaml.governance
+        admin = engine_from_yaml._admin_governance
+        for name in sorted(_ReadOnlyGovernanceView._ALLOWED):
+            member = getattr(gov, name)
+            assert (
+                getattr(member, "__self__", None) is not admin
+            ), f"'{name}' hands back the engine via __self__"
+            cells = [
+                c.cell_contents for c in (getattr(member, "__closure__", None) or ())
+            ]
+            assert admin not in cells, f"'{name}' closes over the engine"
+
+    def test_super_and_slot_descriptor_do_not_yield_the_engine(
+        self, engine_from_yaml: PactEngine
+    ) -> None:
+        """The slot is always reachable through the class; it must be sealed."""
+        from kailash.trust.readonly_proxy import (
+            ReadOnlyAttributeProxy,
+            ReadOnlyProxyError,
+        )
+
+        gov = engine_from_yaml.governance
+        admin = engine_from_yaml._admin_governance
+
+        sealed = super(_ReadOnlyGovernanceView, gov)._target
+        assert sealed is not admin
+        with pytest.raises(ReadOnlyProxyError):
+            sealed("not-the-token")
+
+        descriptor = ReadOnlyAttributeProxy.__dict__["_target"]
+        assert descriptor.__get__(gov) is not admin
+
+    def test_view_cannot_be_reinitialised(self, engine_from_yaml: PactEngine) -> None:
+        """Re-__init__ would widen a live view's allowlist in place."""
+        gov = engine_from_yaml.governance
+        admin = engine_from_yaml._admin_governance
+        with pytest.raises(AttributeError, match="already initialised"):
+            type(gov).__init__(gov, admin)
+        with pytest.raises(AttributeError, match="does not expose"):
+            gov.grant_clearance
+
     # --- Pole 5: a NEWLY-ADDED mutation method is not silently exposed -----
 
     def test_newly_added_mutation_method_is_not_exposed(

@@ -37,23 +37,65 @@ exposed by default, and nothing signals that the list has gone stale. An
 allowlist inverts the default -- a newly added method on the target is denied
 until a human classifies it.
 
+Why an allowlisted method is not handed back as a bound method
+--------------------------------------------------------------
+Gating the NAME is not enough. ``getattr(target, "some_method")`` returns a
+BOUND METHOD, and every bound method carries ``__self__`` -- the target. So a
+proxy that returns bound methods leaks the target through any allowlisted
+method in two plain attribute reads::
+
+    view.list_roles.__self__            # -> the GovernanceEngine itself
+    view.list_roles.__self__.grant_clearance(...)
+
+That defeats the allowlist completely: the caller never touches a denied name.
+Allowlisted callables are therefore returned as forwarding closures that hold
+the proxy and the attribute name -- never the target.
+
+Why the target is not stored in a readable slot
+-----------------------------------------------
+A ``__slots__`` entry installs a member descriptor on the CLASS, and the class
+is always reachable (``type(x)`` reads the type pointer directly; no attribute
+access on the instance is involved). So a slot holding the target is readable
+through ``super(type(v), v)._target`` and through the descriptor itself. The
+slot therefore holds a SEALED accessor: a closure that returns the target only
+when handed this module's private token.
+
 Scope, stated honestly
 ----------------------
 This is a containment boundary against ordinary attribute access, not a
 sandbox. A caller who can execute arbitrary Python in the same process can
-still reach the target via ``object.__getattribute__(proxy, "_target")`` or
-``gc.get_referents``. That is a documented Python-level limitation and is not
-what this class defends against; it defends against the target escaping through
-a plain, innocent-looking attribute read.
+still reach the target -- by digging the sealed accessor's ``__closure__``
+cell, by reading this module's private token out of ``sys.modules``, or via
+``gc.get_referents``. Those are documented Python-level limitations and are not
+what this class defends against. What it does guarantee is that NO sequence of
+ordinary attribute reads on the proxy -- including through an allowlisted
+member's return value -- yields the target.
+
+Known residual, deliberately NOT solved here
+---------------------------------------------
+This class contains the PROXY. It cannot make the target's own return values
+safe: if an allowlisted method hands back a live mutable internal (a store's
+own list, a config object whose list fields are still mutable), a caller can
+mutate that object in place and change the target's behaviour without ever
+touching a denied name. Closing that requires the TARGET to return snapshots or
+immutable structures. See issue #2226.
+
+Equally, it cannot close a route that never goes THROUGH the proxy -- a second
+public accessor on the same facade that hands out the raw object. See #2227.
 """
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping
 
 __all__ = ["ReadOnlyProxyError", "ReadOnlyAttributeProxy"]
 
 _DEFAULT_MESSAGE_TEMPLATE = "'{label}' does not expose '{name}'."
+
+# Module-private sentinel. The sealed accessor in the proxy's slot returns the
+# target ONLY when handed this exact object, so reading the slot (via the class
+# descriptor or super()) yields an accessor that refuses to open.
+_ACCESS_TOKEN = object()
 
 
 class ReadOnlyProxyError(AttributeError):
@@ -83,6 +125,52 @@ def _denial(proxy: Any, name: str) -> ReadOnlyProxyError:
         template = object.__getattribute__(proxy, "_message_template")
         message = template.format(label=label, name=name)
     return ReadOnlyProxyError(label, name, message)
+
+
+def _seal(target: Any) -> Callable[[Any], Any]:
+    """Wrap ``target`` so only a holder of ``_ACCESS_TOKEN`` can open it.
+
+    This is what the proxy's slot holds, so reading the slot -- through the
+    class's member descriptor, or through ``super()`` -- yields this function
+    rather than the target.
+    """
+
+    def _unseal(token: Any) -> Any:
+        if token is not _ACCESS_TOKEN:
+            raise ReadOnlyProxyError(
+                "<sealed>",
+                "_target",
+                "the wrapped target is sealed and cannot be opened from outside "
+                "kailash.trust.readonly_proxy.",
+            )
+        return target
+
+    return _unseal
+
+
+def _target_of(proxy: Any) -> Any:
+    """Open the sealed target. Module-internal; never exposed on the proxy."""
+    return object.__getattribute__(proxy, "_target")(_ACCESS_TOKEN)
+
+
+def _forwarder(proxy: Any, name: str) -> Callable[..., Any]:
+    """Return a callable that forwards to ``target.name`` on each call.
+
+    Deliberately closes over the PROXY and the NAME, never over the target or a
+    bound method of it -- so the returned function's ``__closure__`` holds
+    nothing that leads to the target except through the sealed accessor.
+    """
+
+    def _call(*args: Any, **kwargs: Any) -> Any:
+        return getattr(_target_of(proxy), name)(*args, **kwargs)
+
+    _call.__name__ = name
+    _call.__qualname__ = f"{object.__getattribute__(proxy, '_label')}.{name}"
+    _call.__doc__ = (
+        f"Read-only forwarder for '{name}'. The underlying bound method is not "
+        f"returned, because its __self__ would expose the wrapped object."
+    )
+    return _call
 
 
 class ReadOnlyAttributeProxy:
@@ -135,8 +223,23 @@ class ReadOnlyAttributeProxy:
                 f"rejected: {invalid}. An allowlist must never be able to expose "
                 f"private or dunder attributes."
             )
+        # __init__ writes through object.__setattr__, which __setattr__ cannot
+        # police -- so re-invoking it (type(v).__init__(v, ...)) would otherwise
+        # widen the allowlist of a live proxy in place, including one another
+        # component is holding. Refuse a second initialisation.
+        try:
+            object.__getattribute__(self, "_target")
+        except AttributeError:
+            pass
+        else:
+            raise ReadOnlyProxyError(
+                "ReadOnlyAttributeProxy",
+                "__init__",
+                "this read-only proxy is already initialised; re-initialising "
+                "would rebind its target and widen its allowlist in place.",
+            )
         # object.__setattr__ because this class's own __setattr__ denies writes.
-        object.__setattr__(self, "_target", target)
+        object.__setattr__(self, "_target", _seal(target))
         object.__setattr__(self, "_allowed", allowed_set)
         object.__setattr__(
             self, "_label", label or f"{type(target).__name__} read-only view"
@@ -150,9 +253,13 @@ class ReadOnlyAttributeProxy:
         if name == "__class__":
             return object.__getattribute__(self, "__class__")
         allowed = object.__getattribute__(self, "_allowed")
-        if name in allowed:
-            return getattr(object.__getattribute__(self, "_target"), name)
-        raise _denial(self, name)
+        if name not in allowed:
+            raise _denial(self, name)
+        value = getattr(_target_of(self), name)
+        if callable(value):
+            # NEVER return the bound method itself: its __self__ is the target.
+            return _forwarder(self, name)
+        return value
 
     def __setattr__(self, name: str, value: Any) -> None:
         label = object.__getattribute__(self, "_label")
@@ -170,7 +277,17 @@ class ReadOnlyAttributeProxy:
             f"'{label}' is read-only; cannot delete '{name}'.",
         )
 
+    @staticmethod
+    def _repr_detail(target: Any) -> str:
+        """Extra repr text for a subclass. Receives the target directly.
+
+        A hook rather than a ``__repr__`` override, so a subclass never needs
+        its own route to the sealed target. Looked up on the CLASS by
+        ``__repr__`` below, so it is not reachable as ``proxy._repr_detail``.
+        """
+        return ""
+
     def __repr__(self) -> str:
         label = object.__getattribute__(self, "_label")
-        target = object.__getattribute__(self, "_target")
-        return f"<{label} target={type(target).__name__}>"
+        detail = type(self)._repr_detail(_target_of(self))
+        return f"<{label}{detail}>"
