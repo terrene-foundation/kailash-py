@@ -603,7 +603,7 @@ class TestMCPClientHealthCheck:
             # key. It used to be `stdio://python:` -- the raw command joined
             # with its args -- which leaked a credential whenever `args`
             # carried one (#2004 sibling surface). It is now a fingerprint.
-            assert health["server"].startswith("stdio://python#")
+            assert health["server"].startswith("stdio#")
             assert health["tools_available"] == 2
             assert health["transport"] == "stdio"
             assert health["metrics"] is not None
@@ -624,7 +624,7 @@ class TestMCPClientHealthCheck:
             health = await self.client.health_check(server_config)
 
             assert secret not in str(health)
-            assert health["server"].startswith("stdio://npx#")
+            assert health["server"].startswith("stdio#")
 
     @pytest.mark.asyncio
     async def test_health_check_failure(self):
@@ -640,7 +640,7 @@ class TestMCPClientHealthCheck:
             # Same disclosure-safe reference on the failure path -- this arm
             # was leaking too, and a failing probe is exactly when an operator
             # pastes the payload into a bug report.
-            assert health["server"].startswith("stdio://python#")
+            assert health["server"].startswith("stdio#")
             assert "Connection failed" in health["error"]
             assert health["transport"] == "stdio"
 

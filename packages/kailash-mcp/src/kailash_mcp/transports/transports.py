@@ -75,7 +75,7 @@ import aiohttp
 import websockets
 
 from kailash.utils.command_safety import safe_command_ref
-from kailash.utils.url_credentials import mask_error_text, mask_url
+from kailash.utils.url_credentials import fingerprint_value, mask_error_text, mask_url
 from kailash_mcp.auth.providers import AuthProvider
 from kailash_mcp.errors import MCPError, MCPErrorCode, TransportError
 from kailash_mcp.protocol.protocol import MetaData, ProtocolManager
@@ -335,9 +335,14 @@ class EnhancedStdioTransport(BaseTransport):
             self._connected = True
             self._update_metrics("connections_total")
 
+            # A pure digest, not `safe_command_ref`: that helper keeps the
+            # executable BASENAME, which is still config-derived and which
+            # `py/clear-text-logging-sensitive-data` (HIGH) reports when it
+            # reaches a logging sink. `get_process_info()` below is a RETURN
+            # value rather than a log sink and keeps the more readable form.
             logger.info(
                 "STDIO transport connected: "
-                f"{safe_command_ref(' '.join([str(self.command), *map(str, self.args or [])]))}"
+                f"stdio#{fingerprint_value(' '.join([str(self.command), *map(str, self.args or [])]))}"
             )
 
         except Exception as e:
