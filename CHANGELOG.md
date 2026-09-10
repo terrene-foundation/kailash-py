@@ -56,6 +56,33 @@ behaviourally but could only catch it when the reaper's tick happened to land on
 queries — so it passed for weeks against a pool whose clock was never refreshed at all. A new
 `test_query_path_refreshes_the_idle_clock` pins the invariant directly, so a regression fails
 deterministically instead of as a flake.
+### Security (BREAKING) — `PactEngine.governance` is now genuinely read-only, and stops proxying five public members (#2224)
+
+`_ReadOnlyGovernanceView` guarded a 13-name blocklist in `__getattr__`. `__getattr__` is consulted ONLY when normal attribute lookup FAILS, and the wrapped engine was a plain instance attribute — so `view._engine` resolved normally, never reached the guard, and returned the `GovernanceEngine` itself. One attribute access bypassed all thirteen names.
+
+The blocklist was also stale in both directions, measured against the live class: it named `compile_org`, which does not exist on `GovernanceEngine`, while `suspend_plan`, `resume_plan` and `update_resume_condition` — real mutation methods added after the list was written — were absent from it and silently proxied through. The code comment asserting the invariant ("Every mutation method ... MUST be listed here") was enforced by nothing.
+
+It is now an **allowlist** enforced in `__getattribute__`, so an unrecognised name is denied by default and a method added to the engine later is contained until someone classifies it. A test introspects the live `GovernanceEngine` and fails when a public member appears that nobody has classified, so the list cannot silently go stale again.
+
+**BREAKING.** Five public members that the old view proxied are now denied: `audit_chain` and `audit_dispatcher` (live handles onto mutable subsystems — exposing either lets a caller append to the audit trail) and `suspend_plan` / `resume_plan` / `update_resume_condition` (mutations that were never on the blocklist). No caller in this repository reaches any of them through the view. **Migration:** use `PactEngine._admin_governance` for mutable operations, which is what the denial message says.
+
+Note `getattr(engine.governance, "audit_chain", None)` now returns `None` rather than the chain, silently — the denial is an `AttributeError` subclass so that `hasattr`/`getattr`-with-default keep their ordinary meaning.
+
+### Security — new `kailash.trust.readonly_proxy`, and two more governance proxies had the same hole (#2224)
+
+`ReadOnlyAttributeProxy` is the shared fail-closed primitive behind the above. Gating attribute NAMES turned out not to be enough on its own: `getattr(target, "method")` returns a BOUND method, and `__self__` is the target, so an allowlisted method leaked the wrapped object in two plain attribute reads. Allowlisted callables are therefore returned as forwarding closures, and the target is held in a sealed accessor rather than a readable slot (a `__slots__` entry is reachable through the always-available class, and through `super()` from a subclass). Re-invoking `__init__` on a live proxy is refused, since it would rebind the target and widen the allowlist in place.
+
+Two sibling proxies shared the original defect and are fixed in the same change, because a security primitive duplicated per-site drifts:
+
+- `kaizen_agents.supervisor._ReadOnlyView` leaked `_target`, exposing every Layer-3 governance subsystem behind the nine read-only views.
+- `kaizen_agents.governed_agent._ProtectedInnerProxy` blocked `_inner` by name while storing the real agent as `_real_inner`, wide open — so `governed.inner._real_inner.run()` ran the agent ungoverned by plain attribute access.
+
+Not fixed here, filed with measured reproductions: **#2226** (the engine still hands out live mutable internals, so `view.get_context(a).effective_envelope.operational.allowed_actions.append(...)` escalates permanently using only allowlisted members) and **#2227** (two public routes that never go through a proxy at all).
+
+### Fixed — `tools/check_pin_consistency.py` was a silent no-op in any checkout under a `build/` directory
+
+`PRUNE_PARTS` was matched against the **absolute** path, and the scan root is resolved — so every ancestor directory of the checkout was tested too. A checkout living under a directory named `build`, `dist` or `node_modules` pruned every manifest and the gate reported success having scanned **0** of them. It now prunes on the path relative to the scan root. Measured on one such checkout: `Scanned 0 manifests` before, `Scanned 9 manifests` after.
+
 
 ### Security (BREAKING) — an empty `allowed_actions` now denies at EVERY enforcement surface (#2218)
 

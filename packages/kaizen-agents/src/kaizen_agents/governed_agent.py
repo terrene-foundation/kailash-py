@@ -29,6 +29,7 @@ from typing import Any
 
 from kailash.trust.action_policy import evaluate_action
 from kailash.trust.envelope import AgentPosture, ConstraintEnvelope
+from kailash.trust.readonly_proxy import ReadOnlyAttributeProxy
 from kaizen.core.base_agent import BaseAgent
 from kaizen_agents.wrapper_base import WrapperBase
 
@@ -54,12 +55,28 @@ class GovernanceRejectedError(RuntimeError):
         super().__init__(f"Governance rejected [{dimension}]: {detail}")
 
 
-class _ProtectedInnerProxy:
+class _ProtectedInnerProxy(ReadOnlyAttributeProxy):
     """Proxy that blocks direct access to the raw inner agent.
 
     Prevents bypassing governance by accessing ``.inner._inner``.
     Only exposes safe read-only attributes.
+
+    Enforcement lives in
+    :class:`~kailash.trust.readonly_proxy.ReadOnlyAttributeProxy`, which gates
+    every access through ``__getattribute__``.
+
+    The previous implementation guarded with ``__getattr__``, which is a
+    FALLBACK consulted only when normal lookup fails. It blocked ``_inner`` by
+    name while storing the real agent as ``_real_inner`` -- a plain instance
+    attribute -- so ``proxy._real_inner.run()`` and
+    ``proxy.__dict__["_real_inner"].run()`` both resolved normally, never
+    reached the guard, and ran the agent ungoverned. Same defect class as
+    #2224. Note this is distinct from the documented Python limitation covered
+    by ``TestGovernanceBypassViaDirectRun``: that one requires an explicit
+    ``object.__getattribute__`` call, whereas this was plain attribute access.
     """
+
+    __slots__ = ()
 
     _ALLOWED_ATTRS = frozenset(
         {
@@ -72,19 +89,21 @@ class _ProtectedInnerProxy:
     )
 
     def __init__(self, inner: BaseAgent) -> None:
-        object.__setattr__(self, "_real_inner", inner)
-
-    def __getattr__(self, name: str) -> Any:
-        if name == "_inner":
-            raise AttributeError(
-                "Direct access to _inner is blocked by governance. "
-                "Use the governed agent's run() or run_async() methods."
-            )
-        if name in self._ALLOWED_ATTRS:
-            return getattr(object.__getattribute__(self, "_real_inner"), name)
-        raise AttributeError(
-            f"Access to '{name}' on the governed inner agent is restricted. "
-            f"Allowed attributes: {sorted(self._ALLOWED_ATTRS)}"
+        allowed = _ProtectedInnerProxy._ALLOWED_ATTRS
+        super().__init__(
+            inner,
+            allowed,
+            label="_ProtectedInnerProxy",
+            message_template=(
+                "Access to '{name}' on the governed inner agent is restricted. "
+                f"Allowed attributes: {sorted(allowed)}"
+            ),
+            overrides={
+                "_inner": (
+                    "Direct access to _inner is blocked by governance. "
+                    "Use the governed agent's run() or run_async() methods."
+                )
+            },
         )
 
     def __setattr__(self, name: str, value: Any) -> None:

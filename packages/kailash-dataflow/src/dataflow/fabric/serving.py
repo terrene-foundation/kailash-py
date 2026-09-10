@@ -46,6 +46,10 @@ ALLOWED_OPERATORS = {"$eq", "$ne", "$gt", "$gte", "$lt", "$lte", "$in", "$nin"}
 _MAX_CONSUMER_LENGTH = 255
 _CONSUMER_PATTERN = __import__("re").compile(r"^[a-zA-Z0-9_-]+$")
 _VALID_REFRESH_VALUES = {"true", "false"}
+# Batch fan-out cap: one request must not be able to schedule unbounded work.
+# Uncapped, `?products=` fans out to one product execution per comma-separated
+# name, so a single URL can drive arbitrary load.
+_MAX_BATCH_PRODUCTS = 50
 
 
 def _validate_consumer_param(value: Any) -> str | None:
@@ -495,6 +499,16 @@ class FabricServingLayer:
             product_names = [
                 n.strip() for n in product_names_str.split(",") if n.strip()
             ]
+
+            if len(product_names) > _MAX_BATCH_PRODUCTS:
+                return {
+                    "_status": 400,
+                    "error": (
+                        f"Maximum {_MAX_BATCH_PRODUCTS} products per batch "
+                        f"request (got {len(product_names)})"
+                    ),
+                }
+
             results: Dict[str, Any] = {}
             overall_freshness = "fresh"
 

@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterator, Protocol, runtime_checkable
 
+from kailash.trust.readonly_proxy import ReadOnlyAttributeProxy
 from pact.costs import CostTracker
 from pact.enforcement import EnforcementMode, validate_enforcement_mode
 from pact.events import EventBus
@@ -1310,52 +1311,80 @@ def _extract_constraints_dict(envelope: Any) -> dict[str, Any]:
     return constraints
 
 
-class _ReadOnlyGovernanceView:
-    """Read-only wrapper around GovernanceEngine per pact-governance.md Rule 1."""
+class _ReadOnlyGovernanceView(ReadOnlyAttributeProxy):
+    """Read-only wrapper around GovernanceEngine per pact-governance.md Rule 1.
 
-    __slots__ = ("_engine",)
+    Fail-closed by construction (#2224). Enforcement lives in
+    :class:`~kailash.trust.readonly_proxy.ReadOnlyAttributeProxy`, which gates
+    every attribute access through ``__getattribute__``. This class contributes
+    only the allowlist.
+
+    The previous implementation guarded a blocklist in ``__getattr__`` and had
+    two independent holes, both of which the allowlist closes:
+
+    1. ``__getattr__`` is a FALLBACK, consulted only when normal lookup fails.
+       The wrapped engine was a plain instance attribute, so ``view._engine``
+       resolved normally and never reached the guard -- one attribute access
+       bypassed the entire blocklist.
+    2. A blocklist over a surface someone else extends is fail-OPEN. Three
+       mutation methods added to ``GovernanceEngine`` after the list was
+       written (``suspend_plan``, ``resume_plan``, ``update_resume_condition``)
+       were never added to it and were silently proxied through.
+
+    ``_ALLOWED`` is pinned against the live ``GovernanceEngine`` surface by
+    ``TestReadOnlyGovernanceViewStaleness``, which fails when a public member
+    appears on the engine that this module has not classified.
+    """
+
+    __slots__ = ()
+
+    #: Members of GovernanceEngine that do not CHANGE GOVERNANCE STATE and are
+    #: therefore proxied. Everything else -- every mutation method, and the
+    #: ``audit_chain`` / ``audit_dispatcher`` handles onto mutable subsystems --
+    #: is denied.
+    #:
+    #: "Read-only" here means "does not change what governance decides", NOT
+    #: "has no side effects". Stated explicitly because two entries do have
+    #: them, and exposing them is the deliberate purpose of this view:
+    #:   * ``verify_action`` is the primary decision method. Deciding consumes
+    #:     the role's rate-limit quota, may trip the circuit breaker, starts
+    #:     vacancy clocks, writes the envelope cache, and appends an audit
+    #:     record. A holder of this view can therefore exhaust a role's daily
+    #:     quota -- tracked in #2226, not silently accepted.
+    #:   * ``check_access`` emits an audit record on every path.
+    #: Neither can grant a permission or alter an envelope, which is the line
+    #: this allowlist draws.
+    #:
+    #: Separately: this allowlist governs which NAMES are reachable. It cannot
+    #: make the RETURN VALUES safe -- several of these still hand back live
+    #: mutable engine internals. That is #2226.
+    _ALLOWED = frozenset(
+        {
+            "org_name",
+            "get_org",
+            "get_node",
+            "list_roles",
+            "get_context",
+            "get_suspension",
+            "get_vacancy_designation",
+            "verify_action",
+            "compute_envelope",
+            "check_access",
+            "verify_audit_integrity",
+        }
+    )
 
     def __init__(self, engine: Any) -> None:
-        self._engine = engine
-
-    @property
-    def org_name(self) -> str:
-        return self._engine.org_name
-
-    @property
-    def compiled_org(self) -> Any:
-        return self._engine.compiled_org
-
-    def verify_action(self, *args: Any, **kwargs: Any) -> Any:
-        return self._engine.verify_action(*args, **kwargs)
-
-    def compute_envelope(self, *args: Any, **kwargs: Any) -> Any:
-        return self._engine.compute_envelope(*args, **kwargs)
-
-    def __repr__(self) -> str:
-        return f"<_ReadOnlyGovernanceView org='{self._engine.org_name}'>"
-
-    def __getattr__(self, name: str) -> Any:
-        # Every mutation method on GovernanceEngine MUST be listed here.
-        # Verified against GovernanceEngine method inventory (2026-04-06).
-        _BLOCKED = {
-            "set_role_envelope",
-            "set_task_envelope",
-            "grant_clearance",
-            "revoke_clearance",
-            "transition_clearance",
-            "compile_org",
-            "create_bridge",
-            "approve_bridge",
-            "consent_bridge",
-            "reject_bridge",
-            "register_compliance_role",
-            "create_ksp",
-            "designate_acting_occupant",
-        }
-        if name in _BLOCKED:
-            raise AttributeError(
-                f"'{type(self).__name__}' does not expose '{name}'. "
+        super().__init__(
+            engine,
+            _ReadOnlyGovernanceView._ALLOWED,
+            label="_ReadOnlyGovernanceView",
+            message_template=(
+                "'{label}' does not expose '{name}'. "
                 "Use PactEngine._admin_governance for mutable operations."
-            )
-        return getattr(self._engine, name)
+            ),
+        )
+
+    @staticmethod
+    def _repr_detail(target: Any) -> str:
+        return f" org='{target.org_name}'"

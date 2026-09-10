@@ -9,7 +9,18 @@ from typing import Any
 import pytest
 
 from kaizen_agents.governance.cost_model import CostModel
-from kaizen_agents.supervisor import GovernedSupervisor
+from kaizen_agents.supervisor import (
+    _ACCOUNTABILITY_QUERY_METHODS,
+    _AUDIT_QUERY_METHODS,
+    _BUDGET_QUERY_METHODS,
+    _BYPASS_QUERY_METHODS,
+    _CASCADE_QUERY_METHODS,
+    _CLASSIFIER_QUERY_METHODS,
+    _CLEARANCE_QUERY_METHODS,
+    _DERELICTION_QUERY_METHODS,
+    _VACANCY_QUERY_METHODS,
+    GovernedSupervisor,
+)
 from kaizen_agents.types import AgentSpec, Plan, PlanEdge, PlanNode, PlanNodeOutput
 
 # ---------------------------------------------------------------------------
@@ -387,3 +398,165 @@ class TestGovernedSupervisorCostModel:
         """cost_model property returns None when not configured."""
         supervisor = GovernedSupervisor()
         assert supervisor.cost_model is None
+
+
+# ---------------------------------------------------------------------------
+# #2224 sibling: the Layer-3 read-only views were not read-only
+# ---------------------------------------------------------------------------
+
+
+class TestLayer3ReadOnlyViewsContainTheirSubsystem:
+    """The Layer-3 ``.audit`` / ``.budget`` / ... views are containment
+    boundaries, and shared the #2224 defect.
+
+    ``_ReadOnlyView`` guarded an allowlist in ``__getattr__``, which is a
+    FALLBACK consulted only when normal lookup FAILS. ``_target`` was a plain
+    instance attribute, so ``view._target`` resolved normally, never reached
+    the guard, and handed back the mutable subsystem -- as did
+    ``view.__dict__["_target"]``.
+    """
+
+    def test_allowed_query_method_still_works(self) -> None:
+        """The allowed pole. A deny-only suite cannot tell a working view from
+        a broken one."""
+        supervisor = GovernedSupervisor(model="test-model", budget_usd=5.0)
+        assert supervisor.audit.to_list() == []
+        assert supervisor.audit.verify_chain() is True
+        assert supervisor.budget.get_snapshot("no-such-agent") is None
+
+    def test_target_handle_is_denied(self) -> None:
+        supervisor = GovernedSupervisor(model="test-model", budget_usd=5.0)
+        for view in (supervisor.audit, supervisor.budget, supervisor.accountability):
+            with pytest.raises(AttributeError, match="has no attribute '_target'"):
+                view._target  # noqa: B018 -- intentional attribute access
+
+    def test_dict_handle_is_denied(self) -> None:
+        supervisor = GovernedSupervisor(model="test-model", budget_usd=5.0)
+        with pytest.raises(AttributeError):
+            supervisor.audit.__dict__  # noqa: B018
+
+    def test_unlisted_name_is_denied(self) -> None:
+        """Default-deny: a name on no list anywhere."""
+        supervisor = GovernedSupervisor(model="test-model", budget_usd=5.0)
+        with pytest.raises(AttributeError, match="has no attribute"):
+            supervisor.audit.never_heard_of_this  # noqa: B018
+
+    def test_mutation_on_the_subsystem_is_denied_through_the_view(self) -> None:
+        """``record_action`` exists on the real AuditTrail, but writes to it.
+
+        Asserted against the real subsystem so the denial is not merely a
+        missing attribute.
+        """
+        supervisor = GovernedSupervisor(model="test-model", budget_usd=5.0)
+        assert hasattr(supervisor._audit, "record_action")
+        with pytest.raises(AttributeError, match="has no attribute 'record_action'"):
+            supervisor.audit.record_action  # noqa: B018
+
+    def test_view_cannot_be_written_to(self) -> None:
+        supervisor = GovernedSupervisor(model="test-model", budget_usd=5.0)
+        with pytest.raises(AttributeError):
+            supervisor.audit.injected = "malicious"
+
+
+# ---------------------------------------------------------------------------
+# #2224 sibling, all nine Layer-3 views (redteam follow-up)
+# ---------------------------------------------------------------------------
+
+# (view property, private subsystem attribute, query-method allowlist)
+_LAYER3_VIEWS = [
+    ("audit", "_audit", _AUDIT_QUERY_METHODS),
+    ("accountability", "_accountability", _ACCOUNTABILITY_QUERY_METHODS),
+    ("budget", "_budget", _BUDGET_QUERY_METHODS),
+    ("cascade", "_cascade", _CASCADE_QUERY_METHODS),
+    ("clearance", "_clearance", _CLEARANCE_QUERY_METHODS),
+    ("classifier", "_classifier", _CLASSIFIER_QUERY_METHODS),
+    ("dereliction", "_dereliction", _DERELICTION_QUERY_METHODS),
+    ("bypass_manager", "_bypass", _BYPASS_QUERY_METHODS),
+    ("vacancy", "_vacancy", _VACANCY_QUERY_METHODS),
+]
+_LAYER3_IDS = [name for name, _, _ in _LAYER3_VIEWS]
+
+
+class TestAllNineLayer3ViewsContainTheirSubsystem:
+    """Every Layer-3 view, not just the three that were spot-checked.
+
+    The first pass covered `audit`, `budget` and `accountability`. Six others
+    wrap equally mutable subsystems and were unpinned.
+    """
+
+    @staticmethod
+    def _supervisor() -> GovernedSupervisor:
+        return GovernedSupervisor(model="test-model", budget_usd=5.0)
+
+    @pytest.mark.parametrize(
+        "view_name,subsystem_attr,allowed", _LAYER3_VIEWS, ids=_LAYER3_IDS
+    )
+    def test_view_never_hands_back_its_subsystem(
+        self, view_name: str, subsystem_attr: str, allowed: frozenset[str]
+    ) -> None:
+        """No allowlisted member is, or leads to, the mutable subsystem.
+
+        ``view.to_list.__self__`` WAS the AuditTrail -- so
+        ``supervisor.audit.to_list.__self__.record_action(...)`` forged an
+        audit record through the read-only view, in two plain attribute reads.
+        """
+        supervisor = self._supervisor()
+        view = getattr(supervisor, view_name)
+        subsystem = getattr(supervisor, subsystem_attr)
+
+        for name in sorted(allowed):
+            member = getattr(view, name)
+            assert member is not subsystem
+            assert (
+                getattr(member, "__self__", None) is not subsystem
+            ), f"{view_name}.{name} leaks the subsystem via __self__"
+            cells = [
+                c.cell_contents for c in (getattr(member, "__closure__", None) or ())
+            ]
+            assert subsystem not in cells
+
+    @pytest.mark.parametrize(
+        "view_name,subsystem_attr,allowed", _LAYER3_VIEWS, ids=_LAYER3_IDS
+    )
+    def test_view_denies_the_target_handle(
+        self, view_name: str, subsystem_attr: str, allowed: frozenset[str]
+    ) -> None:
+        supervisor = self._supervisor()
+        view = getattr(supervisor, view_name)
+        for handle in ("_target", "__dict__", "never_heard_of_this"):
+            with pytest.raises(AttributeError):
+                getattr(view, handle)
+
+    @pytest.mark.parametrize(
+        "view_name,subsystem_attr,allowed", _LAYER3_VIEWS, ids=_LAYER3_IDS
+    )
+    def test_allowlist_has_no_phantom_entries(
+        self, view_name: str, subsystem_attr: str, allowed: frozenset[str]
+    ) -> None:
+        """Staleness gate for the nine query-method sets.
+
+        The pact view has such a gate; these nine had none. A name listed here
+        that does not exist on the subsystem is dead weight hiding a rename --
+        and the failure mode is silent, because a missing name is simply
+        denied.
+        """
+        supervisor = self._supervisor()
+        subsystem = getattr(supervisor, subsystem_attr)
+        phantoms = sorted(n for n in allowed if not hasattr(subsystem, n))
+        assert not phantoms, (
+            f"{view_name} allowlist names absent from "
+            f"{type(subsystem).__name__}: {phantoms}"
+        )
+
+    @pytest.mark.parametrize(
+        "view_name,subsystem_attr,allowed", _LAYER3_VIEWS, ids=_LAYER3_IDS
+    )
+    def test_every_allowlisted_member_still_resolves(
+        self, view_name: str, subsystem_attr: str, allowed: frozenset[str]
+    ) -> None:
+        """The allowed pole, for all nine. A view that denies everything would
+        satisfy every deny-assertion above."""
+        supervisor = self._supervisor()
+        view = getattr(supervisor, view_name)
+        for name in sorted(allowed):
+            assert getattr(view, name) is not None
