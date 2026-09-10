@@ -451,6 +451,42 @@ class SecureKeyStorage:
             if salt_b64:
                 salt = base64.b64decode(salt_b64)
             else:
+                # WHY THE EPHEMERAL SALT IS SAFE HERE (#2118).
+                #
+                # This is the generate-on-unconfigured / WARN / continue shape
+                # that #2063 upgraded and #2083 / #2092 closed as a defect
+                # elsewhere. It is safe at THIS site, and the reason is a
+                # property of SecureKeyStorage, not a property of KDF salts in
+                # general — do not lift this disposition to a sibling without
+                # re-checking both points below:
+                #
+                # 1. NOTHING THIS CLASS ENCRYPTS OUTLIVES THE PROCESS.
+                #    `self._keys` is a plain in-memory dict (see __init__:
+                #    `self._keys: Dict[str, bytes] = {}`). store_key() writes
+                #    ciphertext into that dict and nowhere else; retrieve_key()
+                #    reads only from it; delete_key() pops from it. There is no
+                #    file, database, or network sink anywhere in the class. So
+                #    a salt that does not survive a restart costs nothing that
+                #    is not already lost at the same moment — the ciphertext it
+                #    would have been needed to decrypt is gone too. The
+                #    WARNING's own words ("keys will not be recoverable across
+                #    restarts") describe a durability consequence that is
+                #    vacuous for a store with no durable backing.
+                #
+                # 2. NO SHIPPED CODE CONSTRUCTS IT. There are zero
+                #    SecureKeyStorage(...) construction sites under src/ or
+                #    packages/*/src — only docstring examples in this module,
+                #    tests, and one example script. It is reachable only by a
+                #    user who deliberately constructs it, having seen this
+                #    WARNING.
+                #
+                # REVISIT IF: `_keys` ever gains a persistent backing store
+                # (file, DB, cache, or any cross-process handoff), or a shipped
+                # code path starts constructing SecureKeyStorage on a default
+                # path. Either change makes this branch a real instance of the
+                # #2092 class — an unrecoverable-by-construction keystore — and
+                # the salt must then come from configuration (fail closed) or
+                # be persisted alongside the ciphertext.
                 salt = os.urandom(32)
                 logger.warning(
                     "No salt configured for %s. Generated random salt - "

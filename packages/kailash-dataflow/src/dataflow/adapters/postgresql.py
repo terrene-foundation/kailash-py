@@ -515,6 +515,12 @@ class PostgreSQLAdapter(DatabaseAdapter):
             import ssl
 
             ssl_ctx = ssl.create_default_context()
+            # Pin the TLS floor explicitly (#2175 sibling sweep). The caller
+            # asked for verify-ca/verify-full, i.e. an authenticated channel
+            # carrying database credentials and row data; the permitted floor
+            # must be stated by this code rather than inherited from whatever
+            # the host interpreter happens to default to.
+            ssl_ctx.minimum_version = ssl.TLSVersion.TLSv1_2
             # Load client certificates if specified in URL query params
             sslrootcert = self.query_params.get("sslrootcert")
             sslcert = self.query_params.get("sslcert")

@@ -6,6 +6,7 @@ providing better resource management and isolation compared to global pools.
 
 import asyncio
 import logging
+import threading
 import time
 import uuid
 from collections import defaultdict
@@ -24,6 +25,7 @@ from kailash.core.ml.query_patterns import QueryPatternTracker
 from kailash.core.monitoring.connection_metrics import (
     ConnectionMetricsCollector,
     ErrorCategory,
+    get_metrics_aggregator,
 )
 from kailash.core.resilience.circuit_breaker import (
     CircuitBreakerConfig,
@@ -35,6 +37,22 @@ from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError
 
 logger = logging.getLogger(__name__)
+
+# Process-wide monitoring dashboard shared by every pool that enables
+# monitoring. The dashboard binds ONE port, so it is inherently a
+# process-level singleton rather than per-pool state.
+#
+# This previously lived on `self.runtime.monitoring_dashboard`. There is no
+# `runtime` attribute on WorkflowConnectionPool (or on its AsyncNode/Node
+# bases) — verified by grep and by construction — so every read raised
+# AttributeError, which the enclosing `except Exception` turned into
+# `{"error": "...has no attribute 'runtime'"}`. Both the dashboard and the
+# metrics-aggregator registration beneath it were therefore unreachable:
+# `enable_monitoring=True` started nothing and collected nothing (#2057
+# site 2). The lock guards the check-and-claim so two pools starting
+# concurrently cannot both bind the port.
+_shared_dashboard: Optional[Any] = None
+_shared_dashboard_lock = threading.Lock()
 
 
 class ConnectionPoolMetrics:
@@ -1102,63 +1120,97 @@ class WorkflowConnectionPool(AsyncNode):
         if not self.enable_monitoring:
             return {"error": "Monitoring not enabled in configuration"}
 
+        global _shared_dashboard
+
         try:
-            # Register this pool with the global metrics aggregator
-            if hasattr(self.runtime, "metrics_aggregator"):  # type: ignore[reportAttributeAccessIssue]
-                self.runtime.metrics_aggregator.register_collector(  # type: ignore[reportAttributeAccessIssue]
-                    self.metrics_collector
-                )
+            # Register this pool's collector with the process-wide aggregator.
+            # Unconditional: get_metrics_aggregator() always returns an
+            # instance, so there is nothing to guard on. The previous
+            # `hasattr(self.runtime, "metrics_aggregator")` guard probed a
+            # name with zero definitions repo-wide on an attribute that does
+            # not exist, so the collector was never registered (#2057 site 2).
+            get_metrics_aggregator().register_collector(self.metrics_collector)
 
-            # Start monitoring dashboard if not already running
-            if not hasattr(self.runtime, "monitoring_dashboard"):  # type: ignore[reportAttributeAccessIssue]
-                from kailash.nodes.monitoring.connection_dashboard import (
-                    ConnectionDashboardNode,
-                )
+            # Start the shared monitoring dashboard if no pool has started it.
+            with _shared_dashboard_lock:
+                dashboard = _shared_dashboard
+                start_needed = dashboard is None
+                if start_needed:
+                    from kailash.nodes.monitoring.connection_dashboard import (
+                        ConnectionDashboardNode,
+                    )
 
-                # Authentication is threaded from THIS pool's config rather
-                # than hardcoded (#2112 parity sweep). The dashboard binds a
-                # real socket and serves pool metrics plus the mutating
-                # /api/alerts routes, so it fails CLOSED: with no credential
-                # source configured this raises ServerAuthNotConfiguredError
-                # instead of starting an open server.
-                #
-                # Threaded, not defaulted, so an operator can opt out through
-                # the pool's own config (`dashboard_require_auth=False`)
-                # without editing SDK source -- the alternative was leaving
-                # them no reachable control at all, which is how an
-                # unavoidable raise becomes a fork.
-                dashboard = ConnectionDashboardNode(
-                    name="global_dashboard",
-                    port=self.monitoring_port,
-                    update_interval=1.0,
-                    require_auth=self.dashboard_require_auth,
-                    auth_config=self.dashboard_auth_config,
-                )
+                    # Authentication is threaded from THIS pool's config rather
+                    # than hardcoded (#2112 parity sweep). The dashboard binds a
+                    # real socket and serves pool metrics plus the mutating
+                    # /api/alerts routes, so it fails CLOSED: with no credential
+                    # source configured this raises ServerAuthNotConfiguredError
+                    # instead of starting an open server.
+                    #
+                    # Threaded, not defaulted, so an operator can opt out through
+                    # the pool's own config (`dashboard_require_auth=False`)
+                    # without editing SDK source -- the alternative was leaving
+                    # them no reachable control at all, which is how an
+                    # unavoidable raise becomes a fork.
+                    #
+                    # Constructed INSIDE the lock but claimed only on success:
+                    # a fail-closed raise here leaves _shared_dashboard None so
+                    # the next caller retries rather than inheriting a
+                    # half-built dashboard.
+                    dashboard = ConnectionDashboardNode(
+                        name="global_dashboard",
+                        port=self.monitoring_port,
+                        update_interval=1.0,
+                        require_auth=self.dashboard_require_auth,
+                        auth_config=self.dashboard_auth_config,
+                    )
+                    _shared_dashboard = dashboard
 
-                # Store dashboard in runtime for sharing
-                self.runtime.monitoring_dashboard = dashboard  # type: ignore[reportAttributeAccessIssue]
-                await dashboard.start()  # type: ignore[reportAttributeAccessIssue]
-
-                return {
-                    "status": "started",
-                    "dashboard_url": f"http://localhost:{self.monitoring_port}",
-                }
-            else:
+            if not start_needed:
                 return {
                     "status": "already_running",
                     "dashboard_url": f"http://localhost:{self.monitoring_port}",
                 }
+
+            # Awaited outside the lock: start() binds a socket and must not
+            # hold a threading lock across the await.
+            try:
+                await dashboard.start()  # type: ignore[reportAttributeAccessIssue]
+            except Exception:
+                # Release the claim so a failed start is not subsequently
+                # reported as "already_running" — that would be the same
+                # fake-success this method was fixed for.
+                with _shared_dashboard_lock:
+                    if _shared_dashboard is dashboard:
+                        _shared_dashboard = None
+                raise
+
+            return {
+                "status": "started",
+                "dashboard_url": f"http://localhost:{self.monitoring_port}",
+            }
 
         except Exception as e:
             logger.error(f"Failed to start monitoring dashboard: {e}")
             return {"error": str(e)}
 
     async def _stop_monitoring_dashboard(self) -> Dict[str, Any]:
-        """Stop the monitoring dashboard."""
+        """Stop the shared monitoring dashboard.
+
+        Releases the process-wide dashboard started by
+        :meth:`_start_monitoring_dashboard`. Previously keyed on
+        ``self.runtime.monitoring_dashboard``, which raised AttributeError on
+        every call (#2057 site 2).
+        """
+        global _shared_dashboard
+
         try:
-            if hasattr(self.runtime, "monitoring_dashboard"):  # type: ignore[reportAttributeAccessIssue]
-                await self.runtime.monitoring_dashboard.stop()  # type: ignore[reportAttributeAccessIssue]
-                del self.runtime.monitoring_dashboard  # type: ignore[reportAttributeAccessIssue]
+            with _shared_dashboard_lock:
+                dashboard = _shared_dashboard
+                _shared_dashboard = None
+
+            if dashboard is not None:
+                await dashboard.stop()
                 return {"status": "stopped"}
             else:
                 return {"status": "not_running"}

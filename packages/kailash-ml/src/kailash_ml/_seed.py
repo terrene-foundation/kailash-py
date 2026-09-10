@@ -16,21 +16,40 @@ downstream training code can plausibly touch:
 Every subsystem can be individually opted out with a keyword argument.
 The returned :class:`SeedReport` records which subsystems were applied
 and which were skipped (with a reason), so reproducibility audits have a
-per-run trail.
+per-run trail. It also captures the linked BLAS backend, which the seed
+does not pin (``ml-engines-v2.md §11.2 MUST 5``).
 
 See ``specs/ml-engines-v2.md §11.1-§11.3``.
 """
 from __future__ import annotations
 
+import contextlib
+import io
+import logging
 import os
 import random
 from dataclasses import dataclass, field
-from typing import Tuple
+from typing import Optional, Tuple
 
 __all__ = [
     "SeedReport",
     "seed",
 ]
+
+logger = logging.getLogger(__name__)
+
+# BLAS backend names numpy reports that we normalise to a canonical token.
+# ``ml-engines-v2.md §11.2 MUST 5`` names openblas / mkl / accelerate as the
+# backends that matter for 1-ULP reproducibility drift; any other name numpy
+# reports is passed through lowercased rather than collapsed to ``None``, so a
+# BLIS or generic-reference build stays distinguishable from "numpy absent".
+_KNOWN_BLAS_TOKENS: Tuple[str, ...] = (
+    "openblas",
+    "mkl",
+    "accelerate",
+    "blis",
+    "atlas",
+)
 
 
 @dataclass(frozen=True)
@@ -42,15 +61,75 @@ class SeedReport:
     user-opt-out ("opt_out") or dependency-unavailable
     ("missing_dep"). ``torch_deterministic`` reflects whether
     ``torch.use_deterministic_algorithms(True)`` was invoked.
+    ``blas_backend`` records the BLAS library numpy is linked against
+    (``ml-engines-v2.md §11.2 MUST 5``) — the seed alone does not pin
+    reproducibility, because OpenBLAS and MKL differ in sum-of-product
+    order and drift at the 1-ULP level on large aggregates.
     """
 
     seed: int
     applied: Tuple[str, ...] = field(default_factory=tuple)
     skipped: Tuple[Tuple[str, str], ...] = field(default_factory=tuple)
     torch_deterministic: bool = False
+    blas_backend: Optional[str] = None
 
     def __contains__(self, subsystem: str) -> bool:
         return subsystem in self.applied
+
+
+def _detect_blas_backend() -> Optional[str]:
+    """Return the BLAS backend numpy is linked against, lowercased.
+
+    ``"openblas"`` / ``"mkl"`` / ``"accelerate"`` are the backends
+    ``ml-engines-v2.md §11.2 MUST 5`` calls out; ``"blis"`` / ``"atlas"``
+    and any other name numpy reports are returned as-is rather than
+    collapsed, so an unusual build stays distinguishable from a numpy-less
+    environment.
+
+    Returns ``None`` only when numpy is absent or reports no BLAS name.
+    Never raises — a probe failure is logged at DEBUG and reported as
+    ``None``, because a reproducibility annotation must not be able to
+    break ``km.seed()``.
+    """
+    np = _try_import("numpy")
+    if np is None or not hasattr(np, "show_config"):
+        return None
+
+    # numpy >= 2.0 exposes a structured form; prefer it.
+    try:
+        cfg = np.show_config(mode="dicts")
+        blas = (cfg or {}).get("Build Dependencies", {}).get("blas", {})
+        name = blas.get("name")
+        if isinstance(name, str) and name.strip():
+            return name.strip().lower()
+    except Exception as exc:  # noqa: BLE001 — probe must never break seeding
+        # numpy 1.x has no ``mode`` kwarg (TypeError); a patched//broken
+        # show_config can raise anything. Either way fall through to the
+        # stdout form below rather than propagating out of ``km.seed()``.
+        logger.debug(
+            "seed.blas_probe.dicts_unavailable",
+            extra={"seed_error": str(exc)},
+        )
+
+    # numpy 1.x — ``show_config()`` prints to stdout and returns None.
+    try:
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            np.show_config()
+        text = buf.getvalue().lower()
+    except Exception as exc:  # noqa: BLE001 — probe must never break seeding
+        logger.debug(
+            "seed.blas_probe.failed",
+            extra={"seed_error": str(exc)},
+        )
+        return None
+
+    for token in _KNOWN_BLAS_TOKENS:
+        if token in text:
+            return token
+    if text.strip():
+        logger.debug("seed.blas_probe.unrecognised_backend")
+    return None
 
 
 def _try_import(module_path: str):
@@ -195,4 +274,5 @@ def seed(
         applied=tuple(applied),
         skipped=tuple(skipped),
         torch_deterministic=torch_det_applied,
+        blas_backend=_detect_blas_backend(),
     )

@@ -4648,8 +4648,12 @@ Check the documentation or explore available resources.
         This method is caller-driven only; it is NOT reachable from ``__del__``
         (see the finalizer's docstring for why that matters).
         """
-        # Close MCP servers first — they hold acquired runtime refs
-        for attr in ("_mcp_server", "_ws_server"):
+        # Close MCP servers first — they hold acquired runtime refs.
+        # `_ws_server` used to sit in this tuple; no code anywhere assigns that
+        # name (the real attribute is `_ws_transport`), so it was pure dead
+        # weight (#2057 site 3). WebSocket transports are already closed by the
+        # `self._transports` loop below, which is where they are registered.
+        for attr in ("_mcp_server",):
             server = getattr(self, attr, None)
             if server is not None and hasattr(server, "close"):
                 try:
@@ -4783,13 +4787,6 @@ Check the documentation or explore available resources.
                 logger.warning(
                     f"Error stopping MCP channel during shutdown: {type(e).__name__}: {e}"
                 )
-        elif hasattr(self, "_ws_server") and self._ws_server:
-            try:
-                _run_sync_shutdown(self._ws_server.stop())
-            except Exception as e:
-                logger.warning(
-                    f"Error stopping WebSocket server during shutdown: {type(e).__name__}: {e}"
-                )
         elif hasattr(self, "_mcp_server"):
             try:
                 if hasattr(self._mcp_server, "stop"):
@@ -4797,6 +4794,25 @@ Check the documentation or explore available resources.
             except Exception as e:
                 logger.warning(
                     f"Error stopping MCP server during shutdown: {type(e).__name__}: {e}"
+                )
+
+        # Stop the WebSocket transport, if one is attached.
+        #
+        # This branch used to read `self._ws_server` — a name nothing in this
+        # repo ever assigns — and sat in the `elif` chain above, so it was
+        # doubly dead: false on every evaluation, and unreachable whenever an
+        # MCP channel was running (#2057 site 3). The real attribute is
+        # `_ws_transport`, set by add_transport(); WebSocketTransport exposes
+        # an async stop(). It is now its OWN `if`, because the WebSocket
+        # transport is independent of the MCP channel/server — chaining them
+        # meant a Nexus running both would stop only the MCP side.
+        ws_transport = getattr(self, "_ws_transport", None)
+        if ws_transport is not None:
+            try:
+                _run_sync_shutdown(ws_transport.stop())
+            except Exception as e:
+                logger.warning(
+                    f"Error stopping WebSocket transport during shutdown: {type(e).__name__}: {e}"
                 )
 
         self._running = False

@@ -166,7 +166,9 @@ A reference column with `std == 0` MUST raise `ZeroVarianceReferenceError` with 
 
 #### MUST 4. RL KL Uses The Same Eps
 
-`RLDiagnostics.track_exploration` reports `kl_div` — when the old-policy distribution puts zero mass on the new-policy action, kailash-ml routes through `KL_SMOOTH_EPS` for exact-KL (TRPO) OR through SB3's sample-based unbiased-KL estimator (PPO). The `kl_estimator: Literal["exact", "sample_unbiased"]` column MUST be emitted alongside the KL value so downstream consumers know how to compare.
+The RL policy-update KL is reported by `RLDiagnostics.record_policy_update` (`packages/kailash-ml/src/kailash_ml/diagnostics/rl.py`), which takes a caller-supplied `kl` keyword and emits it on the `rl.policy.kl_from_ref` metric key. When the old-policy distribution puts zero mass on the new-policy action, kailash-ml MUST route through `KL_SMOOTH_EPS` for exact-KL (TRPO) OR through SB3's sample-based unbiased-KL estimator (PPO), and a `kl_estimator: Literal["exact", "sample_unbiased"]` column MUST be emitted alongside the KL value so downstream consumers know how to compare.
+
+> **Implementation status: NOT SHIPPED — this is the one unclosed MUST in §3.** The shipped `record_policy_update(loss, *, kl=None, entropy=None, clip_fraction=None)` accepts an already-computed `kl` float from the caller and neither smooths it nor labels its estimator: `grep -rn 'kl_estimator' packages/kailash-ml/src/` returns nothing, and `rl.py` references no `KL_SMOOTH_EPS`. The eps constants and `stability_note` DO ship, but only on the tabular drift path (`kailash_ml/drift/stats.py`, exporting `PSI_SMOOTH_EPS = 1e-4`, `JSD_SMOOTH_EPS = 1e-10`, `KL_SMOOTH_EPS = 1e-10`) — MUSTs 3 and 5 of this section are satisfied there. Closing this MUST requires the RL path to compute (rather than accept) the KL so it can know which estimator produced it; the earlier spec text named the emitter as a `track_exploration` method on `RLDiagnostics`, which has never existed on that class (`grep -rn 'track_exploration' packages/ src/` returns nothing; the class defines `record_episode`, `record_policy_update`, `record_value_update`, `record_q_update`, `record_replay`, `record_eval_rollout`, `as_sb3_callback` and `report`).
 
 #### MUST 5. Stability Note
 
@@ -178,14 +180,22 @@ When smoothing fires (any column where raw PSI / KL / JSD would have been `±Inf
 
 ## 4. Reference Dataset Persistence
 
-Round-1 HIGH finding §8 (mlops): "`DriftMonitor._references: dict[str, _StoredReference]` is keyed by `model_name` only — a multi-tenant deployment with two tenants each training `'churn'` collides". This section closes that.
+Round-1 HIGH finding §8 (mlops): "the in-memory reference cache is keyed by `model_name` only — a multi-tenant deployment with two tenants each training `'churn'` collides". This section closes that. **The tenant-collision half is CLOSED in code; the durability half is NOT — see the status block at the end of §4.1.**
 
 ### 4.1 MUST: Reference Is NOT Cached In-Memory Only
 
-`DriftMonitor._references` MAY be used as an LRU cache, but the source of truth is the `_kml_drift_references` table in the configured `store`. Every `set_reference` call MUST write the reference snapshot (hash + column summary + raw rows up to `reference_max_rows`) to the table; every `check_drift` call MUST resolve via the key `(tenant_id, model_name, model_version)` and lazy-load if the LRU misses.
+The in-memory cache (`drift_monitor.py::DriftMonitor._references`, an instance attribute assigned in `__init__`, not an importable module symbol) MAY be used as an LRU cache, but the source of truth is the `_kml_drift_references` table in the configured `store`. Every `set_reference` call MUST write the reference snapshot to the table; every `check_drift` call MUST resolve via the tenant-scoped composite key and lazy-load if the LRU misses.
+
+> **Implementation status, re-derived against `packages/kailash-ml/src/kailash_ml/engines/drift_monitor.py`.**
+>
+> - **CLOSED — tenant scoping.** `self._references: dict[tuple[str, str], _StoredReference]` (`drift_monitor.py:737`) is keyed by the composite `cache_key = (self._tenant_id, model_name)` at both the write (`:1001`) and read (`:1110`) sites, so the two-tenant `'churn'` collision this section was written to fix cannot occur. Note the shipped key is a **2-tuple** — `model_version` is NOT part of it, contrary to the 3-tuple this clause and §4.2/§4.4 originally specified.
+> - **CLOSED — write-through.** `set_reference_data` (`:900-1061`) persists to `_kml_drift_references` on every call, INSERT-or-UPDATE against an existence probe (`:1017`).
+> - **OPEN — lazy-load on LRU miss.** `check_drift` does NOT read the table back. On a cache miss it raises `ReferenceNotFoundError` (`:1112-1121`) telling the caller to "Call set_reference_data() first". The only `SELECT ... FROM _kml_drift_references` statements outside the legacy-shape migration live inside `set_reference_data` itself. **User impact:** a reference set before a process restart is durably on disk but unreachable — `check_drift` fails after every restart until `set_reference_data` is called again, which is the precise failure this section exists to close.
+> - **Why it is not a drop-in fix.** The persisted row carries `feature_columns`, `statistics` (JSON), `sample_size`, `set_at`, `policy_json`, `timestamp_column` — it does NOT carry `_StoredReference.data` (the per-feature `polars.Series` the static path compares against) or `raw_data` (needed for non-static re-slicing). Rehydrating a usable reference therefore requires extending the persisted schema and a migration, not just adding a SELECT; it is tracked as the open item of this section rather than described here as shipped behaviour.
 
 ```python
-# DO — persisted, tenant-scoped, lazy-loaded
+# TARGET — persisted, tenant-scoped, lazy-loaded. The `_load_reference_from_store`
+# call is the OPEN item above; no such method exists in drift_monitor.py today.
 async def check_drift(self, current_df, *, tenant_id, model_name, model_version, ...):
     key = (tenant_id, model_name, model_version)
     ref = self._references.get(key)
@@ -193,13 +203,15 @@ async def check_drift(self, current_df, *, tenant_id, model_name, model_version,
         ref = await self._load_reference_from_store(key)
     ...
 
-# DO NOT — in-memory only (current failure mode)
+# DO NOT — in-memory only, un-scoped key (the original round-1 failure mode)
 async def check_drift(self, current_df, *, model_name, ...):
     ref = self._references[model_name]  # KeyError on cold start; cross-tenant collision
     ...
 ```
 
 ### 4.2 Reference Table Schema
+
+> **Implementation status: the DDL below is the TARGET schema; the shipped table is narrower.** `drift_monitor.py` creates `_kml_drift_references` with exactly `tenant_id`, `model_name`, `feature_columns`, `statistics`, `sample_size`, `set_at`, `policy_json`, `timestamp_column` and `PRIMARY KEY (tenant_id, model_name)` — a **2-column PK with no `model_version`** — plus `CREATE INDEX idx_drift_refs_tenant`. The target columns `model_version`, `reference_hash`, `reference_row_count`, `reference_column_summary`, `reference_artifact_uri`, `set_by_actor_id` and `superseded_at` are NOT present (`grep -n 'reference_hash\|superseded_at\|set_by_actor_id\|artifact_uri' drift_monitor.py` returns nothing); `policy_json` and `timestamp_column` are shipped columns this target DDL does not list. A `_migrate_references_legacy_shape` path (`:331-441`) upgrades pre-tenant-scoping tables via RENAME + CREATE + INSERT-SELECT + DROP inside one transaction, because SQLite cannot alter a PK in place.
 
 ```sql
 CREATE TABLE _kml_drift_references (
@@ -220,9 +232,13 @@ CREATE INDEX idx_drift_refs_tenant ON _kml_drift_references (tenant_id);
 
 ### 4.3 Reference Size Caps
 
+> **Implementation status: TARGET — not shipped.** `grep -n 'reference_max_rows\|reservoir\|artifact_uri' drift_monitor.py` returns nothing. The shipped bound is a cache-entry count, not a row cap: `self._max_references = 100` (`drift_monitor.py:738`) evicts whole references from the in-memory LRU, and the persisted row stores the full computed `statistics` JSON with no sub-sampling and no artifact-store offload.
+
 References above `reference_max_rows` (default 100K) are sub-sampled via reservoir sampling with a fixed seed (default 42, overridable). The full reference bytes are offloaded to the artifact store; the column summary is always inline for fast check-time access. Drift statistics on a 100K sample of a 100M-row reference are empirically within 1σ of the full-dataset numbers for all four continuous statistics above.
 
 ### 4.4 Reference Versioning + Supersede Audit
+
+> **Implementation status: TARGET — not shipped.** The shipped `set_reference_data` overwrites in place: it probes for an existing `(tenant_id, model_name)` row and issues an UPDATE when one exists, else an INSERT (`drift_monitor.py:1017-1051`). There is no supersede semantics, no `superseded_at` column, no version dimension, and no `_kml_drift_audit` table anywhere in `packages/kailash-ml/src/` — so the prior reference snapshot is lost on re-set rather than retained and marked. Closing this depends on the §4.2 schema widening.
 
 Calling `set_reference` on an existing `(tenant_id, model_name, model_version)` key MUST:
 

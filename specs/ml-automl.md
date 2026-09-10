@@ -365,7 +365,7 @@ This is a deliberate contraction of the v1 spec § 5 surface. See § "Deferred t
 
 `run()` ALWAYS returns an `AutoMLResult` (possibly with `early_stopped=True`, possibly with `best_trial=None`). It does NOT raise `BudgetExhaustedError`, `InsufficientTrialsError`, or any AutoML-typed error from the AutoMLError family. Failures inside `trial_fn` are wrapped into per-trial `status="failed"` records and the run continues.
 
-This diverges from v1 spec § 6.1 MUST 1 ("BudgetExhaustedError is non-fatal" — i.e., the v1 spec said it WOULD be raised but caught by `MLEngine.fit_auto`). In v1.1.1, the engine never raises an AutoMLError-family error; it returns an `AutoMLResult` whose `early_stopped_reason` field documents the cause. See § "Deferred to M2 milestone" entry D-typederrors.
+This diverges from v1 spec § 6.1 MUST 1 ("BudgetExhaustedError is non-fatal" — i.e., the v1 spec said it WOULD be raised, then caught by an `MLEngine` method the v1 text called `fit_auto`). **That method never shipped and has no code surface**: `MLEngine` (`packages/kailash-ml/src/kailash_ml/engine.py`) exposes `setup` / `compare` / `fit` / `predict` / `evaluate` / `finalize` / `register` / `serve` and no `fit_auto`, and `grep -rn 'fit_auto' packages/kailash-ml/src/` returns nothing. The AutoML entry point is `AutoMLEngine.run` (`automl/engine.py::AutoMLEngine.run`), returning `kailash_ml.automl.engine.AutoMLResult`. In v1.1.1, the engine never raises an AutoMLError-family error; it returns an `AutoMLResult` whose `early_stopped_reason` field documents the cause. See § "Deferred to M2 milestone" entry D-typederrors.
 
 ### 6.4 No Per-Trial Early-Stopping Patience
 

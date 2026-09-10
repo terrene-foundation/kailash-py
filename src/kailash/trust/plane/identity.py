@@ -429,6 +429,12 @@ class JWKSProvider:
         """
         try:
             ctx = ssl.create_default_context()
+            # Pin the TLS floor explicitly (#2175 sibling sweep). This fetch
+            # retrieves JWKS material used to VERIFY tokens, so the transport
+            # is trust-bearing: relying on the interpreter's default floor
+            # rather than stating it is exactly the assumption the sweep
+            # removes. Matches trust/plane/siem.py:614.
+            ctx.minimum_version = ssl.TLSVersion.TLSv1_2
             req = urllib.request.Request(
                 url,
                 headers={"Accept": "application/json"},
