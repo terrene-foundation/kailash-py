@@ -1079,6 +1079,7 @@ class LLMAgentNode(Node):
                     api_key=per_request_api_key,
                     base_url=per_request_base_url,
                     provider_config=provider_config,
+                    timeout=timeout,
                 )
 
             # Handle tool execution if enabled and tools were called
@@ -1131,6 +1132,7 @@ class LLMAgentNode(Node):
                             api_key=per_request_api_key,
                             base_url=per_request_base_url,
                             provider_config=provider_config,
+                            timeout=timeout,
                         )
 
                 # Update final response metadata
@@ -2405,6 +2407,7 @@ Final Answer: 6 hours"""
         api_key: str = None,
         base_url: str = None,
         provider_config: dict | None = None,
+        timeout: float | None = None,
     ) -> dict[str, Any]:
         """Generate LLM response using provider architecture.
 
@@ -2418,6 +2421,14 @@ Final Answer: 6 hours"""
                 `model` is the canonical model FAMILY, so reasoning-model
                 detection keys off the family regardless of the deployment name.
                 Ignored by every non-Azure provider.
+            timeout: Wire-call timeout in seconds, forwarded to
+                ``LlmClient.complete(timeout=...)``. #2209: the node's declared
+                ``timeout`` NodeParameter reached ONLY the LangChain branch and
+                was dropped on this — the real — dispatch path, so the wire
+                timeout was pinned at the transport's hardcoded 60 s with no
+                supported override. A generation exceeding 60 s failed and
+                could not be configured around. ``None`` keeps the transport
+                default.
 
         #1720 Wave-B1a — LIVE CUTOVER, #1892 — LEGACY PATH REMOVED. This
         method returns the four-axis ``kaizen.llm.client.LlmClient`` result
@@ -2508,6 +2519,15 @@ Final Answer: 6 hours"""
             )
             if effective_tool_choice is not None:
                 sampling_kwargs["tool_choice"] = effective_tool_choice
+
+            # #2209: forward the node's declared `timeout` to the wire. Merged
+            # into `sampling_kwargs` (rather than unpacked alongside it) so a
+            # future `"timeout"` entry in _GENERATION_CONFIG_SAMPLING_KEYS
+            # cannot become a duplicate-keyword TypeError; the explicit
+            # parameter wins. Emitted only when set, so an unset timeout keeps
+            # the transport's client-level default byte-identical to pre-#2209.
+            if timeout is not None:
+                sampling_kwargs["timeout"] = timeout
 
             async def _call_complete():
                 return await client.complete(

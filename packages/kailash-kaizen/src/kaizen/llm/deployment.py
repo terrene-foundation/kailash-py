@@ -448,6 +448,25 @@ class LlmDeployment(BaseModel):
     Threaded onto the request as ``CompletionRequest.canonical_model`` by
     ``LlmClient._build_completion_request``.
     """
+    timeout: Optional[float] = None
+    """#2209 deployment-level wire-call timeout, in seconds.
+
+    Before #2209 ``LlmClient`` constructed its ``LlmHttpClient`` with a
+    HARDCODED ``timeout=60.0`` at every site and neither ``complete()`` nor
+    ``stream()`` accepted a per-request override — so an application could not
+    change the LLM wire timeout AT ALL, while ``LLMAgentNode`` advertised a
+    documented ``timeout`` NodeParameter that never reached the provider.
+
+    ``None`` (the default) keeps the historical 60.0 s transport default, so
+    every existing deployment behaves exactly as before. When set, it becomes
+    the client-level timeout for every transport this deployment's client
+    constructs. A per-request ``complete(timeout=...)`` /
+    ``stream(timeout=...)`` overrides it for that one call.
+
+    Must be > 0 when set — a zero or negative timeout would make every request
+    fail instantly, which is a configuration error, not a "no limit" idiom
+    (httpx spells "no limit" as ``None``).
+    """
     streaming: StreamingConfig = Field(default_factory=StreamingConfig)
     retry: RetryConfig = Field(default_factory=RetryConfig)
     completion_routing: Optional[CompletionRouting] = None
@@ -473,6 +492,24 @@ class LlmDeployment(BaseModel):
     Python idiom is field access (``dep.preset_name``) rather than the
     Rust method-style ``dep.preset_name()``.
     """
+
+    @field_validator("timeout")
+    @classmethod
+    def _validate_timeout(cls, value: Optional[float]) -> Optional[float]:
+        """Reject a non-positive ``timeout`` with a typed, self-describing error.
+
+        #2209: a ``0`` / negative timeout makes every wire call fail instantly.
+        Accepting it silently would be the ``zero-tolerance`` Rule 3 failure
+        mode at the config surface (the caller believes they disabled the
+        limit); httpx spells "no limit" as ``None``, which is this field's
+        default, so there is no legitimate non-positive value.
+        """
+        if value is not None and value <= 0:
+            raise ValueError(
+                f"LlmDeployment.timeout must be > 0 seconds; got {value!r}. "
+                "Use timeout=None (the default) for no deployment-level limit."
+            )
+        return value
 
     # -------------------------------------------------------------
     # Preset classmethod STUBS — only `.openai` is implemented in S1+S2.

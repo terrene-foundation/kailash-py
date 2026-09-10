@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Tool calling works on Gemini 3.x models again (#2120).** Gemini 3.x requires every replayed function call to carry back the `thought_signature` the model issued alongside it. `GoogleStreamAdapter` neither captured it from the response nor replayed it in history, so the first request succeeded and returned a tool call, the second was rejected with `400 INVALID_ARGUMENT` ("Function call is missing a thought_signature in functionCall parts"), and no tool ever executed. There was no caller-side workaround — the adapter owns both halves. The signature is now captured on the tool-call it belongs to and replayed as a part-level sibling of the function call, which is where Google's own model puts it. Gemini 2.5 issues no signature and its behaviour is byte-identical. A stashed signature that has been corrupted now raises a named error rather than being dropped, since dropping it reproduces exactly the opaque provider rejection this fixes.
+
 ## [0.13.0] — 2026-08-17 — Documented permission checker is fixed and now fails closed on error; skill discovery fails closed on a partial caller identity; credential and traceback disclosure closed across log and return surfaces
 
 **Upgrade note: `pip install -U kailash-kaizen` alone does NOT deliver the discovery fixes below.** The previous release, `kaizen-agents` 0.12.0, declares `kailash-kaizen>=2.36.0` with no upper cap, and these are `kaizen-agents` fixes (`UserFilteredAgentDiscovery` lives in this package, not in `kailash-kaizen`). A `kailash-kaizen` upgrade to 2.46.0 already satisfies that floor, so a resolver has no reason to also touch `kaizen-agents` — an installation can report "kailash-kaizen upgraded" while `kaizen-agents` stays at 0.12.0, keeping both the fail-open permission checker and the partial-identity discovery bypass described below live, with no dependency-resolver signal that anything is still wrong. **`kaizen-agents` MUST be explicitly upgraded to 0.13.0 to receive these fixes** — `pip install -U kailash-kaizen kaizen-agents` (or pin `kaizen-agents>=0.13.0` directly).

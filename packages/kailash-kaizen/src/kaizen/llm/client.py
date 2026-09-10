@@ -618,6 +618,30 @@ class LlmClient:
         )
 
     # -----------------------------------------------------------------
+    # Transport timeout resolution (#2209)
+    # -----------------------------------------------------------------
+
+    #: Historical hardcoded client-level transport timeout, in seconds. Kept as
+    #: the floor so a deployment that sets no ``timeout`` behaves exactly as it
+    #: did before #2209 (every ``LlmHttpClient`` this client builds was
+    #: constructed with a literal ``timeout=60.0``).
+    _DEFAULT_TRANSPORT_TIMEOUT_SECONDS = 60.0
+
+    def _transport_timeout(self) -> float:
+        """Resolve the client-level transport timeout for a new ``LlmHttpClient``.
+
+        #2209: this replaces SEVEN hardcoded ``timeout=60.0`` literals. Reads
+        the deployment's ``timeout`` when set, else the historical 60.0 s
+        default, so an application finally has a supported way to raise (or
+        lower) the LLM wire timeout. A per-request ``complete(timeout=...)`` /
+        ``stream(timeout=...)`` / ``embed(timeout=...)`` still overrides this
+        for that single call.
+        """
+        if self._deployment is not None and self._deployment.timeout is not None:
+            return self._deployment.timeout
+        return self._DEFAULT_TRANSPORT_TIMEOUT_SECONDS
+
+    # -----------------------------------------------------------------
     # Lifecycle — async context manager + aclose() (#1388)
     # -----------------------------------------------------------------
 
@@ -635,7 +659,7 @@ class LlmClient:
         if self._deployment is not None and self._http_client is None:
             self._http_client = LlmHttpClient(
                 deployment_preset=self._deployment.wire.name,
-                timeout=60.0,
+                timeout=self._transport_timeout(),
             )
         return self
 
@@ -801,14 +825,14 @@ class LlmClient:
             if self._http_client is None:
                 self._http_client = LlmHttpClient(
                     deployment_preset=wire.name,
-                    timeout=60.0,
+                    timeout=self._transport_timeout(),
                 )
             http_client = self._http_client
             owns_client = False  # instance owns it; closed at aclose(), not here
         elif owns_client:
             http_client = LlmHttpClient(
                 deployment_preset=wire.name,
-                timeout=60.0,
+                timeout=self._transport_timeout(),
             )
         assert http_client is not None  # narrowing for type-checker
 
@@ -1170,6 +1194,19 @@ class LlmClient:
             payload = shaper.build_request_payload(
                 request, use_chat_schema=use_chat_schema
             )
+        elif wire is WireProtocol.OpenAiChat:
+            # #2215: thread the deployment's StreamingConfig.include_usage into
+            # the OpenAI shaper so a streamed request carries `stream_options`
+            # and the terminal chunk returns a usage block. Same structural
+            # dispatch-on-a-typed-deployment-field route as `use_chat_schema`
+            # above (rules/agent-reasoning.md permits config branching); NOT
+            # passed universally, because no other shaper accepts the kwarg and
+            # `stream_options` is an OpenAI-protocol field. The shaper itself
+            # additionally requires `request.stream`, so a buffered complete()
+            # on an include_usage=True deployment stays byte-identical.
+            payload = shaper.build_request_payload(
+                request, include_usage=self._deployment.streaming.include_usage
+            )
         else:
             payload = shaper.build_request_payload(request)
         # Platform-Anthropic body transform (Vertex / Bedrock Claude). No-op
@@ -1281,9 +1318,18 @@ class LlmClient:
         n: Optional[int] = None,
         top_k: Optional[int] = None,
         api_key: Optional[str] = None,
+        timeout: Optional[float] = None,
         http_client: Optional[LlmHttpClient] = None,
     ) -> Dict[str, Any]:
         """Issue a chat completion through the configured deployment.
+
+        ``timeout`` (#2209): OPTIONAL per-request wire-call timeout, in
+        seconds — the same contract :meth:`embed` has carried since Wave-B1b.
+        When set it bounds THIS completion, overriding the deployment-level
+        ``LlmDeployment.timeout`` (and the historical 60.0 s transport default)
+        for this call only. When ``None`` the transport's client-level timeout
+        applies, byte-identical to the pre-#2209 behaviour. Exceeding it raises
+        the typed :class:`~kaizen.llm.errors.Timeout`, never a silent truncation.
 
         Mirrors :meth:`embed`: redacts prompt PII at the boundary, shapes the
         body for the deployment's wire, dispatches through the SSRF-safe
@@ -1363,12 +1409,14 @@ class LlmClient:
         if owns_client and self._managed:
             if self._http_client is None:
                 self._http_client = LlmHttpClient(
-                    deployment_preset=wire.name, timeout=60.0
+                    deployment_preset=wire.name, timeout=self._transport_timeout()
                 )
             http_client = self._http_client
             owns_client = False
         elif owns_client:
-            http_client = LlmHttpClient(deployment_preset=wire.name, timeout=60.0)
+            http_client = LlmHttpClient(
+                deployment_preset=wire.name, timeout=self._transport_timeout()
+            )
         assert http_client is not None
 
         try:
@@ -1386,11 +1434,19 @@ class LlmClient:
                     "mode": "real",
                 },
             )
+            # #2209: a caller-supplied `timeout` bounds THIS wire call. Threaded
+            # into the httpx request only when set, so an unset timeout stays
+            # byte-identical to the transport's client-level default (the same
+            # post_kwargs shape embed() has used since #1720 Wave-B1b).
+            post_kwargs: Dict[str, Any] = {}
+            if timeout is not None:
+                post_kwargs["timeout"] = timeout
             resp = await http_client.post(
                 url,
                 headers=headers,
                 content=body_bytes,
                 auth_strategy_kind=auth_kind,
+                **post_kwargs,
             )
         except httpx.TimeoutException as exc:
             logger.error(
@@ -1471,9 +1527,22 @@ class LlmClient:
         n: Optional[int] = None,
         top_k: Optional[int] = None,
         api_key: Optional[str] = None,
+        timeout: Optional[float] = None,
         http_client: Optional[LlmHttpClient] = None,
     ) -> AsyncIterator[Dict[str, Any]]:
         """Stream a chat completion as an async iterator of parsed chunks.
+
+        ``timeout`` (#2209): OPTIONAL per-request wire-call timeout, in
+        seconds — same contract as :meth:`complete`, and forwarded unchanged on
+        BOTH the real streaming send AND the ``streaming.enabled=False``
+        buffered-``complete()`` fallback so the two paths stay at parity.
+
+        ``stream_options`` (#2215): on an OpenAI-wire deployment whose
+        :class:`~kaizen.llm.deployment.StreamingConfig` has ``include_usage``
+        True (the default), the request now carries
+        ``stream_options: {"include_usage": true}`` so the terminal chunk
+        returns a ``usage`` block. Set ``include_usage=False`` on the
+        deployment's ``streaming`` config to suppress it.
 
         A REAL streaming send: routes through ``LlmHttpClient.stream_lines``
         (httpx ``client.stream`` on the SAME SSRF-safe transport — no second
@@ -1528,6 +1597,7 @@ class LlmClient:
                 n=n,
                 top_k=top_k,
                 api_key=api_key,
+                timeout=timeout,
                 http_client=http_client,
             )
             yield result
@@ -1560,12 +1630,14 @@ class LlmClient:
         if owns_client and self._managed:
             if self._http_client is None:
                 self._http_client = LlmHttpClient(
-                    deployment_preset=wire.name, timeout=60.0
+                    deployment_preset=wire.name, timeout=self._transport_timeout()
                 )
             http_client = self._http_client
             owns_client = False
         elif owns_client:
-            http_client = LlmHttpClient(deployment_preset=wire.name, timeout=60.0)
+            http_client = LlmHttpClient(
+                deployment_preset=wire.name, timeout=self._transport_timeout()
+            )
         assert http_client is not None
 
         dispatch = _COMPLETE_DISPATCH[wire]
@@ -1585,12 +1657,19 @@ class LlmClient:
                     "mode": "real",
                 },
             )
+            # #2209: per-request timeout bounds THIS streaming send. Threaded
+            # only when set so an unset timeout keeps the transport's
+            # client-level default (byte-identical to pre-#2209).
+            stream_kwargs: Dict[str, Any] = {}
+            if timeout is not None:
+                stream_kwargs["timeout"] = timeout
             async for line in http_client.stream_lines(
                 "POST",
                 url,
                 headers=headers,
                 content=body_bytes,
                 auth_strategy_kind=auth_kind,
+                **stream_kwargs,
             ):
                 chunk = _parse_stream_line(line, shaper)
                 if chunk is not None:

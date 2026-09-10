@@ -57,7 +57,7 @@ class TestIterativeLLMAgentMCPIntegration:
         ):
             # Mock the parent's run method to avoid actual LLM calls
             with patch(
-                "kailash.nodes.ai.llm_agent.LLMAgentNode.run",
+                "kaizen.nodes.ai.llm_agent.LLMAgentNode.run",
                 return_value={
                     "success": True,
                     "response": {"content": "Test response"},
@@ -106,7 +106,7 @@ class TestIterativeLLMAgentMCPIntegration:
         with patch.object(self.agent, "_discover_mcp_tools", return_value=[]):
             # Mock the parent's run method
             with patch(
-                "kailash.nodes.ai.llm_agent.LLMAgentNode.run",
+                "kaizen.nodes.ai.llm_agent.LLMAgentNode.run",
                 return_value={
                     "success": True,
                     "response": {"content": "Test response"},
@@ -132,7 +132,16 @@ class TestIterativeLLMAgentMCPIntegration:
 
                 if exec_results["steps_completed"]:
                     step_result = exec_results["steps_completed"][0]
-                    assert "Mock execution result" in step_result["output"]
+                    # With no MCP tools discovered the agent takes the
+                    # direct-LLM path and the step output IS the model's
+                    # content. This previously asserted a literal
+                    # "Mock execution result" placeholder, which production
+                    # code no longer emits — a hardcoded placeholder string is
+                    # a stub under zero-tolerance Rule 2, and its removal was
+                    # correct; only this assertion still expected it.
+                    assert step_result["action"] == "direct_llm_response"
+                    assert step_result["tools_used"] == []
+                    assert step_result["output"] == "Test response"
 
     @patch("kailash_mcp.MCPClient")
     def test_error_handling_in_mcp_execution(self, mock_mcp_client):
@@ -162,7 +171,7 @@ class TestIterativeLLMAgentMCPIntegration:
         ):
             # Mock the parent's run method
             with patch(
-                "kailash.nodes.ai.llm_agent.LLMAgentNode.run",
+                "kaizen.nodes.ai.llm_agent.LLMAgentNode.run",
                 return_value={
                     "success": True,
                     "response": {"content": "Test response"},

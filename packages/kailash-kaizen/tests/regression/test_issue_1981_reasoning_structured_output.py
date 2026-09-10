@@ -118,6 +118,11 @@ def _install_fake_transport(monkeypatch, content):
         api_key=None,
         base_url=None,
         provider_config=None,
+        # #2209: mirrors _provider_llm_response's signature, which now carries
+        # the node's declared `timeout` through to the wire. Captured (not
+        # swallowed via **kwargs) so this double stays a faithful mirror and a
+        # future signature drift keeps surfacing here.
+        timeout=None,
     ):
         captured.append(
             {
@@ -125,6 +130,7 @@ def _install_fake_transport(monkeypatch, content):
                 "model": model,
                 "messages": messages,
                 "generation_config": generation_config,
+                "timeout": timeout,
             }
         )
         body = content(provider) if callable(content) else content
