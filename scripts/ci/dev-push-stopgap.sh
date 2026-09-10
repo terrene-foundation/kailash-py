@@ -57,8 +57,16 @@ fi
 # --- 2. Never push a checkpoint(UNREVIEWED): commit to a shared trunk -------
 # orchestration-launch-ledger.md MUST-5 mandates that prefix on rescue
 # checkpoints precisely so a merge gate can detect one; this is that gate.
-if git log origin/main..HEAD --format=%s 2>/dev/null | grep -q '^checkpoint(UNREVIEWED):'; then
-    note "unreviewed checkpoints" "PRESENT — refusing"
+# `grep -c`, never `grep -q`. Under `set -o pipefail`, `grep -q` exits on the
+# FIRST match, `git log` then dies writing to the closed pipe with SIGPIPE, and
+# pipefail surfaces git's 141 as the pipeline status — so the `if` takes the
+# ELSE branch on a match and the guard silently reports "none". Measured here:
+# `grep_status=141` with the checkpoint commit present. It is a RACE (git
+# sometimes finishes first), so the bug is intermittent, which is worse.
+# `grep -c` reads all input, so nothing exits early.
+CHECKPOINTS=$(git log origin/main..HEAD --format=%s 2>/dev/null | grep -c '^checkpoint(UNREVIEWED):' || true)
+if [ "${CHECKPOINTS:-0}" -gt 0 ]; then
+    note "unreviewed checkpoints" "$CHECKPOINTS PRESENT — refusing"
     FAILED=1
 else
     note "unreviewed checkpoints" "none"
@@ -83,8 +91,10 @@ fi
 # Mapped by path so an unrelated change does not pay for the whole tree
 # (test-parsimony.md MUST-1). Add a mapping when you add a surface.
 declare -a SUITES=()
-echo "$CHANGED" | grep -q '^src/kailash/trust/' && SUITES+=("tests/trust/unit/")
-echo "$CHANGED" | grep -qE '^src/kailash/trust/a2a/|^packages/kailash-kaizen/' \
+# Counts, not `grep -q` — same pipefail/SIGPIPE race as above.
+[ "$(printf '%s\n' "$CHANGED" | grep -c '^src/kailash/trust/' || true)" -gt 0 ] \
+    && SUITES+=("tests/trust/unit/")
+[ "$(printf '%s\n' "$CHANGED" | grep -cE '^src/kailash/trust/a2a/|^packages/kailash-kaizen/' || true)" -gt 0 ] \
     && SUITES+=("packages/kailash-kaizen/tests/integration/trust/test_a2a_service.py")
 
 if [ ${#SUITES[@]} -eq 0 ]; then
