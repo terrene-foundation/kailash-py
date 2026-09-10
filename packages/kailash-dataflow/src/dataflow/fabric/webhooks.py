@@ -614,7 +614,19 @@ class WebhookReceiver:
                                 "reason": "Invalid timestamp format",
                             }
                         ts = datetime.fromtimestamp(ts_float, tz=timezone.utc)
-                    except (ValueError, OverflowError):
+                    except (ValueError, OverflowError, OSError):
+                        # ``OSError`` completes the failure set, matching the
+                        # provider verifiers above. ``fromtimestamp`` does NOT
+                        # raise a single type for out-of-range input: measured
+                        # on CPython 3.13/macOS, ``1e300`` raises OverflowError
+                        # but ``1e18`` raises ``OSError: [Errno 84] Value too
+                        # large to be stored in data type``. Catching only the
+                        # first left the DEFAULT ``generic`` provider on the
+                        # exact #2189 defect the provider verifiers were fixed
+                        # for -- the exception escaped ``handle_webhook``'s
+                        # documented return contract and skipped
+                        # ``metrics.record_webhook``, so the rejected delivery
+                        # was invisible rather than merely mis-reported.
                         metrics.record_webhook(source=source_name, accepted=False)
                         return {
                             "accepted": False,
