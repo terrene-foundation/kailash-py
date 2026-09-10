@@ -355,42 +355,62 @@ class TestAsyncNodePerformance:
 
     @pytest.mark.asyncio
     async def test_concurrent_execution_performance(self):
-        """Test that concurrent execution is non-blocking.
+        """Test that concurrent execution actually overlaps (does not serialize).
 
-        Asserts RELATIVE speedup (concurrent measurably faster than
-        sequential) rather than absolute wall-clock — the absolute
-        `< 0.1s` threshold was flaky on shared CI runners where
-        import + loop-startup overhead could push 10× async-sleep(1ms)
-        calls past 100ms despite async working correctly. The relative
-        check catches the real regression (serialization) without
-        measuring runner load.
+        Asserts the PROPERTY (how many executions were in flight at once)
+        rather than inferring it from elapsed time.
+
+        This previously asserted ``concurrent_duration * 3 < sequential_duration``
+        over a ~30ms workload. Both arms sat close enough to the scheduler-noise
+        floor that a busy machine collapsed the ratio, and the failure message
+        blamed serialization -- the one thing a wall-clock ratio cannot
+        distinguish from "the host was loaded" (issue #2029). Because this file
+        runs in the Tier-1 pre-commit hook, that noise blocked commits.
+
+        Counting in-flight executions tests the real proposition directly and
+        cannot flake under load: if the runtime ever serializes the async path,
+        peak concurrency drops to 1 no matter how fast or slow the machine is.
         """
-        # Each node sleeps 1ms. 10 nodes sequentially ≥ 10ms sleep time.
-        # Concurrently ≥ 1ms. We require concurrent to be at least 3×
-        # faster than sequential — a margin that survives runner noise
-        # while still failing loudly if the runtime serializes.
-        nodes_concurrent = [ConcreteTestAsyncNode() for _ in range(10)]
-        nodes_sequential = [ConcreteTestAsyncNode() for _ in range(10)]
+        in_flight = 0
+        peak_concurrency = 0
 
-        import time
+        class _ConcurrencyProbeNode(ConcreteTestAsyncNode):
+            """Records how many executions overlap, via the real async path."""
 
-        start = time.time()
+            async def async_run(self, **kwargs):
+                nonlocal in_flight, peak_concurrency
+                in_flight += 1
+                peak_concurrency = max(peak_concurrency, in_flight)
+                try:
+                    return await super().async_run(**kwargs)
+                finally:
+                    in_flight -= 1
+
+        # Concurrent arm: all ten must overlap.
+        nodes_concurrent = [_ConcurrencyProbeNode() for _ in range(10)]
         results = await asyncio.gather(
             *[node.execute_async() for node in nodes_concurrent]
         )
-        concurrent_duration = time.time() - start
 
-        start = time.time()
+        assert peak_concurrency == 10, (
+            f"concurrent execution should run all 10 nodes simultaneously; "
+            f"peak in-flight was {peak_concurrency} — the async path is "
+            f"serializing."
+        )
+        assert in_flight == 0, "every execution should have completed"
+
+        # Sequential arm: the same probe must observe no overlap, which is what
+        # makes the assertion above meaningful rather than trivially satisfied.
+        peak_concurrency = 0
+        nodes_sequential = [_ConcurrencyProbeNode() for _ in range(10)]
         for node in nodes_sequential:
             await node.execute_async()
-        sequential_duration = time.time() - start
 
-        assert concurrent_duration * 3 < sequential_duration, (
-            f"concurrent execution should be at least 3x faster than "
-            f"sequential; got concurrent={concurrent_duration:.3f}s vs "
-            f"sequential={sequential_duration:.3f}s — async path "
-            f"appears to be serializing."
+        assert peak_concurrency == 1, (
+            f"sequential execution should never overlap; peak in-flight was "
+            f"{peak_concurrency}"
         )
+
         assert len(results) == 10
         assert all(r["result"] == "success" for r in results)
 

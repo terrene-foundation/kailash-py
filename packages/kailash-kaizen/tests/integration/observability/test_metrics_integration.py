@@ -516,50 +516,71 @@ class TestPerformanceValidation:
 
     @pytest.mark.asyncio
     async def test_metrics_collection_overhead_minimal(self):
-        """Test metrics collection adds <2% overhead to agent execution"""
-        # Setup: Create hooks
+        """Test metrics collection adds negligible overhead to agent execution.
+
+        Measures the hooks' OWN cost directly.
+
+        This used to time two loops of 100 ``asyncio.sleep(0.001)`` calls -- one
+        with hooks, one without -- and assert on the percentage difference. That
+        cannot work: both arms are ~100ms of sleep whose real duration is set by
+        the OS scheduler, so the subtraction is dominated by jitter rather than
+        by the microseconds of hook work it claims to isolate. It failed on a
+        loaded host during issue #2219 triage and passed on a quiet one, with no
+        code change in between.
+
+        The hooks cost ~1.2us per ``handle()``. The budget below is ~80x that,
+        and the hooks must be negligible against the 1ms operation they wrap, so
+        a regression that actually matters (a hook doing blocking I/O, a
+        network call, or unbounded accumulation) costs milliseconds and trips
+        this decisively -- while ordinary host load cannot.
+
+        ``min()`` across repetitions is the estimator on purpose: contention can
+        only make a run slower, never faster, so the fastest observed run is the
+        least contaminated measure of the code's own cost.
+        """
+        # Budget per handle() call. Generous vs the ~1.2us measured cost, and
+        # still far below the 1ms operation the hooks instrument.
+        max_seconds_per_handle = 100e-6
+
         metrics_hook = MetricsHook()
         profiler_hook = PerformanceProfilerHook()
 
-        # Baseline: Execute 100 operations WITHOUT hooks
-        start_baseline = time.perf_counter()
-        for i in range(100):
-            await asyncio.sleep(0.001)  # Simulate 1ms operation
-        end_baseline = time.perf_counter()
-        baseline_time = end_baseline - start_baseline
-
-        # With hooks: Execute 100 operations WITH hooks
-        start_with_hooks = time.perf_counter()
-        for i in range(100):
-            pre_context = HookContext(
-                event_type=HookEvent.PRE_TOOL_USE,
+        def _context(event_type):
+            return HookContext(
+                event_type=event_type,
                 agent_id="test_agent",
                 timestamp=time.time(),
                 data={},
             )
-            await metrics_hook.handle(pre_context)
-            await profiler_hook.handle(pre_context)
 
-            await asyncio.sleep(0.001)  # Simulate 1ms operation
+        # Warm up: first-call import/allocation costs are not steady-state cost.
+        for _ in range(50):
+            await metrics_hook.handle(_context(HookEvent.PRE_TOOL_USE))
+            await profiler_hook.handle(_context(HookEvent.POST_TOOL_USE))
 
-            post_context = HookContext(
-                event_type=HookEvent.POST_TOOL_USE,
-                agent_id="test_agent",
-                timestamp=time.time(),
-                data={},
-            )
-            await metrics_hook.handle(post_context)
-            await profiler_hook.handle(post_context)
-        end_with_hooks = time.perf_counter()
-        with_hooks_time = end_with_hooks - start_with_hooks
+        iterations = 200
+        handles_per_iteration = 4
+        best_per_handle = None
 
-        # Calculate overhead
-        overhead_time = with_hooks_time - baseline_time
-        overhead_percent = (overhead_time / baseline_time) * 100
+        for _ in range(5):
+            start = time.perf_counter()
+            for _ in range(iterations):
+                pre_context = _context(HookEvent.PRE_TOOL_USE)
+                await metrics_hook.handle(pre_context)
+                await profiler_hook.handle(pre_context)
 
-        # Assert: Overhead < 2%
-        # NOTE: This may fail initially and will PASS after optimization
-        assert overhead_percent < 10, (
-            f"Metrics overhead is {overhead_percent:.2f}% (target: <2%). "
-            f"Baseline: {baseline_time:.3f}s, With hooks: {with_hooks_time:.3f}s"
+                post_context = _context(HookEvent.POST_TOOL_USE)
+                await metrics_hook.handle(post_context)
+                await profiler_hook.handle(post_context)
+            elapsed = time.perf_counter() - start
+
+            per_handle = elapsed / (iterations * handles_per_iteration)
+            if best_per_handle is None or per_handle < best_per_handle:
+                best_per_handle = per_handle
+
+        assert best_per_handle < max_seconds_per_handle, (
+            f"metrics hook overhead is {best_per_handle * 1e6:.2f}us per "
+            f"handle() call (budget: {max_seconds_per_handle * 1e6:.0f}us). "
+            f"A hook doing blocking I/O or accumulating unboundedly is the "
+            f"regression this guards against."
         )

@@ -43,7 +43,19 @@ __all__ = ["scrub_brief"]
 # workspaces/from-brief-1125/04-validate/round-02-security.md:108-124
 # AND rules/security.md § "Credential Decode Helpers" rule 2
 # (encode + decode in one helper module).
-_URL_CANDIDATE = re.compile(r"[A-Za-z][A-Za-z0-9+.\-]*://\S+")
+#
+# PERF/SEC: the scheme quantifier is BOUNDED (``{0,63}``, not ``*``). With an
+# unbounded ``*`` this pattern is quadratic on input that contains no ``://``
+# at all: at each of n start positions the character class greedily consumes to
+# end-of-string, then backtracks to look for ``://`` and fails, which is O(n)
+# work per position and O(n^2) overall. On a 63,000-char brief -- comfortably
+# under MAX_BRIEF_LENGTH -- that measured ~14s in this single pass, and ~5ms
+# once bounded. That is a denial-of-service reachable from user-supplied brief
+# text on every ``from_brief()`` surface, so the bound is a security fix and
+# not only a speed one. The 64-char ceiling is far above every IANA-registered
+# URI scheme (the longest is ~36 chars); a longer "scheme" still matches from a
+# later offset, so credentials are still redacted. See issue #2128.
+_URL_CANDIDATE = re.compile(r"[A-Za-z][A-Za-z0-9+.\-]{0,63}://\S+")
 
 
 # Compile-once patterns. Order matters: URL with credentials is checked
@@ -55,8 +67,10 @@ _URL_CANDIDATE = re.compile(r"[A-Za-z][A-Za-z0-9+.\-]*://\S+")
 # Captures the entire URL for replacement. The credential portion is
 # extracted from the captured URL via ``urlsplit`` so the masking
 # matches what ``kailash.utils.url_credentials.mask_url`` would emit.
+# The scheme quantifier is bounded for the same reason as _URL_CANDIDATE above
+# (measured ~12.7s -> ~4.6ms on a 63,000-char credential-free brief).
 _URL_WITH_CREDS = re.compile(
-    r"(?P<url>[A-Za-z][A-Za-z0-9+.\-]*://[^\s:/]+:[^\s@]+@[^\s]+)"
+    r"(?P<url>[A-Za-z][A-Za-z0-9+.\-]{0,63}://[^\s:/]+:[^\s@]+@[^\s]+)"
 )
 
 # OpenAI/Anthropic-style API-key shape: ``sk-`` followed by ≥20 chars of
