@@ -84,6 +84,7 @@ Phase commands replace the manual copy-paste workflow. Each loads the correspond
 | CI job budget & duplicate runs        | `rules/ci-job-budget.md`        | `.github/workflows/**`, `scripts/ci/job-budget.d/**`                  |
 | Local docker: one group, no strays    | `rules/docker-no-sprawl.md`     | `**/docker-compose*.yml`, `**/compose.y*ml`, `**/Dockerfile*`         |
 | Test parsimony: iteration vs juncture | `rules/test-parsimony.md`       | `tests/**`, `**/*test*.py`, `.pre-commit-config.yaml`, workflows      |
+| Dev integration trunk (land free)     | `rules/dev-integration-trunk.md`| `unlanded-work-surface.js`, `worktree-reap.mjs`, workflows, notes     |
 
 **Note**: Rules with path scoping are loaded only when editing matching files. Global rules load every session.
 

@@ -585,6 +585,17 @@ function main(argv) {
   mainTop = gitCommonDir.replace(/\/\.git\/?$/, "");
 
   const defaultRemoteRef = (() => {
+    // DEV INTEGRATION TRUNK (2026-09-10 directive). A worktree is reapable once
+    // its work has LANDED, and landing is measured against the integration
+    // trunk -- not against `main`, which costs a CI run to reach. Pointing the
+    // reap classifier at a trunk reachable for free is what lets the worktree
+    // ceiling drain itself instead of ratcheting.
+    //
+    // INERT WHERE THERE IS NO `dev`: falls through to the ORIGINAL
+    // origin/HEAD -> origin/main chain unchanged.
+    const override = (process.env.COC_LANDED_TARGET || "").trim();
+    if (override) return override;
+    if (gitOk(["rev-parse", "--verify", "--quiet", "origin/dev"]).ok) return "origin/dev";
     const r = gitOk(["symbolic-ref", "refs/remotes/origin/HEAD"]);
     if (r.ok && r.out) return r.out.replace(/^refs\/remotes\//, "");
     return gitOk(["rev-parse", "--verify", "--quiet", "origin/main"]).ok ? "origin/main" : null;
