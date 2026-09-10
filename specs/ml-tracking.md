@@ -98,7 +98,9 @@ Origin: closes `round-1-spec-compliance.md:1.8`.
 
 ### 2.3 Storage-Driver Migration
 
-**MUST**: The legacy `kailash_ml.tracking.sqlite_backend.SQLiteTrackerBackend` class is **DELETED** at 1.0.0 per Decision 14 (breaking-change list) and `rules/orphan-detection.md` §3 (removed = deleted, not deprecated). The internal storage surface is replaced by `kailash_ml._storage.sqlite_driver.SQLiteStorageDriver`, consumed ONLY by `ExperimentTracker`. No deprecation shim, no `DeprecationWarning` re-export, no compatibility alias. Users upgrading from 0.x MUST switch to `km.track()` / `ExperimentTracker.create()`.
+**MUST**: The legacy 0.x `SQLiteTrackerBackend` class (formerly `kailash_ml/tracking/sqlite_backend.py`) is **DELETED** at 1.0.0 per Decision 14 (breaking-change list) and `rules/orphan-detection.md` §3 (removed = deleted, not deprecated). No deprecation shim, no `DeprecationWarning` re-export, no compatibility alias. Users upgrading from 0.x MUST switch to `km.track()` / `ExperimentTracker.create()`.
+
+**Status: deletion CONFIRMED; replacement landed under a different name.** `grep -rn 'SQLiteTrackerBackend' packages/` matches only a historical `packages/kailash-ml/CHANGELOG.md` entry — no source file, no module `kailash_ml/tracking/sqlite_backend.py`. **Deviation on the replacement (`rules/spec-accuracy.md` Rule 6):** this clause previously named the successor `kailash_ml._storage.sqlite_driver.SQLiteStorageDriver`. **What changed:** no `kailash_ml/_storage/` package was ever created. The storage surface shipped as a per-dialect store family under `kailash_ml.tracking.storage`, behind the `AbstractTrackerStore` Protocol (`storage/base.py`), with `kailash_ml.tracking.storage.sqlite.SqliteTrackerStore` and `kailash_ml.tracking.storage.postgres.PostgresTrackerStore` as the two implementations, both re-exported from `kailash_ml.tracking`. **Why:** a Protocol plus two concrete stores was needed once Postgres joined SQLite; a single private `_storage` driver module could not carry both dialects. **User impact:** the consumption rule also widened — the store is NOT consumed only by `ExperimentTracker`; `kailash_ml/tracking/runner.py:1564` constructs a `SqliteTrackerStore` directly on the `km.track()` path. Anything written against the `kailash_ml._storage.sqlite_driver` path from the older spec text will `ModuleNotFoundError`.
 
 ```python
 # DO — internal storage driver
@@ -410,7 +412,13 @@ Origin: closes `round-1-spec-compliance.md:1.10, 1.11`.
 async def attach_training_result(self, result: "TrainingResult") -> None: ...
 ```
 
-**MUST**: Persists `result.device: DeviceReport` into the run's envelope. For SQL/BI convenience, `attach_training_result` ALSO projects the DeviceReport into the three flattened `_kml_run` columns (`device_used`, `accelerator`, `precision`) using the same `device.backend_name` / `device.family` / `device.precision` mapping that `TrainingResult.__post_init__` uses for its 1.x back-compat mirrors (see `ml-engines-v2.md §4.1`). `result.seed_report` is persisted unchanged. These projections MUST use the canonical `DeviceReport` fields — storing a different string in the flat column than what `device.backend_name` would produce is BLOCKED (breaks the `TrainingResult.device` ⇔ `_kml_run.device_used` invariant).
+**MUST**: Persists `result.device: DeviceReport` into the run's envelope. For SQL/BI convenience, `attach_training_result` ALSO projects into the three flattened run-table columns `device_used`, `accelerator` and `precision`, consistent with the 1.x back-compat mirrors `TrainingResult.__post_init__` maintains (see `ml-engines-v2.md §4.1`). These projections MUST stay consistent with the canonical `DeviceReport` — storing a string in the flat column that contradicts the envelope is BLOCKED.
+
+**Status, re-derived against `packages/kailash-ml/src/kailash_ml/tracking/`.** Three corrections to the clause as previously written:
+
+1. **Table name.** The runs table is `experiment_runs` (`tracking/storage/sqlite.py:44`, mirrored in `postgres.py:120`), NOT `_kml_run` — `grep -rn '_kml_run\b' packages/kailash-ml/src/` returns nothing. The columns themselves DO exist: `device_used`, `accelerator`, `precision`, plus `device_family`, `device_backend`, `device_fallback_reason`, `device_array_api`. (Note `packages/kailash-kaizen/src/kaizen/ml/_sqlite_sink.py` documents a `JOIN _kml_run ON _kml_agent_runs.run_id` against this same non-existent name — the stale identifier has propagated cross-package.)
+2. **Field name.** `DeviceReport` (`kailash_ml/_device_report.py`) declares `family`, `backend`, `device_string`, `precision`, `fallback_reason`, `array_api`. There is no `backend_name` field. The shipped projection (`tracking/runner.py::ExperimentRun.attach_training_result`, `runner.py:1255-1289`) reads `device.family` / `device.backend` / `device.fallback_reason` / `device.array_api` for the envelope columns, and sources the three flat columns from the TOP-LEVEL `result.device_used` / `result.accelerator` / `result.precision` fields rather than from the `DeviceReport`, falling back to `result.device_used` as the backend when no `DeviceReport` is present.
+3. **`seed_report` is NOT persisted.** `grep -rn 'seed_report' packages/kailash-ml/src/kailash_ml/tracking/` returns nothing — the tracker never reads or stores it, so the reproducibility trail `ml-engines-v2.md §11.2 MUST 2` depends on does not reach the run row. This is an OPEN gap, not shipped behaviour.
 
 #### MUST: Resume HP-Diff Emission
 
@@ -533,9 +541,11 @@ async def diff_runs(
 ) -> RunDiff: ...
 ```
 
-**MUST**: `RunDiff` is a frozen dataclass. `reproducibility_risk` MUST be a typed boolean field, not a free-text note. Implementation MUST live at `kailash_ml.engines.experiment_tracker.diff_runs` — the module-level `diff_runs` function consumed by `km.diff_runs()` is a thin wrapper.
+**MUST**: `RunDiff` is a frozen dataclass. `reproducibility_risk` MUST be a typed boolean field, not a free-text note. The diff computation MUST live in one module-level function, with any tracker method on top of it being a thin wrapper.
 
-Origin: closes `round-1-spec-compliance.md:1.13` (grep currently empty).
+**Status: SHIPPED, at a different path than the clause originally named.** Both MUSTs hold in code — `kailash_ml.tracking.query.RunDiff` is `@dataclass(frozen=True)` (`query.py:115-124`) carrying `reproducibility_risk: bool` as a typed field alongside `run_id_a`, `run_id_b`, `params`, `metrics`, `environment`, `summary`. **Deviation (`rules/spec-accuracy.md` Rule 6):** the clause previously required the implementation as a module-level `diff_runs` in `kailash_ml.engines.experiment_tracker`. **What changed:** `engines/experiment_tracker.py` exists but defines no `diff_runs` — it is the 0.x-lineage engine (`Experiment`, `Run`, `MetricEntry`, `RunComparison`). The computation shipped as `kailash_ml.tracking.query.compute_run_diff` (`query.py:628`), with `packages/kailash-ml/src/kailash_ml/tracking/tracker.py::ExperimentTracker.diff_runs` as the thin async wrapper — so the one-implementation shape the MUST requires is satisfied, under `kailash_ml.tracking.query` rather than the originally-named `engines/experiment_tracker.py`. **User impact:** there is also no top-level `km.diff_runs()` — `grep -n 'diff_runs' kailash_ml/__init__.py kailash_ml/tracking/__init__.py` is empty, so callers reach it via the `ExperimentTracker` instance method or import `compute_run_diff` directly. Note `compute_run_diff` is NOT in `query.py`'s `__all__` (which lists `EnvDelta`, `FilterParseError`, `MetricDelta`, `ParamDelta`, `RunDiff`, `RunRecord`, `build_search_sql`), so the direct-import path is de-facto internal.
+
+Origin: closes `round-1-spec-compliance.md:1.13`.
 
 ---
 
@@ -1085,9 +1095,12 @@ Origin: Decision 4 (approved 2026-04-21). Cross-references: autolog mirror claus
 
 ### 11.1 Server Class
 
-**MUST**: `kailash_ml.tracker.mcp.TrackerMCPServer` MUST exist as a subclass of the `kailash-mcp` framework server base. Per `rules/framework-first.md`, rolling a custom MCP server is BLOCKED.
+> **Implementation status: NOT SHIPPED.** No tracker MCP server exists. `grep -rn 'TrackerMCPServer' packages/ src/` returns nothing, and there is no `kailash_ml/tracker/` package at all (the tracking code lives under `kailash_ml/tracking/`). The one MCP surface kailash-ml does ship is unrelated: `kailash_ml/serving/channels/mcp.py` exports a single `bind_mcp` function that fronts the INFERENCE path, and contains none of §11.2's tools (`grep -n 'start_run\|log_metric\|search_runs\|compare_runs'` against it is empty). This whole section — the server class and the six-tool table in §11.2 — is a TARGET design. The import path shown in the fence below — an `mcp` module under a `kailash_ml/tracker/` package — is a name this spec RESERVES; importing it today raises `ModuleNotFoundError`. **Whenever it is built, `rules/framework-first.md` still governs: it MUST subclass the `kailash-mcp` framework server base — rolling a custom MCP server is BLOCKED.**
+
+**MUST**: A tracker MCP server MUST exist as a subclass of the `kailash-mcp` framework server base, exposing §11.2's tools. Per `rules/framework-first.md`, rolling a custom MCP server is BLOCKED.
 
 ```python
+# TARGET — see the status note above; this import does not resolve today.
 from kailash_ml.tracker.mcp import TrackerMCPServer
 from kailash.mcp import serve_mcp
 
@@ -1095,7 +1108,7 @@ server = TrackerMCPServer(tracker=my_tracker, registry=my_registry)
 await serve_mcp(server, transport="stdio")
 ```
 
-Origin: closes `round-1-spec-compliance.md:1.12` (grep currently empty).
+Origin: `round-1-spec-compliance.md:1.12` — still OPEN.
 
 ### 11.2 Tools
 

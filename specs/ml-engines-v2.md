@@ -144,7 +144,9 @@ or os.environ.get("KAILASH_ML_FEATURE_STORE_URL")     # hypothetical feature-sto
 # ↑ N env vars = N precedence surfaces = N silent drifts between engines
 ```
 
-**Legacy `KAILASH_ML_TRACKER_DB` bridge.** The v0.9.x spec exposed `KAILASH_ML_TRACKER_DB` for the experiment tracker's SQLite path. kailash-ml 1.x MUST honour it WHEN `KAILASH_ML_STORE_URL` is unset, logging ONE `kailash_ml.env.tracker_db_legacy` DEBUG line on first resolution pointing at the canonical env var. At kailash-ml 2.0, `KAILASH_ML_TRACKER_DB` is REMOVED — resolution raises `EnvVarDeprecatedError` with the migration instruction. No other legacy store-path env vars are accepted.
+**Legacy `KAILASH_ML_TRACKER_DB` bridge.** The v0.9.x spec exposed `KAILASH_ML_TRACKER_DB` for the experiment tracker's SQLite path. kailash-ml 1.x MUST honour it WHEN `KAILASH_ML_STORE_URL` is unset, logging ONE DEBUG line on first resolution pointing at the canonical env var. That line's event key is the string literal `"kailash_ml.env.tracker_db_legacy"` — a LOG-EVENT NAME, not an importable symbol; the sole emitter is `_env.py::resolve_store_url` (`logger.debug("kailash_ml.env.tracker_db_legacy", extra={"legacy_var", "canonical_var", "sunset_version"})`), guarded once-per-process by `_env.py::_legacy_log_emitted` under `_legacy_log_lock`. At kailash-ml 2.0, `KAILASH_ML_TRACKER_DB` was to be REMOVED — resolution raising `EnvVarDeprecatedError` with the migration instruction. No other legacy store-path env vars are accepted.
+
+> **Deviation (`rules/spec-accuracy.md` Rule 6) — the 2.0 removal has NOT happened.** **What changed:** nothing did, and that is the finding. The package is at `2.2.3` (`packages/kailash-ml/src/kailash_ml/_version.py::__version__`), two minors past the announced cut, and `resolve_store_url` still returns the legacy value with only a DEBUG log. `EnvVarDeprecatedError` IS raised — but ONLY when the opt-in `KAILASH_ML_STRICT_ENV` flag (`_env.py::STRICT_ENV_FLAG`) is set to `1`/`true`/`yes`; with the flag unset, a 0.x config resolves silently on 2.2.x. **Why:** the strict-mode flag shipped as the 1.0 preview of the cut and the unconditional removal was never sequenced into a 2.0 release. **User impact:** operators still running `KAILASH_ML_TRACKER_DB` on 2.2.x are not failing as this section promises, so a 0.x store path can silently outlive the migration; the code's own `sunset_version: "2.0"` log field now under-reports. Removing the bridge is a breaking change and a release-gated decision, so it is recorded here rather than actioned: either the bridge is dropped and this paragraph becomes true, or the sunset version is re-set and `sunset_version` updated with it.
 
 **Cross-engine consistency.** Every engine MUST use `kailash_ml._env.resolve_store_url(explicit=...)` (single shared helper) — hand-rolled `os.environ.get(...)` at engine-construction sites is BLOCKED per `rules/security.md` § "Multi-Site Kwarg Plumbing" (the authority-chain contract is security-relevant because a divergent engine can silently write to a different store than the tracker reads from, breaking lineage and audit).
 
@@ -709,7 +711,7 @@ When `strategy` is non-None, `TrainingPipeline._train_lightning` MUST:
 
 1. Pass the value verbatim as `L.Trainer(strategy=strategy)`.
 2. Propagate `num_nodes: int` (default 1) and `devices: int | str | list[int]` (default `"auto"`) from `MLEngine.fit(num_nodes=..., devices=...)` kwargs into the Trainer constructor.
-3. Gate DLDiagnostics emission AND autolog emission to rank 0 only — see `ml-autolog-draft.md §3.2 MUST 2` and `ml-diagnostics-draft.md §5.5` Decision 4 rank-0 rule. The rank-0 check uses `torch.distributed.get_rank() == 0` (when dist is initialized) OR `DistributionEnv.detect().is_main_process` (when accelerate is the launcher).
+3. Gate DLDiagnostics emission AND autolog emission to rank 0 only — see `ml-autolog-draft.md §3.2 MUST 2` and `ml-diagnostics-draft.md §5.5` Decision 4 rank-0 rule. The rank-0 check routes through the shipped `kailash_ml.autolog._distribution.is_main_process` helper, which tests `torch.distributed.get_rank() == 0` (when dist is initialized) AND `accelerate.PartialState().is_main_process` (when accelerate is the launcher) AND the TP/PP rank env vars. The class-based `DistributionEnv` gate named in earlier revisions of `ml-diagnostics.md` §5.5 is NOT shipped — see that section's status note.
 
 ```python
 # DO — user enables FSDP for a 70B model
@@ -1683,6 +1685,12 @@ def seed(
         seeding, ExperimentTracker.run_id salt).
     """
 
+# TARGET SHAPE — the shipped dataclass is NARROWER. `kailash_ml._seed.SeedReport`
+# carries exactly: seed, applied (tuple of subsystem names), skipped (tuple of
+# (subsystem, reason) pairs), torch_deterministic, blas_backend. The per-subsystem
+# booleans below are expressed as membership in `applied` (`"torch" in report`, via
+# `SeedReport.__contains__`), and the `platform_*` capture fields are NOT implemented.
+# Only `blas_backend` of the fields below exists under that name (§11.2 MUST 5).
 @dataclass(frozen=True)
 class SeedReport:
     seed: int
@@ -1729,7 +1737,9 @@ When `use_deterministic_algorithms=True`, kailash-ml MUST log at INFO: "torch.us
 
 #### 5. BLAS Backend Captured In SeedReport
 
-`SeedReport.blas_backend` MUST be populated by probing `numpy.show_config()` for one of `"openblas"`, `"mkl"`, `"accelerate"`, or `None`. OpenBLAS vs MKL changes sum-of-product order and produces 1-ULP float drift on 1B-row aggregates — the seed alone is not enough.
+`SeedReport.blas_backend` MUST be populated by probing `numpy.show_config()`, yielding `"openblas"`, `"mkl"`, `"accelerate"`, another backend name numpy reports (e.g. `"blis"`, `"atlas"`), or `None` when numpy is absent or names no BLAS. OpenBLAS vs MKL changes sum-of-product order and produces 1-ULP float drift on 1B-row aggregates — the seed alone is not enough.
+
+> **Implementation status: SHIPPED.** `kailash_ml._seed.SeedReport` carries `blas_backend: Optional[str] = None`, populated by `_seed.py::_detect_blas_backend` and passed at every `km.seed()` return. The probe prefers numpy ≥ 2.0's structured `show_config(mode="dicts")` (reading `Build Dependencies → blas → name`) and falls back to capturing numpy 1.x's stdout form and matching against `_seed.py::_KNOWN_BLAS_TOKENS`. It **never raises** — any probe failure degrades to `None` with a DEBUG log (`seed.blas_probe.dicts_unavailable` / `seed.blas_probe.failed` / `seed.blas_probe.unrecognised_backend`), because a reproducibility annotation must not be able to break seeding. **Deliberate widening from the original clause text (`rules/spec-accuracy.md` Rule 6):** the clause previously enumerated exactly `openblas` / `mkl` / `accelerate` / `None`. **What changed:** an unrecognised backend is now returned lowercased rather than collapsed to `None`. **Why:** collapsing made a BLIS or reference build indistinguishable from "numpy not installed", losing the axis on the very machines where it matters. **User impact:** consumers MUST treat the field as an open `str | None`, not a closed enum. The field is appended last with a default, so existing positional and keyword `SeedReport(...)` construction is unaffected. Covered by `packages/kailash-ml/tests/unit/test_seed.py` (`test_blas_backend_detected_when_numpy_present`, `test_blas_backend_is_none_when_numpy_absent` as the negative control, `test_blas_backend_probe_never_raises`, `test_seed_populates_blas_backend_on_the_report`).
 
 **Why:** Reproducibility across dev machines (MKL-by-default Anaconda) and CI containers (OpenBLAS-by-default pip) drifts at the 1-ULP level without the BLAS axis.
 
@@ -1928,6 +1938,8 @@ If the child run's `schema` differs from the parent's in a non-additive way (col
 ## 14. Future-Proofing (2026-27 Architecture Posture)
 
 This section enumerates which 2026-27 architectures the kailash-ml 1.0 spine supports and at what level. Items below the "deferred" bar are roadmap, not omission — the spine's design explicitly accommodates them under a versioned extension point.
+
+> **Reading the `v1.0 support` column.** The levels below describe the SPINE'S DESIGN INTENT, not verified shipped state. Two identifiers cited in the Access-pattern column do not exist in source as of this re-derivation and their rows should be read accordingly: **`DistributionEnv`** (cited by the Tensor-parallel and Pipeline-parallel rows, both marked SUPPORTED) resolves to zero definition sites — the only shipped multi-axis rank gate is the module-level `kailash_ml.autolog._distribution.is_main_process`, which DOES cover the TP/PP axes via the `TENSOR_PARALLEL_RANK`/`TP_RANK` and `PIPELINE_PARALLEL_RANK`/`PP_RANK` env vars, but captures no `tp_size`/`pp_size`/`dp_size` values as those rows claim; and **`BackendCapability`** (cited by the Flash-Attention 3 row) does not exist at all (`grep -rn 'BackendCapability' packages/ src/` is empty), so it has not been "extended" — §14's checklist entry for it is correctly still unchecked. See `ml-diagnostics.md` §5.5 and `ml-serving.md` §4.1.1 for the paired status notes.
 
 | Architecture                              | v1.0 support | Access pattern                                                                                                                                                                                                                                                                                  |
 | ----------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |

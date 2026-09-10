@@ -98,6 +98,8 @@ A feature group's `.classification` attribute (when present) propagates through 
 
 ### 3.1 New helper: `dataflow.transform`
 
+**Canonical import path.** The binding is defined at `packages/kailash-dataflow/src/dataflow/ml/_transform.py` and re-exported from the `dataflow.ml` package `__init__` — so the resolvable dotted symbol is `dataflow.ml.transform` and the only supported import form is `from dataflow.ml import transform`. It is NOT re-exported at the `dataflow` top level; `dataflow.transform` is a SHORTHAND used in this spec's prose and call-site fences, never an importable path.
+
 ```python
 # packages/kailash-dataflow/src/dataflow/ml/_transform.py
 def transform(
@@ -157,6 +159,8 @@ recency = dataflow.transform(recency_expr, clicks, name="recency@1.0", tenant_id
 
 ### 4.1 `dataflow.hash(df)` contract
 
+**Canonical import path.** The binding is defined at `packages/kailash-dataflow/src/dataflow/ml/_hash.py` and re-exported from the `dataflow.ml` package `__init__` — so the resolvable dotted symbol is `dataflow.ml.hash` and the only supported import form is `from dataflow.ml import hash`. It is NOT re-exported at the `dataflow` top level; `dataflow.hash` is a SHORTHAND used in this spec's prose and call-site fences, never an importable path.
+
 ```python
 # packages/kailash-dataflow/src/dataflow/ml/_hash.py
 def hash(
@@ -205,7 +209,7 @@ await registry.register_version(
 
 ### 4.5 Resolution
 
-Hash-to-snapshot resolution (resolving a `lineage_dataset_hash` back to the DataFlow-backed query that produced it) is **out of scope** for this spec — neither `ModelRegistry` nor `dataflow.lineage` ships a `resolve_dataset` / `replay` method today (`grep -rn 'resolve_dataset' packages/` returns no production match). `dataflow.hash(df)` is a one-way fingerprint: it indexes a dataset for registry provenance but does NOT retain the query needed to reconstruct it. Callers needing reproducibility MUST persist the producing query themselves (e.g. a named materialization the caller owns). When a reverse-resolution capability is genuinely scoped and implemented, it lands in a future revision of this spec describing the shipped surface — not as a reserved stub here (per `rules/spec-accuracy.md` Rule 5).
+Hash-to-snapshot resolution (resolving a `lineage_dataset_hash` back to the DataFlow-backed query that produced it) is **out of scope** for this spec — neither `ModelRegistry` nor the lineage binding `dataflow.ml.hash` ships a `resolve_dataset` / `replay` method today (`grep -rn 'resolve_dataset' packages/` returns no production match; `grep -rn 'def replay' packages/kailash-ml/src/` likewise). There is no `lineage` module under the `dataflow` package at all — `dataflow.ml.hash` IS the entire lineage surface DataFlow exposes to ML (`dataflow/ml/__init__.py` `__all__`). `dataflow.hash(df)` is a one-way fingerprint: it indexes a dataset for registry provenance but does NOT retain the query needed to reconstruct it. Callers needing reproducibility MUST persist the producing query themselves (e.g. a named materialization the caller owns). When a reverse-resolution capability is genuinely scoped and implemented, it lands in a future revision of this spec describing the shipped surface — not as a reserved stub here (per `rules/spec-accuracy.md` Rule 5).
 
 ---
 
@@ -434,8 +438,8 @@ File naming:
 DataFlow exists in kailash-rs at `crates/kailash-dataflow/`. Rust parity targets:
 
 - `dataflow.ml_feature_source` → `dataflow::ml_feature_source()` returning a `LazyFrame` (polars-rs).
-- `dataflow.transform` → `dataflow::transform()`.
-- `dataflow.hash` → `dataflow::hash()` — MUST produce byte-identical SHA-256 hashes for the same canonicalized polars Arrow IPC stream.
+- `dataflow.ml.transform` → `dataflow::transform()`.
+- `dataflow.ml.hash` → `dataflow::hash()` — MUST produce byte-identical SHA-256 hashes for the same canonicalized polars Arrow IPC stream.
 - Same error taxonomy mapping to Rust `DataFlowError` variants.
 
 Cross-SDK follow-up is deferred until kailash-rs scopes a Rust-side ML feature-source surface. The parity contract above (byte-identical SHA-256 hashes + DataFlowError taxonomy mapping) is the baseline, and the hash-byte-parity test MUST be added to both SDKs' integration suites when the Rust surface lands. No tracking issue required until Rust-side scoping begins.

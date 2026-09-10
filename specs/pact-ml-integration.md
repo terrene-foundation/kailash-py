@@ -24,10 +24,15 @@ Three new `GovernanceEngine` methods required by the kailash-ml 1.0.0 engine sur
 
 All three methods:
 
-- Acquire `PactEngine._lock` / `GovernanceEngine._lock` (PACT MUST Rule 8 — thread-safety).
+- Acquire the engine's threading lock (PACT MUST Rule 8 — thread-safety). Shipped as `pact/ml/__init__.py::_acquire_engine_lock`, called by all three (`check_trial_admission` L651, `check_engine_method_clearance` L771, `check_cross_tenant_op` L939). It resolves `getattr(engine, "_lock", None)` and uses it only when it is a real `threading.Lock`/`RLock` instance, else falls back to the module-level `_FALLBACK_LOCK`.
 - Return a frozen dataclass (PACT MUST Rule 1 — frozen `GovernanceContext` discipline).
 - Fail-CLOSED on any probe exception (PACT MUST Rule 4 — exception is NOT a pass).
 - Audit the decision to the trust-plane audit chain with `tenant_id`, `actor_id`, and a `sha256:<8hex>` fingerprint of any classified payload field (per `rules/event-payload-classification.md` §2).
+
+> **Status, re-derived against source.** All three shipped, but as module-level FUNCTIONS in `packages/kailash-pact/src/pact/ml/__init__.py` (exported from `pact.ml` and re-exported from `pact`), NOT as new `GovernanceEngine` methods — the engine is passed in as an argument instead. Two corrections to the lock clause above:
+>
+> - **`GovernanceEngine._lock` exists** — `src/kailash/trust/pact/engine.py:255` assigns `self._lock = threading.Lock()`, so a real `GovernanceEngine` caller gets the engine's own lock, as intended. (It is an instance attribute set in `__init__`, so it is referenced here by file-and-attribute rather than as an importable dotted symbol.)
+> - **`PactEngine._lock` does NOT exist.** `packages/kailash-pact/src/pact/engine.py` has `self._submit_lock = asyncio.Lock()` (`:197`) and no `_lock`. An `asyncio.Lock` would also fail `_acquire_engine_lock`'s `threading.Lock`/`RLock` type check. So passing a `PactEngine` silently degrades to the module-global `_FALLBACK_LOCK`, which serializes the three governance checks against each other process-wide but does NOT serialize them against `PactEngine`'s own submit path. The helper's docstring scopes the fallback to "the v1.0 always-denied cross-tenant path (no state is read)" and testing; production callers are expected to pass a `GovernanceEngine`. Either `PactEngine` gains a compatible `_lock`, or this clause should stop naming it as a supported engine — recorded rather than actioned, since it is a PACT-side API change.
 
 ### 1.2 Out of Scope (Owned By Sibling Specs)
 

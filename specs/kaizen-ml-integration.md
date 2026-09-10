@@ -409,7 +409,9 @@ class CostDelta:
         )
 ```
 
-`pact.costs.CostDelta` MUST use the IDENTICAL schema. A `CostDelta` serialized by Kaizen MUST deserialize by PACT and vice versa.
+Any PACT-side per-event cost record MUST use the IDENTICAL schema, so a `CostDelta` serialized by Kaizen deserializes on the PACT side and vice versa.
+
+> **Status: the PACT counterpart does NOT exist.** The Kaizen half shipped — `kaizen.ml.CostDelta` (`packages/kailash-kaizen/src/kaizen/ml/_cost_delta.py::CostDelta`, re-exported from `kaizen.ml`) is a frozen record carrying exactly `microdollars`, `provider`, `model`, `prompt_tokens`, `completion_tokens`, `at`, `tenant_id`, `actor_id`, with `from_usd` / `to_dict` / `from_dict` / `usd`. **The PACT half does not**: `packages/kailash-pact/src/pact/costs.py` declares `__all__ = ["CostTracker"]` and defines no `CostDelta` — `grep -rn 'class CostDelta' packages/ src/` matches only the Kaizen module. PACT's nearest surface is `pact.costs.CostTracker`, whose `record(amount: float, description="", *, envelope_id=None, agent_id=None) -> None` takes USD floats and keeps no per-event dataclass, and whose `consumption_report(...)` returns an aggregated `ConsumptionReport` (`total_microdollars`, `entries`, `per_envelope`, `per_agent`, `since`, `until`) — a ROLLUP, not a per-event delta. **What IS shared is the integer-microdollars convention**, which both sides use for the same precision reason; the round-trip guarantee this clause asserts is NOT achievable today because there is no PACT type to round-trip into. Closing it means PACT adopting the record shape (a PACT-side API addition, out of scope for this spec) — until then, treat the MUST as binding on any FUTURE PACT cost record, not as a description of current behaviour.
 
 ### 4.3 Migration for 2.11.x users
 
@@ -461,7 +463,7 @@ Two tables, `_kml_` prefix (aligned with ML's canonical internal-system-table co
 ```sql
 CREATE TABLE IF NOT EXISTS _kml_agent_traces (
     trace_id        TEXT    PRIMARY KEY,
-    run_id          TEXT,                    -- FK to _kml_run.run_id (ml-tracking canonical table; see ml-tracking.md §6.3), NULL allowed
+    run_id          TEXT,                    -- FK to experiment_runs.run_id (ml-tracking canonical runs table, kailash_ml/tracking/storage/sqlite.py:44; the name _kml_run used in earlier revisions does not exist in code), NULL allowed
     agent_id        TEXT    NOT NULL,
     tenant_id       TEXT,
     actor_id        TEXT,
@@ -492,7 +494,7 @@ CREATE INDEX IF NOT EXISTS _kml_agent_trace_events_trace_idx ON _kml_agent_trace
 
 ### 5.4 Run correlation
 
-When a `km.track()` run is ambient at `TraceExporter` construction time (read via `get_current_run()`), `SQLiteSink` sets `run_id` to the ambient run's `run_id`. Dashboards can then join `_kml_run` to `_kml_agent_traces` on `run_id` to show "this ML run used these agent traces."
+When a `km.track()` run is ambient at `TraceExporter` construction time (read via `get_current_run()`), `SQLiteSink` sets `run_id` to the ambient run's `run_id`. Dashboards can then join `experiment_runs` (the canonical runs table; earlier revisions of this spec called it `_kml_run`, which does not exist in code) to `_kml_agent_traces` on `run_id` to show "this ML run used these agent traces."
 
 ### 5.5 TraceExporter default sink
 

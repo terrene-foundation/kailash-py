@@ -415,9 +415,12 @@ Requires `transformers>=4.30`. Raises `ImportError("pip install kailash-ml[dl]")
 
 ### 5.5 accelerate / DDP / FSDP / DeepSpeed Safety
 
+> **Implementation status: TARGET DESIGN — `DistributionEnv` is NOT shipped.** As of this re-derivation, `DistributionEnv` resolves to zero definition sites across every source root (`src/` and every `packages/*/src/`), and there is no `kailash_ml/diagnostics/distribution.py` module — `packages/kailash-ml/src/kailash_ml/diagnostics/` contains only `__init__.py`, `classical.py`, `dl.py`, `rag.py`, `rl.py`. The ONE axis of this section that has shipped is the rank-0 emission gate, and it shipped as a module-level function rather than a dataclass property: `is_main_process()` at `packages/kailash-ml/src/kailash_ml/autolog/_distribution.py`, covering the DP / Accelerate / TP / PP axes described under MUST 1 below. Consumers needing a rank gate today MUST use that function (`ml-autolog.md` §3.3 is the normative clause and carries the full deviation record); the `launcher` / `strategy` / `zero_stage` / `fa_version` detection surface below has no implementation and MUST NOT be cited as an existing API.
+
 kailash-ml MUST detect the active distribution launcher and strategy through a single dataclass that every adapter reads.
 
 ```python
+# TARGET DESIGN — not present in source; see the status note above.
 @dataclass(frozen=True)
 class DistributionEnv:
     is_distributed: bool

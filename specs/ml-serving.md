@@ -209,6 +209,8 @@ When `format="onnx"` and the model signature declares opset imports or the regis
 
 #### 2.5.1 Load-Time Resolution
 
+> **Implementation status: BLOCKED ON THE PRODUCER.** All three steps below read columns that do NOT exist. `_kml_model_versions` is provisioned by numbered migrations `0002_kml_prefix_tenant_audit.py` + `0005_kml_model_versions_data_columns.py`; 0005 adds only `metrics_json`, `signature_json`, `onnx_status`, `onnx_error`, `artifact_path`, `model_uuid`, and its docstring explicitly defers `onnx_unsupported_ops`, `onnx_opset_imports` and `ort_extensions` to a 1.6.0/1.7.0 workstream that never landed (the package is at 2.2.3 and there is no migration 0006). The producer side is half-built: `kailash_ml/tracking/artifacts/onnx_probe.py` COMPUTES `opset_imports`, `ort_extensions` and `unsupported_ops`, but nothing persists them. Until `ml-registry.md` §5.6.1's persistence half lands, this resolver has no columns to read and cannot pre-empt an opset or extension mismatch. See `ml-registry.md` §5.6.1 for the paired status note.
+
 At `InferenceServer._load_model()`:
 
 1. Resolve `opset_imports` — the server pulls the `_kml_model_versions.onnx_opset_imports: dict[str, int]` column from the model registry (see `ml-registry-draft.md §5.6` — the ONNX Export Probe persists this at `register_model(format="onnx")` time) and passes them to the `onnxruntime.InferenceSession` via session options. Mismatch between session-supported opset and model-requested opset raises `OnnxOpsetMismatchError(model_name, requested_opset, available_opset)`.
@@ -491,6 +493,8 @@ class BatchInferenceResult:
 
 ### 4.1.1 Padding Strategy Contract (A10-1)
 
+> **Implementation status: TARGET DESIGN — no part of this subsection is shipped.** `packages/kailash-ml/src/kailash_ml/serving/` contains `__init__.py`, `_types.py`, `channels/`, `multi_model_adapter.py`, `serve_handle.py`, `server.py`; `_types.py` exposes only `InferenceServerProtocol`, `MultiModelAdapterProtocol` and `ServeHandle`. There is no `padding_strategy` field, no `BackendCapability` type anywhere in the repo (`grep -rn 'BackendCapability' packages/ src/` returns nothing), no `DEFAULT_LENGTH_BUCKETS`, and no `VariableLengthInputError`. The only occurrence of the word "batching" under `serving/` is a docstring line in `server.py:15` listing it as intended scope. Treat every identifier in this subsection as a name this spec is RESERVING, not one a caller can import today.
+
 Variable-length inputs (LLM prompts, tokenized text, variable-shape tensors) MUST be routed through one of four explicit strategies. Default is `"bucket"` — the strictly-dominant choice for mixed-length workloads on GPU backends.
 
 ```python
@@ -503,9 +507,11 @@ padding_strategy: Literal["bucket", "pad_to_max", "dynamic", "none"] = "bucket"
 #             kernel launches. Use for near-uniform-length workloads.
 # dynamic:    dispatch variable-length per-token (LLM streaming / continuous
 #             batching). Requires vLLM-compatible backend. When the detected
-#             backend does NOT advertise continuous-batching capability via
-#             `BackendCapability.continuous_batching`, the server MUST fall back
-#             to "bucket" + emit `inference.padding.dynamic_fallback` WARN.
+#             backend does NOT advertise the continuous-batching capability
+#             (the reserved `continuous_batching` flag on the planned
+#             BackendCapability type — see the status note above; not yet in
+#             source), the server MUST fall back to "bucket" and emit an
+#             `inference.padding.dynamic_fallback` WARN log line.
 # none:       fixed-length inputs (classical tabular ML). No padding applied.
 #             Raises `VariableLengthInputError` if inputs have non-uniform shape.
 ```
