@@ -2,7 +2,7 @@
 
 All notable changes to the Kailash MCP package will be documented in this file.
 
-## [Unreleased]
+## [0.6.0] - 2026-09-10 — OAuth signing-key floor; spawn-command credential disclosure (#2083, #2092, #2004)
 
 ### Security (BREAKING) — `JWTManager` no longer invents its own OAuth signing key (#2083, #2092)
 
@@ -23,6 +23,22 @@ export KAILASH_MCP_JWT_PRIVATE_KEY="$(cat oauth-signing-key.pem)"
 ```
 
 A verify-only resource server needs `KAILASH_MCP_JWT_PUBLIC_KEY` (or `public_key=`) instead. For local development, pass `allow_ephemeral_key=True`. There is deliberately no compatibility shim: a shim would have to keep generating the key, which is the defect.
+
+### Security (BREAKING) — `SpawnSecurityError` no longer carries the rejected spawn command (#2004)
+
+- **A rejected spawn command leaked its embedded credential into logs and into the caller's status dict.** `HealthChecker` logged and returned `str(e)` for a spawn rejection, and `server.command` is untrusted registry/discovery input that routinely carries a credential as a CLI flag (`npx ... --token=<secret>`). The whole command — token included — reached both sinks.
+- **Fixed at the raise site, not at the sinks.** `SpawnSecurityError.__init__` now converts the command at construction time to a disclosure-safe `basename#fingerprint` reference via `kailash.utils.command_safety.safe_command_ref`. One change therefore covers the exception message, the `.data` attribute, and the JSON-RPC payload produced by `MCPError.to_dict()` — including sinks added later. Verified: `validate_spawn_command("npx --token=SUPERSECRET", allowed_commands={"node"})` raises with message and `data` both rendering `npx#726b68e7`, and `"SUPERSECRET"` present in neither.
+- **BREAKING — the `data` key was renamed.** `SpawnSecurityError.data["command"]` (the raw command string) is now `data["command_ref"]` (the `basename#fingerprint` reference). Code reading `data["command"]` must read `data["command_ref"]`, and must not expect the original command back — recovering it is the defect. There is deliberately no compatibility alias: keeping `data["command"]` populated would keep the credential on the wire.
+- **The constructor now accepts any object.** The `command` parameter widened from `Optional[str]` to `object`, so a non-string command is fingerprinted rather than silently dropped: a non-string renders `<non-string>` and an empty string renders `<empty>`, where previously both produced `data=None`.
+- **Not routed through `mask_error_text`.** Measured: that helper redacts URL userinfo and credential query parameters but passes a CLI-flag credential through verbatim, so it does not close this leak.
+
+### Fixed
+
+- **A failing health-endpoint probe was swallowed silently.** `HealthChecker` caught every exception from the `/health` probe with a bare `except Exception: pass` before falling through to the main-endpoint probe, so a persistently-failing health endpoint was undiagnosable. The fall-through behaviour is unchanged — it is correct — but the exception is now logged at DEBUG (`health_check.health_endpoint_failed`) with the error text passed through `mask_error_text`, since the probe URL is echoed by most client errors and may carry userinfo or credential query parameters.
+
+### Added
+
+- **`allow_ephemeral_key` is accepted by `AuthorizationServer` and `ResourceServer`, not only by `JWTManager`.** Both default-construct a `JWTManager`, so without it a caller who wanted the development-only ephemeral-key behaviour had no way to reach it through the server constructors they actually use. Verified: `AuthorizationServer(issuer=...)` with no key raises `JWTKeyNotConfiguredError` at the signing boundary, and the `allow_ephemeral_key=True` path emits the one-time ERROR naming the wiring.
 
 ## [0.5.1] — 2026-08-09 — Cap mcp<2.0 (packaging only)
 
