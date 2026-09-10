@@ -322,3 +322,38 @@ def test_scrub_brief_accepts_under_cap_brief():
     under_cap = "x" * (MAX_BRIEF_LENGTH - 1000)
     out = scrub_brief(under_cap)
     assert out == under_cap  # no credentials, idempotent passthrough
+
+
+def test_scrub_brief_is_not_quadratic_on_max_cap_input():
+    """ReDoS guard: scrubbing a max-cap brief MUST NOT blow up (issue #2128).
+
+    The URL patterns' scheme quantifier used to be unbounded (``*``), which made
+    the scan quadratic on input containing no ``://``: at every start position
+    the character class consumed to end-of-string, then backtracked to look for
+    ``://`` and failed. A 63,000-char brief -- legal, under MAX_BRIEF_LENGTH --
+    cost ~27s across the two URL passes, so ``scrub_brief`` was a
+    denial-of-service surface reachable from user-supplied text, and this file's
+    sibling test blew the suite's 30s timeout.
+
+    The bound below is deliberately ~1000x the measured post-fix cost (~5ms for
+    both URL passes). That is NOT the flaky wall-clock-threshold anti-pattern:
+    the regression this guards against is a ~3-order-of-magnitude cliff, so the
+    margin is wide enough that host load cannot reach it, while a reintroduced
+    quadratic (tens of seconds) still trips it decisively.
+    """
+    import time
+
+    from kailash._from_brief.scrubber import MAX_BRIEF_LENGTH
+
+    worst_case = "x" * (MAX_BRIEF_LENGTH - 1000)
+
+    start = time.perf_counter()
+    out = scrub_brief(worst_case)
+    elapsed = time.perf_counter() - start
+
+    assert out == worst_case
+    assert elapsed < 5.0, (
+        f"scrub_brief took {elapsed:.2f}s on a {len(worst_case)}-char "
+        f"credential-free brief; the URL patterns have regressed to "
+        f"quadratic backtracking (expected ~0.005s)"
+    )

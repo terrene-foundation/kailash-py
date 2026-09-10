@@ -447,13 +447,32 @@ class TestMigrationConnectionManager(unittest.TestCase):
         }
         mock_connection = MockConnection("conn_exec_test")
 
-        # Execute operation simulation
-        start_time = time.time()
-        self.connection_manager._execute_migration_operation(mock_connection, operation)
-        execution_time = time.time() - start_time
+        # Assert the OBSERVABLE effect of the operation, not its wall-clock cost.
+        #
+        # This assertion used to be `execution_time < 0.1`. That measured
+        # nothing about migrations: the callee's body is a hardcoded
+        # `time.sleep(0.01)`, so the assertion only ever asked "did a 10ms sleep
+        # finish within 100ms" -- true on an idle machine, false whenever the
+        # host is loaded enough for scheduler delay to eat the margin. It failed
+        # exactly that way during a loaded full-suite run while passing in
+        # isolation. Per rules/testing.md, a wall-clock threshold that cannot
+        # distinguish "the code regressed" from "the machine was busy" is not a
+        # test; widening the bound would only move the flake.
+        with self.assertLogs(
+            "dataflow.performance.migration_optimizer", level="DEBUG"
+        ) as captured:
+            result = self.connection_manager._execute_migration_operation(
+                mock_connection, operation
+            )
 
-        # Verify execution completed in reasonable time
-        self.assertLess(execution_time, 0.1)  # Should be very fast (simulated)
+        # The operation completes without raising and reports no value.
+        self.assertIsNone(result)
+        # ...and records which operation type it executed.
+        self.assertTrue(
+            any("create_table" in line for line in captured.output),
+            f"expected the executed operation type in the debug log; "
+            f"got: {captured.output}",
+        )
 
     def test_active_connection_tracking(self):
         """Test that active connections are properly tracked."""

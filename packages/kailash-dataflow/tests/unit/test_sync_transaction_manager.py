@@ -13,7 +13,6 @@ Per ``rules/testing.md`` § 3-Tier Testing:
 
 from __future__ import annotations
 
-import threading
 import warnings
 from typing import Any
 
@@ -133,9 +132,13 @@ def test_del_emits_resource_warning_on_unclosed(async_manager):
     finalizer — that's the deadlock pattern the rule documents).
     """
     sync_mgr = SyncTransactionManager(async_manager)
-    # Capture the BG thread so we can join it post-test (we did NOT call
-    # close_sync — the warning fires precisely because of that).
+    # Capture the BG thread AND its event loop so we can shut both down
+    # post-test (we did NOT call close_sync — the warning fires precisely
+    # because of that). Holding these two references does not keep the
+    # MANAGER alive, so its __del__ still runs and still emits the warning
+    # under test.
     thread_ref = sync_mgr._thread
+    loop_ref = sync_mgr._loop
 
     with warnings.catch_warnings(record=True) as captured:
         warnings.simplefilter("always", ResourceWarning)
@@ -156,26 +159,51 @@ def test_del_emits_resource_warning_on_unclosed(async_manager):
     )
     assert "not closed" in str(resource_warnings[0].message)
 
-    # Manually clean up the BG thread we leaked on purpose. The daemon
-    # flag means it dies with the interpreter regardless, but joining
-    # keeps the test runner from leaking threads across the suite.
+    # Manually clean up the BG thread AND event loop we leaked on purpose,
+    # running the same stop -> join -> close sequence close_sync() would have.
+    #
+    # Closing the LOOP is the part that matters and the part this test used to
+    # omit (issue #2157). A daemon thread dies with the interpreter, but an
+    # un-closed event loop stays reachable as garbage and emits
+    # "ResourceWarning: unclosed event loop" from its finalizer whenever some
+    # LATER test happens to run gc.collect(). The next test in this file does
+    # exactly that inside a warnings-capture block, so the leak surfaced there
+    # as a bogus failure -- a warning raised by THIS test, attributed to that
+    # one. Closing here keeps the warning under test local to this test.
+    if loop_ref is not None and loop_ref.is_running():
+        try:
+            loop_ref.call_soon_threadsafe(loop_ref.stop)
+        except RuntimeError:
+            pass  # already stopped/destroyed — nothing to unwind
     if thread_ref is not None and thread_ref.is_alive():
-        # The loop is still running — there's no manager left to call
-        # close_sync, so we drive the loop stop directly via the thread's
-        # loop attribute (we captured nothing else). Best-effort — the
-        # daemon flag is the safety net.
-        thread_ref.join(timeout=0.01)
+        thread_ref.join(timeout=5.0)
+    if loop_ref is not None:
+        try:
+            loop_ref.close()
+        except RuntimeError:
+            pass  # already closed by run_forever() shutdown
 
 
 def test_del_silent_on_closed(async_manager):
     """A cleanly-closed manager does NOT emit ResourceWarning on GC."""
+    import gc
+
     sync_mgr = SyncTransactionManager(async_manager)
     sync_mgr.close_sync()
+
+    # Drain garbage left by EARLIER tests before opening the capture window.
+    #
+    # gc.collect() finalizes everything collectable at that moment, not just
+    # our object, so any unrelated leak elsewhere in the suite would fire its
+    # finalizer inside the block below and be recorded as if this manager had
+    # emitted it. Collecting first makes the capture attributable to sync_mgr
+    # (issue #2157: an unclosed event loop from a sibling test in this very
+    # file was landing here as "closed manager MUST NOT emit ResourceWarning").
+    gc.collect()
 
     with warnings.catch_warnings(record=True) as captured:
         warnings.simplefilter("always", ResourceWarning)
         del sync_mgr
-        import gc
 
         gc.collect()
 

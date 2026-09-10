@@ -13,14 +13,14 @@ class TestModelExistence:
 
     def test_check_model_exists_method(self):
         """Test model_exists method is available."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         manager = OllamaModelManager()
         assert hasattr(manager, "model_exists")
 
     def test_check_model_exists_returns_bool(self):
         """Test model_exists returns boolean value."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         # Mock ollama.list() to return a model
         mock_ollama = MagicMock()
@@ -41,7 +41,7 @@ class TestModelExistence:
 
     def test_check_model_exists_when_present(self):
         """Test model_exists returns True when model is present."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         # Mock ollama.list() with specific model
         mock_ollama = MagicMock()
@@ -62,7 +62,7 @@ class TestModelExistence:
 
     def test_check_model_exists_when_absent(self):
         """Test model_exists returns False when model is absent."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         # Mock ollama.list() with empty models
         mock_ollama = MagicMock()
@@ -81,14 +81,14 @@ class TestModelDownload:
 
     def test_download_model_llava_method_exists(self):
         """Test download_model method is available."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         manager = OllamaModelManager()
         assert hasattr(manager, "download_model")
 
     def test_download_model_llava_success(self):
         """Test successful download of llava:13b model."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         # Mock ollama.pull() to simulate successful download
         mock_ollama = MagicMock()
@@ -109,7 +109,7 @@ class TestModelDownload:
 
     def test_download_model_bakllava_success(self):
         """Test successful download of bakllava model."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         # Mock ollama.pull() to simulate successful download
         mock_ollama = MagicMock()
@@ -129,7 +129,7 @@ class TestModelDownload:
 
     def test_download_model_failure(self):
         """Test download failure handling."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         # Mock ollama.pull() to raise exception
         mock_ollama = MagicMock()
@@ -146,7 +146,7 @@ class TestDownloadProgress:
 
     def test_download_progress_tracking_callback(self):
         """Test download progress with callback function."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         # Track progress calls
         progress_updates = []
@@ -177,7 +177,7 @@ class TestDownloadProgress:
 
     def test_download_progress_percentage_calculation(self):
         """Test progress percentage is calculated correctly."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         progress_updates = []
 
@@ -205,7 +205,7 @@ class TestDownloadProgress:
 
     def test_download_progress_without_callback(self):
         """Test download works without progress callback."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         # Mock ollama.pull()
         mock_ollama = MagicMock()
@@ -228,14 +228,14 @@ class TestModelInfo:
 
     def test_model_info_retrieval_method_exists(self):
         """Test get_model_info method exists."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         manager = OllamaModelManager()
         assert hasattr(manager, "get_model_info")
 
     def test_model_info_retrieval_for_existing_model(self):
         """Test get_model_info returns info for existing model."""
-        from kaizen.providers import ModelInfo, OllamaModelManager
+        from kaizen.providers.ollama_model_manager import ModelInfo, OllamaModelManager
 
         # Mock ollama.list() with model data
         mock_ollama = MagicMock()
@@ -260,7 +260,7 @@ class TestModelInfo:
 
     def test_model_info_retrieval_for_missing_model(self):
         """Test get_model_info returns None for missing model."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         # Mock ollama.list() with empty models
         mock_ollama = MagicMock()
@@ -280,7 +280,7 @@ class TestModelSizeValidation:
 
     def test_model_size_validation_after_download(self):
         """Test verifying model size after download."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         # Mock ollama for download
         mock_ollama = MagicMock()
@@ -317,7 +317,7 @@ class TestModelSizeValidation:
 
     def test_model_size_comparison_llava_vs_bakllava(self):
         """Test that llava:13b is larger than bakllava."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         # Mock ollama.list() with both models
         mock_ollama = MagicMock()
@@ -354,14 +354,14 @@ class TestVisionModelSetup:
 
     def test_setup_vision_models_method_exists(self):
         """Test setup_vision_models method exists."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         manager = OllamaModelManager()
         assert hasattr(manager, "setup_vision_models")
 
     def test_setup_vision_models_checks_both_models(self):
         """Test setup_vision_models checks both llava and bakllava."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         # Mock ollama
         mock_ollama = MagicMock()
@@ -385,7 +385,7 @@ class TestVisionModelSetup:
 
     def test_setup_vision_models_with_auto_download(self):
         """Test setup_vision_models downloads missing models when auto_download=True."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         # Mock ollama
         mock_ollama = MagicMock()
@@ -412,7 +412,7 @@ class TestVisionModelSetup:
 
     def test_setup_vision_models_without_auto_download(self):
         """Test setup_vision_models skips download when auto_download=False."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         # Mock ollama with no models
         mock_ollama = MagicMock()
@@ -434,14 +434,14 @@ class TestEnsureModelAvailable:
 
     def test_ensure_model_available_method_exists(self):
         """Test ensure_model_available method exists."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         manager = OllamaModelManager()
         assert hasattr(manager, "ensure_model_available")
 
     def test_ensure_model_available_when_already_present(self):
         """Test ensure_model_available returns True when model exists."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         # Mock ollama with model already present
         mock_ollama = MagicMock()
@@ -464,7 +464,7 @@ class TestEnsureModelAvailable:
 
     def test_ensure_model_available_downloads_when_missing(self):
         """Test ensure_model_available downloads when model is missing."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         # Mock ollama
         mock_ollama = MagicMock()
@@ -506,7 +506,7 @@ class TestEnsureModelAvailable:
 
     def test_ensure_model_available_skips_download_when_disabled(self):
         """Test ensure_model_available doesn't download when auto_download=False."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         # Mock ollama with no models
         mock_ollama = MagicMock()
