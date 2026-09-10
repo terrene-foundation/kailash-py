@@ -422,6 +422,21 @@ jobs:
           uv venv .venv
           uv pip install -e ".[trust]" --python .venv/bin/python
           uv pip install -e "packages/kailash-pact[dev]" --python .venv/bin/python
+          # kaizen + kaizen-agents are needed to COLLECT, not merely to run:
+          # tests/regression/test_issue_2218_allowed_actions_parity.py imports
+          # `kaizen.core.base_agent` and `kaizen_agents.governed_agent` at
+          # module scope, because the parity it asserts spans three enforcement
+          # surfaces and the third one lives in kaizen_agents. Without them the
+          # whole file errors at collection with
+          # `ModuleNotFoundError: No module named 'kaizen'`.
+          #
+          # Installed rather than made skippable on purpose: an importorskip
+          # here would turn a cross-package parity gate into one that silently
+          # never runs in the job named after the package it guards, which is
+          # the failure mode the gate exists to prevent.
+          uv pip install -e packages/kailash-mcp --python .venv/bin/python
+          uv pip install -e packages/kailash-kaizen --python .venv/bin/python
+          uv pip install -e packages/kaizen-agents --python .venv/bin/python
 
       - name: Test kailash-pact
         timeout-minutes: 5
