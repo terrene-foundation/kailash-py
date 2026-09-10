@@ -1340,7 +1340,11 @@ class TestLinkedHashChain:
 
     def test_verify_integrity_empty_chain(self):
         chain = LinkedHashChain()
-        valid, break_idx = chain.verify_integrity()
+        # verify_integrity() is a deprecation shim; these tests exist to pin it
+        # while it lives, so assert the DeprecationWarning rather than letting
+        # it leak to the run's warning summary.
+        with pytest.warns(DeprecationWarning, match="verify_integrity"):
+            valid, break_idx = chain.verify_integrity()
         assert valid is True
         assert break_idx is None
 
@@ -1348,14 +1352,18 @@ class TestLinkedHashChain:
         chain = LinkedHashChain()
         chain.add_hash("a1", "h1")
         chain.add_hash("a2", "h2")
-        valid, break_idx = chain.verify_integrity()
+        with pytest.warns(DeprecationWarning, match="verify_integrity"):
+            valid, break_idx = chain.verify_integrity()
         assert valid is True
         assert break_idx is None
 
     def test_verify_integrity_strict_raises(self):
         chain = LinkedHashChain()
         chain.add_hash("a1", "h1")
-        with pytest.raises(ValueError, match="verify_integrity.*strict=True"):
+        with (
+            pytest.warns(DeprecationWarning, match="verify_integrity"),
+            pytest.raises(ValueError, match="verify_integrity.*strict=True"),
+        ):
             chain.verify_integrity(strict=True)
 
     def test_verify_chain_linkage_valid(self):
