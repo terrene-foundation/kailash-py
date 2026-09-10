@@ -8,6 +8,21 @@ Installability was verified from a clean venv BEFORE the advisory went out.
 
 **`dev` IS THE INTEGRATION TRUNK** and carries 2.64.0.
 
+**kailash-mcp 0.6.0 and kailash-kaizen 2.46.1 are on PyPI** (lane L7-release,
+2026-09-10, PR #2223 promoted `dev` -> `main` at `e9f7a8c1b`; tags `mcp-v0.6.0`
+and `kaizen-v2.46.1`). Both verified from a clean venv AFTER upload, both poles:
+published 2.46.0 raises `AttributeError` on `enable_observability()`, published
+2.46.1 returns OK. mcp 0.6.0 carries the OAuth signing-key floor (#2083/#2092)
+and the spawn-command disclosure fix (#2004) INCLUDING the sibling surfaces the
+original fix missed (`MCPClient.health_check`, `discover_tools` logging,
+`get_process_info`).
+
+**NOTHING ELSE WAS PUBLISHED.** `kailash-dataflow` 2.20.1 is prepped on `main`
+and deliberately UNPUBLISHED (pending a separate decision) — in this repo only a
+pushed tag publishes, so promoting it to `main` released nothing. PyPI still
+reads dataflow 2.20.0, nexus 2.16.0, ml 2.2.3, align 0.7.4, pact 0.18.0,
+kaizen-agents 0.13.0, kailash 2.64.0.
+
 **Promotion is now a DUAL TRIGGER:** 10 independent landings OR 72 hours OR
 immediately for security/deploy-affecting. Counter is `--first-parent`, not raw.
 `rules/dev-integration-trunk.md` MUST-4. Thresholds are PROVISIONAL (see D3).
@@ -97,6 +112,37 @@ landed branch, and re-run the census — do not leave the tree for a later pass.
 ---
 
 ## Traps (measured — do not rediscover)
+
+**T-L7a. `pip list` in the repo `.venv` prints NOTHING — even for packages that
+are installed.** Measured: 0 lines total, including `pytest`. Every "package X
+is not installed" conclusion drawn from it is ZERO EVIDENCE. Import the module
+and print `__file__` instead. This produced one wrong inference this session
+(that the venv had no opentelemetry, when it has the full stack).
+
+**T-L7b. The pre-commit Tier-1 hook used to test the MAIN checkout from inside a
+worktree.** `find-venv-python.sh` resolved the INTERPRETER worktree-safely but
+the venv's editable `.pth` files hold ABSOLUTE paths into the main checkout, so
+tests were collected from the worktree and run against main's code. Wrong in
+BOTH directions: a worktree fix looks broken, a worktree regression can pass.
+FIXED this session (the wrapper now prepends the worktree's source roots).
+
+**T-L7c. pre-commit stashes unstaged files during a commit.** A test suite
+running in the BACKGROUND while you commit reads the tree mid-stash and reports
+failures against the pre-fix source. Cost one confusing full-suite run. Never
+run a suite in the background while committing.
+
+**T-L7d. Three orphaned `/tmp/mock*.py` daemons have held ports 8771-8773 since
+2026-09-06** (PPID 1). They broke three kaizen tests that hardcoded those ports.
+The tests now bind ephemeral ports, so this is closed — but the daemons are
+still listening and will break anything else that hardcodes 8765-8773.
+
+**T-L7e. CodeQL `py/clear-text-logging-sensitive-data` follows the call graph.**
+A masked URL or a `basename#digest` reaching a LOG sink is still reported,
+because both carry a config-derived substring. Only `<literal>#<digest>` clears
+it, with the literal from a MAPPING (a membership test was measured NOT to work
+— see `kailash.trust.auth.asgi`). Model rows in
+`.github/codeql/sanitizers/sanitizers.model.yml` do NOT create barriers; that
+file says so, with measurements. The fix belongs in the code.
 
 - **`tools/sweep-redteam.py` EXITS NON-ZERO when it finds something, and emits
   JSONL findings + a sentinel comment, NOT one JSON object.** A `|| continue`

@@ -55,8 +55,10 @@ class TestServerRefIsDisclosureSafe:
         ref = client._get_server_ref(STDIO_CFG)
         assert SECRET not in ref
         assert "--token" not in ref
-        # It still identifies the executable, so the log stays useful.
-        assert ref.startswith("stdio://npx#")
+        # It still identifies the transport class, so the log stays useful.
+        # The executable basename is deliberately NOT kept: it is config-derived
+        # and `py/clear-text-logging-sensitive-data` reports it at a log sink.
+        assert ref.startswith("stdio#")
 
     def test_url_transport_ref_masks_userinfo_and_query_credentials(self, client):
         cfg = {

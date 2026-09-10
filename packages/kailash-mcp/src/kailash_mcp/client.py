@@ -12,8 +12,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 if TYPE_CHECKING:
     from mcp import ClientSession
 
-from kailash.utils.command_safety import safe_command_ref
-from kailash.utils.url_credentials import mask_url
+from kailash.utils.url_credentials import fingerprint_value
 from kailash_mcp.auth.providers import (
     AuthManager,
     AuthProvider,
@@ -931,21 +930,42 @@ class MCPClient:
         The stdio form fingerprints the whole command line, so two servers that
         differ only in their arguments still get distinct references while the
         arguments themselves never appear.
-        """
-        if isinstance(server_config, str):
-            return mask_url(server_config)
 
-        transport = server_config.get("transport", "stdio")
-        if transport == "stdio":
+        Every branch returns a MODULE-OWNED LITERAL joined to a non-reversible
+        digest, and nothing else -- no substring of the config survives into the
+        return value: not a masked URL, not a command basename, not an argument.
+
+        That is stricter than disclosure-safety alone requires, deliberately.
+        ``py/clear-text-logging-sensitive-data`` (HIGH) follows the call graph
+        interprocedurally, so ANY config-derived value reaching a logging sink
+        is reported -- a masked URL still carries host and path, and
+        ``safe_command_ref`` still carries the executable basename. The first
+        version of this method used both and CodeQL reported three HIGH alerts
+        on the log lines that consume it. ``fingerprint_value`` is the helper
+        this repo designates for a value destined for a log line (see its
+        docstring: "especially when the tag is destined for a LOG line"), and
+        the transport label is resolved through a MAPPING to a literal rather
+        than echoed -- the pattern measured to work in ``kailash.trust.auth.asgi``
+        where a membership test was measured NOT to.
+        """
+        transport_labels = {
+            "stdio": "stdio",
+            "sse": "sse",
+            "http": "http",
+            "websocket": "websocket",
+        }
+
+        if isinstance(server_config, str):
+            return f"server#{fingerprint_value(server_config)}"
+
+        label = transport_labels.get(server_config.get("transport", "stdio"), "other")
+        if label == "stdio":
             command = server_config.get("command", "python")
             args = server_config.get("args", []) or []
-            return (
-                f"stdio://{safe_command_ref(' '.join([str(command), *map(str, args)]))}"
-            )
-        elif transport in ["sse", "http", "websocket"]:
-            return mask_url(server_config.get("url", "unknown"))
+            material = " ".join([str(command), *map(str, args)])
         else:
-            return f"{transport}://<server>"
+            material = str(server_config.get("url", ""))
+        return f"{label}#{fingerprint_value(material)}"
 
     def _get_server_key(self, server_config: Union[str, Dict[str, Any]]) -> str:
         """Generate cache key for server config.
