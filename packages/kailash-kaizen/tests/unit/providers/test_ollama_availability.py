@@ -62,6 +62,10 @@ def _providers_reloaded(*, ollama_present: bool):
     leak is issue #2149 -- it made unrelated tests in this file pass only
     because this one happened to run first.
     """
+    import kaizen
+    import kaizen.providers
+
+    original = sys.modules["kaizen.providers"]
     blocker = None
     overrides = {"ollama": MagicMock()} if ollama_present else {}
     try:
@@ -74,11 +78,24 @@ def _providers_reloaded(*, ollama_present: bool):
     finally:
         if blocker is not None and blocker in sys.meta_path:
             sys.meta_path.remove(blocker)
-        # Runs after the patch.dict/meta_path overrides are unwound, so this
-        # import observes the true environment. Also re-points the parent
-        # package attribute (``kaizen.providers``), which patch.dict does not
-        # restore on its own.
-        _fresh_providers()
+        # Put back the ORIGINAL module OBJECT, in both places that reference it.
+        #
+        # Re-importing instead would build a NEW object, and a fresh
+        # kaizen.providers namespace does NOT carry the submodule attributes
+        # that earlier imports had set on the original -- importing
+        # kaizen.providers.registry sets `registry` on whichever parent object
+        # was current at the time, and a later import is a sys.modules cache hit
+        # that never re-sets it. Tests elsewhere do
+        # monkeypatch.setattr("kaizen.providers.registry...."), which resolves
+        # that attribute via getattr and dies on the barrel's __getattr__ with
+        # "module 'kaizen.providers' has no attribute 'registry'". Restoring the
+        # original object keeps this helper invisible to the rest of the suite,
+        # which is the whole point of it.
+        #
+        # patch.dict restores sys.modules wholesale but knows nothing about the
+        # parent package attribute, so that one is reset explicitly.
+        sys.modules["kaizen.providers"] = original
+        kaizen.providers = original
 
 
 class TestOllamaAvailabilityFlag:
