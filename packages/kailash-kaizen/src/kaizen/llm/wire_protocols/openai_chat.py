@@ -64,12 +64,26 @@ def _token_limit_field(model: str) -> str:
     return "max_tokens"
 
 
-def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
+def build_request_payload(
+    request: CompletionRequest, *, include_usage: bool = False
+) -> Dict[str, Any]:
     """Build the ``/v1/chat/completions`` request body for OpenAI.
 
     Emits the canonical OpenAI chat shape. Optional fields are written only
     when the caller set them so callers relying on server defaults do NOT
     get a silent override.
+
+    ``include_usage`` (#2215): the deployment's
+    :class:`~kaizen.llm.deployment.StreamingConfig.include_usage`, threaded in
+    by :meth:`LlmClient._build_completion_payload_and_url` for this wire (the
+    same typed-deployment-config-into-shaper route ``use_chat_schema`` takes on
+    the HuggingFace wire). When True AND ``request.stream`` is True, emits
+    ``stream_options: {"include_usage": true}`` so the provider's terminal SSE
+    chunk carries a ``usage`` block — without it a streamed call is unbillable.
+    Both halves are required: a NON-streaming request never emits
+    ``stream_options`` (the field is meaningless off the streaming path and
+    OpenAI 400s on it), and ``include_usage=False`` emits nothing, keeping the
+    body byte-identical to the pre-#2215 output.
 
     #1720 Wave-1b reasoning-model filter: before any sampling field is
     written to the payload, ``temperature`` / ``top_p`` / ``frequency_penalty``
@@ -136,6 +150,14 @@ def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
         payload["stop"] = list(request.stop)
     if request.stream:
         payload["stream"] = True
+        # #2215: StreamingConfig.include_usage was declared and never read, so
+        # LlmClient.stream() emitted no `stream_options` and an OpenAI-wire
+        # provider returned NO usage block on a streamed response — with no
+        # supported way to ask for one. Emit it only on the streaming path and
+        # only when the deployment asked for it (both poles are pinned by
+        # tests/unit/llm/test_stream_options_include_usage.py).
+        if include_usage:
+            payload["stream_options"] = {"include_usage": True}
     if request.user is not None:
         payload["user"] = request.user
 

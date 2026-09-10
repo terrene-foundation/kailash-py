@@ -20,6 +20,11 @@ import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
 
+from kaizen.llm.thought_signature import (
+    THOUGHT_SIGNATURE_KEY,
+    encode_thought_signature,
+    thought_signature_for_sdk,
+)
 from kaizen_agents.delegate.adapters.protocol import StreamEvent
 
 logger = logging.getLogger(__name__)
@@ -64,14 +69,21 @@ def _convert_messages_for_gemini(
                     args = json.loads(args_str) if args_str else {}
                 except json.JSONDecodeError:
                     args = {}
-                parts.append(
-                    {
-                        "function_call": {
-                            "name": func.get("name", ""),
-                            "args": args,
-                        }
+                fc_part: dict[str, Any] = {
+                    "function_call": {
+                        "name": func.get("name", ""),
+                        "args": args,
                     }
-                )
+                }
+                # #2120: replay the model-issued thought_signature as a
+                # PART-LEVEL SIBLING of function_call — in google-genai's model
+                # it lives on the Part (``Part.thought_signature``), not inside
+                # the FunctionCall. Absent for Gemini 2.5 (which never issues
+                # one), so that path stays byte-identical.
+                stashed = tc.get(THOUGHT_SIGNATURE_KEY)
+                if stashed is not None:
+                    fc_part["thought_signature"] = thought_signature_for_sdk(stashed)
+                parts.append(fc_part)
             if parts:
                 contents.append({"role": "model", "parts": parts})
 
@@ -282,6 +294,16 @@ class GoogleStreamAdapter:
                                 ),
                             },
                         }
+                        # #2120: capture the PART-level thought_signature that
+                        # Gemini 3.x issues with a functionCall. Without it the
+                        # replay in _convert_messages_for_gemini emits a bare
+                        # functionCall part and the NEXT request 400s, so no
+                        # tool loop can reach its second turn.
+                        signature = encode_thought_signature(
+                            getattr(part, "thought_signature", None)
+                        )
+                        if signature is not None:
+                            tc_dict[THOUGHT_SIGNATURE_KEY] = signature
                         tool_calls.append(tc_dict)
                         yield StreamEvent(
                             event_type="tool_call_start",

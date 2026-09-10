@@ -20,6 +20,9 @@ Public allowlists are unchanged, so no legitimate call site is affected; only `_
 
 **Requires `kailash>=2.65.0`** — `supervisor` and `governed_agent` import `kailash.trust.readonly_proxy` at module scope, and 2.64.0 does not carry it.
 
+### Fixed
+
+- **Tool calling works on Gemini 3.x models again (#2120).** Gemini 3.x requires every replayed function call to carry back the `thought_signature` the model issued alongside it. `GoogleStreamAdapter` neither captured it from the response nor replayed it in history, so the first request succeeded and returned a tool call, the second was rejected with `400 INVALID_ARGUMENT` ("Function call is missing a thought_signature in functionCall parts"), and no tool ever executed. There was no caller-side workaround — the adapter owns both halves. The signature is now captured on the tool-call it belongs to and replayed as a part-level sibling of the function call, which is where Google's own model puts it. Gemini 2.5 issues no signature and its behaviour is byte-identical. A stashed signature that has been corrupted now raises a named error rather than being dropped, since dropping it reproduces exactly the opaque provider rejection this fixes.
 
 ## [0.13.0] — 2026-08-17 — Documented permission checker is fixed and now fails closed on error; skill discovery fails closed on a partial caller identity; credential and traceback disclosure closed across log and return surfaces
 

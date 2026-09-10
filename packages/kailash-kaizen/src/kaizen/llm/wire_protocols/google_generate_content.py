@@ -5,7 +5,10 @@
 
 Gemini's ``/v1beta/models/{model}:generateContent`` schema uses:
 
-* ``contents`` (list of ``{role, parts: [{text}]}``) — not ``messages``.
+* ``contents`` (list of ``{role, parts: [...]}``) — not ``messages``. A part is
+  ``{text}``, ``{inlineData}``/``{fileData}`` (multimodal), ``{functionCall}``
+  (an assistant tool-call turn) or ``{functionResponse}`` (a tool result); a
+  ``functionCall`` part may carry a sibling ``thoughtSignature`` (#2120/#2121).
 * Role names: ``user`` and ``model`` (no ``assistant`` or ``system``).
 * ``systemInstruction`` is a top-level field with a ``parts`` list.
 * ``generationConfig`` holds temperature / max_output_tokens / top_p.
@@ -21,6 +24,11 @@ import logging
 from typing import Any, Dict, List
 
 from kaizen.llm.deployment import CompletionRequest
+from kaizen.llm.thought_signature import (
+    THOUGHT_SIGNATURE_KEY,
+    encode_thought_signature,
+    thought_signature_for_rest,
+)
 from kaizen.llm.wire_protocols import _content_parts
 
 logger = logging.getLogger(__name__)
@@ -112,6 +120,162 @@ def _extract_text_parts(content: Any) -> List[Dict[str, Any]]:
     return [{"text": str(content)}]
 
 
+def _function_call_part(tool_call: Dict[str, Any]) -> Dict[str, Any]:
+    """Turn ONE OpenAI-shaped ``tool_calls`` entry into a Gemini part.
+
+    Emits ``{"functionCall": {"name", "args"}}``, plus a PART-LEVEL SIBLING
+    ``thoughtSignature`` when the parse stashed one (#2120/#2121) — in Gemini's
+    schema the signature lives on the Part, not inside the FunctionCall.
+
+    OpenAI carries call arguments as a JSON **string**; Gemini wants a real
+    object, so the string is parsed. A malformed arguments string raises
+    ``ValueError`` naming the offending tool rather than being swallowed into
+    an empty ``{}`` — silently calling a function with no arguments is the
+    ``zero-tolerance`` Rule 3 failure mode (the model asked for a specific
+    call; dropping its arguments produces a wrong answer, not an error).
+    """
+    function = tool_call.get("function")
+    if not isinstance(function, dict):
+        raise ValueError(
+            "google_generate_content: assistant tool_calls entry has no "
+            f"'function' object; got {tool_call!r}"
+        )
+    name = function.get("name")
+    if not name:
+        raise ValueError(
+            "google_generate_content: assistant tool_calls entry has no "
+            "function name; Gemini requires a name on every functionCall part"
+        )
+    raw_args = function.get("arguments", "{}")
+    if isinstance(raw_args, dict):
+        args: Dict[str, Any] = raw_args
+    elif isinstance(raw_args, str):
+        try:
+            args = json.loads(raw_args) if raw_args.strip() else {}
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                "google_generate_content: tool call "
+                f"{name!r} has malformed JSON arguments: {exc}"
+            ) from exc
+        if not isinstance(args, dict):
+            raise ValueError(
+                f"google_generate_content: tool call {name!r} arguments must "
+                f"decode to an object; got {type(args).__name__}"
+            )
+    else:
+        raise ValueError(
+            f"google_generate_content: tool call {name!r} arguments must be a "
+            f"JSON string or dict; got {type(raw_args).__name__}"
+        )
+
+    part: Dict[str, Any] = {"functionCall": {"name": name, "args": args}}
+    stashed = tool_call.get(THOUGHT_SIGNATURE_KEY)
+    if stashed is not None:
+        part["thoughtSignature"] = thought_signature_for_rest(stashed)
+    return part
+
+
+def _function_response_part(
+    msg: Dict[str, Any], call_id_to_name: Dict[str, str]
+) -> Dict[str, Any]:
+    """Turn ONE OpenAI ``role="tool"`` message into a Gemini part.
+
+    Gemini keys a ``functionResponse`` by the function NAME, but an OpenAI tool
+    result carries only ``tool_call_id`` (``LLMAgentNode``'s own loop emits
+    ``{"role": "tool", "tool_call_id": ..., "content": ...}`` with NO ``name``),
+    so the name is resolved from the preceding assistant turn's ``tool_calls``
+    via ``call_id_to_name``, falling back to an explicit ``name`` when the
+    caller supplied one.
+
+    An unresolvable name raises ``ValueError``: there is no correct Gemini
+    representation for a nameless tool result, and the pre-#2121 behaviour —
+    flattening it to anonymous user text — is exactly the silent failure this
+    fix removes (``zero-tolerance`` Rule 3).
+    """
+    call_id = msg.get("tool_call_id")
+    name = msg.get("name") or (call_id_to_name.get(call_id) if call_id else None)
+    if not name:
+        raise ValueError(
+            "google_generate_content: tool result message cannot be mapped to a "
+            f"Gemini functionResponse — tool_call_id={call_id!r} matches no "
+            "preceding assistant tool_calls entry and the message carries no "
+            "'name'. Include the assistant tool-call turn in the message "
+            "history, or set 'name' on the tool result."
+        )
+    content = msg.get("content", "")
+    # Gemini's functionResponse.response is an OBJECT. A dict result passes
+    # through as-is; anything else is wrapped under "result" (the shape the
+    # sibling Delegate google adapter already uses).
+    response = content if isinstance(content, dict) else {"result": content}
+    return {"functionResponse": {"name": name, "response": response}}
+
+
+def _contents_from_messages(rest: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Build Gemini ``contents`` from the non-system OpenAI messages.
+
+    #2121: before this, EVERY non-system message became text parts only::
+
+        contents = [{"role": ..., "parts": _extract_text_parts(msg["content"])}
+                    for msg in rest]
+
+    so an assistant turn carrying ``tool_calls`` serialised to
+    ``{"role": "model", "parts": [{"text": ""}]}`` — the function call was
+    DROPPED — and a tool result became plain user text rather than a
+    ``functionResponse`` part. There was no error; the model simply never saw
+    that a tool had been called or what it returned, which made a multi-turn
+    tool loop impossible on this wire and failed SILENTLY.
+
+    Now an assistant turn emits its text part (when non-empty) followed by one
+    ``functionCall`` part per tool call, and a ``role="tool"`` message emits a
+    ``functionResponse`` part inside a ``user``-role turn (Gemini's own
+    function-calling schema). A message with neither tool calls nor tool role
+    is shaped exactly as before — byte-identical for every tool-less request.
+    """
+    contents: List[Dict[str, Any]] = []
+    # Resolves a tool result's function name from the assistant turn that
+    # requested it; Gemini keys functionResponse by name, OpenAI by call id.
+    call_id_to_name: Dict[str, str] = {}
+
+    for msg in rest:
+        role = msg.get("role", "user")
+        gemini_role = _role_from_openai(role)
+
+        if role == "tool":
+            contents.append(
+                {
+                    "role": gemini_role,
+                    "parts": [_function_response_part(msg, call_id_to_name)],
+                }
+            )
+            continue
+
+        tool_calls = msg.get("tool_calls")
+        if role == "assistant" and tool_calls:
+            parts: List[Dict[str, Any]] = []
+            content = msg.get("content", "")
+            # Gemini rejects an empty text part; a tool-call turn commonly has
+            # content=None/"" (the model emitted only the call).
+            if content:
+                parts.extend(_extract_text_parts(content))
+            for tool_call in tool_calls:
+                parts.append(_function_call_part(tool_call))
+                call_id = tool_call.get("id")
+                function = tool_call.get("function")
+                if call_id and isinstance(function, dict) and function.get("name"):
+                    call_id_to_name[call_id] = function["name"]
+            contents.append({"role": gemini_role, "parts": parts})
+            continue
+
+        contents.append(
+            {
+                "role": gemini_role,
+                "parts": _extract_text_parts(msg.get("content", "")),
+            }
+        )
+
+    return contents
+
+
 def _partition_system(
     messages: List[Dict[str, Any]],
 ) -> tuple[List[Dict[str, Any]] | None, List[Dict[str, Any]]]:
@@ -138,13 +302,10 @@ def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
         raise TypeError("build_request_payload expects a CompletionRequest")
 
     system_parts, rest = _partition_system(request.messages)
-    contents: List[Dict[str, Any]] = [
-        {
-            "role": _role_from_openai(msg.get("role", "user")),
-            "parts": _extract_text_parts(msg.get("content", "")),
-        }
-        for msg in rest
-    ]
+    # #2121: assistant tool-call turns and tool results round-trip as
+    # functionCall / functionResponse parts instead of being silently flattened
+    # to text. See _contents_from_messages.
+    contents: List[Dict[str, Any]] = _contents_from_messages(rest)
 
     generation_config: Dict[str, Any] = {}
     if request.temperature is not None:
@@ -266,8 +427,22 @@ def _tool_config_from_choice(tool_choice: Any) -> Dict[str, Any] | None:
     OpenAI ``"auto"``/``"required"``/``"none"`` map to Gemini modes
     ``AUTO``/``ANY``/``NONE``. A forced-tool dict
     (``{"type": "function", "function": {"name": ...}}``) maps to ``ANY`` plus
-    ``allowedFunctionNames``. When tools are set but ``tool_choice`` is unset,
-    the default is ``ANY`` (legacy "required" semantics).
+    ``allowedFunctionNames``.
+
+    #2121 — when tools are set but ``tool_choice`` is unset, the default is
+    ``AUTO``, NOT ``ANY``. ``ANY`` forces a function call on EVERY turn, so the
+    model can never emit the final text answer that ends an agent loop: the
+    loop runs to ``max_rounds`` and returns no answer. The previous ``ANY``
+    default was commented as "legacy ``required`` semantics", but that
+    rationale does not hold for THIS provider — ``legacy_tool_choice_default``
+    (``kaizen/llm/deployment_resolver.py``) injects a default for openai
+    (``"required"``) and azure/docker (``"auto"``) ONLY; **every other legacy
+    provider, google included, sent no ``tool_choice`` at all**, leaving
+    Gemini's own server-side default, which is ``AUTO``. So ``ANY`` was a
+    behavioural REGRESSION introduced by this wire, not inherited legacy.
+    ``AUTO`` is emitted explicitly (rather than omitting ``toolConfig``) so the
+    wire states its intent instead of relying on an unstated server default.
+    A caller wanting forced calling passes ``tool_choice="required"``.
     """
     if isinstance(tool_choice, dict):
         fn = tool_choice.get("function", {})
@@ -279,8 +454,8 @@ def _tool_config_from_choice(tool_choice: Any) -> Dict[str, Any] | None:
     if isinstance(tool_choice, str):
         mode = _TOOL_CHOICE_MODE.get(tool_choice, "ANY")
         return {"functionCallingConfig": {"mode": mode}}
-    # tool_choice is None but tools are set -> default to ANY (required).
-    return {"functionCallingConfig": {"mode": "ANY"}}
+    # tool_choice is None but tools are set -> AUTO, so the loop can terminate.
+    return {"functionCallingConfig": {"mode": "AUTO"}}
 
 
 def parse_response(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -318,16 +493,23 @@ def parse_response(payload: Dict[str, Any]) -> Dict[str, Any]:
                 # into the canonical normalized shape shared with openai/anthropic.
                 function_call = part.get("functionCall")
                 if isinstance(function_call, dict):
-                    tool_calls.append(
-                        {
-                            "id": f"call_{index}",
-                            "type": "function",
-                            "function": {
-                                "name": function_call.get("name"),
-                                "arguments": json.dumps(function_call.get("args", {})),
-                            },
-                        }
-                    )
+                    entry: Dict[str, Any] = {
+                        "id": f"call_{index}",
+                        "type": "function",
+                        "function": {
+                            "name": function_call.get("name"),
+                            "arguments": json.dumps(function_call.get("args", {})),
+                        },
+                    }
+                    # #2120/#2121: stash the PART-level thoughtSignature so the
+                    # replay in _function_call_part can send it back. Gemini 3.x
+                    # 400s on a replayed functionCall that lacks it, which broke
+                    # the second request of every tool loop. Gemini 2.5 emits
+                    # none, leaving this entry byte-identical to before.
+                    signature = encode_thought_signature(part.get("thoughtSignature"))
+                    if signature is not None:
+                        entry[THOUGHT_SIGNATURE_KEY] = signature
+                    tool_calls.append(entry)
 
     usage = payload.get("usageMetadata", {}) or {}
     result: Dict[str, Any] = {

@@ -29,14 +29,39 @@ class TimeoutMixin:
     """
     Mixin that adds operation timeout handling to agents.
 
-    Wraps operations with timeout protection:
-    - Configurable timeout (default 30 seconds)
+    Wraps WHOLE-AGENT ``run()`` execution with timeout protection:
     - Graceful task cancellation
     - TimeoutError raised on expiration
     - Timeout events logged
 
-    Example:
-        config = BaseAgentConfig(timeout_enabled=True, timeout=60.0)
+    Scope — this bounds the agent's ``run()`` call, NOT the LLM HTTP request.
+    For the WIRE timeout use ``LlmDeployment.timeout`` or
+    ``LlmClient.complete(timeout=...)`` / ``stream(timeout=...)`` (#2209);
+    this mixin is not a substitute for either.
+
+    Activation — the mixin is applied by ``BaseAgent.__init__`` when the
+    config's ``memory_enabled`` flag is truthy (``base_agent.py:253`` — the
+    ``_MIXIN_MAP`` row pairing ``"memory_enabled"`` with ``TimeoutMixin``).
+    There is no ``timeout_enabled`` flag; ``BaseAgentConfig`` declares neither
+    ``timeout_enabled`` nor a plain ``timeout`` field (only ``hook_timeout``),
+    so the prior version of this example raised
+    ``TypeError: BaseAgentConfig.__init__() got an unexpected keyword argument
+    'timeout_enabled'`` (#2209). ``apply()`` is invoked with no explicit
+    timeout (``base_agent.py:272``), so the effective limit is
+    ``DEFAULT_TIMEOUT`` (30 s) unless the concrete config class the caller
+    passes carries its own ``timeout`` attribute, which ``apply()`` reads via
+    ``getattr(agent.config, "timeout", None)`` below.
+
+    Example::
+
+        from dataclasses import dataclass
+        from kaizen.core.config import BaseAgentConfig
+
+        @dataclass
+        class TimedQAConfig(BaseAgentConfig):
+            timeout: float = 60.0
+
+        config = TimedQAConfig(memory_enabled=True)
         agent = SimpleQAAgent(config)
         # If run() takes longer than 60 seconds, TimeoutError is raised
         result = await agent.run(question="complex question")
