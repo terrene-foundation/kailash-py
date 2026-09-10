@@ -13,6 +13,15 @@ range such as `>=2.0`.
 
 ## [Unreleased]
 
+## [2.46.1] — 2026-09-10 — `enable_observability()` no longer crashes on a default-constructed agent
+
+> **One source fix, in one method.** No API changed and nothing was removed, so this is a
+> patch. It also carries one advisory that is **not** a kaizen change: `kaizen.trust.a2a`
+> re-exports names from `kailash` core, and core 2.64.0 changed their behaviour. Because
+> this package requires `kailash>=2.63.0`, a fresh `pip install kailash-kaizen==2.46.1`
+> resolves core 2.64.0 and you get that behaviour — which is why it is recorded here
+> rather than left to be found at runtime.
+
 ### Fixed — `enable_observability()` no longer crashes on a default-constructed agent
 
 `BaseAgent.enable_observability()` raised `AttributeError: 'NoneType' object has no
