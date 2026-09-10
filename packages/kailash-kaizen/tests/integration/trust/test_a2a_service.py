@@ -381,6 +381,81 @@ class TestJsonRpcHandler:
         assert "error" in result
         assert result["error"]["code"] == -32600  # Invalid Request
 
+    @pytest.mark.regression
+    @pytest.mark.parametrize(
+        "bogus_token",
+        ["AAAA", " ", "not-a-jwt-at-all", "a.b.c", "Bearer"],
+    )
+    def test_unsigned_bearer_token_is_rejected_end_to_end(
+        self, test_client, bogus_token
+    ):
+        """An unsigned string MUST NOT authenticate against the REAL verifier.
+
+        Regression for the pre-existing hole where `handle` tested the bearer
+        token for truthiness and discarded it: `A2AAuthenticator.verify_token`
+        had no call site in the request path, so any non-empty string
+        authenticated every protected method -- including `trust.delegate` and
+        `audit.query`.
+
+        This drives the real Ed25519 path through the real HTTP surface, which
+        the Tier 1 suite (a deterministic Protocol adapter) cannot do.
+        """
+        response = test_client.post(
+            "/a2a/jsonrpc",
+            json={
+                "jsonrpc": "2.0",
+                "method": "trust.delegate",
+                "params": {
+                    "delegatee_agent_id": "attacker-agent",
+                    "task_id": "task-1",
+                    "capabilities": ["analyze"],
+                },
+                "id": 1,
+            },
+            headers={"Authorization": f"Bearer {bogus_token}"},
+        )
+
+        result = response.json()
+        assert "error" in result, (
+            f"{bogus_token!r} authenticated against the real verifier -- "
+            "token verification is bypassed"
+        )
+        # Assert the AUTHENTICATION code specifically (-40002), never merely
+        # that "an error" came back. Under the pre-fix wiring a bogus token
+        # authenticated and `trust.delegate` then failed downstream with
+        # -40004, so an `"error" in result` check passes under BOTH the fixed
+        # and the vulnerable code -- a non-discriminating assertion that is
+        # green for the wrong reason (instrument-discipline.md MUST-1).
+        assert result["error"]["code"] == -40002, (
+            f"{bogus_token!r} produced {result['error']} -- expected an "
+            "authentication failure (-40002). A non-auth error code means the "
+            "token AUTHENTICATED and failed somewhere downstream."
+        )
+        assert "result" not in result or result.get("result") is None
+
+    @pytest.mark.regression
+    def test_genuine_token_still_reaches_a_protected_method(
+        self, test_client, auth_token
+    ):
+        """Negative control for the rejection test above.
+
+        Without this, a verifier that refused everything would satisfy the
+        bypass test and the pair could not distinguish "verification works"
+        from "auth is broken shut".
+        """
+        response = test_client.post(
+            "/a2a/jsonrpc",
+            json={"jsonrpc": "2.0", "method": "unknown.method", "id": 1},
+            headers={"Authorization": f"Bearer {auth_token}"},
+        )
+
+        result = response.json()
+        # Reaching method-dispatch (-32601) proves authentication SUCCEEDED;
+        # an auth failure would have short-circuited before dispatch.
+        assert (
+            result["error"]["code"] == -32601
+        ), f"genuine token failed to authenticate: {result['error']}"
+
     def test_jsonrpc_method_not_found(self, test_client, auth_token):
         """Unknown methods should return method not found error (with auth)."""
         # Note: Need auth token because auth check happens before method dispatch

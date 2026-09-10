@@ -13,8 +13,9 @@ import hmac
 import json
 import logging
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Protocol, Tuple
 
 from kailash.trust.a2a.exceptions import (
     AuthenticationError,
@@ -27,6 +28,46 @@ from kailash.trust.operations import TrustOperations
 from kailash.trust.signing.crypto import sign, verify_signature
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class CallerIdentity:
+    """The VERIFIED identity of a JSON-RPC caller.
+
+    Constructed only after :meth:`A2AAuthenticator.verify_token` has checked the
+    signature, expiry, audience and trust chain. A handler that receives one may
+    treat ``agent_id`` as authenticated; a handler that receives ``None`` is
+    serving an unauthenticated public method.
+
+    Frozen so a handler cannot mutate the caller identity it was handed and have
+    that leak into a later authorization decision.
+    """
+
+    agent_id: str
+    """The authenticated caller — the token's ``sub`` claim."""
+
+    claims: A2AToken
+    """Full verified claims, for capability/constraint checks."""
+
+    token: str
+    """The raw bearer token, for onward delegation calls."""
+
+
+class TokenVerifier(Protocol):
+    """Structural type for the token-verification dependency.
+
+    A Protocol rather than a hard dependency on :class:`A2AAuthenticator` so a
+    deployment can supply its own verifier. Any implementation MUST raise on an
+    invalid token — returning ``None`` or a sentinel would reintroduce the
+    fail-open behaviour this indirection exists to remove.
+    """
+
+    async def verify_token(
+        self,
+        token: str,
+        expected_audience: Optional[str] = None,
+        verify_trust: bool = True,
+    ) -> A2AToken: ...
 
 
 class A2AAuthenticator:

@@ -112,7 +112,15 @@ class A2AService:
             agent_id=agent_id,
             private_key=private_key,
         )
-        self._jsonrpc_handler = JsonRpcHandler()
+        # The handler VERIFIES every bearer token on a protected method. Passing
+        # the authenticator here is what makes authentication real; without it
+        # the handler fails closed rather than accepting any non-empty string.
+        # `expected_audience` pins tokens to THIS agent, so one minted for a
+        # different agent cannot be replayed against us.
+        self._jsonrpc_handler = JsonRpcHandler(
+            token_verifier=self._authenticator,
+            expected_audience=agent_id,
+        )
 
         # Register default method handlers
         self._method_handlers = A2AMethodHandlers(
@@ -143,19 +151,25 @@ class A2AService:
         # Register routes
         self._register_routes(nexus_app)
 
-        # Add startup/shutdown handlers via the underlying ASGI app
-        fastapi_app = nexus_app.fastapi_app
-
-        @fastapi_app.on_event("startup")
+        # Lifecycle handlers go through Nexus, which owns the FastAPI lifespan
+        # and dispatches these from inside it. Reaching for
+        # `nexus_app.fastapi_app.on_event(...)` here would be wrong twice over:
+        # FastAPI deprecated `on_event` in favour of lifespan handlers, and the
+        # `fastapi_app` property returns None until `register()`/`start()`
+        # triggers lazy gateway init — so the registration silently depended on
+        # call order. Nexus.add_startup_handler names that trap explicitly, and
+        # pyright flags the same thing as `on_event` on `None`.
         async def startup():
             self._started_at = datetime.now(timezone.utc)
             logger.info("a2a_service.started", extra={"agent_id": self._agent_id})
 
-        @fastapi_app.on_event("shutdown")
         async def shutdown():
             logger.info("a2a_service.shutdown", extra={"agent_id": self._agent_id})
 
-        return fastapi_app
+        nexus_app.add_startup_handler(startup)
+        nexus_app.add_shutdown_handler(shutdown)
+
+        return nexus_app.fastapi_app
 
     def _register_routes(self, app: Nexus) -> None:
         """Register all routes on the Nexus app."""

@@ -13,9 +13,36 @@ such as `>=2.0`.
 
 ## [Unreleased]
 
+### Security (BREAKING) — A2A bearer tokens are now actually verified (#2203)
+
+`A2AAuthenticator.verify_token` — which checks the Ed25519 signature, expiry, audience and trust chain — **had no call site in the request path**. `JsonRpcHandler.handle` tested the bearer token for truthiness and discarded it, so **any non-empty string authenticated every protected method**, including `trust.delegate` (which grants capabilities) and `audit.query` (which reads the audit trail). Measured: `'AAAA'`, `' '` and `'not-a-jwt-at-all'` all authenticated. Supplying no token at all was correctly refused — the check existed and could refuse, it simply could not tell a signed token from arbitrary bytes.
+
+`JsonRpcHandler` now takes a `token_verifier` and an `expected_audience`, verifies every token on a protected method, and passes handlers a **verified `CallerIdentity`** instead of the raw string. The audience pin means a token minted for a _different_ agent can no longer be replayed against this one. `A2AService` wires its existing authenticator automatically — deployments using `A2AService` need no code change to get the fix.
+
+**Fail-closed by default.** A `JsonRpcHandler` constructed with no verifier now REFUSES protected methods rather than accepting anything. `allow_unverified_tokens=True` restores the old behaviour as an explicit, one-time-warning migration path; it is not a supported production mode. Per `security.md` § Secure-Default, an enabling flag whose default makes the protection a silent no-op is the shape being removed here.
+
+**Migration for callers registering custom JSON-RPC handlers.** `MethodHandler`'s second argument changed from `Optional[str]` (raw token) to `Optional[CallerIdentity]` (verified identity, `None` for public methods). The same applies to a custom `invoke_handler`. This is deliberately a hard break rather than a shim: the old signature's whole problem was that a handler could treat "a non-empty string arrived" as "a caller is authenticated", and any compatibility shim would preserve exactly that.
+
+```python
+# before — `auth_token` is an UNVERIFIED string
+async def my_handler(params, auth_token):
+    if not auth_token:            # presence only; any string passed
+        raise AuthenticationError(...)
+
+# after — `caller` is verified, or None for a public method
+async def my_handler(params, caller):
+    if caller is None:
+        raise AuthenticationError(...)
+    agent_id = caller.agent_id    # authenticated `sub` claim
+```
+
+Regression coverage: `tests/trust/unit/test_a2a_token_verification.py` (21 tests) and two end-to-end cases in the kaizen A2A integration suite that drive the real Ed25519 path over HTTP. Restoring the pre-fix semantics reds 12 of the 21 unit tests and 4 of the 6 integration cases; the survivors are deliberate controls — a genuine token must still authenticate, and a whitespace token is caught by a separate guard. The integration assertion checks the authentication error code specifically (`-40002`) rather than merely that an error came back, because under the vulnerable code a bogus token authenticated and then failed _downstream_ with a different code, which an `"error" in result` check cannot distinguish.
+
+**Not fixed here, and tracked separately:** `trust.delegate` still delegates from the serving agent's own identity, so any _validly authenticated_ peer can ask this agent to delegate its capabilities. That is an authorization question, distinct from the authentication hole closed above.
+
 ### Fixed — two mechanisms reported success without having measured anything (#2189)
 
-A sweep for the class *an absence rendered as a success* — a mechanism that learned NOTHING returning the same value as one that checked and passed. Both instances produced their vacuous value exactly when the machinery was misconfigured or the input was hostile, which is when a caller most needs the truth.
+A sweep for the class _an absence rendered as a success_ — a mechanism that learned NOTHING returning the same value as one that checked and passed. Both instances produced their vacuous value exactly when the machinery was misconfigured or the input was hostile, which is when a caller most needs the truth.
 
 - **`MultiDimensionEvaluator.evaluate` reported a constraint set it never evaluated as `satisfied=True`.** An unregistered dimension was appended to `warnings` and then `continue`d — dropped from both `dimension_results` and `failed_dimensions`. With every dimension unknown (a typo'd name, a registry missing a plugin), the result was `satisfied=True`, `failed_dimensions=[]`, `dimension_results={}` — **identical, on the field every caller gates on, to an evaluation that ran and passed.** The partial case was worse: `CONJUNCTIVE` "ALL must pass" was computed over the silently shrunk subset, so one known-good dimension plus one unknown returned `True`. An unknown dimension is now recorded as a failed dimension with a reason, and `_compute_satisfaction` fails closed on an empty result map instead of returning `True` (that branch also guarded `HIERARCHICAL`, which indexes the map and would otherwise raise). Warnings are unchanged — the point is that the truth now reaches the field callers read, not only the one they don't.
 
