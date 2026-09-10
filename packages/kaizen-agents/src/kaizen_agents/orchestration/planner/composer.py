@@ -22,6 +22,7 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
+from kailash.trust.action_policy import allowed_actions_tightening_violation
 from kaizen_agents.llm import LLMClient
 from kaizen_agents.orchestration.planner.decomposer import Subtask
 from kaizen_agents.orchestration.planner.designer import SpawnDecision
@@ -308,7 +309,6 @@ class PlanValidator:
 
         # INV-PLAN-07: Monotonic tightening per node
         parent_blocked = set(plan.envelope.operational.blocked_actions)
-        parent_allowed = plan.envelope.operational.allowed_actions
 
         for node_id, node in plan.nodes.items():
             child_env = node.agent_spec.envelope
@@ -344,21 +344,24 @@ class PlanValidator:
                     )
                 )
 
-            # Operational: child allowed must be subset of parent allowed (if parent restricts)
-            if parent_allowed:
-                child_allowed = set(child_env.operational.allowed_actions)
-                excess_allowed = child_allowed - set(parent_allowed)
-                if excess_allowed:
-                    errors.append(
-                        ValidationError(
-                            code="ALLOWED_OPS_EXCEED_PARENT",
-                            message=(
-                                f"Node '{node_id}' has allowed operations not in parent: "
-                                f"{', '.join(sorted(excess_allowed))}."
-                            ),
-                            node_id=node_id,
-                        )
+            # Operational: child allowed must be subset of parent allowed.
+            # Shared restrictiveness model (GH #2218,
+            # security.md § Enforcement-Surface Parity): the previous
+            # `if parent_allowed:` guard read an EMPTY parent allowlist as
+            # "unrestricted" and skipped the check, so a plan whose parent
+            # envelope permitted nothing could still admit nodes declaring
+            # operations. An empty allowlist permits NOTHING.
+            aa_violation = allowed_actions_tightening_violation(
+                plan.envelope.operational, child_env.operational
+            )
+            if aa_violation is not None:
+                errors.append(
+                    ValidationError(
+                        code="ALLOWED_OPS_EXCEED_PARENT",
+                        message=f"Node '{node_id}' {aa_violation}.",
+                        node_id=node_id,
                     )
+                )
 
         return errors
 

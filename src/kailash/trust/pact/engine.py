@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
+from kailash.trust.action_policy import evaluate_action, evaluate_scope
 from kailash.trust.pact.access import (
     AccessDecision,
     KnowledgeSharePolicy,
@@ -1520,26 +1521,15 @@ class GovernanceEngine:
         """
         # --- Operational: check allowed/blocked actions ---
         # None means unconstrained (maximally permissive) -- skip entirely (GH #390).
+        # The allow/block decision itself lives in ONE place
+        # (kailash.trust.action_policy) so this surface, the gradient, the
+        # governed-agent run() path and the bridge scope validator cannot drift
+        # apart on what an empty allowlist means (GH #2218,
+        # security.md § Enforcement-Surface Parity).
         if envelope.operational is not None:
-            blocked_actions = set(envelope.operational.blocked_actions)
-            allowed_actions = set(envelope.operational.allowed_actions)
-
-            if action in blocked_actions:
-                return (
-                    "blocked",
-                    f"Action '{action}' is explicitly blocked by operational constraints",
-                )
-
-            # If allowed_actions is explicitly defined (even if empty), the action
-            # must be in the list. Empty allowed_actions + envelope exists = nothing
-            # allowed. When no envelope exists, the caller gets None (maximally
-            # permissive) and _evaluate_against_envelope is never called.
-            if action not in allowed_actions:
-                return (
-                    "blocked",
-                    f"Action '{action}' is not in the allowed actions list: "
-                    f"{sorted(allowed_actions)}",
-                )
+            action_verdict = evaluate_action(envelope.operational, action)
+            if not action_verdict.permitted:
+                return ("blocked", action_verdict.reason)
 
             # --- Operational: check rate limits (max_actions_per_day/hour) ---
             daily_calls = ctx.get("daily_calls")
@@ -3093,16 +3083,30 @@ class GovernanceEngine:
                         )
 
             if has_ops_scope:
-                allowed = set(envelope.operational.allowed_actions)
-                requested = set(bridge.operational_scope)
-                if allowed and not requested.issubset(allowed):
-                    extra = requested - allowed
+                # Same shared predicate the eval surfaces use (GH #2218): a
+                # role whose allowlist is EMPTY permits nothing, so it cannot
+                # carry ANY bridge scope. The previous `if allowed and ...`
+                # spelling short-circuited on the empty allowlist and admitted
+                # every requested operation.
+                #
+                # ``ConstraintEnvelopeConfig.operational`` is NOT optional -- it
+                # carries a default_factory -- so on this class it can never be
+                # None, and this site therefore needs no None guard of its own.
+                # evaluate_scope nonetheless reads None as "dimension not
+                # configured" rather than raising AttributeError, which keeps
+                # this lock-held path from turning a differently-shaped envelope
+                # into an unhandled exception.
+                scope_verdict = evaluate_scope(
+                    envelope.operational, bridge.operational_scope
+                )
+                if not scope_verdict.permitted:
                     raise PactError(
-                        f"Bridge operational_scope {sorted(extra)} not in "
-                        f"role '{role_addr}' allowed actions {sorted(allowed)}",
+                        f"Bridge operational_scope rejected for role "
+                        f"'{role_addr}': {scope_verdict.reason}",
                         details={
                             "role_address": role_addr,
-                            "extra_ops": sorted(extra),
+                            "rule": scope_verdict.rule,
+                            "reason": scope_verdict.reason,
                         },
                     )
 

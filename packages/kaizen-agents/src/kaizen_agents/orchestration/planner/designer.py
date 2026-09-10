@@ -19,6 +19,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
+from kailash.trust.action_policy import permitted_action_set
 from kailash.trust.pact.config import (
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
@@ -855,14 +856,22 @@ class AgentDesigner:
         child_blocked = set(spec.envelope.operational.blocked_actions)
         merged_blocked = sorted(parent_blocked | child_blocked)
 
-        # Ensure allowed operations are a subset of parent's (if parent restricts)
-        parent_allowed = parent_envelope.operational.allowed_actions
-        if parent_allowed:
-            parent_allowed_set = set(parent_allowed)
-            child_allowed = spec.envelope.operational.allowed_actions
-            filtered_allowed = [a for a in child_allowed if a in parent_allowed_set]
+        # Ensure allowed operations are a subset of parent's. Shared
+        # restrictiveness model (GH #2218, security.md § Enforcement-Surface
+        # Parity): the previous `if parent_allowed: ... else: keep everything`
+        # branch read an EMPTY parent allowlist as "unrestricted" and handed
+        # the child its FULL requested action list -- a widening synthesised by
+        # the very function whose job is to tighten. An empty parent permits
+        # nothing, so the intersection is correctly empty.
+        parent_permitted = permitted_action_set(parent_envelope.operational)
+        child_permitted = permitted_action_set(spec.envelope.operational)
+        if parent_permitted is None:
+            # Parent does not configure the dimension at all (widest).
+            filtered_allowed = sorted(child_permitted or ())
         else:
-            filtered_allowed = list(spec.envelope.operational.allowed_actions)
+            filtered_allowed = sorted(
+                (child_permitted or frozenset()) & parent_permitted
+            )
 
         # Reconstruct the envelope with enforced constraints (frozen model)
         spec.envelope = ConstraintEnvelopeConfig(
