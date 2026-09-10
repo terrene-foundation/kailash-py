@@ -18,6 +18,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Any
 
+from kailash.trust.action_policy import evaluate_action
 from kailash.trust.pact.config import (
     ConstraintDimension,
     ConstraintEnvelopeConfig,
@@ -75,7 +76,12 @@ class GradientEngine:
     evaluates an action context against the constraint dimensions, and returns
     an EvaluationResult with the verification level.
 
-    Fail-closed: Any evaluation error returns BLOCKED.
+    Fail-closed: any evaluation error returns BLOCKED, AND an operational
+    dimension that permits nothing (an empty or unreadable allowed-actions
+    list) denies every action rather than silently permitting them. The
+    allow/block decision is delegated to ``kailash.trust.action_policy``, the
+    single restrictiveness model shared with ``GovernanceEngine.verify_action``
+    (GH #2218).
 
     Args:
         config: The constraint envelope to evaluate against.
@@ -210,24 +216,21 @@ class GradientEngine:
                 reason="No operational constraints configured",
             )
 
-        if op.blocked_actions and action in op.blocked_actions:
-            return DimensionResult(
-                dimension=ConstraintDimension.OPERATIONAL,
-                satisfied=False,
-                reason=f"Action '{action}' is explicitly blocked",
-            )
-
-        if op.allowed_actions and action not in op.allowed_actions:
-            return DimensionResult(
-                dimension=ConstraintDimension.OPERATIONAL,
-                satisfied=False,
-                reason=f"Action '{action}' not in allowed actions list",
-            )
-
+        # The allow/block decision lives in ONE place
+        # (kailash.trust.action_policy) shared with GovernanceEngine.
+        # verify_action, the governed-agent run() path and the bridge scope
+        # validator (GH #2218, security.md § Enforcement-Surface Parity).
+        # This surface previously spelled the check as
+        # ``if op.allowed_actions and action not in op.allowed_actions`` -- the
+        # ``and`` short-circuited on an EMPTY allowlist and permitted every
+        # action, while verify_action denied every action for the identical
+        # envelope. The module docstring's "fail-closed" promise was true only
+        # for exceptions, not for this silent permit.
+        verdict = evaluate_action(op, action)
         return DimensionResult(
             dimension=ConstraintDimension.OPERATIONAL,
-            satisfied=True,
-            reason="Action permitted",
+            satisfied=verdict.permitted,
+            reason=verdict.reason,
         )
 
     def _eval_temporal(self, ctx: dict[str, Any]) -> DimensionResult:

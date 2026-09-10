@@ -1,5 +1,18 @@
 # PACT Changelog
 
+## [Unreleased]
+
+### Changed (Security, BREAKING)
+
+- **An empty `operational.allowed_actions` now DENIES at every enforcement surface (#2218).** The field defaults to `[]`, and the surfaces disagreed about what that meant: `GovernanceEngine.verify_action` denied every action, while `GradientEngine.evaluate`, `L3GovernedAgent.run()` and the bridge scope validator all permitted every action, because each spelled the check as `if op.allowed_actions and action not in op.allowed_actions` — the `and` short-circuits on an empty list and skips the check. Measured on `delete_production_database`: `allowed_actions=[]` gave `verify_action=deny` but `gradient/agent/bridge=PERMIT`; the `allowed_actions=['read']` control agreed on all four. The strictest-looking configuration produced the widest outcome, and the victim was the operator who tightened the allowlist to nothing.
+
+  The decision now lives in ONE shared restrictiveness model, `kailash.trust.action_policy` (re-exported from `kailash.trust.pact.config` beside its circuit-breaker sibling), consumed by every enforcement surface AND every monotonic-tightening validator (`security.md` § Enforcement-Surface Parity). An empty allowlist and an unreadable allowlist both rank **TIGHTEST** — they permit nothing. An absent operational dimension stays a distinct, widest state.
+
+  - **Behavior change:** callers who omitted `allowed_actions` were permitted everything at `GradientEngine.evaluate()`, `L3GovernedAgent.run()`, `GovernanceEngine.create_bridge()` and the plan composer; they are now denied everything. That code was silently ungoverned — this is the bug surfacing.
+  - **Migration:** name the permitted actions explicitly (`OperationalConstraintConfig(allowed_actions=[...])`). `ConstraintEnvelopeConfig.operational` is not optional, so a PACT envelope always carries the dimension and always needs an explicit allowlist.
+  - **Also fixed:** `_validate_bridge_scope_locked` read `envelope.operational.allowed_actions` with no `is not None` guard, unlike the `verify_action` path; the shared predicate reads `None` as "dimension not configured" instead of raising `AttributeError` inside a lock-held validation path.
+  - **Unchanged:** a non-empty allowlist behaves exactly as before at every surface, and the blocklist keeps its own monotonicity rule — tightening compares allowlists, and the eval-time intersection still unions blocklists and re-subtracts them.
+
 ## [0.18.0] — 2026-07-22 — Deprecate the untrusted metadata['tenant_id'] tenant fallback (#1919)
 
 ### Changed (Security)

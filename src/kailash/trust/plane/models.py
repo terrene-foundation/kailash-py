@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
+from kailash.trust.action_policy import allowed_actions_tightening_violation
 from kailash.trust.signing.crypto import serialize_for_signing
 
 logger = logging.getLogger(__name__)
@@ -328,15 +329,17 @@ class ConstraintEnvelope:
             set(self.operational.blocked_actions)
         ):
             return False
-        # Allowed actions: if other restricts, this must be subset (fewer = tighter)
-        # Dropping the allowlist entirely (empty) = unrestricted = loosening
-        if other.operational.allowed_actions:
-            if not self.operational.allowed_actions:
-                return False  # Parent restricts, child unrestricted = loosening
-            if not set(self.operational.allowed_actions).issubset(
-                set(other.operational.allowed_actions)
-            ):
-                return False
+        # Allowed actions: this allowlist must be a SUBSET of other's.
+        # Uses the shared restrictiveness model (GH #2218,
+        # security.md § Enforcement-Surface Parity). An EMPTY allowlist permits
+        # nothing, so it is the TIGHTEST value -- not "unrestricted". The
+        # previous spelling skipped the check when the parent allowlist was
+        # empty, letting a child claim actions the parent could not perform.
+        if (
+            allowed_actions_tightening_violation(other.operational, self.operational)
+            is not None
+        ):
+            return False
         # Blocked paths: this must be superset
         if not set(other.data_access.blocked_paths).issubset(
             set(self.data_access.blocked_paths)

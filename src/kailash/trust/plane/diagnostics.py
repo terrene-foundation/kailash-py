@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from kailash.trust._locking import safe_read_json
+from kailash.trust.plane.store.filesystem import sort_anchor_files
 
 
 def analyze_constraints(
@@ -39,7 +40,7 @@ def analyze_constraints(
     action_types: Counter[str] = Counter()
 
     if anchors_dir.exists():
-        for af in sorted(anchors_dir.glob("*.json")):
+        for af in sort_anchor_files(anchors_dir.glob("*.json")):
             data = safe_read_json(af)
             action = data.get("action", "")
             action_types[action] += 1
@@ -102,7 +103,11 @@ def _compute_utilization(
     blocked = set(envelope.operational.blocked_actions)
 
     if not allowed and not blocked:
-        return {"status": "unconstrained", "percentage": 0}
+        # GH #2218: an empty allowlist permits NOTHING at every enforcement
+        # surface. Reporting it as "unconstrained" told the operator the exact
+        # opposite of the verdict they would get, which is the mental model
+        # the bug came from.
+        return {"status": "permits_nothing", "percentage": 0}
 
     used_allowed = allowed & set(action_types.keys())
     tested_blocked = blocked & set(action_types.keys())

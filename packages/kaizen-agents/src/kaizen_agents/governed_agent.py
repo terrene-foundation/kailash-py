@@ -27,6 +27,7 @@ import logging
 import math
 from typing import Any
 
+from kailash.trust.action_policy import evaluate_action
 from kailash.trust.envelope import AgentPosture, ConstraintEnvelope
 from kaizen.core.base_agent import BaseAgent
 from kaizen_agents.wrapper_base import WrapperBase
@@ -193,21 +194,26 @@ class L3GovernedAgent(WrapperBase):
 
         action = inputs.get("_action", "")
         if not action:
+            # The caller declared no action, so there is nothing to match
+            # against the allow/block lists. This is orthogonal to GH #2218:
+            # it behaves identically for empty and non-empty allowlists, so
+            # no surface disagrees about it.
             return
 
-        # Check blocked actions first (deny wins)
-        if ops.blocked_actions and action in ops.blocked_actions:
+        # The allow/block decision lives in ONE place
+        # (kailash.trust.action_policy), shared with
+        # GovernanceEngine.verify_action, GradientEngine and the bridge scope
+        # validator (GH #2218, security.md § Enforcement-Surface Parity).
+        # This surface previously spelled the check as
+        # ``if ops.allowed_actions and action not in ops.allowed_actions`` --
+        # the ``and`` short-circuited on an EMPTY allowlist, so an agent whose
+        # operator had tightened the allowlist down to nothing was permitted
+        # EVERY action on its own run() path.
+        verdict = evaluate_action(ops, action)
+        if not verdict.permitted:
             raise GovernanceRejectedError(
                 dimension="operational",
-                detail=f"Action '{action}' is explicitly blocked.",
-            )
-
-        # If allowed_actions is non-empty, the action must be in the list
-        if ops.allowed_actions and action not in ops.allowed_actions:
-            raise GovernanceRejectedError(
-                dimension="operational",
-                detail=f"Action '{action}' is not in the allowed actions list: "
-                f"{sorted(ops.allowed_actions)}.",
+                detail=f"{verdict.reason}.",
             )
 
     def _evaluate_posture_ceiling(self) -> None:

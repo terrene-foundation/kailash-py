@@ -750,6 +750,29 @@ class PostgresTrustPlaneStore:
             )
             return [row["data"] for row in cursor.fetchall()]
 
+    def latest_anchor(self) -> dict | None:
+        """Return the most recently appended anchor, or ``None`` if empty.
+
+        PostgreSQL exposes no stable implicit insertion order (``ctid`` moves
+        on rewrite), so the ordering key is the anchor's own ISO-8601
+        ``timestamp`` — the chronological field every anchor minted by the
+        trust plane carries. Anchors with no ``timestamp`` sort last
+        (``NULLS LAST``) and are ordered by ``anchor_id`` so the result is
+        total and deterministic rather than arbitrary.
+
+        It is deliberately not a bounded listing indexed at the tail, which
+        would return the ``limit``-th record once the chain outgrew the page.
+        """
+        with self._safe_connection() as conn:
+            row = conn.execute(
+                "SELECT data FROM anchors "
+                "ORDER BY (data->>'timestamp') DESC NULLS LAST, anchor_id DESC "
+                "LIMIT 1"
+            ).fetchone()
+        if row is None:
+            return None
+        return row["data"]
+
     # ------------------------------------------------------------------
     # WAL (Write-Ahead Log for cascade revocation)
     # ------------------------------------------------------------------

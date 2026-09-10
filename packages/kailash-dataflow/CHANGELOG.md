@@ -1,8 +1,114 @@
 # DataFlow Changelog
 
-## [Unreleased]
+> Dates on release headings are PyPI **publication** dates, not branch-prep
+> dates. A section written during release prep MUST have its date corrected at
+> publish time if the publish slips — see the 2.20.0 correction below.
 
-### Fixed — SQLite URI-filename (`file:`) connection strings are recognised again (#1502 regression)
+## [2.20.1] — 2026-09-11
+
+Two security fixes, no API change and no configuration change. Both are
+upgrade-in-place.
+
+### Security — a hostile webhook timestamp no longer crashes the request or vanishes from your metrics (#2189)
+
+**Who is affected.** Anyone receiving webhooks through DataFlow Fabric's
+`WebhookReceiver` — any source carrying a `WebhookConfig`. All three providers
+that read a timestamp are affected: `stripe` and `slack` inside their signature
+verifiers, and `generic` — the DEFAULT `WebhookConfig.provider` — inside the
+receiver's own `X-Webhook-Timestamp` window.
+
+**What broke.** Anyone who could POST to your webhook endpoint could send a
+timestamp that is a perfectly valid number but outside the range the operating
+system can turn into a date, and `WebhookReceiver.handle_webhook()` raised
+instead of returning. Measured against the published 2.20.0:
+
+```
+>>> await receiver.handle_webhook("src", {"stripe-signature": "t=1e300,v1=deadbeef"}, b"{}")
+OverflowError: timestamp out of range for platform time_t
+```
+
+**No valid signature was required.** The timestamp is converted BEFORE the HMAC
+comparison, so the crash is reachable by an unauthenticated caller as long as
+the source is registered and its secret env var is set — i.e. in normal
+production configuration. `handle_webhook` documents a
+`{"accepted": bool, "reason": str}` return; an escaping exception breaks that
+contract, and whatever HTTP layer you mount the receiver behind renders it as a
+500 rather than a clean rejection.
+
+**The quieter half.** Because the exception escaped, `metrics.record_webhook()`
+was never reached, so the rejected delivery was never counted into
+`fabric_webhook_received_total`. A burst of these was **invisible** to your
+monitoring rather than merely mis-reported. Measured on 2.20.0 the metric
+recorded nothing at all; it now records the delivery as rejected.
+
+**What is safe now.** The conversion moved INSIDE the guard and the guard's
+failure set was completed, so the same request returns
+`{"accepted": False, "reason": "Stripe-Signature timestamp not numeric"}` (and
+the Slack equivalent) and the metric counts it. Separately, `handle_webhook`
+now wraps the entire verifier call: a verifier operates only on
+attacker-controlled headers and body, so ANY unanticipated exception from one is
+logged, counted as a rejection, and returned as
+`{"accepted": False, "reason": "Signature verification failed"}` instead of
+propagating.
+
+**Root cause.** The parse was guarded with `math.isfinite`, which admits
+finite-but-out-of-range values, while the `datetime.fromtimestamp()` conversion
+that actually fails on them sat OUTSIDE the guarded block.
+
+**The default `generic` provider is closed in THIS release.** `#2189` fixed the
+Stripe and Slack verifiers and recorded that the generic path "already caught
+`OverflowError`". It did — but `datetime.fromtimestamp` does not raise a single
+type for out-of-range input. Measured on CPython 3.13 / macOS, `1e300` raises
+`OverflowError` while `1e18` raises `OSError: [Errno 84] Value too large to be
+stored in data type`. The generic path caught only the first, so the DEFAULT
+provider still raised out of `handle_webhook` and still skipped the metric.
+`OSError` is now part of the caught set on all three paths.
+
+**No action needed.** No API, signature or configuration change.
+
+### Security — the PostgreSQL `verify-ca` / `verify-full` TLS floor is stated by DataFlow, not inherited from the host (#2175)
+
+**Who is affected.** Anyone connecting with `sslmode=verify-ca` or
+`sslmode=verify-full`. `sslmode=disable`, `require` and `prefer` are unchanged —
+they do not build an `SSLContext` at all.
+
+**What changed.** `PostgreSQLAdapter.get_connection_parameters()` built its
+`SSLContext` with `ssl.create_default_context()` and left `minimum_version` at
+whatever the host interpreter's OpenSSL build happens to default to. It now
+pins `ssl.TLSVersion.TLSv1_2` explicitly.
+
+**What this does and does not change — measured, so you can size it.** On a
+stock CPython 3.13 build `create_default_context()` already returns
+`minimum_version = TLSVersion.TLSv1_2`, so on such a host there is **no
+behavioural change at all**. The pin matters on a runtime whose default floor is
+lower. With the host default forced to TLS 1.0:
+
+```
+2.20.0 : minimum_version = TLSVersion.TLSv1     (inherited from the host)
+2.20.1 : minimum_version = TLSVersion.TLSv1_2   (pinned by DataFlow)
+```
+
+**Why it is worth shipping anyway.** This is the channel that carries your
+database credentials and every row you read or write, and the caller asked for
+an authenticated channel by choosing `verify-ca`/`verify-full`. What that
+channel permits should be stated by the code that owns the trust decision, not
+inherited from a deployment detail. Part of a sweep of every SSL-context
+construction in shipped source.
+
+**Migration.** If your PostgreSQL server genuinely cannot negotiate TLS 1.2 AND
+your host's default floor was below it, that connection will now be refused
+rather than silently downgraded. TLS 1.0/1.1 are deprecated; upgrade the server
+rather than the client.
+
+## [2.20.0] — 2026-08-17 — Generated identifiers fitted to the connection's dialect; database-type detection fails closed (#1971)
+
+> **Heading date corrected in 2.20.1.** This section previously read
+> `2026-08-05`, the date the version was bumped on the branch. 2.20.0 was
+> actually published to PyPI on **2026-08-17**, twelve days later, and the entry
+> immediately below landed in between — which is why it was mis-filed under
+> `[Unreleased]` until 2.20.1 moved it here.
+
+### Fixed — SQLite URI-filename (`file:`) connection strings are recognised again (#1502 regression) — SHIPPED IN 2.20.0
 
 `ConnectionParser.detect_database_type` gained a fail-closed scheme allowlist in the
 #1971 work. The allowlist omitted `file:` — SQLite's own URI-filename scheme
@@ -59,8 +165,6 @@ each one rejects `gopher://` and names the rejected scheme.
 **The fail-closed posture is unchanged.** This is a positive allowlist entry, not a
 permissive fallback: every genuinely unknown scheme still raises rather than
 guessing an engine, because an incorrect engine emits SQL for the wrong database.
-
-## [2.20.0] — 2026-08-05 — Generated identifiers fitted to the connection's dialect; database-type detection fails closed (#1971)
 
 ### Fixed — generated identifiers are fitted to the connection's dialect (#1971)
 
