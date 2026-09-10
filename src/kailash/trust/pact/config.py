@@ -27,6 +27,16 @@ from typing import Any, Self
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from kailash.trust import ConfidentialityLevel, TrustPosture
+from kailash.trust.action_policy import (
+    ActionPolicy,
+    ActionVerdict,
+    action_permitted,
+    allowed_actions_tightening_violation,
+    evaluate_action,
+    evaluate_scope,
+    permitted_action_set,
+    scope_permitted,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1382,24 +1392,31 @@ class OrgDefinition(BaseModel):
                         )
                     )
 
-                # Operational tightening -- allowed actions
-                if lead_env.operational and sub_env.operational:
-                    lead_actions = set(lead_env.operational.allowed_actions or [])
-                    sub_actions = set(sub_env.operational.allowed_actions or [])
-                    if lead_actions and sub_actions:
-                        extra = sub_actions - lead_actions
-                        if extra:
-                            results.append(
-                                ValidationResult(
-                                    severity=ValidationSeverity.ERROR,
-                                    message=(
-                                        f"Agent '{member_id}' has actions {sorted(extra)} "
-                                        f"not in lead '{lead_id}' envelope"
-                                    ),
-                                    code="OPERATIONAL_TIGHTENING",
-                                )
-                            )
+                # Operational tightening -- allowed actions. Shared
+                # restrictiveness model (GH #2218): an EMPTY lead allowlist
+                # permits nothing, so a member declaring any action widens.
+                # Called UNGUARDED on purpose: the predicate owns both None
+                # cases (absent lead dimension = widest; a member that drops
+                # the dimension the lead constrains = widening). Gating the
+                # call on `lead_env.operational and sub_env.operational` would
+                # make the drop-the-dimension branch dead -- the same
+                # short-circuit shape as the defect being fixed.
+                aa_violation = allowed_actions_tightening_violation(
+                    lead_env.operational, sub_env.operational
+                )
+                if aa_violation is not None:
+                    results.append(
+                        ValidationResult(
+                            severity=ValidationSeverity.ERROR,
+                            message=(
+                                f"Agent '{member_id}' {aa_violation} "
+                                f"vs lead '{lead_id}' envelope"
+                            ),
+                            code="OPERATIONAL_TIGHTENING",
+                        )
+                    )
 
+                if lead_env.operational and sub_env.operational:
                     # Operational tightening -- rate limit
                     lead_rate = lead_env.operational.max_actions_per_day
                     sub_rate = sub_env.operational.max_actions_per_day
@@ -1566,24 +1583,29 @@ class OrgDefinition(BaseModel):
                     )
                 )
 
-            # Operational tightening -- allowed actions
-            if parent_env.operational and child_env.operational:
-                parent_actions = set(parent_env.operational.allowed_actions or [])
-                child_actions = set(child_env.operational.allowed_actions or [])
-                if parent_actions and child_actions:
-                    extra = child_actions - parent_actions
-                    if extra:
-                        results.append(
-                            ValidationResult(
-                                severity=ValidationSeverity.ERROR,
-                                message=(
-                                    f"{child_label} has actions {sorted(extra)} "
-                                    f"not in {parent_label} envelope"
-                                ),
-                                code=code,
-                            )
-                        )
+            # Operational tightening -- allowed actions. Shared restrictiveness
+            # model (GH #2218): an EMPTY parent allowlist permits nothing, so a
+            # child declaring any action widens and must be rejected. Called
+            # UNGUARDED on purpose -- see the sibling site above: the predicate
+            # owns both None cases, and gating the call on
+            # `parent_env.operational and child_env.operational` would make the
+            # drop-the-dimension branch dead.
+            aa_violation = allowed_actions_tightening_violation(
+                parent_env.operational, child_env.operational
+            )
+            if aa_violation is not None:
+                results.append(
+                    ValidationResult(
+                        severity=ValidationSeverity.ERROR,
+                        message=(
+                            f"{child_label} {aa_violation} "
+                            f"vs {parent_label} envelope"
+                        ),
+                        code=code,
+                    )
+                )
 
+            if parent_env.operational and child_env.operational:
                 # Operational tightening -- rate limit
                 parent_rate = parent_env.operational.max_actions_per_day
                 child_rate = child_env.operational.max_actions_per_day
@@ -1803,6 +1825,18 @@ __all__ = [
     "circuit_breaker_active",
     "circuit_breaker_tightening_violation",
     "tighter_circuit_breaker",
+    # Allowed/blocked-action restrictiveness (GH #2218) -- the shared model every
+    # enforcement surface and every tightening validator consumes. Re-exported
+    # from kailash.trust.action_policy so PACT callers find it beside its
+    # circuit-breaker sibling.
+    "ActionPolicy",
+    "ActionVerdict",
+    "action_permitted",
+    "allowed_actions_tightening_violation",
+    "evaluate_action",
+    "evaluate_scope",
+    "permitted_action_set",
+    "scope_permitted",
     # Confidence / evidence-quality disposition gate (#1516 leg b)
     "ConfidenceThresholdConfig",
     # Verification gradient

@@ -403,10 +403,14 @@ class TestEnvelopeBypass:
         )
         engine.set_role_envelope(role_env)
 
-        # "read" is not in the empty allowed list -> blocked
+        # "read" is not in the empty allowed list -> blocked.
+        # GH #2218 gave the empty-allowlist denial its own reason, distinct
+        # from the "not in the list" denial, so an operator can tell the two
+        # apart; the VERDICT is unchanged.
         verdict = engine.verify_action("D1-R1-T1-R1", "read")
         assert verdict.level == "blocked"
-        assert "not in the allowed actions" in verdict.reason.lower()
+        assert "empty allowed-actions list" in verdict.reason.lower()
+        assert "permits nothing" in verdict.reason.lower()
 
     def test_degenerate_zero_spend_envelope(self) -> None:
         """An envelope with $0 max_spend blocks any action with cost > 0."""

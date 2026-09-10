@@ -102,7 +102,11 @@ def _compute_utilization(
     blocked = set(envelope.operational.blocked_actions)
 
     if not allowed and not blocked:
-        return {"status": "unconstrained", "percentage": 0}
+        # GH #2218: an empty allowlist permits NOTHING at every enforcement
+        # surface. Reporting it as "unconstrained" told the operator the exact
+        # opposite of the verdict they would get, which is the mental model
+        # the bug came from.
+        return {"status": "permits_nothing", "percentage": 0}
 
     used_allowed = allowed & set(action_types.keys())
     tested_blocked = blocked & set(action_types.keys())

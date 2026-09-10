@@ -13,6 +13,29 @@ such as `>=2.0`.
 
 ## [Unreleased]
 
+### Security (BREAKING) — an empty `allowed_actions` now denies at EVERY enforcement surface (#2218)
+
+`operational.allowed_actions` defaults to `[]`, and the enforcement surfaces disagreed about what that meant. Measured, on one envelope, one action:
+
+```
+action under test: 'delete_production_database'
+config                          gradient / governed agent / bridge    verify_action
+allowed_actions=[]  (default)   PERMIT                                deny
+allowed_actions=['read']        deny                                  deny
+```
+
+Row 2 is the control — with a non-empty allowlist the surfaces already agreed. Row 1 was the defect. **Removing every entry from the allowlist flipped a destructive action from denied to permitted.** `GovernanceEngine.verify_action` read an explicitly-defined-but-empty allowlist as "nothing is allowed"; `GradientEngine`, `L3GovernedAgent.run()` and the bridge scope validator all spelled the check as `if op.allowed_actions and action not in op.allowed_actions`, whose `and` short-circuits on the empty list and skips the check entirely.
+
+The victim of this is the operator who did the safest-looking thing: tightening the allowlist down to nothing, and reading `check_degenerate_envelope`'s "agent cannot perform any operations" warning as confirmation.
+
+The allow/block decision now lives in exactly one place — `kailash.trust.action_policy` — which every enforcement surface and every monotonic-tightening validator calls. In its restrictiveness model an empty allowlist, and an unreadable one, both rank **TIGHTEST**: they permit nothing. An absent operational dimension (`operational=None`) remains a distinct state meaning "not configured", which is still the widest.
+
+**BREAKING.** This lands on exactly the callers who omitted `allowed_actions` and were, until now, permitted everything at `GradientEngine.evaluate()`, `L3GovernedAgent.run()`, `GovernanceEngine.create_bridge()` and the plan composer. Under the fix they are denied everything. Their code was silently ungoverned, so this is the bug surfacing rather than a new bug — but it will read as a regression.
+
+**Migration.** Any envelope whose `operational` dimension exists must now name the actions it permits: `OperationalConstraintConfig(allowed_actions=["read", "write", ...])`. A deployment that intends "this dimension does not constrain actions" must say so by not configuring the dimension, not by leaving the list empty. Note that PACT's `ConstraintEnvelopeConfig.operational` is NOT optional — it carries a `default_factory` — so a PACT envelope always has the dimension and always needs an explicit allowlist. The trust-layer `ConstraintEnvelope` (the type `L3GovernedAgent` consumes) does accept `operational=None`.
+
+The monotonic-tightening validators are reconciled onto the same reading in the same change, so a configuration that registers cannot then be evaluated more widely than the one that defined it. A parent that permits nothing can no longer have a child that permits something — previously several validators read an empty parent allowlist as "widest" and waved the child through. Tightening compares **allowlists**; the blocklist keeps its own separate monotonicity rule and the eval-time envelope intersection continues to union blocklists and re-subtract them, so a child restating an action its ancestor blocks is unaffected.
+
 ## [2.64.0] — 2026-09-10 — A2A protected methods verify and authorize their callers; eight un-gated HTTP servers closed; no component invents its own signing or encryption key (#2203, #2072, #2112, #2083, #2092)
 
 ### Fixed — `import kailash.trust.a2a` failed on a `[trust]`-only install (#2203)

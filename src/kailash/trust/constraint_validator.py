@@ -29,6 +29,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
+from kailash.trust.action_policy import (
+    allowed_actions_tightening_violation,
+    operational_view,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -207,16 +212,19 @@ class ConstraintValidator:
                     f"Child {child_depth} > Parent {parent_depth}"
                 )
 
-        # Check action restrictions (allowed_actions must be subset)
+        # Check action restrictions (allowed_actions must be subset).
+        # Routed through the shared restrictiveness model (GH #2218) so this
+        # surface cannot drift from the envelope-based enforcement surfaces.
+        # An ABSENT parent key means the parent does not constrain actions at
+        # all (widest); an empty parent LIST permits nothing (tightest).
         if "allowed_actions" in parent_constraints:
-            parent_actions = set(parent_constraints["allowed_actions"])
-            child_actions = set(child_constraints.get("allowed_actions", []))
-            if child_actions and not child_actions.issubset(parent_actions):
+            aa_violation = allowed_actions_tightening_violation(
+                operational_view(allowed=parent_constraints["allowed_actions"]),
+                operational_view(allowed=child_constraints.get("allowed_actions", [])),
+            )
+            if aa_violation is not None:
                 violations.append(ConstraintViolation.ACTION_RESTRICTION_REMOVED)
-                added_actions = child_actions - parent_actions
-                details["allowed_actions"] = (
-                    f"Child adds actions not in parent: {added_actions}"
-                )
+                details["allowed_actions"] = aa_violation
 
         return ValidationResult(
             valid=len(violations) == 0,
@@ -562,17 +570,16 @@ class ConstraintValidator:
             # Parent doesn't restrict, child can specify any
             return
 
-        parent_actions = set(parent_constraints.get("allowed_actions", []))
-        child_actions = set(child_constraints.get("allowed_actions", []))
-
-        # If child specifies actions, they must be subset of parent's
-        if child_actions:
-            added_actions = child_actions - parent_actions
-            if added_actions:
-                violations.append(ConstraintViolation.ACTION_RESTRICTION_REMOVED)
-                details["allowed_actions"] = (
-                    f"Child adds actions not in parent: {added_actions}"
-                )
+        # Shared restrictiveness model (GH #2218): the child's allowlist must
+        # be a subset of the parent's. An empty parent list permits nothing,
+        # so any child action is a widening.
+        aa_violation = allowed_actions_tightening_violation(
+            operational_view(allowed=parent_constraints.get("allowed_actions", [])),
+            operational_view(allowed=child_constraints.get("allowed_actions", [])),
+        )
+        if aa_violation is not None:
+            violations.append(ConstraintViolation.ACTION_RESTRICTION_REMOVED)
+            details["allowed_actions"] = aa_violation
 
     def _validate_forbidden_actions(
         self,

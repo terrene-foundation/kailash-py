@@ -61,9 +61,14 @@ class TestUtilization:
         assert result["percentage"] == 0
 
     def test_empty_envelope(self):
+        # GH #2218: an envelope with neither an allowlist nor a blocklist
+        # permits NOTHING at every enforcement surface. This diagnostic used
+        # to report it as "unconstrained", telling the operator the exact
+        # opposite of the verdict they would get -- the mental model the bug
+        # came from.
         env = ConstraintEnvelope()
         result = _compute_utilization(env, Counter())
-        assert result["status"] == "unconstrained"
+        assert result["status"] == "permits_nothing"
 
     def test_full_utilization(self, sample_envelope):
         actions = Counter(
