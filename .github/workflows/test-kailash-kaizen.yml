@@ -387,11 +387,18 @@ jobs:
           # kaizen-agents installed AFTER kailash-kaizen so its kailash-kaizen>=2.35.0
           # pin resolves against the local editable kaizen (see NOTE above).
           uv pip install -e "packages/kaizen-agents" --python .venv/bin/python
-          # src/kaizen/core/autonomy/observability/tracing_manager.py hard-imports
-          # opentelemetry.exporter.otlp.proto.grpc, which the [observability] extra
-          # does NOT ship — install it explicitly so every test that transitively
-          # imports tracing_manager collects. (kaizen packaging gap: [observability]
-          # should include this exporter — test-hygiene follow-up.)
+          # kailash-pact: needed by the #2218 cross-package parity gate below.
+          # That test spans three enforcement surfaces and the third is in
+          # kaizen_agents, so it cannot run in the "Test PACT" job -- that job
+          # is deliberately kaizen-free (its enforcement-mode tests assert
+          # PactEngine's behaviour when kaizen-agents is ABSENT). This job is
+          # the only environment where all three surfaces coexist.
+          uv pip install -e "packages/kailash-pact" --python .venv/bin/python
+          # CLOSED (kaizen 2.46.1): the [observability] extra now declares
+          # opentelemetry-exporter-otlp itself, so the explicit install this
+          # comment used to describe as a "packaging gap — test-hygiene
+          # follow-up" is no longer load-bearing. Kept as a belt-and-braces pin
+          # of the grpc variant specifically; harmless once already satisfied.
           uv pip install opentelemetry-exporter-otlp-proto-grpc --python .venv/bin/python
           # Loose deps the expanded unit tiers hard-import but NO kaizen extra
           # declares: pynacl (trust crypto), pytz (governance time-windows),
@@ -478,6 +485,25 @@ jobs:
             tests/regression/ \
             -m 'not (integration or e2e or requires_azure or requires_docker or requires_google or benchmark or requires_postgres or requires_redis or requires_ollama or requires_db or requires_llm or llm_execution or real_llm or ollama_validation or cost or landing_ai or stress or endurance or requires_infrastructure or requires_kafka or requires_mongodb or memory_intensive or requires_isolation or data_intensive or flaky or slow or load or migration or openai or anthropic or google or docker or ollama or integration_llm or tier3 or performance)' \
             --timeout=30 --maxfail=50 -q
+
+      - name: Test (#2218 cross-package allowed_actions parity)
+        # This file lives in packages/kailash-pact but CANNOT run in the "Test
+        # PACT" job: surface 3 of the parity it asserts is kaizen_agents, and
+        # that job is deliberately kaizen-free. Left unrun it would be a gate
+        # that cannot fail, so it runs HERE, where all three surfaces exist.
+        # It carries an importorskip for kaizen_agents, which means a silent
+        # SKIP in this job would be indistinguishable from a pass -- so assert
+        # it actually collected, and fail loudly if it did not.
+        timeout-minutes: 5
+        working-directory: packages/kailash-pact
+        run: |
+          ../../.venv/bin/python -m pytest \
+            tests/regression/test_issue_2218_allowed_actions_parity.py \
+            --timeout=60 -q -p no:cacheprovider | tee /tmp/parity.log
+          if grep -q "no tests ran\|skipped" /tmp/parity.log; then
+            echo "::error::#2218 parity gate SKIPPED in the job that exists to run it"
+            exit 1
+          fi
 
       - name: Test (kaizen-agents regression suite, infra-free)
         # packages/kaizen-agents/tests/ appeared in NO pytest invocation in ANY

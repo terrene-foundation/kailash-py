@@ -84,10 +84,35 @@ from kailash.trust.pact.envelopes import MonotonicTighteningError, RoleEnvelope
 from kailash.trust.pact.exceptions import PactError
 from kailash.trust.plane.models import ConstraintEnvelope as PlaneEnvelope
 from kailash.trust.plane.models import OperationalConstraints as PlaneOperational
-from kaizen.core.base_agent import BaseAgent
-from kaizen.core.config import BaseAgentConfig
-from kaizen_agents.governed_agent import GovernanceRejectedError, L3GovernedAgent
-from pact.examples.university.org import create_university_org
+
+# Surface 3 of the parity this file asserts lives in kaizen_agents, which the
+# "Test PACT" job deliberately does NOT install -- tests/unit/test_enforcement_modes.py
+# in this same package asserts PactEngine's behaviour when kaizen-agents is
+# ABSENT, so installing it there breaks five tests by construction. A bare
+# module-scope import therefore errored the whole file at COLLECTION with
+# `ModuleNotFoundError: No module named 'kaizen'`, which is how this gate came
+# to be red rather than merely unrun.
+#
+# This skip is NOT the gate quietly opting out: the file is also run by
+# test-kailash-kaizen.yml, in the environment that has all three surfaces
+# installed, so the parity assertion genuinely executes on every PR. Without
+# that second runner this would be a check that cannot fail, and the skip would
+# be worse than the error it replaces.
+pytest.importorskip(
+    "kaizen_agents.governed_agent",
+    reason=(
+        "parity surface 3 needs kaizen-agents; this file is run for real by "
+        "test-kailash-kaizen.yml, which installs it"
+    ),
+)
+
+from kaizen.core.base_agent import BaseAgent  # noqa: E402
+from kaizen.core.config import BaseAgentConfig  # noqa: E402
+from kaizen_agents.governed_agent import (  # noqa: E402
+    GovernanceRejectedError,
+    L3GovernedAgent,
+)
+from pact.examples.university.org import create_university_org  # noqa: E402
 
 # The university org's CS Chair, and the Dean who defines its envelope.
 CS_CHAIR = "D1-R1-D1-R1-D1-R1-T1-R1"
