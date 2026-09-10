@@ -1,6 +1,28 @@
-# Session Notes — 2026-09-01 (cont-25: CI/local-gate parsimony; #2203 plan STILL unapproved)
+# Session Notes — 2026-09-10 (cont-26: DEV IS THE TRUNK; #2203 plan STILL unapproved)
 
 ## Where we are
+
+**`dev` IS THE INTEGRATION TRUNK AS OF 2026-09-10. READ THIS BEFORE TOUCHING ANY BRANCH.**
+
+- The primary checkout tracks **`dev`**, not `main`. Lane work merges into `dev`
+  the same session it is finished — no PR, no gate, no wait.
+- **"Landed" now means "in `dev`".** `unlanded-work-surface.js` and
+  `worktree-reap.mjs` both resolve `COC_LANDED_TARGET` → `origin/dev` → the old
+  `origin/HEAD` chain. Override with `COC_LANDED_TARGET=origin/main` to see the
+  old view.
+- **`dev` → `main` is ONE deliberate promotion PR costing ONE gate run.** It is
+  not automatic. Current gap: `git rev-list --count origin/main..origin/dev`
+  (was 3 at cont-26 close — re-measure, do not cite).
+- Deploy runs off a pinned `dev` commit, never `main`. Deploy authorisation to a
+  real-client namespace still needs an explicit human yes — unchanged.
+- Contract: `rules/dev-integration-trunk.md`.
+
+Board at cont-26 close: 2 local refs (dev, main), 2 remote, 1 worktree, 0 open
+PRs, clean tree.
+
+**#2203 wave plan is STILL AWAITING APPROVAL** — unchanged for four sessions. It
+is the top item.
+
 
 main — green, PR queue empty, working tree clean, one local branch.
 
@@ -185,6 +207,16 @@ pre-fix tool.
   already-gone volumes and return non-zero. cont-24 read 315 such as
   "refused (in-use)" — they were "already removed". Re-measure with
   `docker volume ls -q | wc -l`, never trust the loop's error tally.
+- **Pushing `dev` fires ZERO workflow runs — verified by the runs API, not by
+  reading `on:` blocks.** Three separate `dev` pushes at cont-26, each checked
+  against a pinned pre-push run-id baseline: 0 runs every time. If you need to
+  re-confirm, query `gh run list --branch dev`; never infer it from trigger config.
+- **The directive's file table does NOT match this repo.** It names
+  `.claude/bin/branch-landed-check.mjs` and `.claude/hooks/wip-closure-guard.js`
+  — NEITHER EXISTS HERE. The live surfaces are `unlanded-work-surface.js`
+  (resolves from `origin/HEAD`, not a constant) and `worktree-reap.mjs`. Creating
+  the named files would have left two dead files and the real predicates still
+  pointed at `main`.
 - **The local gate is 29s, not "tens of minutes".** Measured: `tests/unit` with the
   pre-commit marker filter is 4891 passed / 27.20s. If a session reports the gate
   as slow, the cause is TRIGGERING, not size — re-measure before optimising.
@@ -229,6 +261,8 @@ pre-fix tool.
 | --- | --- | --- | --- |
 | `proto-drift` | #2203 MCP + A2A superseded revisions | **TOP PRIORITY**, UNBLOCKED; plan awaiting approval | #2203 comment, `02-plans/03-2203-*` |
 | `sweep5-orphans` | was 52/18 → now **22 orphans, 0 gaps**; 3 triaged by hand | open, scanner fixed | PR #2205, § Sweep-5 above |
+| `dev-trunk` | dev integration trunk; landing is free | **CLOSED** — landed in dev | `rules/dev-integration-trunk.md` |
+| `promotion-cadence` | dev->main promotion has no standing cadence yet | **OPEN** — needs a human decision | this file § Where we are |
 | `ci-local-parsimony` | iteration/juncture split; 53->35 jobs, 82s->3s gate | **CLOSED** — merged | PR #2213, `rules/test-parsimony.md` |
 | `docker-sprawl` | one compose group + guard; 491→35 volumes | **CLOSED** — merged | PR #2208, `rules/docker-no-sprawl.md` |
 | `dataflow-durability` | #1548 residual uncommitted-DDL window | **NEW**, filed with evidence | #2206 |
