@@ -348,6 +348,19 @@ class TestNoPickleNoCopy:
     PROPERTY -- a context cannot be pickled or copied -- and deliberately not
     the mechanism; do not read a green run as evidence that any one of the two
     overrides is still present.
+
+    Scope, measured -- this is DEFENCE IN DEPTH, not a forgery boundary.
+    ``context.py`` describes the overrides as blocking "forged context
+    injection", which overstates them. A forger does not need pickle:
+    ``dataclasses.replace(ctx, role_address="D9-R9-ADMIN")`` and (3.13)
+    ``copy.replace`` both succeed, and are STRICTLY STRONGER than blind
+    construction because they inherit ``effective_envelope`` and ``clearance``
+    from a verified context while swapping the address. Direct construction is
+    unguarded too -- only ``from_dict`` warns. What these overrides do buy is
+    that a context cannot ride along inside a pickled or deep-copied payload,
+    which is worth keeping and worth pinning; they are not a reason to trust an
+    unverified context. ``GovernanceEngine.get_context()`` remains the only
+    authoritative construction path.
     """
 
     @staticmethod

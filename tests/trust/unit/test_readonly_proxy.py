@@ -150,12 +150,22 @@ class TestIntrospectionStillWorks:
         assert proxy.__class__ is ReadOnlyAttributeProxy
         assert isinstance(proxy, ReadOnlyAttributeProxy)
 
-    def test_repr_does_not_leak_target_state(
-        self, proxy: ReadOnlyAttributeProxy
+    def test_repr_names_the_proxy_and_not_the_target_object(
+        self, proxy: ReadOnlyAttributeProxy, target: _Target
     ) -> None:
+        """Deliberately does NOT assert 'a property value is absent'.
+
+        The base repr is ``f"<{label}{detail}>"`` with an empty default
+        ``detail``, so asserting that some property value is missing from it
+        cannot fail -- it is structurally incapable of containing one. That
+        assertion was here and was vacuous. What IS falsifiable is that the
+        repr identifies the proxy and does not embed the target's own repr
+        (which for most objects carries its memory address).
+        """
         text = repr(proxy)
         assert "_Target read-only view" in text
-        assert "target-name" not in text
+        assert repr(target) not in text
+        assert hex(id(target)) not in text
 
 
 class TestAllowlistConstructionIsFailClosed:

@@ -207,8 +207,14 @@ def _parse_req(spec: str) -> Pin | None:
 
 def _iter_manifests(root: Path):
     for p in root.rglob("pyproject.toml"):
-        rel = p.relative_to(root).as_posix()
-        if any(part in PRUNE_PARTS for part in p.parts):
+        rel_path = p.relative_to(root)
+        rel = rel_path.as_posix()
+        # Prune on the path RELATIVE to the scan root, never the absolute path.
+        # `root` is resolved, so matching p.parts tested every ancestor
+        # directory of the checkout too -- and a checkout living under any
+        # directory named e.g. "build" or "dist" pruned EVERY manifest,
+        # silently turning this gate into a no-op that reports success.
+        if any(part in PRUNE_PARTS for part in rel_path.parts):
             continue
         if any(marker in rel for marker in FIXTURE_MARKERS):
             continue

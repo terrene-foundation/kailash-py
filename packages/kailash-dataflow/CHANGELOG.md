@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Security — `/fabric/_batch` caps the number of products per request (RT-SERVE-1)
+
+`_make_batch_handler` applied no limit to `?products=`, so a single URL fanned out to one product execution per comma-separated name and could drive arbitrary load. Requests naming more than `_MAX_BATCH_PRODUCTS` (50) now return `{"_status": 400}` with the module's existing error shape.
+
+The guard runs before tenant extraction and product routing, so it does not touch the multi-tenant or parameterized-product paths. **Behaviour change:** a caller currently sending more than 50 products in one batch request will start receiving a 400.
+
+
 ### Fixed — SQLite URI-filename (`file:`) connection strings are recognised again (#1502 regression)
 
 `ConnectionParser.detect_database_type` gained a fail-closed scheme allowlist in the

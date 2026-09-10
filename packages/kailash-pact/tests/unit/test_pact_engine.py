@@ -894,11 +894,24 @@ class TestReadOnlyGovernanceViewIsActuallyReadOnly:
         from kailash.trust.pact.engine import GovernanceEngine
 
         gov = engine_from_yaml.governance
+        admin = engine_from_yaml._admin_governance
         for name in sorted(_ReadOnlyGovernanceView._ALLOWED):
             value = getattr(gov, name)
+            # `not isinstance(value, GovernanceEngine)` ALONE is too weak: a
+            # bound method is not a GovernanceEngine, so that assertion stayed
+            # green while `gov.list_roles.__self__` WAS the engine. Check the
+            # object AND the two places it can hide behind one.
+            assert value is not admin, f"'{name}' IS the GovernanceEngine"
             assert not isinstance(
                 value, GovernanceEngine
-            ), f"'{name}' leaks the GovernanceEngine"
+            ), f"'{name}' leaks a GovernanceEngine"
+            assert (
+                getattr(value, "__self__", None) is not admin
+            ), f"'{name}' leaks the engine via __self__"
+            cells = [
+                c.cell_contents for c in (getattr(value, "__closure__", None) or ())
+            ]
+            assert admin not in cells, f"'{name}' closes over the engine"
 
     # --- Pole 4: a name on NO list at all is DENIED (default-deny) ---------
 
