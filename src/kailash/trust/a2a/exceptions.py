@@ -74,6 +74,22 @@ class JsonRpcInternalError(A2AError):
         super().__init__(message, code=-32603, data=data)
 
 
+# A2A 1.0 Protocol Error Codes (-32001 to -32099)
+#
+# Codes are fixed by the A2A 1.0 specification § "Error Code Mappings" and are
+# NOT free to renumber: a client maps -32001 to TaskNotFoundError by the table,
+# so changing the number silently changes the error a conformant client sees.
+class TaskNotFoundError(A2AError):
+    """The requested task id is not known to this agent (A2A 1.0: -32001)."""
+
+    def __init__(self, task_id: str, data: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            f"Task not found: {task_id}",
+            code=-32001,
+            data={"task_id": task_id, **(data or {})},
+        )
+
+
 # EATP-Specific Error Codes (-40001 to -40099)
 class TrustVerificationError(A2AError):
     """Trust verification failed for agent."""

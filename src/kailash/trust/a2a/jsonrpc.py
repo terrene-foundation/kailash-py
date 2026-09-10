@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+import uuid
 from typing import TYPE_CHECKING, Any, Callable, Coroutine, Dict, List, Optional
 
 if TYPE_CHECKING:
@@ -25,6 +26,18 @@ from kailash.trust.a2a.exceptions import (
     JsonRpcInvalidRequestError,
     JsonRpcMethodNotFoundError,
     JsonRpcParseError,
+    TaskNotFoundError,
+)
+from kailash.trust.a2a.messaging import (
+    GetTaskRequest,
+    Message,
+    Part,
+    Role,
+    SendMessageRequest,
+    SendMessageResponse,
+    Task,
+    TaskState,
+    TaskStatus,
 )
 from kailash.trust.a2a.models import (
     AuditQueryRequest,
@@ -36,11 +49,16 @@ from kailash.trust.a2a.models import (
     VerificationRequest,
     VerificationResponse,
 )
+from kailash.trust.a2a.task_store import InMemoryTaskStore
 
 logger = logging.getLogger(__name__)
 
 # Type alias for JSON-RPC method handlers
 MethodHandler = Callable[[Dict[str, Any], Optional[str]], Coroutine[Any, Any, Any]]
+
+# Type alias for an A2A 1.0 message executor: takes the inbound Message and the
+# Task created for it, returns the Task in whatever state execution reached.
+MessageHandler = Callable[[Message, Task], Coroutine[Any, Any, Task]]
 
 
 class JsonRpcHandler:
@@ -242,6 +260,8 @@ class A2AMethodHandlers:
         agent_id: str,
         capabilities: List[str],
         invoke_handler: Optional[MethodHandler] = None,
+        message_handler: Optional[MessageHandler] = None,
+        task_store: Optional[InMemoryTaskStore] = None,
     ):
         """
         Initialize A2A method handlers.
@@ -251,6 +271,12 @@ class A2AMethodHandlers:
             agent_id: This agent's identifier.
             capabilities: List of capabilities this agent supports.
             invoke_handler: Optional custom handler for agent.invoke.
+            message_handler: Async callable that executes an inbound A2A 1.0
+                Message and returns the resulting Task. Without it SendMessage
+                still accepts and records the message, but the task never
+                leaves TASK_STATE_SUBMITTED — see :meth:`handle_send_message`.
+            task_store: Store backing SendMessage/GetTask. Defaults to a
+                bounded in-memory store.
         """
         from kailash.trust.operations import TrustOperations
 
@@ -258,6 +284,9 @@ class A2AMethodHandlers:
         self._agent_id = agent_id
         self._capabilities = capabilities
         self._invoke_handler = invoke_handler
+        self._message_handler = message_handler
+        self._task_store = task_store if task_store is not None else InMemoryTaskStore()
+        self._warned_no_message_handler = False
 
     async def handle_capabilities(
         self,
@@ -314,7 +343,16 @@ class A2AMethodHandlers:
                         "delegations_count": len(chain.delegations),
                     }
             except Exception:
-                pass
+                # The verification verdict above is already decided; the chain
+                # summary is optional enrichment, so a failure here degrades
+                # the response rather than invalidating it. Log and continue
+                # with chain_summary=None -- never swallow silently
+                # (zero-tolerance.md Rule 3).
+                logger.warning(
+                    "a2a.verify.chain_summary_unavailable",
+                    exc_info=True,
+                    extra={"agent_id": agent_id},
+                )
 
         # VerificationResult uses 'violations' and 'reason', not 'errors'
         errors = []
@@ -457,7 +495,14 @@ class A2AMethodHandlers:
                         for d in chain.delegations
                     ]
             except Exception:
-                pass
+                # Same shape as trust.verify above: the audit actions are
+                # already retrieved, and the delegation chain is optional
+                # enrichment. Degrade to delegation_chain=None, loudly.
+                logger.warning(
+                    "a2a.audit_query.delegation_chain_unavailable",
+                    exc_info=True,
+                    extra={"agent_id": agent_id},
+                )
 
             return AuditQueryResponse(
                 agent_id=agent_id,
@@ -490,8 +535,147 @@ class A2AMethodHandlers:
         # Default: return method not implemented
         raise JsonRpcMethodNotFoundError("agent.invoke not implemented for this agent")
 
+    async def handle_send_message(
+        self,
+        params: Dict[str, Any],
+        auth_token: Optional[str],
+    ) -> Dict[str, Any]:
+        """
+        Handle the A2A 1.0 ``SendMessage`` method.
+
+        Creates a Task for the inbound Message, executes it via the configured
+        message handler, and returns a ``SendMessageResponse``.
+
+        Without a configured message handler the task is created, recorded and
+        returned in ``TASK_STATE_SUBMITTED`` — a spec-valid response for an
+        asynchronous agent, and honestly observable via ``GetTask``, but it
+        will never progress. That is a wiring gap rather than a behaviour, so
+        it emits a one-time WARN naming the missing parameter instead of
+        failing silently (``security.md`` § Secure-Default).
+        """
+        from kailash.trust.a2a.exceptions import AuthenticationError
+
+        if not auth_token:
+            raise AuthenticationError("Authentication required for SendMessage")
+
+        try:
+            request = SendMessageRequest.from_dict(params)
+        except ValueError as e:
+            raise JsonRpcInvalidParamsError(str(e))
+
+        message = request.message
+        task_id = message.task_id or str(uuid.uuid4())
+        existing = self._task_store.get(task_id)
+
+        if existing is not None:
+            if existing.is_terminal:
+                raise JsonRpcInvalidParamsError(
+                    f"Task {task_id} is already in a terminal state "
+                    f"({existing.status.state.value}) and cannot accept messages"
+                )
+            task = existing
+            task.history.append(message)
+        else:
+            task = Task(
+                id=task_id,
+                status=TaskStatus(state=TaskState.SUBMITTED),
+                context_id=message.context_id,
+                history=[message],
+            )
+
+        self._task_store.put(task)
+
+        if self._message_handler is None:
+            if not self._warned_no_message_handler:
+                self._warned_no_message_handler = True
+                logger.warning(
+                    "a2a.send_message.no_message_handler",
+                    extra={
+                        "agent_id": self._agent_id,
+                        "detail": (
+                            "SendMessage is registered but no message_handler was "
+                            "supplied to A2AMethodHandlers; tasks are recorded and "
+                            "readable via GetTask but remain TASK_STATE_SUBMITTED"
+                        ),
+                    },
+                )
+        else:
+            try:
+                task = await self._message_handler(message, task)
+            except A2AError:
+                raise
+            except Exception as e:
+                logger.exception(
+                    "a2a.send_message.handler_error",
+                    extra={"agent_id": self._agent_id, "task_id": task_id},
+                )
+                task.status = TaskStatus(
+                    state=TaskState.FAILED,
+                    message=Message(
+                        message_id=str(uuid.uuid4()),
+                        role=Role.AGENT,
+                        parts=[Part(text=f"Message execution failed: {e}")],
+                        task_id=task_id,
+                        context_id=task.context_id,
+                    ),
+                )
+            self._task_store.put(task)
+
+        history_length = (
+            request.configuration.history_length if request.configuration else None
+        )
+        return SendMessageResponse(task=task).to_dict_with_history(history_length)
+
+    async def handle_get_task(
+        self,
+        params: Dict[str, Any],
+        auth_token: Optional[str],
+    ) -> Dict[str, Any]:
+        """
+        Handle the A2A 1.0 ``GetTask`` method.
+
+        Returns the task's current state. An unknown id raises
+        ``TaskNotFoundError`` (-32001 per the A2A 1.0 error-code mapping),
+        NOT a generic invalid-params error — a conformant client discriminates
+        on that code.
+        """
+        from kailash.trust.a2a.exceptions import AuthenticationError
+
+        if not auth_token:
+            raise AuthenticationError("Authentication required for GetTask")
+
+        try:
+            request = GetTaskRequest.from_dict(params)
+        except ValueError as e:
+            raise JsonRpcInvalidParamsError(str(e))
+
+        task = self._task_store.get(request.id)
+        if task is None:
+            raise TaskNotFoundError(request.id)
+
+        try:
+            return task.to_dict(history_length=request.history_length)
+        except ValueError as e:
+            raise JsonRpcInvalidParamsError(str(e))
+
     def register_all(self, handler: JsonRpcHandler) -> None:
-        """Register all A2A methods with the handler."""
+        """Register all A2A methods with the handler.
+
+        Two method families are registered:
+
+        - **A2A 1.0 core methods**, PascalCase per the 1.0 JSON-RPC binding
+          (spec § "Protocol Requirements": *"Method Naming: PascalCase method
+          names matching gRPC conventions"*). The slash-notation spellings
+          ``message/send`` / ``tasks/get`` are the 0.2.x/0.3.x names and are
+          deliberately NOT registered — ``/message:send`` and ``/tasks/{id}``
+          are 1.0's REST endpoints, not its JSON-RPC methods.
+        - **Kailash trust extension methods**, dot-notation, outside the A2A
+          method namespace by design.
+        """
+        # A2A 1.0 core
+        handler.register_method("SendMessage", self.handle_send_message)
+        handler.register_method("GetTask", self.handle_get_task)
+        # Kailash trust extensions
         handler.register_method("agent.capabilities", self.handle_capabilities)
         handler.register_method("agent.invoke", self.handle_invoke)
         handler.register_method("trust.verify", self.handle_verify)

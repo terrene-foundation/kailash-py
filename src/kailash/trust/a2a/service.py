@@ -143,19 +143,24 @@ class A2AService:
         # Register routes
         self._register_routes(nexus_app)
 
-        # Add startup/shutdown handlers via the underlying ASGI app
-        fastapi_app = nexus_app.fastapi_app
-
-        @fastapi_app.on_event("startup")
+        # Lifecycle handlers go through Nexus, which owns the FastAPI lifespan
+        # and dispatches these from inside it. Reaching for
+        # `nexus_app.fastapi_app.on_event(...)` here would be wrong twice over:
+        # FastAPI deprecated `on_event` in favour of lifespan handlers, and the
+        # `fastapi_app` property returns None until `register()`/`start()`
+        # triggers lazy gateway init, so the registration silently depends on
+        # call order (Nexus.add_startup_handler names this trap explicitly).
         async def startup():
             self._started_at = datetime.now(timezone.utc)
             logger.info("a2a_service.started", extra={"agent_id": self._agent_id})
 
-        @fastapi_app.on_event("shutdown")
         async def shutdown():
             logger.info("a2a_service.shutdown", extra={"agent_id": self._agent_id})
 
-        return fastapi_app
+        nexus_app.add_startup_handler(startup)
+        nexus_app.add_shutdown_handler(shutdown)
+
+        return nexus_app.fastapi_app
 
     def _register_routes(self, app: Nexus) -> None:
         """Register all routes on the Nexus app."""

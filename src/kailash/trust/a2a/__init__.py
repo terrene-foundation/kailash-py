@@ -52,10 +52,24 @@ from kailash.trust.a2a.exceptions import (
     JsonRpcInvalidRequestError,
     JsonRpcMethodNotFoundError,
     JsonRpcParseError,
+    TaskNotFoundError,
     TokenExpiredError,
     TrustVerificationError,
 )
 from kailash.trust.a2a.jsonrpc import A2AMethodHandlers, JsonRpcHandler
+from kailash.trust.a2a.messaging import (
+    Artifact,
+    GetTaskRequest,
+    Message,
+    Part,
+    Role,
+    SendMessageConfiguration,
+    SendMessageRequest,
+    SendMessageResponse,
+    Task,
+    TaskState,
+    TaskStatus,
+)
 from kailash.trust.a2a.models import (
     A2AToken,
     AgentCapability,
@@ -71,6 +85,7 @@ from kailash.trust.a2a.models import (
     VerificationResponse,
 )
 from kailash.trust.a2a.service import A2AService, create_a2a_app
+from kailash.trust.a2a.task_store import InMemoryTaskStore
 
 __all__ = [
     # Service
@@ -87,6 +102,19 @@ __all__ = [
     "A2AMethodHandlers",
     "JsonRpcRequest",
     "JsonRpcResponse",
+    # A2A 1.0 messaging model
+    "Role",
+    "TaskState",
+    "Part",
+    "Message",
+    "Artifact",
+    "TaskStatus",
+    "Task",
+    "SendMessageConfiguration",
+    "SendMessageRequest",
+    "SendMessageResponse",
+    "GetTaskRequest",
+    "InMemoryTaskStore",
     # Authentication
     "A2AAuthenticator",
     "extract_token_from_header",
@@ -106,6 +134,7 @@ __all__ = [
     "JsonRpcMethodNotFoundError",
     "JsonRpcInvalidParamsError",
     "JsonRpcInternalError",
+    "TaskNotFoundError",
     "TrustVerificationError",
     "AuthenticationError",
     "AuthorizationError",
