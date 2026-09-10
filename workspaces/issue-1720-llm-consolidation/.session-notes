@@ -20,8 +20,9 @@
 Board at cont-26 close: 2 local refs (dev, main), 2 remote, 1 worktree, 0 open
 PRs, clean tree.
 
-**#2203 wave plan is STILL AWAITING APPROVAL** — unchanged for four sessions. It
-is the top item.
+**#2203 plan APPROVED 2026-09-10.** Wave 1 Shard A is LANDED; **Shard 1B (the 1.0
+method set) is the next actionable item.** Waves 2 (MCP Modern, 4 shards) and 3
+(conformance gating) follow. Promotion cadence: WEEKLY.
 
 
 main — green, PR queue empty, working tree clean, one local branch.
@@ -262,7 +263,9 @@ pre-fix tool.
 | `proto-drift` | #2203 MCP + A2A superseded revisions | **TOP PRIORITY**, UNBLOCKED; plan awaiting approval | #2203 comment, `02-plans/03-2203-*` |
 | `sweep5-orphans` | was 52/18 → now **22 orphans, 0 gaps**; 3 triaged by hand | open, scanner fixed | PR #2205, § Sweep-5 above |
 | `dev-trunk` | dev integration trunk; landing is free | **CLOSED** — landed in dev | `rules/dev-integration-trunk.md` |
-| `promotion-cadence` | dev->main promotion has no standing cadence yet | **OPEN** — needs a human decision | this file § Where we are |
+| `promotion-cadence` | dev->main promotion cadence | **CLOSED** — WEEKLY, ratified 2026-09-10 | `rules/dev-integration-trunk.md` MUST-4 |
+| `2203-w1a` | A2A 1.0 well-known path (16 sites/6 files) | **CLOSED** — landed in dev | `#2203#issuecomment-5613952429` |
+| `2203-w1b` | A2A 1.0 method set (message/send, tasks/get) | **OPEN** — next shard | plan § Wave 1 |
 | `ci-local-parsimony` | iteration/juncture split; 53->35 jobs, 82s->3s gate | **CLOSED** — merged | PR #2213, `rules/test-parsimony.md` |
 | `docker-sprawl` | one compose group + guard; 491→35 volumes | **CLOSED** — merged | PR #2208, `rules/docker-no-sprawl.md` |
 | `dataflow-durability` | #1548 residual uncommitted-DDL window | **NEW**, filed with evidence | #2206 |

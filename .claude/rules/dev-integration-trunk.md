@@ -100,6 +100,11 @@ construction.
 git rev-list --count origin/main..origin/dev     # the promotion gap
 ```
 
+**CADENCE: WEEKLY** (ratified 2026-09-10). One promotion PR per week,
+`dev` → `main`, one gate run. Weekly is small enough that the merge stays
+reviewable in a single pass; the gap counter is what shows when a week has
+been missed.
+
 **This is the model's one honest cost, stated rather than hidden:** the risk is
 RELOCATED, not removed. Two things keep it honest — this counter, and a standing
 promotion cadence. Without a cadence `main` rots and the first promotion after a
