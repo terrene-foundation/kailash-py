@@ -27,6 +27,7 @@ Example:
 import asyncio
 import logging
 import statistics
+import threading
 import time
 import types
 from collections import defaultdict, deque
@@ -775,3 +776,27 @@ class MetricsAggregator:
         for collector in self._collectors.values():
             outputs.append(collector.export_prometheus())
         return "\n\n".join(outputs)
+
+
+# Process-wide aggregator. Connection pools are constructed independently all
+# over a workflow, so cross-pool aggregation needs a shared instance that is
+# not owned by any one of them. Previously WorkflowConnectionPool reached for
+# `self.runtime.metrics_aggregator` — a name with zero definitions repo-wide,
+# on an attribute WorkflowConnectionPool does not have (#2057 site 2) — so no
+# pool collector was ever registered anywhere.
+_global_aggregator: Optional[MetricsAggregator] = None
+_global_aggregator_lock = threading.Lock()
+
+
+def get_metrics_aggregator() -> MetricsAggregator:
+    """Return the process-wide :class:`MetricsAggregator` singleton.
+
+    Mirrors the accessor pattern used by ``kailash.monitoring.metrics``.
+    Thread-safe: pools may start monitoring from different worker threads.
+    """
+    global _global_aggregator
+    if _global_aggregator is None:
+        with _global_aggregator_lock:
+            if _global_aggregator is None:
+                _global_aggregator = MetricsAggregator()
+    return _global_aggregator
