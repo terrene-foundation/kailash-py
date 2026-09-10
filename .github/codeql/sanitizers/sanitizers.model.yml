@@ -89,4 +89,39 @@ extensions:
       # ["\r\n", "\n"], so `sanitize_log_value` ends with
       # `.replace("\r", " ").replace("\n", " ")` as its final, returned
       # expression. See the comment at that line for the full reasoning.
+      # CONFIRMED 2026-09-11: those alerts are `fixed` on main and no
+      # successor alert stands at those sites (#2106).
+      #
+      # ---------------------------------------------------------------
+      # 2026-09-11 (#2044) — A THIRD ATTEMPT TO PRE-EMPT: do NOT add a
+      # barrier/sanitizer row here for `fingerprint_secret`. It cannot
+      # work, for a reason DIFFERENT from the two above, and the reason
+      # is visible in the scan output rather than inferred.
+      #
+      # For `py/clear-text-logging-sensitive-data` alerts 11465
+      # (nexus rate_limit/middleware.py:188) and 11466/11467
+      # (dataflow/core/nodes.py:1039,1044), the SARIF for the analysis of
+      # main at 938b9089d811 names the SENSITIVE-DATA NODE ITSELF:
+      #
+      #   11465 relatedLocations[0] "sensitive data (secret)"
+      #         -> middleware.py:188:17-52, i.e. the expression
+      #            `fingerprint_secret(str(identifier))`
+      #         (no codeFlows at all: source and sink coincide)
+      #   11466 codeFlows[0][0] "ControlFlowNode for fingerprint_secret()"
+      #         -> nodes.py:1035:36-71, the CALL, not a value reaching it
+      #
+      # The rule classifies the RETURN VALUE of a call whose name matches
+      # its sensitive-name heuristic as a SOURCE. A barrier stops FLOW;
+      # here there is no flow to stop, so no model row, no `isBarrier`
+      # predicate and no custom query barrier can remove the alert. Only
+      # the SOURCE CLASSIFICATION could, and that is driven by the
+      # identifier name `fingerprint_secret` — whose own docstring says
+      # "Fingerprints MUST NOT be treated as secrets".
+      #
+      # Disposition for that class: a per-alert dismissal carrying a
+      # runtime-safety proof (`zero-tolerance.md` Rule 1b), tracked on
+      # #2044. The durable fix is to rename the helper so the name stops
+      # asserting something it disclaims — 51 non-test call sites across
+      # 13 files in 4 packages, so its own shard with a deprecation
+      # cycle (`zero-tolerance.md` Rule 6a), not a drive-by.
       # ---------------------------------------------------------------

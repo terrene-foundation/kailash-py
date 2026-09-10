@@ -1,12 +1,19 @@
-# CodeQL pack metadata for the kailash-py custom sanitizer barriers.
+# CodeQL Model-as-Data pack for kailash-py.
 #
-# This pack declares the in-house URL masker (`dataflow.utils.masking.mask_url`)
-# and log-field sanitizer (`dataflow.utils.masking.safe_log_value`) as
-# CodeQL Sanitizer barriers for the `py/clear-text-logging-sensitive-data`
-# rule. CodeQL's default model does not know about our custom helpers,
-# so without this pack the rule traces taint from `urlparse` through
-# every parsed field on `self` and flags structured log calls that
-# never actually emit credentials.
+# INTENT (2026-04-12): declare the in-house URL masker
+# (`dataflow.utils.masking.mask_url`) and log-field sanitizer
+# (`dataflow.utils.masking.safe_log_value`) as taint barriers for
+# `py/clear-text-logging-sensitive-data`, so the rule stops tracing taint
+# from `urlparse` through every parsed field on `self` and flagging
+# structured log calls that never emit credentials.
+#
+# CORRECTION (2026-09-11, #2106): the pack DOES NOT DO THAT, and the
+# sentence above is retained only as the record of what was attempted.
+# A `summaryModel` row does not declare a barrier at all, and both named
+# functions are IN SOURCE, so CodeQL analyses the real body regardless.
+# The two rows are inert. See sanitizers.model.yml for the measurements,
+# for the third refutation (a barrier cannot remove a name-heuristic
+# SOURCE), and for why no row should be added for `fingerprint_secret`.
 #
 # 2026-08-12 (#2088 / #2040): an attempt to extend this pack with
 # `kailash.utils.secure_logging.sanitize_log_value` / `sanitize_log_structure`

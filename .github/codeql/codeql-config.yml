@@ -5,12 +5,49 @@
 # `py/clear-text-logging-sensitive-data` rule traced taint from
 # `urlparse(connection_string)` through every parsed field on `self`,
 # flagging structured log calls that emitted only connection coordinates
-# (host/port/database) and never credentials. The fix is a custom
-# sanitizer model declared in `.github/codeql/sanitizers.qll` that tells
-# CodeQL which functions are taint barriers — specifically
-# `dataflow.utils.masking.mask_url` (the credential-stripping URL masker)
-# and `dataflow.utils.masking.safe_log_value` (the explicit barrier
-# helper used at every adapter log site).
+# (host/port/database) and never credentials.
+#
+# CORRECTION (2026-09-11, issue #2106): the paragraph that stood here
+# claimed the fix was "a custom sanitizer model declared in
+# `.github/codeql/sanitizers.qll` that tells CodeQL which functions are
+# taint barriers". BOTH halves of that sentence are false, and the
+# sentence actively misdirects the next reader:
+#
+#   1. `.github/codeql/sanitizers.qll` DOES NOT EXIST and never has.
+#      The only files under `.github/codeql/` are this config and the
+#      Model-as-Data pack `sanitizers/{qlpack.yml,sanitizers.model.yml}`.
+#   2. The MaD pack does NOT declare taint barriers, and cannot. Its two
+#      `dataflow.utils.masking` rows are `summaryModel` kind `value`,
+#      which states the return carries the argument's VALUE — and value
+#      flow is a SUBSET of taint flow, so the rows say taint PROPAGATES,
+#      the opposite of the intent. They are additionally INERT: both
+#      named functions are IN SOURCE (`packages/*/src/` is scanned), and
+#      CodeQL analyses the real body rather than a model row. Measured
+#      on PR #2103 — with rows in place, every alert still reported.
+#      Correcting or removing those rows is tracked on its own issue;
+#      do not "fix" them here without measuring the result.
+#
+# THE MECHANISMS THAT ACTUALLY WORK IN THIS REPO, all measured:
+#
+#   - `py/log-injection`: a barrier IN THE CODE. The stock query
+#     recognises `LogInjection::ReplaceLineBreaksSanitizer` — a
+#     `.replace` attribute call whose first argument is a string LITERAL
+#     in ["\r\n", "\n"]. `kailash.utils.secure_logging.sanitize_log_value`
+#     therefore RETURNS `....replace("\r", " ").replace("\n", " ")` as
+#     its last expression. That closed the alerts of #2106; see the
+#     comment at `src/kailash/utils/secure_logging.py` for the detail.
+#   - `py/clear-text-logging-sensitive-data` and
+#     `py/weak-sensitive-data-hashing` on NAME-HEURISTIC matches: no code
+#     mechanism. Both rules classify sensitive data from an IDENTIFIER
+#     NAME, and where the flagged expression IS the classified source, a
+#     barrier cannot help — a barrier stops FLOW, and there is no flow to
+#     stop. Confirmed from the SARIF for alerts 11465/11466/11467, whose
+#     `relatedLocations` "sensitive data (secret)" node is the
+#     `fingerprint_secret(...)` CALL ITSELF, not a value reaching it. The
+#     disposition for that class is a per-alert dismissal carrying a
+#     runtime-safety proof (`zero-tolerance.md` Rule 1b), never a model
+#     row and never an inline `# codeql[...]` comment — the latter was
+#     measured NOT honoured by GitHub code scanning (#2146, PR #2140).
 #
 # This config also documents the path filters that prevent CodeQL from
 # scanning generated artifacts and vendor directories where false
@@ -18,16 +55,13 @@
 
 name: "kailash-py CodeQL config"
 
-# Use the security-and-quality query suite. The custom sanitizer model
-# is loaded via the `packs:` directive below.
+# Use the security-and-quality query suite.
 queries:
   - uses: security-and-quality
 
-# Custom CodeQL pack with the sanitizer barrier definitions for
-# `dataflow.utils.masking.mask_url` and
-# `dataflow.utils.masking.safe_log_value`. The pack is distributed
-# alongside the source tree so it follows the same review and PR
-# discipline as the rest of the codebase.
+# Model-as-Data pack. Kept LOADED (removing it is a behaviour change that
+# must be measured, not assumed) but understood to be non-functional as
+# written — see the CORRECTION above. It is not a barrier declaration.
 packs:
   - "./.github/codeql/sanitizers"
 
