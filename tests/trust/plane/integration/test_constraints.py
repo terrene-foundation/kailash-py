@@ -217,8 +217,17 @@ class TestMonotonicTightening:
         )
         assert tighter.is_tighter_than(original)
 
-    def test_dropping_allowlist_is_loosening(self):
-        """Removing an allowlist (going unrestricted) is loosening."""
+    def test_emptying_the_allowlist_is_tightening(self):
+        """An EMPTY allowlist permits nothing, so it is the tightest child.
+
+        This test previously asserted the opposite -- that emptying the
+        allowlist meant "going unrestricted" and was therefore a loosening.
+        That belief is the defect in GH #2218: three of the four enforcement
+        surfaces read an empty allowlist as PERMIT-EVERYTHING, so an operator
+        who tightened the allowlist to nothing got the widest possible outcome
+        on a destructive action. Every surface now reads an empty allowlist as
+        permitting NOTHING, and this validator agrees with them.
+        """
         original = ConstraintEnvelope(
             operational=OperationalConstraints(
                 allowed_actions=["read", "write"],
@@ -227,7 +236,18 @@ class TestMonotonicTightening:
         no_allowlist = ConstraintEnvelope(
             operational=OperationalConstraints(allowed_actions=[]),
         )
-        assert not no_allowlist.is_tighter_than(original)
+        assert no_allowlist.is_tighter_than(original)
+
+    # An ABSENT operational dimension -- "not configured", the widest state --
+    # is the one case that is genuinely a loosening, and it is deliberately NOT
+    # tested here: this envelope's `operational` field is non-Optional
+    # (default_factory=OperationalConstraints), so the state is unconstructible
+    # on this type and any test of it would be asserting on an invalid object.
+    # It IS covered, on the type that can express it
+    # (kailash.trust.envelope.ConstraintEnvelope, whose `operational` is
+    # `OperationalConstraint | None`), by
+    # packages/kailash-pact/tests/regression/test_issue_2218_allowed_actions_parity.py
+    # :: TestEmptyIsNotAbsent.
 
     def test_none_to_limit_removal_is_loosening(self):
         """Removing a financial limit (going from 50 to None) is loosening."""

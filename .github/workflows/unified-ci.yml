@@ -422,6 +422,13 @@ jobs:
           uv venv .venv
           uv pip install -e ".[trust]" --python .venv/bin/python
           uv pip install -e "packages/kailash-pact[dev]" --python .venv/bin/python
+          # This job is DELIBERATELY kaizen-free -- tests/unit/test_enforcement_modes.py
+          # asserts PactEngine's behaviour when kaizen-agents is absent ("the
+          # result should fail because kaizen-agents is not installed, NOT
+          # because of governance blocking"). Installing kaizen here to satisfy
+          # the #2218 parity test was tried and unmasked five of those tests,
+          # which then demanded KAIZEN_DEFAULT_MODEL. The parity gate runs in
+          # test-kailash-kaizen.yml instead, where kaizen genuinely exists.
 
       - name: Test kailash-pact
         timeout-minutes: 5

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-mcp"
-version = "0.5.1"
+version = "0.6.0"
 description = "Production-ready Model Context Protocol (MCP) client, server, and platform for Kailash SDK"
 authors = [{name = "Terrene Foundation", email = "info@terrene.foundation"}]
 readme = "README.md"
@@ -40,7 +40,26 @@ dependencies = [
     #   `[websocket]` extras retain their declarations as harmless
     #   redundancy (already-installed entries are no-ops).
     # ─────────────────────────────────────────────────────────────
-    "kailash>=2.56.0",  # mask_error_text (transports.py) is new in core 2.56.0
+    # RAISED 2.56.0 -> 2.63.0 in 0.6.0. `security.py:30` imports
+    # `kailash.utils.command_safety.safe_command_ref` at MODULE scope (the
+    # #2004 spawn-command disclosure fix), and that module does not exist in
+    # any kailash before 2.63.0. Measured against the published wheels:
+    #
+    #     kailash 2.62.0  ModuleNotFoundError: No module named
+    #                     'kailash.utils.command_safety'
+    #     kailash 2.63.0  OK
+    #
+    # `security.py` is imported at module scope by client.py:30,
+    # transports/transports.py:81 and discovery/discovery.py:54, so an
+    # unraised floor is not a latent edge case: with 0.6.0 installed beside a
+    # satisfying-but-too-old core, `pip check` reports no broken requirements
+    # and `import kailash_mcp.client` raises at import. The floor turns that
+    # into a resolver error at install time (`deployment.md` MUST:
+    # eagerly-imported transitive dependencies are declared by the importing
+    # package). 2.63.0, not 2.64.0 — 2.63.0 is the minimum that satisfies
+    # every `from kailash.` import in this package (command_safety,
+    # url_credentials.mask_error_text/mask_url, redis_validation).
+    "kailash>=2.63.0",
     # Capped <2.0 to match the root package's ALREADY-DELIBERATE cap
     # (kailash-py pyproject.toml: `mcp = ["mcp[cli]>=1.23.0,<2.0"]`).
     # mcp 2.0.0 REMOVED `mcp.client.websocket`, which this package imports

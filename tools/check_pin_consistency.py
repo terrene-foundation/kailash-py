@@ -207,8 +207,17 @@ def _parse_req(spec: str) -> Pin | None:
 
 def _iter_manifests(root: Path):
     for p in root.rglob("pyproject.toml"):
-        rel = p.relative_to(root).as_posix()
-        if any(part in PRUNE_PARTS for part in p.parts):
+        relative = p.relative_to(root)
+        rel = relative.as_posix()
+        # Prune on the path RELATIVE to the repo root, never the absolute one.
+        # `p.parts` includes every ancestor directory outside the checkout, so a
+        # repo that merely LIVES under a directory named e.g. "build" or "dist"
+        # had every one of its manifests pruned -- this gate then printed
+        # "Scanned 0 manifests" followed by a green tick, and could not fail for
+        # any input. Measured in this checkout
+        # (.../kailash/build/.kailash-py-wt/release): 10 manifests found by
+        # rglob, 10 pruned, 0 scanned.
+        if any(part in PRUNE_PARTS for part in relative.parts):
             continue
         if any(marker in rel for marker in FIXTURE_MARKERS):
             continue

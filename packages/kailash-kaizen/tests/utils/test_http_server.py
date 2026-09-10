@@ -89,16 +89,27 @@ class TestHTTPServer:
 
     __test__ = False  # Exclude from pytest collection (utility class, not a test)
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 8765):
+    def __init__(self, host: str = "127.0.0.1", port: int = 0):
         """
         Initialize HTTP test server.
 
         Args:
             host: Host to bind to (default: "127.0.0.1")
-            port: Port to bind to (default: 8765)
+            port: Port to bind to. Defaults to 0, meaning "let the OS pick a
+                free one" -- read the actual port back from :attr:`port` (or
+                build URLs with :attr:`base_url`) after ``start()``.
+
+                Do NOT hardcode a port. Fixed ports make a test fail with
+                ``OSError: [Errno 48] address already in use`` whenever
+                anything else on the machine happens to hold that number,
+                which says nothing about the code under test. Measured: three
+                tests here bound 8771-8773 and failed for five days because
+                three unrelated stray processes held exactly those ports.
 
         Example:
-            server = TestHTTPServer(host="127.0.0.1", port=8765)
+            server = TestHTTPServer()
+            await server.start()
+            url = f"{server.base_url}/control"
         """
         self._host = host
         self._port = port
@@ -115,8 +126,17 @@ class TestHTTPServer:
         self._sse_queues: list[asyncio.Queue] = []
 
     @property
+    def port(self) -> int:
+        """The port actually bound. Only meaningful after ``start()``."""
+        return self._port
+
+    @property
     def base_url(self) -> str:
-        """Get base URL for HTTP requests."""
+        """Get base URL for HTTP requests.
+
+        With the ephemeral default this is only meaningful after ``start()``,
+        since the port is not known until the OS assigns it.
+        """
         return f"http://{self._host}:{self._port}"
 
     async def start(self) -> None:
@@ -130,7 +150,7 @@ class TestHTTPServer:
             RuntimeError: If server fails to start (e.g., port in use)
 
         Example:
-            server = TestHTTPServer(host="127.0.0.1", port=8765)
+            server = TestHTTPServer()
             await server.start()
             assert server.is_running()
         """
@@ -153,6 +173,12 @@ class TestHTTPServer:
         # Create site and start
         self._site = web.TCPSite(self._runner, self._host, self._port)
         await self._site.start()
+
+        # With port=0 the OS assigned one; read it back so callers can reach
+        # the server. Without this the ephemeral default would be unusable.
+        sockets = getattr(self._site._server, "sockets", None)
+        if sockets:
+            self._port = sockets[0].getsockname()[1]
 
         self._running = True
 

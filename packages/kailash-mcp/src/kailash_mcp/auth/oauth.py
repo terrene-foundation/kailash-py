@@ -106,6 +106,7 @@ except ImportError:  # pragma: no cover
     serialization = None  # type: ignore[assignment]
     rsa = None  # type: ignore[assignment]
 
+from kailash.utils.url_credentials import mask_error_text
 from kailash_mcp.auth.providers import AuthProvider
 from kailash_mcp.auth.well_known import (
     build_www_authenticate_challenge,
@@ -634,7 +635,8 @@ class JWTManager:
     **A signing key is required to mint tokens, and there is no default.** With
     neither ``private_key=`` nor ``KAILASH_MCP_JWT_PRIVATE_KEY`` set, this
     constructs but refuses to sign or verify: it does NOT generate a key pair.
-    Releases up to kailash-mcp 0.9 generated one silently, which meant every
+    Releases up to and including kailash-mcp 0.5.1 generated one silently,
+    which meant every
     OAuth token died at the next restart and replicas behind a load balancer
     rejected each other's tokens — an intermittent auth failure that presents as
     a client bug (same class as kailash #2041 / #2083).
@@ -1457,6 +1459,22 @@ class AuthorizationServer:
                     ),
                     scopes=token_data.get("scopes"),
                 )
+        except JWTKeyNotConfiguredError:
+            # A missing signing key is an OPERATOR misconfiguration, not a bad
+            # token. #2092 hoisted the key resolution out of the `try` inside
+            # `verify_refresh_token` so the typed refusal would propagate; this
+            # frame's catch-all would otherwise swallow it right back and answer
+            # "Invalid refresh token", which is the blame-the-client message
+            # that fix exists to eliminate. Re-raise so the operator is told
+            # what to wire.
+            #
+            # The end state was already fail-CLOSED without this -- the
+            # `create_access_token` below raises the same error, so no token was
+            # ever minted -- but the fallback path below accepts whatever the
+            # token store holds WITHOUT a signature check on its way there, and
+            # the operator was told to check the client. Both are fixed by not
+            # entering the fallback at all.
+            raise
         except Exception:
             # Fall back to token store
             refresh_token_obj = await self.token_store.get_refresh_token(refresh_token)
@@ -1534,6 +1552,14 @@ class AuthorizationServer:
                     "aud": aud,
                     "token_type": "access_token",
                 }
+        except JWTKeyNotConfiguredError:
+            # Same distinction as `refresh_token_grant`: an unconfigured signing
+            # key is the operator's problem, not a verdict about the token.
+            # Answering `active: false` here is the safe DIRECTION but the wrong
+            # DIAGNOSIS -- it reports a valid token as inactive and says nothing
+            # about the wiring. JWTKeyNotConfiguredError subclasses
+            # AuthenticationError, so this arm MUST precede the one below.
+            raise
         except AuthenticationError:
             # Token is invalid or expired
             pass
@@ -2307,7 +2333,11 @@ class OAuth2Client:
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             ) as response:
                 if response.status != 200:
-                    error_text = await response.text()
+                    # The POST body above carries client_secret; a proxy or a
+                    # non-conformant AS that echoes the request form would put
+                    # it in this message and then into every log that renders
+                    # the exception. Scrub before it is ever interpolated.
+                    error_text = mask_error_text(await response.text())
                     raise AuthenticationError(f"Token request failed: {error_text}")
 
                 token_response = await response.json()
@@ -2430,7 +2460,10 @@ class OAuth2Client:
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             ) as response:
                 if response.status != 200:
-                    error_text = await response.text()
+                    # Same as the token-request path: the posted form carries
+                    # client_secret / refresh_token, and an AS that echoes it
+                    # back would leak both through this message.
+                    error_text = mask_error_text(await response.text())
                     raise AuthenticationError(f"Token exchange failed: {error_text}")
 
                 token_response = await response.json()
@@ -2460,7 +2493,7 @@ class OAuth2Client:
             try:
                 return await self._refresh_access_token()
             except Exception as e:
-                logger.error(f"Token refresh failed: {e}")
+                logger.error(f"Token refresh failed: {mask_error_text(str(e))}")
 
         return None
 

@@ -87,23 +87,23 @@ def sample_response_json(sample_request: ControlRequest) -> str:
     return response.to_json()
 
 
-import random
-
-
 @pytest.fixture
 async def http_server(anyio_backend):
     """
     Provide a running TestHTTPServer for integration tests.
 
     Yields a server instance that automatically starts/stops.
-    Uses random port to avoid conflicts.
+    Binds an ephemeral port; read the address from ``server.base_url``.
     """
     if TestHTTPServer is None:
         pytest.skip("TestHTTPServer not yet implemented")
 
-    # Use random port to avoid conflicts between tests
-    port = random.randint(9000, 9999)
-    server = TestHTTPServer(host="127.0.0.1", port=port)
+    # Port 0 asks the OS for a free port, which start() then reads back. A
+    # random.randint(9000, 9999) pick -- what this used to do -- is not
+    # collision-free: it can land on a port another test, a parallel CI job, or
+    # an unrelated local process already holds, and the whole fixture then dies
+    # with "address already in use" instead of the test's real verdict.
+    server = TestHTTPServer(host="127.0.0.1", port=0)
 
     await server.start()
 

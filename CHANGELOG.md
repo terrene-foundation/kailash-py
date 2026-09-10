@@ -13,6 +13,73 @@ such as `>=2.0`.
 
 ## [Unreleased]
 
+### Fixed — the idle-pool reaper no longer closes a pool that is actively serving queries (#697)
+
+A long-lived process that keeps querying the same PostgreSQL/MySQL DSN could see its
+connection pool closed underneath an in-flight call, surfacing as:
+
+```
+asyncpg.exceptions._base.InterfaceError: pool is closing
+kailash.sdk_exceptions.NodeExecutionError: Database query failed: pool is closing
+```
+
+The DPI-B3 reaper decides whether a pool is idle from
+`EnterpriseConnectionPool._last_activity_at`. That timestamp was refreshed in exactly one
+place — `EnterpriseConnectionPool.get_connection()` — and **nothing on the node's query path
+calls it**: `async_run()` reaches the driver through `adapter.begin_transaction()`, and the
+non-transaction path through `adapter.execute()`, both of which acquire from the driver pool
+directly. So the clock only ever held the pool's *creation* time, and a pool serving a query
+every 0.5s still aged past `idle_timeout` and became reapable. Measured before the fix, with a
+successful query on every iteration and `idle_timeout=2`:
+
+```
+iter  age_s   is_idle  query
+0     0.48    False    ok
+3     2.00    False    ok
+4     2.50    True     ok      <-- reapable while actively serving
+5     3.91    True     ok
+```
+
+`age_s` never resets — the query path never touched the clock. After the fix it holds flat at
+the inter-query interval and `is_idle` stays `False`.
+
+Every acquisition in every adapter ends at one raw driver pool, so the fix wraps that pool once
+(`_ActivityTrackingPool`) rather than re-spelling a touch at each of the nine `acquire()` call
+sites. Delegation is total: only `acquire` is intercepted.
+
+The exposure was proportional to how *idle-tuned* a deployment was: the shorter the configured
+`idle_timeout`, the wider the window. Defaults made it rare, which is why it surfaced as an
+intermittent CI failure rather than a reported outage.
+
+`tests/regression/test_issue_697_pool_leak.py::test_active_pools_not_reaped` pinned this
+behaviourally but could only catch it when the reaper's tick happened to land on one of its
+queries — so it passed for weeks against a pool whose clock was never refreshed at all. A new
+`test_query_path_refreshes_the_idle_clock` pins the invariant directly, so a regression fails
+deterministically instead of as a flake.
+
+### Security (BREAKING) — an empty `allowed_actions` now denies at EVERY enforcement surface (#2218)
+
+`operational.allowed_actions` defaults to `[]`, and the enforcement surfaces disagreed about what that meant. Measured, on one envelope, one action:
+
+```
+action under test: 'delete_production_database'
+config                          gradient / governed agent / bridge    verify_action
+allowed_actions=[]  (default)   PERMIT                                deny
+allowed_actions=['read']        deny                                  deny
+```
+
+Row 2 is the control — with a non-empty allowlist the surfaces already agreed. Row 1 was the defect. **Removing every entry from the allowlist flipped a destructive action from denied to permitted.** `GovernanceEngine.verify_action` read an explicitly-defined-but-empty allowlist as "nothing is allowed"; `GradientEngine`, `L3GovernedAgent.run()` and the bridge scope validator all spelled the check as `if op.allowed_actions and action not in op.allowed_actions`, whose `and` short-circuits on the empty list and skips the check entirely.
+
+The victim of this is the operator who did the safest-looking thing: tightening the allowlist down to nothing, and reading `check_degenerate_envelope`'s "agent cannot perform any operations" warning as confirmation.
+
+The allow/block decision now lives in exactly one place — `kailash.trust.action_policy` — which every enforcement surface and every monotonic-tightening validator calls. In its restrictiveness model an empty allowlist, and an unreadable one, both rank **TIGHTEST**: they permit nothing. An absent operational dimension (`operational=None`) remains a distinct state meaning "not configured", which is still the widest.
+
+**BREAKING.** This lands on exactly the callers who omitted `allowed_actions` and were, until now, permitted everything at `GradientEngine.evaluate()`, `L3GovernedAgent.run()`, `GovernanceEngine.create_bridge()` and the plan composer. Under the fix they are denied everything. Their code was silently ungoverned, so this is the bug surfacing rather than a new bug — but it will read as a regression.
+
+**Migration.** Any envelope whose `operational` dimension exists must now name the actions it permits: `OperationalConstraintConfig(allowed_actions=["read", "write", ...])`. A deployment that intends "this dimension does not constrain actions" must say so by not configuring the dimension, not by leaving the list empty. Note that PACT's `ConstraintEnvelopeConfig.operational` is NOT optional — it carries a `default_factory` — so a PACT envelope always has the dimension and always needs an explicit allowlist. The trust-layer `ConstraintEnvelope` (the type `L3GovernedAgent` consumes) does accept `operational=None`.
+
+The monotonic-tightening validators are reconciled onto the same reading in the same change, so a configuration that registers cannot then be evaluated more widely than the one that defined it. A parent that permits nothing can no longer have a child that permits something — previously several validators read an empty parent allowlist as "widest" and waved the child through. Tightening compares **allowlists**; the blocklist keeps its own separate monotonicity rule and the eval-time envelope intersection continues to union blocklists and re-subtract them, so a child restating an action its ancestor blocks is unaffected.
+
 ## [2.64.0] — 2026-09-10 — A2A protected methods verify and authorize their callers; eight un-gated HTTP servers closed; no component invents its own signing or encryption key (#2203, #2072, #2112, #2083, #2092)
 
 ### Fixed — `import kailash.trust.a2a` failed on a `[trust]`-only install (#2203)
@@ -22,6 +89,19 @@ such as `>=2.0`.
 `A2AService` and `create_a2a_app` are now served through a PEP 562 `__getattr__`, with a `TYPE_CHECKING` block so `__all__`, Sphinx, pyright and CodeQL still resolve them. Accessing either without `nexus` installed raises an actionable error naming the extra, instead of making the package unimportable.
 
 This is `dependencies.md`'s module-scope-import rule — an unconditional import of a sibling the package does not declare. It survived because a monorepo dev environment has `nexus` editable-installed, so it could only ever fail on a clean install; it surfaced when new trust tests became the first thing under `tests/trust/unit/` to import the package in a `[trust]`-only CI job.
+
+### Changed (BREAKING) — the Agent Card moved to the A2A 1.0 well-known path (#2203)
+
+> Documented after the fact. This change shipped in 2.64.0 and this entry did not, so a reader
+> checking why their discovery broke found nothing. No artifact is re-published; only these notes
+> are corrected — the same treatment applied to the kaizen notes on the same date.
+
+A2A moves to the 1.0 line, so the Agent Card is served at **`/.well-known/agent-card.json`**
+instead of the 0.2.x **`/.well-known/agent.json`**. This is a **hard cutover with no dual-serving
+shim** — the old path is gone, not deprecated alongside — so any client, crawler, service-discovery
+probe or health check still requesting `/.well-known/agent.json` now gets a 404. Update the path;
+there is no compatibility window. Anyone consuming the card through `kaizen.trust.a2a`, which
+re-exports these names, is affected identically.
 
 ### Security (BREAKING) — A2A protected methods now require authorization (#2203)
 

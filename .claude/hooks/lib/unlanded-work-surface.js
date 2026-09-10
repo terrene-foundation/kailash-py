@@ -378,7 +378,7 @@ function formatUnlandedBlock(summary) {
       "no resolvable upstream default branch, or git timed out). This is **not** " +
       "a clean result — the unlanded-work backlog is UNKNOWN. Run " +
       "`git for-each-ref --no-merged origin/main refs/heads/` manually before " +
-      'trusting any claim that nothing is outstanding.'
+      "trusting any claim that nothing is outstanding."
     );
   }
   if (summary.total === 0) {
@@ -519,7 +519,6 @@ function computeUnlandedState(cwd, openPrHeads) {
   }
 }
 
-
 /**
  * Count commits on the integration trunk that have NOT been promoted to the
  * repository's default branch — the `dev..main` gap, stated as a number.
@@ -562,7 +561,16 @@ function computePromotionGap(cwd) {
         return null; // no trunk (or no main) => nothing to report
       }
     }
-    const ahead = parseInt(run(["rev-list", "--count", `${target}..${trunk}`]), 10);
+    // --first-parent, never raw: the promotion's review cost scales with
+    // INDEPENDENT LANDINGS, not with the commits each merge dragged in.
+    // Measured on this repo's dev: 6397 raw vs 1943 first-parent (3.3x), with
+    // 77 merge commits in 30 days. Reporting raw inflates the batch and pushes
+    // toward promoting LESS often than the evidence supports, which is
+    // backwards (rules/dev-integration-trunk.md MUST-4).
+    const ahead = parseInt(
+      run(["rev-list", "--count", "--first-parent", `${target}..${trunk}`]),
+      10,
+    );
     if (!Number.isFinite(ahead)) return null;
     return { ahead, trunk, target };
   } catch {
@@ -581,7 +589,7 @@ function formatPromotionGapBlock(gap) {
     return (
       `# ✓ Promotion Gap Clear\n\n` +
       `\`${gap.trunk}\` and \`${gap.target}\` are level — every landed commit is promoted. ` +
-      `Measured at session start with \`git rev-list --count ${gap.target}..${gap.trunk}\`.`
+      `Measured at session start with \`git rev-list --count --first-parent ${gap.target}..${gap.trunk}\`.`
     );
   }
   return (
@@ -592,7 +600,12 @@ function formatPromotionGapBlock(gap) {
     `\`dev\` → \`main\` is ONE deliberate promotion PR costing ONE gate run. It is not ` +
     `automatic and it is not urgent — but a gap left to grow makes the eventual ` +
     `promotion a large, hard-to-review merge.\n\n` +
-    `Re-measure: \`git rev-list --count ${gap.target}..${gap.trunk}\``
+    `Promotion fires on a DUAL trigger — whichever comes first: **10 independent ` +
+    `landings** unpromoted (caps debug-on-red), **72 hours** with anything ` +
+    `unpromoted (caps production divergence), or **immediately** for a security ` +
+    `fix or deploy-affecting change. Thresholds are provisional pending ≥14 days ` +
+    `of trunk history (rules/dev-integration-trunk.md MUST-4).\n\n` +
+    `Re-measure: \`git rev-list --count --first-parent ${gap.target}..${gap.trunk}\``
   );
 }
 

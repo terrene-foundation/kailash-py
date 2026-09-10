@@ -245,6 +245,21 @@ class TrustPlaneStore(Protocol):
         """List anchors, bounded by *limit*."""
         ...
 
+    def latest_anchor(self) -> dict | None:
+        """Return the most recently appended anchor, or ``None`` if empty.
+
+        This is the anchor-chain *tip* query. Callers MUST use it rather than
+        indexing the tail of :meth:`list_anchors`: that listing is bounded by
+        ``limit``, so ``list_anchors()[-1]`` silently returns the
+        ``limit``-th oldest anchor once the chain grows past the page size,
+        and the next anchor minted then chains to a mid-chain parent.
+
+        Implementations answer from their own append order — the audit
+        sequence for the filesystem store, insertion order for the SQL
+        backends — and never from a caller-supplied window.
+        """
+        ...
+
     # --- WAL (Write-Ahead Log for cascade revocation) ---
 
     def store_wal(self, wal_data: dict) -> None:

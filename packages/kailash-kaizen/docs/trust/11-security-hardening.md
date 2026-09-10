@@ -113,8 +113,18 @@ storage.delete_key("agent-001")
 **Security Properties**:
 - **Encryption**: AES-128-CBC via Fernet
 - **Key Derivation**: PBKDF2-HMAC-SHA256, 100,000 iterations
-- **Salt**: Static salt for deterministic key derivation
-- **Storage**: In-memory (extend for persistent storage)
+- **Salt**: Per-instance, not static (CARE-001). Resolved in this order:
+  the explicit `salt=` argument, then `KAIZEN_TRUST_ENCRYPTION_KEY_SALT`,
+  then a fresh `os.urandom(32)` with a WARNING. See
+  `src/kailash/trust/security.py:444-499`.
+- **Storage**: In-memory only. `_keys` is a plain dict
+  (`src/kailash/trust/security.py:421`) with no file, database, or network
+  sink anywhere in the class — **nothing stored here survives the process**.
+  That is also why the random-salt fallback above is safe: a salt that does
+  not outlive the process costs nothing when the ciphertext does not either.
+  If you extend this class with persistent storage, the salt MUST come from
+  configuration or be persisted alongside the ciphertext, or the stored keys
+  become permanently unreadable after a restart.
 
 ### 3. TrustRateLimiter
 

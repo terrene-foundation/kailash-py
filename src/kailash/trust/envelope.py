@@ -38,6 +38,7 @@ from enum import Enum
 from typing import Any, Optional
 
 from kailash.trust._canonical import canonical_scalars
+from kailash.trust.action_policy import allowed_actions_tightening_violation
 from kailash.trust.signing.algorithm_id import (
     AlgorithmIdentifier,
     coerce_algorithm_id,
@@ -931,14 +932,23 @@ class ConstraintEnvelope:
                 set(self.operational.blocked_actions)
             ):
                 return False
-            # Allowed actions: if other restricts, this must be subset
-            if other.operational.allowed_actions:
-                if not self.operational.allowed_actions:
-                    return False
-                if not set(self.operational.allowed_actions).issubset(
-                    set(other.operational.allowed_actions)
-                ):
-                    return False
+            # Allowed actions: this allowlist must be a SUBSET of other's.
+            # Uses the shared restrictiveness model (GH #2218,
+            # security.md § Enforcement-Surface Parity). The previous spelling
+            # read an empty allowlist as "unrestricted" in BOTH directions --
+            # it skipped the check when the PARENT allowlist was empty, and
+            # rejected a child whose allowlist was empty as a loosening. Under
+            # the model every enforcement surface now shares, an empty
+            # allowlist permits nothing: it is the TIGHTEST value, so an empty
+            # child always fits and a non-empty child never fits an empty
+            # parent.
+            if (
+                allowed_actions_tightening_violation(
+                    other.operational, self.operational
+                )
+                is not None
+            ):
+                return False
 
         # Temporal dimension
         if other.temporal is not None:

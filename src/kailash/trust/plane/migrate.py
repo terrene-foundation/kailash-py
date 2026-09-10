@@ -27,6 +27,7 @@ from kailash.trust.chain import AuthorityType, CapabilityType
 from kailash.trust.chain_store.filesystem import FilesystemStore
 from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
 from kailash.trust.plane.project import _AuthorityRegistry, _load_keys
+from kailash.trust.plane.store.filesystem import sort_anchor_files
 
 logger = logging.getLogger(__name__)
 
@@ -169,7 +170,7 @@ async def migrate_project(trust_dir: str | Path) -> dict:
     anchors_dir = trust_path / "anchors"
     anchors_updated = 0
     if anchors_dir.exists():
-        anchor_files = sorted(anchors_dir.glob("*.json"))
+        anchor_files = sort_anchor_files(anchors_dir.glob("*.json"))
         parent_id = None
         for af in anchor_files:
             data = safe_read_json(af)

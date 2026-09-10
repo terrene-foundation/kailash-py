@@ -9,6 +9,7 @@ import inspect
 import logging
 import uuid
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 # Import existing Kailash access control components
@@ -32,6 +33,7 @@ from kailash.nodes.admin import (
 
 # Import Kailash security nodes
 from kailash.nodes.security import CredentialManagerNode, RotatingCredentialNode
+from kailash.sdk_exceptions import KailashConfigError
 
 # Import middleware event system
 from ..communication.events import EventStream, EventType
@@ -242,31 +244,96 @@ class MiddlewareAccessControlManager:
     async def create_permission_rule(
         self, rule_data: Dict[str, Any], created_by: str
     ) -> Dict[str, Any]:
-        """Create permission rule using existing Kailash patterns."""
+        """Register a permission rule on the access manager.
 
-        # Use existing access control manager
+        Fails CLOSED (issue #2057, site 1). The previous implementation probed
+        the manager for ``add_permission_rule`` — a name with zero definitions
+        repo-wide — so the rule was never registered, while the
+        ``permission_rule_created`` audit event and ``{"success": True}`` were
+        emitted unconditionally, outside the guard. An operator saw the rule
+        succeed and saw it in the audit trail; it enforced nothing, and the
+        returned ``rule_id`` was ``hash(str(rule))`` — an id referring to no
+        registered rule. That is a falsified audit record of a security
+        control.
+
+        Three defects are fixed together, because the first hid the others:
+
+        1. The real registration API on both shipped managers
+           (``AccessControlManager``, ``EnhancedAccessControlManager``) is
+           ``add_rule``. It is called directly, and its absence raises
+           :class:`KailashConfigError` rather than being silently skipped.
+        2. ``PermissionRule`` has no ``resource_pattern`` field and requires
+           ``id``/``resource_type``/``resource_id``, so the old constructor
+           call raised ``TypeError`` before it ever reached the dead guard —
+           this method could not succeed at all. Rule data is now validated
+           and mapped onto the real field set (``resource_pattern`` is still
+           accepted as the legacy spelling of ``resource_id``).
+        3. The audit event and the success response are emitted only AFTER
+           ``add_rule`` returns, and ``rule_id`` is the id the rule was
+           actually registered under.
+
+        Raises:
+            ValueError: If ``rule_data`` omits ``permission`` or the resource
+                the rule applies to. A rule missing either matches nothing, so
+                registering it would be the same silent no-op in a new place.
+            KailashConfigError: If the configured access manager exposes no
+                ``add_rule``; the rule cannot be registered and no audit event
+                is emitted.
+        """
+        permission = rule_data.get("permission")
+        if not permission:
+            raise ValueError(
+                "rule_data['permission'] is required: a permission rule with no "
+                "permission matches no access check and would enforce nothing."
+            )
+
+        # `resource_pattern` was this method's original (never-working) spelling;
+        # accept it so existing callers keep working, but store it in the field
+        # PermissionRule actually has.
+        resource_id = rule_data.get("resource_id") or rule_data.get("resource_pattern")
+        if not resource_id:
+            raise ValueError(
+                "rule_data must name the resource via 'resource_id' (or the "
+                "legacy 'resource_pattern'): a rule with no resource matches "
+                "no access check and would enforce nothing."
+            )
+
         rule = PermissionRule(
+            id=rule_data.get("id") or f"rule-{uuid.uuid4()}",
+            resource_type=rule_data.get("resource_type", "api"),
+            resource_id=resource_id,
+            permission=permission,
+            effect=PermissionEffect(rule_data.get("effect", "allow")),
             user_id=rule_data.get("user_id"),
             role=rule_data.get("role"),
-            permission=rule_data.get("permission"),
-            resource_pattern=rule_data.get("resource_pattern"),
-            effect=PermissionEffect(rule_data.get("effect", "allow")),
+            tenant_id=rule_data.get("tenant_id"),
             conditions=rule_data.get("conditions", {}),
+            created_by=created_by,
         )
 
-        add_rule_fn = getattr(self.access_manager, "add_permission_rule", None)
-        if add_rule_fn:
-            add_rule_fn(rule)
+        add_rule_fn = getattr(self.access_manager, "add_rule", None)
+        if not callable(add_rule_fn):
+            raise KailashConfigError(
+                f"{type(self.access_manager).__name__} exposes no callable "
+                "add_rule(); permission rules cannot be registered. Configure "
+                "MiddlewareAccessControlManager with an access manager that "
+                "implements add_rule(PermissionRule) — both "
+                "kailash.access_control.AccessControlManager and "
+                "kailash.access_control_abac.EnhancedAccessControlManager do."
+            )
+        add_rule_fn(rule)
 
-        # Audit the rule creation
+        # Audit ONLY after the rule is genuinely registered. Emitting this
+        # before/regardless of registration is what made the audit trail lie.
         if self.enable_audit and self.audit_node:
             self.audit_node.execute(
                 event_type="permission_rule_created",
                 rule_data=rule_data,
                 created_by=created_by,
+                rule_id=rule.id,
             )
 
-        return {"success": True, "rule_id": str(hash(str(rule)))}
+        return {"success": True, "rule_id": rule.id}
 
     async def get_user_effective_permissions(
         self, user_context: UserContext
@@ -277,11 +344,28 @@ class MiddlewareAccessControlManager:
         get_perms_fn = getattr(self.access_manager, "get_user_permissions", None)
         rules = get_perms_fn(user_context) if get_perms_fn else []
 
+        # `rule.resource_pattern` does not exist on PermissionRule — reading it
+        # raised AttributeError for every registered rule (same #2057 root cause
+        # as create_permission_rule: this pair was written against a field set
+        # the dataclass never had). The real field is `resource_id`.
+        #
+        # `permission` is genuinely dual-shape: the middleware's own API rules
+        # carry string permissions (check_api_access compares against the
+        # string `api.<method>.<path>`), while SDK-registered rules carry
+        # WorkflowPermission/NodePermission enums. Dispatch on the type rather
+        # than probing for `.value` (zero-tolerance Rule 3d).
         return [
             {
-                "permission": rule.permission,
-                "resource_pattern": rule.resource_pattern,
-                "effect": rule.effect.value,
+                "permission": (
+                    rule.permission.value
+                    if isinstance(rule.permission, Enum)
+                    else rule.permission
+                ),
+                "resource_type": rule.resource_type,
+                "resource_id": rule.resource_id,
+                "effect": (
+                    rule.effect.value if isinstance(rule.effect, Enum) else rule.effect
+                ),
                 "conditions": rule.conditions,
             }
             for rule in rules

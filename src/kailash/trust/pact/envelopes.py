@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from kailash.trust.action_policy import allowed_actions_tightening_violation
 from kailash.trust.pact.addressing import Address
 from kailash.trust.pact.config import (
     CONFIDENTIALITY_ORDER,
@@ -552,18 +553,18 @@ class RoleEnvelope:
                 f"({parent_envelope.confidentiality_clearance.value})"
             )
 
-        # Operational: child allowed_actions must be subset of parent's
-        parent_allowed = set(parent_envelope.operational.allowed_actions)
-        child_allowed = set(child_envelope.operational.allowed_actions)
-        if (
-            parent_allowed
-            and child_allowed
-            and not child_allowed.issubset(parent_allowed)
-        ):
-            extra = child_allowed - parent_allowed
-            violations.append(
-                f"Operational: child allowed_actions {extra} not in parent allowed set"
-            )
+        # Operational: child allowed_actions must be subset of parent's.
+        # Uses the SAME shared restrictiveness model the eval surfaces consume
+        # (GH #2218, security.md § Enforcement-Surface Parity). The previous
+        # `parent_allowed and child_allowed and ...` spelling read an EMPTY
+        # parent allowlist as WIDEST and skipped the check -- the opposite of
+        # what verify_action does with the identical envelope, so a child could
+        # register actions its parent was not permitted to perform.
+        aa_violation = allowed_actions_tightening_violation(
+            parent_envelope.operational, child_envelope.operational
+        )
+        if aa_violation is not None:
+            violations.append(f"Operational: {aa_violation}")
 
         # Operational: circuit-breaker (BH5 #1510). A re-registration/tightening
         # that STRIPS or LOOSENS a parent breaker is a widening -- a privilege

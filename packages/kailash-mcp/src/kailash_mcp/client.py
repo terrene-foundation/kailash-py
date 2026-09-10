@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 if TYPE_CHECKING:
     from mcp import ClientSession
 
+from kailash.utils.url_credentials import fingerprint_value
 from kailash_mcp.auth.providers import (
     AuthManager,
     AuthProvider,
@@ -343,7 +344,9 @@ class MCPClient:
             if self.metrics:
                 self._update_metrics("discover_tools", time.time() - (start_time or 0))
 
-            logger.info(f"Discovered {len(tools)} tools from {server_key}")
+            logger.info(
+                f"Discovered {len(tools)} tools from {self._get_server_ref(server_config)}"
+            )
             return tools
 
         except Exception as e:
@@ -351,7 +354,9 @@ class MCPClient:
                 if "requests_failed" in self.metrics:
                     self.metrics["requests_failed"] += 1
 
-            logger.error(f"Failed to discover tools from {server_key}: {e}")
+            logger.error(
+                f"Failed to discover tools from {self._get_server_ref(server_config)}: {e}"
+            )
             return []
 
     async def _discover_tools_stdio(
@@ -876,7 +881,7 @@ class MCPClient:
 
             return {
                 "status": "healthy",
-                "server": self._get_server_key(server_config),
+                "server": self._get_server_ref(server_config),
                 "tools_available": len(tools),
                 "transport": self._get_transport_type(server_config),
                 "metrics": self.metrics.copy() if self.metrics else None,
@@ -884,7 +889,7 @@ class MCPClient:
         except Exception as e:
             return {
                 "status": "unhealthy",
-                "server": self._get_server_key(server_config),
+                "server": self._get_server_ref(server_config),
                 "error": str(e),
                 "transport": self._get_transport_type(server_config),
             }
@@ -911,8 +916,65 @@ class MCPClient:
         else:
             return server_config.get("transport", "stdio")
 
+    def _get_server_ref(self, server_config: Union[str, Dict[str, Any]]) -> str:
+        """Disclosure-safe reference to a server, for logs and status payloads.
+
+        NEVER return :meth:`_get_server_key` to a caller or a log sink. That key
+        embeds ``command`` and every element of ``args`` verbatim, and
+        ``server_config`` is untrusted registry/discovery input that routinely
+        carries a credential as a CLI flag (``npx ... --token=<secret>``) or as
+        URL userinfo. This is the same disclosure closed at the raise site in
+        ``SpawnSecurityError`` (#2004); the sinks here read the config directly
+        and so inherit nothing from that fix.
+
+        The stdio form fingerprints the whole command line, so two servers that
+        differ only in their arguments still get distinct references while the
+        arguments themselves never appear.
+
+        Every branch returns a MODULE-OWNED LITERAL joined to a non-reversible
+        digest, and nothing else -- no substring of the config survives into the
+        return value: not a masked URL, not a command basename, not an argument.
+
+        That is stricter than disclosure-safety alone requires, deliberately.
+        ``py/clear-text-logging-sensitive-data`` (HIGH) follows the call graph
+        interprocedurally, so ANY config-derived value reaching a logging sink
+        is reported -- a masked URL still carries host and path, and
+        ``safe_command_ref`` still carries the executable basename. The first
+        version of this method used both and CodeQL reported three HIGH alerts
+        on the log lines that consume it. ``fingerprint_value`` is the helper
+        this repo designates for a value destined for a log line (see its
+        docstring: "especially when the tag is destined for a LOG line"), and
+        the transport label is resolved through a MAPPING to a literal rather
+        than echoed -- the pattern measured to work in ``kailash.trust.auth.asgi``
+        where a membership test was measured NOT to.
+        """
+        transport_labels = {
+            "stdio": "stdio",
+            "sse": "sse",
+            "http": "http",
+            "websocket": "websocket",
+        }
+
+        if isinstance(server_config, str):
+            return f"server#{fingerprint_value(server_config)}"
+
+        label = transport_labels.get(server_config.get("transport", "stdio"), "other")
+        if label == "stdio":
+            command = server_config.get("command", "python")
+            args = server_config.get("args", []) or []
+            material = " ".join([str(command), *map(str, args)])
+        else:
+            material = str(server_config.get("url", ""))
+        return f"{label}#{fingerprint_value(material)}"
+
     def _get_server_key(self, server_config: Union[str, Dict[str, Any]]) -> str:
-        """Generate cache key for server config."""
+        """Generate cache key for server config.
+
+        INTERNAL ONLY -- this value is credential-bearing by construction (it
+        embeds the raw command and args so that two otherwise-identical servers
+        do not collide in the cache). Use :meth:`_get_server_ref` for anything
+        a caller or a log can observe.
+        """
         if isinstance(server_config, str):
             return server_config
         else:

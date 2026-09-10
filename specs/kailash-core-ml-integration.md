@@ -159,7 +159,9 @@ class MLError(Exception):
 # --- 11 domain families (one per spec) ---
 
 class TrackingError(MLError):
-    """Raised by ExperimentTracker, SQLiteStorageDriver, or the migration
+    """Raised by ExperimentTracker, the tracker stores (SqliteTrackerStore /
+    PostgresTrackerStore under kailash_ml.tracking.storage; the name
+    SQLiteStorageDriver used in earlier revisions never shipped), or the migration
     helpers. Subclasses: RunNotFoundError, ExperimentNotFoundError,
     MetricValueError, ParamValueError, TenantRequiredError,
     ActorRequiredError, AliasNotFoundError, ErasureRefusedError,

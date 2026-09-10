@@ -400,9 +400,27 @@ async def check_jaeger_health() -> bool:
 
 
 def is_jaeger_available() -> bool:
-    """Check if Jaeger is available (synchronous wrapper)."""
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(check_jaeger_health())
+    """Check if Jaeger is available (synchronous wrapper).
+
+    Runs on a dedicated event loop that is created, used, and closed here.
+
+    ``asyncio.get_event_loop()`` MUST NOT be used: it raises
+    ``RuntimeError: There is no current event loop in thread 'MainThread'``
+    once anything in the process has completed an ``asyncio.run()``, because
+    that leaves the thread's policy with ``_set_called=True`` and ``_loop=None``
+    (documented CPython behaviour, not a teardown bug in the caller). Any
+    earlier test that drives a sync-wrapped async API is enough to trigger it,
+    which made this helper fail in combined runs while passing standalone
+    (issue #2219).
+
+    The loop is deliberately NOT installed via ``asyncio.set_event_loop()`` so
+    this helper leaves the thread's loop state exactly as it found it.
+    """
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(check_jaeger_health())
+    finally:
+        loop.close()
 
 
 def get_jaeger_config() -> Dict:

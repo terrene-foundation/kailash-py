@@ -563,6 +563,71 @@ class TestEmptyStore:
     def test_list_anchors_empty(self, store):
         assert store.list_anchors() == []
 
+    def test_latest_anchor_empty(self, store):
+        assert store.latest_anchor() is None
+
+
+# ---------------------------------------------------------------------------
+# 5b. Anchor tip query (issue #2163)
+# ---------------------------------------------------------------------------
+
+#: The default page size of ``list_anchors``. Deriving the tip as
+#: ``list_anchors()[-1]`` silently returns the ``limit``-th oldest anchor once
+#: the chain grows past this, which is the defect ``latest_anchor`` closes.
+LIST_ANCHORS_DEFAULT_LIMIT = 1000
+
+
+def _store_anchor_chain(store, count: int) -> list[str]:
+    """Append *count* anchors in ascending order, newest last.
+
+    Ids, insertion order and timestamps all ascend together, so every backend's
+    append order (filename sequence, ``rowid``, ``timestamp``) agrees on which
+    anchor is the tip — the assertion is about the tip, not about tie-breaking.
+    """
+    ids = []
+    for i in range(count):
+        anchor_id = f"anc-item{i:010d}"
+        store.store_anchor(
+            anchor_id,
+            {
+                "anchor_id": anchor_id,
+                "timestamp": f"2026-01-01T00:00:00.{i:06d}+00:00",
+            },
+        )
+        ids.append(anchor_id)
+    return ids
+
+
+class TestLatestAnchor:
+    """Every backend must answer the tip query without a caller-set window."""
+
+    def test_protocol_declares_latest_anchor(self):
+        assert hasattr(TrustPlaneStore, "latest_anchor")
+
+    def test_returns_the_newest_anchor(self, store):
+        ids = _store_anchor_chain(store, 5)
+        assert store.latest_anchor()["anchor_id"] == ids[-1]
+
+    def test_single_anchor_is_its_own_tip(self, store):
+        ids = _store_anchor_chain(store, 1)
+        assert store.latest_anchor()["anchor_id"] == ids[0]
+
+    def test_tip_is_correct_past_the_list_limit(self, store):
+        """The count deliberately EXCEEDS the cap, so the old derivation fails.
+
+        Discrimination: the assertion on ``list_anchors()[-1]`` below pins the
+        specific wrong value the pre-fix code returned, so this test would have
+        caught the original rather than merely noticing a difference.
+        """
+        count = LIST_ANCHORS_DEFAULT_LIMIT + 5
+        ids = _store_anchor_chain(store, count)
+
+        page = store.list_anchors()
+        assert len(page) == LIST_ANCHORS_DEFAULT_LIMIT
+        assert page[-1]["anchor_id"] != ids[-1], "cap must actually bite here"
+
+        assert store.latest_anchor()["anchor_id"] == ids[-1]
+
 
 # ---------------------------------------------------------------------------
 # 6. Input validation (Store Security Contract)

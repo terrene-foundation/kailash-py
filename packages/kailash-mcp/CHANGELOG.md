@@ -2,7 +2,7 @@
 
 All notable changes to the Kailash MCP package will be documented in this file.
 
-## [Unreleased]
+## [0.6.0] — 2026-09-10 — OAuth signing-key floor; spawn-command credential disclosure (#2083, #2092, #2004)
 
 ### Security (BREAKING) — `JWTManager` no longer invents its own OAuth signing key (#2083, #2092)
 
@@ -23,6 +23,38 @@ export KAILASH_MCP_JWT_PRIVATE_KEY="$(cat oauth-signing-key.pem)"
 ```
 
 A verify-only resource server needs `KAILASH_MCP_JWT_PUBLIC_KEY` (or `public_key=`) instead. For local development, pass `allow_ephemeral_key=True`. There is deliberately no compatibility shim: a shim would have to keep generating the key, which is the defect.
+
+### Security (BREAKING) — `SpawnSecurityError` no longer carries the rejected spawn command (#2004)
+
+- **A rejected spawn command leaked its embedded credential into logs and into the caller's status dict.** `HealthChecker` logged and returned `str(e)` for a spawn rejection, and `server.command` is untrusted registry/discovery input that routinely carries a credential as a CLI flag (`npx ... --token=<secret>`). The whole command — token included — reached both sinks.
+- **Fixed at the raise site, not at the sinks.** `SpawnSecurityError.__init__` now converts the command at construction time to a disclosure-safe `basename#fingerprint` reference via `kailash.utils.command_safety.safe_command_ref`. One change therefore covers the exception message, the `.data` attribute, and the JSON-RPC payload produced by `MCPError.to_dict()` — including sinks added later. Verified: `validate_spawn_command("npx --token=SUPERSECRET", allowed_commands={"node"})` raises with message and `data` both rendering `npx#726b68e7`, and `"SUPERSECRET"` present in neither.
+- **BREAKING — the `data` key was renamed.** `SpawnSecurityError.data["command"]` (the raw command string) is now `data["command_ref"]` (the `basename#fingerprint` reference). Code reading `data["command"]` must read `data["command_ref"]`, and must not expect the original command back — recovering it is the defect. There is deliberately no compatibility alias: keeping `data["command"]` populated would keep the credential on the wire.
+- **The constructor now accepts any object.** The `command` parameter widened from `Optional[str]` to `object`, and every value is now routed through `safe_command_ref`, which substitutes a constant sentinel for the two shapes it cannot fingerprint: a non-string renders `<non-string>` and an empty string renders `<empty>`. Measured against the pre-fix constructor (`data={"command": command} if command is not None else None`), which did **not** produce `data=None` for either: a non-string was stored **raw** — `data={'command': ['npx', '--token=S']}`, credential and all, since only the `str` path was ever considered — and an empty string was stored as `data={'command': ''}`. Only `command=None` yielded an empty `data`. So the widening closes a leak rather than merely tidying a dropped value.
+- **Not routed through `mask_error_text`.** Measured: that helper redacts URL userinfo and credential query parameters but passes a CLI-flag credential through verbatim, so it does not close this leak.
+
+### Security (BREAKING) — the same spawn-command disclosure, closed at the sibling surfaces the #2004 fix did not reach
+
+Found by the pre-release security review of this very release. The #2004 fix above is correct but scoped to sinks that read the **exception**; the sites below read `command` / `args` straight off the untrusted server config and so inherited nothing from it. Shipping 0.6.0 with them open would have made the headline note above a completeness claim this wheel does not hold.
+
+- **`MCPClient.health_check()` returned, and `MCPClient.discover_tools()` logged, the full stdio command including every argument.** The internal cache key `_get_server_key()` renders `stdio://<command>:<arg>:<arg>...`, which for the exact input #2004 is written about produces `stdio://npx:-y:@vendor/mcp:--token=<secret>`. That string reached four sinks: the `server` field of the health-check payload on **both** the healthy and unhealthy paths, and two unconditional `logger.info` / `logger.error` writes on the ordinary success and failure paths — so it did not need a rejection to fire. The cache key is unchanged and still exact (two servers differing only in arguments must not collide); a new disclosure-safe `_get_server_ref()` is what callers and logs now see. It fingerprints the **whole** command line, so those two servers still get distinct references — measured, `stdio://npx#d59a40bf` vs a different digest — while no argument appears. URL transports route through `mask_url`, so userinfo and credential query parameters are masked too.
+- **BREAKING — `EnhancedStdioTransport.get_process_info()` returned `"command": [self.command] + self.args` raw.** It is now `"command_ref"`, the same `basename#fingerprint` form. Code reading `data["command"]` must read `data["command_ref"]` and must not expect the argv back — recovering it is the defect, so there is deliberately no compatibility alias. The `logger.info` on STDIO connect was fingerprinted for the same reason.
+
+### Security — an unconfigured signing key is reported as a misconfiguration, not as a bad token (#2092 follow-through)
+
+- **`AuthorizationServer.refresh_token_grant()` and `introspect_token()` swallowed `JWTKeyNotConfiguredError`.** #2092 hoisted the key resolution out of the `try` inside `verify_refresh_token` so the typed refusal would propagate — and one frame up, a catch-all caught it right back and answered `AuthorizationError("Invalid refresh token")`, which is precisely the blame-the-client message that fix exists to eliminate. `introspect_token` had the same shape, answering `{"active": false}`. Both now re-raise. Note the arm ordering is load-bearing: `JWTKeyNotConfiguredError` subclasses `AuthenticationError`, so it must be caught first. **This was never an auth bypass** — the end state was already fail-closed, because the subsequent `create_access_token` raises the same error and no token was minted; it was a diagnostic defect, plus a fallback that consulted the token store without a signature check on its way to that refusal.
+- **An authorization-server error body reached an exception message and an ERROR log unscrubbed.** The token-request and token-exchange POSTs carry `client_secret` and `refresh_token`; a proxy or non-conformant AS that echoes the request form back would have put both into `AuthenticationError(f"Token ... failed: {error_text}")` and from there into any log rendering it. All three sites now pass through `mask_error_text`, which this package already uses for exactly this class.
+
+### Fixed
+
+- **A failing health-endpoint probe was swallowed silently.** `HealthChecker` caught every exception from the `/health` probe with a bare `except Exception: pass` before falling through to the main-endpoint probe, so a persistently-failing health endpoint was undiagnosable. The fall-through behaviour is unchanged — it is correct — but the exception is now logged at DEBUG (`health_check.health_endpoint_failed`) with the error text passed through `mask_error_text`, since the probe URL is echoed by most client errors and may carry userinfo or credential query parameters.
+
+### Added
+
+- **`allow_ephemeral_key` is accepted by `AuthorizationServer` and `ResourceServer`, not only by `JWTManager`.** Both default-construct a `JWTManager`, so without it a caller who wanted the development-only ephemeral-key behaviour had no way to reach it through the server constructors they actually use. Verified: `AuthorizationServer(issuer=...)` with no key raises `JWTKeyNotConfiguredError` at the signing boundary, and the `allow_ephemeral_key=True` path emits the one-time ERROR naming the wiring.
+
+### Packaging (REQUIRED for the #2004 fix to import) — the `kailash` floor is raised to `>=2.63.0`
+
+- **`kailash>=2.56.0` → `kailash>=2.63.0`.** The spawn-command disclosure fix above imports `kailash.utils.command_safety.safe_command_ref` at **module** scope in `security.py`, and `security.py` is itself imported at module scope by `client.py`, `transports/transports.py` and `discovery/discovery.py`. That module does not exist in any `kailash` before 2.63.0. Measured against the published wheels: on `kailash==2.62.0`, `import kailash_mcp.client` raises `ModuleNotFoundError: No module named 'kailash.utils.command_safety'`; on `kailash==2.63.0` every `from kailash.` import in this package resolves. Under the old floor `pip check` reported **no broken requirements** while the import still failed, so the raise converts a runtime `ImportError` into a resolver error at install time. **If you pin `kailash` below 2.63.0, `kailash-mcp` 0.6.0 will not install** — that is deliberate, and upgrading `kailash` is the fix. 2.63.0 rather than 2.64.0 because 2.63.0 is the lowest release that satisfies every core import this package makes.
 
 ## [0.5.1] — 2026-08-09 — Cap mcp<2.0 (packaging only)
 

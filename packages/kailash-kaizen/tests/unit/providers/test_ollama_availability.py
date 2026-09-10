@@ -5,9 +5,97 @@ Tests the OLLAMA_AVAILABLE flag and Ollama installation checks.
 Following TDD pattern from TODO-148/149.
 """
 
+import contextlib
+import importlib
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+
+class _BlockedImportFinder:
+    """A ``sys.meta_path`` finder that makes one top-level package unimportable.
+
+    Needed so ``ollama``-absent behaviour can be exercised on a machine where
+    ``ollama`` IS installed: dropping the entry from ``sys.modules`` only clears
+    the cache, it does not stop the next ``import`` from finding it on disk.
+    """
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == self.name or fullname.startswith(self.name + "."):
+            raise ImportError(f"{fullname!r} blocked by test fixture")
+        return None
+
+
+def _fresh_providers():
+    """Import ``kaizen.providers`` with a genuinely CLEAN namespace.
+
+    ``importlib.reload()`` is deliberately NOT used here. Reload re-executes the
+    module body in the module's EXISTING ``__dict__`` and never deletes stale
+    attributes, so a reload performed while ``ollama`` was mocked leaves
+    ``OllamaModelManager`` bound forever afterwards -- a later reload flips
+    ``OLLAMA_AVAILABLE`` back to False but the export it gates stays visible.
+    Dropping the entry from ``sys.modules`` and re-importing builds a new module
+    object instead, which is the only form that actually restores state.
+
+    Only the ``kaizen.providers`` barrel is dropped; its submodules stay cached,
+    so classes such as ``ModelInfo`` keep their identity across the swap.
+    """
+    sys.modules.pop("kaizen.providers", None)
+    return importlib.import_module("kaizen.providers")
+
+
+@contextlib.contextmanager
+def _providers_reloaded(*, ollama_present: bool):
+    """Import ``kaizen.providers`` with ``ollama`` forced present/absent.
+
+    ``kaizen.providers`` binds its legacy Ollama re-exports (``OllamaModelManager``,
+    ``ModelInfo``, ``OllamaConfig``, ...) behind an ``if OLLAMA_AVAILABLE:`` guard
+    evaluated at IMPORT time, so importing it under a patched ``sys.modules``
+    produces a module whose namespace does not match the real environment.
+
+    The ``finally`` restore is the point of this helper: without it the mutated
+    module outlives the test and every later test in the process sees it. That
+    leak is issue #2149 -- it made unrelated tests in this file pass only
+    because this one happened to run first.
+    """
+    import kaizen
+    import kaizen.providers
+
+    original = sys.modules["kaizen.providers"]
+    blocker = None
+    overrides = {"ollama": MagicMock()} if ollama_present else {}
+    try:
+        with patch.dict("sys.modules", overrides):
+            if not ollama_present:
+                sys.modules.pop("ollama", None)
+                blocker = _BlockedImportFinder("ollama")
+                sys.meta_path.insert(0, blocker)
+            yield _fresh_providers()
+    finally:
+        if blocker is not None and blocker in sys.meta_path:
+            sys.meta_path.remove(blocker)
+        # Put back the ORIGINAL module OBJECT, in both places that reference it.
+        #
+        # Re-importing instead would build a NEW object, and a fresh
+        # kaizen.providers namespace does NOT carry the submodule attributes
+        # that earlier imports had set on the original -- importing
+        # kaizen.providers.registry sets `registry` on whichever parent object
+        # was current at the time, and a later import is a sys.modules cache hit
+        # that never re-sets it. Tests elsewhere do
+        # monkeypatch.setattr("kaizen.providers.registry...."), which resolves
+        # that attribute via getattr and dies on the barrel's __getattr__ with
+        # "module 'kaizen.providers' has no attribute 'registry'". Restoring the
+        # original object keeps this helper invisible to the rest of the suite,
+        # which is the whole point of it.
+        #
+        # patch.dict restores sys.modules wholesale but knows nothing about the
+        # parent package attribute, so that one is reset explicitly.
+        sys.modules["kaizen.providers"] = original
+        kaizen.providers = original
 
 
 class TestOllamaAvailabilityFlag:
@@ -25,28 +113,31 @@ class TestOllamaAvailabilityFlag:
 
     def test_ollama_available_true_when_installed(self):
         """Test OLLAMA_AVAILABLE is True when ollama package is available."""
-        # Mock ollama import to simulate it being installed
-        with patch.dict("sys.modules", {"ollama": MagicMock()}):
-            # Re-import to trigger the availability check
-            import importlib
+        import kaizen.providers
 
-            import kaizen.providers
+        real_value = kaizen.providers.OLLAMA_AVAILABLE
 
-            importlib.reload(kaizen.providers)
+        with _providers_reloaded(ollama_present=True) as providers:
+            assert providers.OLLAMA_AVAILABLE is True
+            # The availability flag gates the legacy re-exports, so a True flag
+            # must also bind them.
+            assert hasattr(providers, "OllamaModelManager")
 
-            from kaizen.providers import OLLAMA_AVAILABLE
-
-            # Note: This test may be True or False depending on actual installation
-            # Just verify it's a boolean
-            assert isinstance(OLLAMA_AVAILABLE, bool)
+        # The reload must not leak: the module is back on the real environment.
+        assert kaizen.providers.OLLAMA_AVAILABLE is real_value
 
     def test_ollama_available_false_when_not_installed(self):
         """Test OLLAMA_AVAILABLE is False when ollama package is missing."""
-        # This test documents expected behavior
-        # Actual value depends on system state
-        from kaizen.providers import OLLAMA_AVAILABLE
+        import kaizen.providers
 
-        assert isinstance(OLLAMA_AVAILABLE, bool)
+        real_value = kaizen.providers.OLLAMA_AVAILABLE
+
+        with _providers_reloaded(ollama_present=False) as providers:
+            assert providers.OLLAMA_AVAILABLE is False
+            # A False flag must leave the legacy re-exports unbound.
+            assert not hasattr(providers, "OllamaModelManager")
+
+        assert kaizen.providers.OLLAMA_AVAILABLE is real_value
 
 
 class TestOllamaInstallationCheck:
@@ -55,7 +146,7 @@ class TestOllamaInstallationCheck:
     def test_ollama_installation_check_command_exists(self):
         """Test detecting if Ollama CLI is installed."""
         # This will fail until OllamaModelManager is implemented
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         manager = OllamaModelManager()
 
@@ -65,7 +156,7 @@ class TestOllamaInstallationCheck:
 
     def test_ollama_installation_check_with_mock_success(self):
         """Test installation check when Ollama CLI exists."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         # Mock subprocess to simulate successful Ollama check
         mock_result = MagicMock()
@@ -79,7 +170,7 @@ class TestOllamaInstallationCheck:
 
     def test_ollama_installation_check_with_mock_failure(self):
         """Test installation check when Ollama CLI is missing."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         # Mock subprocess to simulate Ollama not found
         with patch("subprocess.run", side_effect=FileNotFoundError):
@@ -93,7 +184,7 @@ class TestOllamaServiceStatus:
 
     def test_ollama_service_running_check_exists(self):
         """Test method to check if Ollama service is running."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         manager = OllamaModelManager()
 
@@ -104,7 +195,7 @@ class TestOllamaServiceStatus:
 
     def test_ollama_service_running_with_mock_success(self):
         """Test service check when Ollama is running."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         # Mock ollama.list() to simulate service running
         mock_ollama = MagicMock()
@@ -118,7 +209,7 @@ class TestOllamaServiceStatus:
 
     def test_ollama_service_not_running_with_mock_failure(self):
         """Test service check when Ollama is not running."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         # Mock ollama.list() to raise exception (service not running)
         mock_ollama = MagicMock()
@@ -136,14 +227,14 @@ class TestOllamaModelListing:
 
     def test_ollama_model_list_method_exists(self):
         """Test that list_models method exists."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         manager = OllamaModelManager()
         assert hasattr(manager, "list_models")
 
     def test_ollama_model_list_returns_list(self):
         """Test list_models returns a list of ModelInfo objects."""
-        from kaizen.providers import ModelInfo, OllamaModelManager
+        from kaizen.providers.ollama_model_manager import ModelInfo, OllamaModelManager
 
         # Mock ollama.list() response (Pydantic object structure)
         mock_ollama = MagicMock()
@@ -167,7 +258,7 @@ class TestOllamaModelListing:
 
     def test_ollama_model_list_handles_empty(self):
         """Test list_models handles empty model list."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         # Mock empty response (Pydantic object structure)
         mock_ollama = MagicMock()
@@ -188,7 +279,7 @@ class TestOllamaSpecificModels:
 
     def test_llava_model_available_check(self):
         """Test checking if llava:13b model is available."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         manager = OllamaModelManager()
 
@@ -211,7 +302,7 @@ class TestOllamaSpecificModels:
 
     def test_bakllava_model_available_check(self):
         """Test checking if bakllava model is available."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         manager = OllamaModelManager()
 
@@ -231,27 +322,9 @@ class TestOllamaSpecificModels:
             result = manager.model_exists("bakllava")
             assert isinstance(result, bool)
 
-    @pytest.mark.skip(
-        reason=(
-            "Issue #2149: depends on cross-test module-reload pollution to "
-            "pass, not a real intermittent flake. FAILS deterministically "
-            "when run alone or in the full kaizen 'expanded FAST unit tiers' "
-            "selection (ImportError: cannot import name 'OllamaModelManager' "
-            "from 'kaizen.providers'); only PASSES when a sibling test in "
-            "this same file (test_ollama_available_true_when_installed) "
-            "happens to have already run first and left kaizen.providers "
-            "reloaded with OLLAMA_AVAILABLE=True via an incomplete "
-            "with-patch.dict(...)+importlib.reload() cleanup. Surfaced by "
-            "the tests/conftest.py::pytest_collection_modifyitems "
-            "determinism fix in #2144 (a stable test order made this "
-            "reliably visible instead of randomly hidden). Do not xfail "
-            "(strict or non-strict) -- it is not intermittent, it is "
-            "order-dependent. Remove this skip only once #2149 is fixed."
-        )
-    )
     def test_vision_models_not_found(self):
         """Test when vision models are not available."""
-        from kaizen.providers import OllamaModelManager
+        from kaizen.providers.ollama_model_manager import OllamaModelManager
 
         manager = OllamaModelManager()
 

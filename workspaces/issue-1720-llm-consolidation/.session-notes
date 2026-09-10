@@ -1,121 +1,136 @@
-# Session Notes — 2026-09-10 (cont-26: dev is the trunk; #2203 approved, W1A landed)
+# Session Notes — 2026-09-10 (cont-28: 2.64.0 RELEASED, advisory PUBLISHED, backlog DRAINED)
 
 ## Where we are
 
-**`dev` IS THE INTEGRATION TRUNK. The primary checkout tracks `dev`, not `main`.**
-Lane work merges into `dev` the same session it is finished — no PR, no gate, no
-wait. `dev` → `main` is ONE deliberate promotion PR, **cadence: WEEKLY**. Deploy
-runs off a pinned `dev` commit, never `main`. Contract:
-`rules/dev-integration-trunk.md`.
+**kailash 2.64.0 is on PyPI. GHSA-c792-qq6h-mm9q is PUBLISHED.** The A2A auth
+bypass that sat in published 2.63.0 for five weeks is closed and disclosed.
+Installability was verified from a clean venv BEFORE the advisory went out.
 
-"Landed" now means "in `dev`". `unlanded-work-surface.js` and `worktree-reap.mjs`
-both resolve `COC_LANDED_TARGET` → `origin/dev` → the old chain. Set
-`COC_LANDED_TARGET=origin/main` to see the pre-trunk view.
+**`dev` IS THE INTEGRATION TRUNK** and carries 2.64.0.
 
-**#2203 plan is APPROVED. Wave 1 Shard A is LANDED. Shard 1B is the next work.**
+**Promotion is now a DUAL TRIGGER:** 10 independent landings OR 72 hours OR
+immediately for security/deploy-affecting. Counter is `--first-parent`, not raw.
+`rules/dev-integration-trunk.md` MUST-4. Thresholds are PROVISIONAL (see D3).
 
-Verify state with live commands rather than trusting this line; no SHA is pinned
-because one goes stale the moment these notes are themselves merged.
+**The archived-ref backlog is DRAINED: 51/51 adjudicated, exactly 1 landable
+(2%), and it landed.** `git cherry` had flagged all 51.
 
 ## Read first
 
-1. § Next-session directives — the only imperative surface in this file
-2. `02-plans/03-2203-protocol-drift-waves.md` — the approved 3-wave / 8-shard plan
-   (its W1A row carries a measured scope correction; the original table is left
-   as the historical record)
-3. § Traps — measured, do not rediscover
+1. § Next-session directives — the only imperative surface here
+2. § Traps — measured, do not rediscover
+3. `rules/dev-integration-trunk.md` MUST-4
 
 ---
 
 ## Next-session directives
 
-1. **Start #2203 W1B — the A2A 1.0 method set.** Register `message/send` and
-   `tasks/get`; the current set is 0.2.x dot-notation (`agent.capabilities`,
-   `agent.invoke`, `trust.verify`, `trust.delegate`, `audit.query`) registered in
-   `src/kailash/trust/a2a/jsonrpc.py::A2AMethodHandlers.register_all`.
-   re-validate: `grep -rc "message/send" src/kailash/trust/a2a/` → `0` ⇒ still to
-   do. A non-zero count ⇒ W1B has started; read the diff before re-implementing.
+**D0. LAND EVERYTHING INTO `dev`, AND DRAIN IMMEDIATELY ON COMPLETION.** Standing
+order, applies to every agent and lane. Any branch, ref, or worktree that is
+finished merges into `dev` in the SAME session — no PR, no gate, no wait
+(`git checkout dev && git merge --no-ff <branch> && git push origin dev`).
+Landing in `dev` costs zero CI. Holding work "until the wave" is what produced a
+51-ref backlog. On completion, drain immediately: reap the worktree, delete the
+landed branch, and re-run the census — do not leave the tree for a later pass.
+`dev` → `main` stays the one deliberate promotion.
 
-2. **Land in `dev`, never open a PR against it.** A PR to `dev` reintroduces the
-   per-landing CI cost the trunk exists to remove.
-   re-validate: `git rev-parse --abbrev-ref HEAD` → `dev` ⇒ the checkout is
-   correct. `gh run list --branch dev --limit 20 --json databaseId -q '.|length'`
-   → `0` ⇒ the trunk is still CI-free.
+1. **Eight sibling packages are overdue for release. Order is FORCED by a
+   dependency floor:** `kailash-mcp` → `kailash-kaizen` → `kaizen-agents`
+   (kaizen pins `kailash-mcp>=0.5.0`, kaizen-agents pins `kailash-kaizen>=2.46.0`,
+   and none have ever published, so a wrong order is unresolvable at install).
+   Then dataflow, nexus, ml, align, pact. **One at a time** — a red batch tells
+   you nothing about which package caused it, and PyPI can only be yanked.
+   - `kailash-mcp` is READY (changelog covers it) → bump 0.5.1 → 0.6.0.
+   - `kaizen` + `kaizen-agents` changelog drafts were WRITTEN and spot-verified
+     this session but NOT applied — they were held pending release go-ahead.
+     kaizen-agents' `[Unreleased]` is EMPTY behind 53 files incl. an auth bypass.
+   - align/pact are pure import-ordering; a one-line chore entry each.
 
-3. **Promote `dev` → `main` if a week has passed.** One PR, one gate run.
-   re-validate: `git rev-list --count origin/main..origin/dev` → `0` ⇒ already
-   promoted. Non-zero ⇒ that many commits await the next weekly promotion.
+2. **Anchor a package's release scope at ITS OWN version bump**, never the core
+   tag. Measured against the core tag dataflow showed 1 changed file; against its
+   own anchor, 36.
 
-4. **Do not implement #2141, #2166, or #2194 without the co-owner's schema
-   decision.** Unchanged for six sessions.
-   re-validate: `gh issue view 2166 --json comments -q '.comments|length'` →
-   non-zero AND a co-owner comment naming the schema ⇒ unblocked. The text form
-   `gh issue view --comments` renders EMPTY here even at exit 0 — use `--json`.
+3. **The 10/72 promotion thresholds are PROVISIONAL.** Adapted from a sibling repo
+   at ~5 landings/day; this trunk was created 2026-09-10 with one day of data. The
+   rule carries the re-derivation command. Do not cite them as measured-here until
+   ≥14 days of trunk history exist.
 
-5. **Triage the 22 sweep-5 spec orphans before adding more spec surface.** Three
-   are already hand-classified (`TrackerMCPServer` unimplemented;
-   `SQLiteStorageDriver` spec-stale; `diff_runs` location drift).
-   re-validate: run `tools/sweep-redteam.py --json` per-spec over `specs/*.md` and
-   count — NEVER `--all` (see Traps).
+4. **Do not implement #2141, #2166, #2194 without the co-owner's schema decision.**
+   re-validate: `gh issue view 2166 --json comments -q '.comments|length'` → 0
+   means still blocked. The text form renders EMPTY here even at exit 0.
+
+5. **Owner authorization is owed on three preserved containers.** All adjudicated,
+   NOTHING dropped — agent judgment that work is old is not discard authority:
+   - **5 stashes** — all LANDED/OBSOLETE, safe to drop. One nuance: `stash@{2}`
+     holds a `.claude/.proposals/latest.yaml` fragment never committed anywhere
+     (stale 4-month-old distribution-log note; immaterial).
+   - **51 archived refs** — all adjudicated, safe to prune EXCEPT
+     `refs/archive/2026-08-21/release/license-update-v0.9.10`, which is **HARMFUL**:
+     it would reintroduce a "PROHIBITION ON STANDALONE COMMERCIAL DISTRIBUTION"
+     block into `LICENSE` (242 lines vs trunk's stock Apache-2.0 201). Directive 0.
+   - `refs/original/...` filter-branch backup + empty `.kailash-py-wt` dir.
+
+6. **The pre-push guard is NOT installed** (a git hook is per-clone, uncommittable;
+   the state-file guard blocks agent writes into `.git`). Run:
+   `ln -sf ../../scripts/ci/dev-push-stopgap.sh .git/hooks/pre-push`
+
+7. **`rules/git.md` always-on landing clause is UNSTARTED, budget-blocked.** The
+   discipline lives in `wip-discipline.md`, path-scoped, matching none of
+   `git checkout -b` / `git push` / session end — so it never loads at the moment
+   of the decision. Headroom was 11.8% vs a 10% floor (inside the 15% band): needs
+   paired extraction or a named rationale, re-measured after EVERY attempt.
 
 ---
 
-## In-play branches and worktrees
+## Sweep results (2026-09-10)
 
-**None at risk.** 2 local refs (`dev`, `main`), 2 remote heads, 0 open PRs, 0
-stale remote-tracking refs, 1 worktree (the primary checkout).
-
-- re-check at-risk content (an ahead-count does NOT discriminate — a rebased
-  branch reads ahead long after its content landed):
-  `for b in $(git for-each-ref --format='%(refname:short)' refs/heads); do git cherry origin/dev $b | grep -q '^+' && echo "AT RISK $b"; done`
-- **Worktrees** — 1 tree, verdict 1 KEEP (the primary checkout; never reapable).
-  Removing a worktree deletes a DIRECTORY, never a branch
-  (`rules/worktree-isolation.md` Rule 8).
-  re-check: `node .claude/bin/worktree-reap.mjs`
-- **51 `archive/2026-08-21/*` tags** preserve every commit from the 169-branch
-  sweep at cont-24. LOCAL ONLY and deliberately not pushed (the tag namespace is
-  used for releases). Losing this clone loses them; the branches they preserve
-  were never pushed either.
-
----
-
-## Executed this session (external — not recoverable from git log)
-
-- Created `dev`, pushed it, retargeted the landed predicate, switched the primary
-  checkout to it. Merged PR #2214 (dependabot `mcp` cap `<2.0`→`<3.0`).
-- Posted the #2203 W1A scope correction (`#2203#issuecomment-5613952429`).
-- Pruned 6 stale remote-tracking refs.
-- Four `dev` landings, each verified zero-CI against a pinned run-id baseline.
+- **Sweep 4 (refs):** 2 local, 2 remote, 0 `worktree-agent-*` orphans, 0 open PRs,
+  51 archive refs on origin. Enumerated UNFILTERED; `--no-merged` used only to rank.
+- **Sweep 5 (specs): REPO-LEVEL mode — 22 orphans across 11 specs**, all ML-family
+  (`ml-tracking` 5, `ml-registry` 3, `dataflow-ml-integration`/`ml-drift`/
+  `ml-engines-v2`/`ml-feature-store`/`pact-ml-integration` 2 each, 4 more with 1).
+  85 scanned, 162 symbols, **0 coverage gaps, 0 stubs**. Reconciles with the
+  independently-recorded 22.
+- **Sweep 6 (worktrees):** 1 tree (the primary), verdict KEEP, 3.08 GiB, 393 GiB free.
+- **Sweep N (deferred-quality):** 0 items — the label carries nothing.
 
 ---
 
 ## Traps (measured — do not rediscover)
 
-- **Pushing `dev` fires ZERO workflow runs — verify via the runs API, never by
-  reading `on:` blocks.** Four `dev` pushes this session, each checked against a
-  pinned pre-push run-id baseline: 0 every time.
-- **The 2026-09-10 trunk directive's file table does NOT match this repo.** It
-  names `.claude/bin/branch-landed-check.mjs` and
-  `.claude/hooks/wip-closure-guard.js` — NEITHER EXISTS HERE. The live surfaces
-  are `unlanded-work-surface.js` (resolves from `origin/HEAD`, not a constant) and
-  `worktree-reap.mjs`.
-- **A plan's site count is a hypothesis.** #2203 said the A2A well-known path was
-  4 sites / 3 files; it was **16 sites / 6 files** — the original grep was scoped
-  to `src/kailash/trust/a2a/` and could not see the integration test (9 sites) or
-  the docs. Re-derive repo-wide before any rename.
-- **A failing Tier-2 test may be a drifted MOCK, not broken production.**
-  `mock_verify` omitted the real API's `action` parameter, so the correct
-  production call raised `TypeError` → `-32603`. Check the REAL signature before
-  changing production to satisfy a test.
+- **`tools/sweep-redteam.py` EXITS NON-ZERO when it finds something, and emits
+  JSONL findings + a sentinel comment, NOT one JSON object.** A `|| continue`
+  therefore skips exactly the specs WITH findings and counts only the clean ones —
+  this produced a confident "0 orphans across 74 specs" against a true 22. Parse
+  the `sweep-redteam:v1:OK ... orphans=N` sentinel; treat non-zero exit as findings.
 - **`tools/sweep-redteam.py --all` returns `specs=0 … OK`** — it scans
-  `workspaces/*/specs`, empty here. That sentinel is a vacuous green; run per-spec.
-- **Cancelled duplicate CI runs surface as `fail` in `gh pr checks`.** Classify
-  with `gh run list --commit <sha> --json conclusion` before believing a red board.
-- **The local gate is ~29s, and fires only on Python/dep changes.** A report of it
-  being slow points at TRIGGERING, not size.
-- **zsh does not word-split unquoted variables**, so `$FILES` in a `cp`/`git
-  checkout` is ONE filename and the command fails. A failing glob aborts the whole
-  command, fabricating a `0`.
+  `workspaces/*/specs`, empty here. A vacuous green. Run per-spec over `specs/*.md`.
+- **A truncated read produces a confidently wrong count.** Reading `[Unreleased]`
+  over 97 lines of a 570-line section reported "3 of 30 documented"; the true
+  figure was 42 documented, 3 missing. A hook now BLOCKS truncated `.session-notes`
+  reads for this reason.
+- **Version parity is NOT content parity.** Declared-vs-PyPI said "nothing to
+  release" for all 9 packages while 5 weeks of src changes sat unpublished.
+- **`git cherry` overstates unlanded work ~18×.** All 51 refs flagged; 1 landable.
+  Patch-id cannot tell "unlanded" from "rebased/reimplemented". Supersession is
+  settled by reading the trunk and cannot be mechanized.
+- **A branch name is not evidence of its commits.**
+  `fix/2070-logging-hook-redaction-defeat` carries #2084 work, not #2070.
+- **`cmd | tail; echo $?` captures tail's status** — this falsely reported a
+  CONFLICTED cherry-pick as "CLEAN" this session. Redirect to a file first.
+- **A control that cannot discriminate proves nothing.** Verifying `--first-parent`
+  where raw and first-parent both equalled 2 was vacuous; it needed a range where
+  they differ (1944 vs 6401).
+- **The `framework-first` hook false-positives on `.claude/hooks/lib/*.js**`,
+  reporting "raw SQL detected" on JS with no SQL. Ignore it there only.
+- **Cancelled duplicate CI runs read as `fail`.** Classify with
+  `gh run list --commit <sha> --json conclusion`.
+- **`release/v*` branches auto-skip the PR-gate matrix** — intended, not a break.
+- **`grep -q` under `set -o pipefail` silently inverts** (SIGPIPE 141). Use `grep -c`.
+- **Root `tests/` and `packages/*/tests/` cannot share one pytest process.**
+- Tests: ALWAYS `.venv/bin/python -m pytest`. `.env` `OPENAI_API_KEY` is INVALID.
+- **zsh: an unmatched glob aborts the whole block**, and the missing output of
+  later lines reads as an empty result. Unquoted `$VAR` does not word-split.
 
 ---
 
@@ -123,16 +138,31 @@ stale remote-tracking refs, 1 worktree (the primary checkout).
 
 | id | workstream | state | receipt |
 | --- | --- | --- | --- |
-| `2203-w1b` | A2A 1.0 method set (`message/send`, `tasks/get`) | **OPEN — next actionable** | plan § Wave 1 |
-| `2203-w2` | MCP → Modern `2026-07-28` (4 shards, architectural) | OPEN, approved, not started | plan § Wave 2 |
-| `2203-w3` | Conformance suites gated per-requirement by name | OPEN, approved, not started | plan § Wave 3 |
-| `promotion` | `dev` → `main`, weekly | OPEN — recurring, gap counted at SessionStart | `rules/dev-integration-trunk.md` MUST-4 |
-| `sweep5-orphans` | 22 spec orphans (3 hand-classified) | open, stable since the scanner fix | PR #2205 |
-| `dataflow-durability` | #1548 residual uncommitted-DDL window | open, filed with evidence | #2206 |
+| `pkg-releases` | 8 packages, forced order mcp→kaizen→agents | **OPEN — next actionable** | D1 |
+| `changelog-apply` | kaizen + kaizen-agents drafts written, NOT applied | OPEN — gated on D1 | D1 |
+| `container-authz` | 5 stashes / 51 refs / refs-original / stray dir | **OPEN — owner decision** | D5 |
+| `2218` | PACT `allowed_actions=[]`: deny-all at 1 surface, permit-all at 3 | OPEN — reachable, HIGH | #2218 |
+| `2219` | test-order pollution: 10 tracing tests error in combined runs | OPEN | #2219 |
+| `sweep5-orphans` | 22 spec orphans, 11 ML-family specs | OPEN — re-measured today | § Sweep results |
+| `2203-1b'` | A2A 1.0 SendMessage/GetTask re-land + owner_id | OPEN — re-implementation | plan § Wave 1 |
+| `2203-1c` | remaining 9 v1.0 JSON-RPC methods (2 SSE) | OPEN, size at /todos | plan § Wave 1 |
+| `2203-w2` | MCP → Modern 2026-07-28 (4 shards) | OPEN, approved | plan § Wave 2 |
+| `2203-w3` | conformance suites gated per-requirement | OPEN, approved | plan § Wave 3 |
+| `promo-thresholds` | re-derive 10/72 from ≥14d trunk data | OPEN — dated | D3 |
+| `dev-preflight` | pre-push guard committed, NOT installed | OPEN — user one-liner | D6 |
+| `landing-rules` | git.md always-on clause | OPEN — budget-blocked | D7 |
+| `three-verdict` | landed-predicate needs UNDETERMINED | OPEN | procedure Step 5 |
+| `preflight-scope` | guard narrower than CI | OPEN | procedure Step 6 |
+| `a2a-residuals` | trust.verify oracle, jti replay, TTL cap | OPEN | adversarial review |
 | `authz-schema` | #2166 + #2194 actor/authz schema | blocked on co-owner | #2194 |
 | `auth-semantics` | #2141 `--auth` + kailash-ml release | blocked on co-owner | #2141 |
-| `mcp-health` | `mcp_channel.py:961` non-discriminating check | blocked on co-owner | cont-22 report D3 |
 
-Closed this session: `dev-trunk` (trunk live, guards retargeted),
-`promotion-cadence` (WEEKLY ratified), `2203-w1a` (16 sites migrated, landed),
-`stale-refs` (6 pruned).
+**Closed this session:** `release` (2.64.0 published + clean-venv verified),
+`advisory` (GHSA published), `changelog-gap` (3 entries, after correcting a
+truncated-read measurement), `promotion-cadence` (weekly → dual trigger,
+first-parent), `trunk-reconcile`, `ref-drain` (51/51 adjudicated, 1 landed),
+`stash-adjudication` (5/5, none dropped), `2084` (reopening was a FALSE PREMISE —
+it checked for an abandoned design's artifacts; all four flags verified real, and
+a different real bug was found and fixed: `enable_observability()` crashed on a
+default-constructed agent, 10 failing tests → 18 passing), `nexus-spec-drift`
+(11 broken module paths), `ml-spec-orphan-note` (§7.3 removed).
