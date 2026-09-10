@@ -1,6 +1,14 @@
 # #2203 — MCP + A2A protocol drift: wave plan
 
-**Status: AWAITING APPROVAL.** `/todos` plan approval is a structural human gate
+**Status: APPROVED 2026-09-10. Wave 1 Shard A LANDED (`b6bf4a1ca`, in `dev`).**
+
+> **Scope correction, measured at implementation:** 1A's well-known path is **16
+> sites across 6 files**, not the 4-across-3 stated below. The original count
+> scoped its grep to `src/kailash/trust/a2a/` and missed the integration test (9
+> sites) and two docs. Recorded at `#2203#issuecomment-5613952429`. The table
+> below is left unedited as the historical record of what was believed.
+
+**Original status line:** `/todos` plan approval is a structural human gate
 (`autonomous-execution.md` § Structural vs Execution Gates). No shard starts on this
 document alone.
 
@@ -37,7 +45,7 @@ validity · JSON-RPC method-name contract · no 0.2.x path left serving.
 
 | shard | scope | budget notes |
 | --- | --- | --- |
-| **1A** | Well-known path `/.well-known/agent.json` → `/.well-known/agent-card.json` across all FOUR sites (`service.py:175` endpoint, `service.py:11` docstring, `models.py:84`, `agent_card.py:209`), plus card derivation to the 1.0 shape. | Small LOC, but 4 sites in 3 files — the trap directive 3 names. Renaming only the endpoint leaves three stale references. |
+| **1A** ✅ LANDED | Well-known path `/.well-known/agent.json` → `/.well-known/agent-card.json` across all FOUR sites (`service.py:175` endpoint, `service.py:11` docstring, `models.py:84`, `agent_card.py:209`), plus card derivation to the 1.0 shape. | Small LOC, but 4 sites in 3 files — the trap directive 3 names. Renaming only the endpoint leaves three stale references. |
 | **1B** | The 1.0 method set: `message/send`, `tasks/get`, `SendMessage`, `GetTask`. All currently 0 hits (control: `jsonrpc` → 23). | Net-new surface; load-bearing logic, well under 500 LOC. |
 
 **Open question for 1A, to settle at implementation:** whether the 0.2.x path keeps serving
