@@ -351,10 +351,6 @@ The canonical 1.0+ `kailash_ml.features.FeatureStore` has a Tier-2 wiring test a
 
 This test satisfies `rules/facade-manager-detection.md` MUST 1 (every `*Store` manager exposed via the public surface MUST have a Tier-2 test imported through the framework facade) AND MUST 2 (file name `test_<lowercase_manager_name>_wiring.py` so the absence is grep-able).
 
-### 7.3 Source-Comment Drift To Clean Up In Wave 6
-
-The runtime `ImportError` message at `features/store.py:354-361` references "W31 31b" — a workspace artifact, not a durable cross-spec citation. Per `rules/specs-authority.md` § 1, user-facing strings MUST cite specs, not workspace history. Wave 6 follow-up: replace "tracked as W31 31b in specs/dataflow-ml-integration.md §1.1" with "see specs/dataflow-ml-integration.md §1.1" in the `ImportError` message body. (Do NOT edit in this round — out of spec scope.)
-
 ---
 
 ## 8. Examples
