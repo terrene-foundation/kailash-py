@@ -7473,32 +7473,51 @@ class AsyncSQLDatabaseNode(AsyncNode):
             self._owned_adapters.clear()
 
     def __del__(self, _warnings=warnings):
-        """Warn and attempt sync cleanup if node is GC'd while still connected."""
-        if not self._connected or self._adapter is None:
+        """Warn — and only warn — if the node is GC'd while still connected.
+
+        Performs no cleanup; see the comment below and issue #2107.
+        """
+        # getattr guards: a node whose __init__ raised before setting these
+        # still gets finalized, and an AttributeError raised here would be
+        # printed by CPython as a confusing "Exception ignored in" trace.
+        if (
+            not getattr(self, "_connected", False)
+            or getattr(self, "_adapter", None) is None
+        ):
             return
 
         tb = ""
-        if self._source_traceback:
+        if getattr(self, "_source_traceback", None):
             try:
                 tb = "\n" + "".join(traceback.format_list(self._source_traceback))
-            except Exception:
-                tb = ""
+            except Exception:  # noqa: BLE001 - degraded warning beats no warning
+                # Not a silent swallow: this HAS an effect (the warning is
+                # still emitted, just without the allocation site). Losing the
+                # traceback must not cost us the leak signal itself.
+                tb = " <allocation traceback unavailable>"
         _warnings.warn(
-            f"AsyncSQLDatabaseNode GC'd while still connected. Created at:{tb}",
+            f"AsyncSQLDatabaseNode GC'd while still connected. "
+            f"Await node.cleanup() to release the adapter. Created at:{tb}",
             ResourceWarning,
             stacklevel=1,
         )
 
-        # Best-effort sync close for SQLite (the only adapter with sync access)
-        # Skip for external pools — the caller owns the connection.
-        if getattr(self, "_external_pool", None) is not None:
-            return
-        try:
-            adapter = self._adapter
-            conn = getattr(adapter, "_connection", None)
-            if conn is not None:
-                raw = getattr(conn, "_conn", None)
-                if raw is not None:
-                    raw.close()
-        except Exception:
-            pass
+        # Nothing further. This finalizer performs no cleanup, deliberately.
+        #
+        # The removed block reached into the adapter for a raw sqlite3 handle
+        # and closed it. Two problems. (1) ``sqlite3.Connection.close()``
+        # serializes on the connection's own mutex, so if another thread is
+        # mid-statement on that handle the finalizer BLOCKS — and a finalizer
+        # runs on whichever arbitrary thread GC happened to fire on. (2) The
+        # enclosing swallow-and-continue guard could not help with that (a
+        # block raises nothing) while silently discarding the sqlite errors
+        # that a close on a live transaction legitimately raises
+        # (``zero-tolerance.md`` Rule 3).
+        #
+        # Nothing leaks by removing it: once ``self._adapter`` becomes
+        # unreachable, sqlite3's own C-level deallocator closes the database
+        # handle, which is finalizer-safe in a way this Python path is not.
+        # The ``ResourceWarning`` above — with the allocation traceback — stays
+        # the leak signal, and ``await node.cleanup()`` stays the deterministic
+        # cleanup path. See ``rules/patterns.md`` § "Async Resource Cleanup"
+        # and issue #2107.

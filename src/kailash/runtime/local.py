@@ -45,7 +45,6 @@ import time
 import warnings
 from collections import OrderedDict
 from datetime import UTC, datetime
-from types import ModuleType
 from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Tuple
 
 if TYPE_CHECKING:
@@ -112,6 +111,7 @@ from kailash.tracking import TaskManager, TaskStatus
 from kailash.tracking.metrics_collector import MetricsCollector
 from kailash.tracking.models import TaskMetrics
 from kailash.utils.data_validation import DataTypeValidator
+from kailash.utils.finalizer import warn_unclosed
 from kailash.workflow import Workflow
 from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor
 
@@ -2174,21 +2174,36 @@ class LocalRuntime(
         """Current reference count (for debugging/testing)."""
         return self._ref_count
 
-    def __del__(self, _warnings: ModuleType = warnings) -> None:
-        """Emit ResourceWarning if runtime was not properly closed."""
-        if getattr(self, "_ref_count", 0) > 0:
-            _warnings.warn(
-                f"Unclosed {self.__class__.__name__} (ref_count={self._ref_count}). "
-                f"Use 'with {self.__class__.__name__}() as runtime:' or call runtime.close().",
-                ResourceWarning,
-                source=self,
+    def __del__(self, _warn=warn_unclosed) -> None:
+        """Emit ResourceWarning if the runtime was not properly closed.
+
+        Warns and RETURNS. This finalizer performs no cleanup, deliberately.
+
+        The previous body forced ``_ref_count = 1`` and called ``close()``.
+        That is the single shortest route into the documented deadlock: on this
+        class ``close()`` runs ``logger.debug(...)``, then takes
+        ``self._loop_lock``, then calls ``_cleanup_event_loop()``, which logs
+        again and drives ``loop.run_until_complete``. A finalizer fires at an
+        arbitrary bytecode boundary on whichever thread drops the last
+        reference — possibly a thread already inside ``logging`` holding the
+        root logging lock, or already inside ``self._loop_lock``. Neither lock
+        is reentrant, so re-entering either wedges the process permanently.
+
+        The swallow-and-continue guard that wrapped the call could not help: a
+        deadlock raises nothing, so there was never an exception to catch. All
+        it did was hide real close failures (``zero-tolerance.md`` Rule 3).
+
+        Deterministic cleanup stays the caller's job via ``close()`` or
+        ``with LocalRuntime() as runtime:``. See ``rules/patterns.md``
+        § "Async Resource Cleanup" and issue #2107.
+        """
+        ref_count = getattr(self, "_ref_count", 0)
+        if ref_count > 0:
+            _warn(
+                self,
+                f"Use 'with {type(self).__name__}() as runtime:' or call runtime.close().",
+                detail=f"ref_count={ref_count}",
             )
-            # Force cleanup regardless
-            self._ref_count = 1  # Ensure close() actually cleans up
-            try:
-                self.close()
-            except Exception:
-                pass
 
     def __enter__(self) -> "LocalRuntime":
         """

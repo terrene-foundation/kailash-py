@@ -2,7 +2,6 @@
 
 import contextvars
 import logging
-import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from typing import Any
@@ -25,6 +24,7 @@ from kailash.sdk_exceptions import (
 from kailash.tracking import TaskManager, TaskStatus
 from kailash.tracking.metrics_collector import MetricsCollector
 from kailash.tracking.models import TaskMetrics
+from kailash.utils.finalizer import warn_unclosed
 from kailash.workflow import Workflow
 from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor
 from kailash.workflow.dag import CycleDetectedError
@@ -633,14 +633,18 @@ class ParallelCyclicRuntime:
             self.local_runtime.release()
             self.local_runtime = None
 
-    def __del__(self, _warnings=warnings):
+    def __del__(self, _warn=warn_unclosed):
+        # Warn and RETURN. This finalizer performs no cleanup, deliberately.
+        #
+        # ``close()`` calls ``self.local_runtime.release()``, which is
+        # ``LocalRuntime.close()``: it emits ``logger.debug``, takes the
+        # runtime's ``_loop_lock``, then runs ``_cleanup_event_loop()`` (more
+        # logging, plus ``loop.run_until_complete``). A finalizer fires at an
+        # arbitrary bytecode boundary on whichever thread drops the last
+        # reference, which may already hold the root logging lock or that
+        # ``_loop_lock``; neither is reentrant, so re-entering wedges the
+        # process. The swallow-and-continue guard could not catch a deadlock
+        # (nothing is raised) and only hid real release failures. See
+        # ``rules/patterns.md`` § "Async Resource Cleanup" and issue #2107.
         if getattr(self, "local_runtime", None) is not None:
-            _warnings.warn(
-                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
-                ResourceWarning,
-                source=self,
-            )
-            try:
-                self.close()
-            except Exception:
-                pass
+            _warn(self, "Call close() explicitly to release the runtime reference.")
