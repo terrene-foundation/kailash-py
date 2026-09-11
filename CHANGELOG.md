@@ -13,6 +13,54 @@ such as `>=2.0`.
 
 ## [Unreleased]
 
+### Fixed — the first `PythonCodeNode` execution no longer imports the whole ML stack (#2000)
+
+On a machine with torch and sklearn installed, the **first** `PythonCodeNode` execution in a
+process took 7–9 seconds before running a single line of user code, and failed outright where
+those packages were present but broken. Two independent paths each eagerly imported every heavy
+optional dependency, for code that referenced none of them. Measured cold, same instrument, for
+`result = {'ok': True}`:
+
+```
+before:  run0 8.485s / 4.546s / 6.629s   torch, sklearn, scipy, pandas all imported
+after:   run0 1.387s / 0.960s / 0.498s   none of them imported
+```
+
+`kailash.security` built `sanitize_input()`'s type allow-list by importing torch, sklearn, scipy,
+pandas, xgboost, lightgbm, plotly, PIL and networkx purely to read type identities off them. It
+now reads `sys.modules` instead: the allow-list is consumed only by `isinstance()`, and a value
+cannot be an instance of `torch.Tensor` unless torch has already executed in this process. The
+cache is keyed on which of those modules are loaded and that key is re-read per call, so a
+framework imported later is still picked up.
+
+`CodeExecutor.execute_code()` imported every module in `ALLOWED_MODULES` into the sandbox
+namespace on every execution. Modules the code actually names are now imported for real and the
+rest are bound to a lazy proxy, so the set of names available to user code is unchanged — only
+the timing of the import differs.
+
+#### Two allow-list verdicts changed
+
+Everything else about the allow-list is verdict-preserving; these two are not, and are called
+out rather than left to be discovered:
+
+- **sklearn under coverage — now WIDER.** The old sklearn branch was wrapped in
+  `if "coverage" not in sys.modules`, so a process running under coverage **rejected**
+  `BaseEstimator`/`TransformerMixin` values that every normal process accepted. That guard was
+  about import cost, not policy, and nothing imports sklearn here any more, so coverage runs now
+  agree with production. If you relied on coverage runs rejecting estimator values, they no
+  longer do.
+- **Non-pandas frames named `DataFrame` — unchanged, deliberately.** `sanitize_input()` has a
+  long-standing branch that accepts any value whose class name contains `DataFrame` (polars,
+  spark), which historically ran whenever pandas was *installed*. It is now gated on
+  installed-ness via `find_spec` rather than on pandas being *imported*, so the verdict is
+  identical to before while no longer importing pandas.
+
+#### Sandbox note
+
+The lazy proxy validates every module name against the same allow-list the eager path enforced,
+at resolve time as well as construction, and subclasses `types.ModuleType` so it is stripped from
+node outputs exactly as a real module is.
+
 ## [2.65.0] — 2026-09-11 — `PactEngine.governance` is genuinely read-only and an empty `allowed_actions` denies at every enforcement surface; the idle-pool reaper stops closing busy pools; a denial-of-service in the brief scrubber is closed (#2224, #2218, #697, #2128, #2162, #2163, #2057, #2175, #2118)
 
 ### Fixed — the idle-pool reaper no longer closes a pool that is actively serving queries (#697)
