@@ -214,6 +214,16 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             # search in hours, and the tag was equivalent to the plaintext IP
             # for any log reader. Never log `identifier` itself next to the
             # tag -- that hands over the pre-image and voids the construction.
+            #
+            # RESIDUAL, stated rather than glossed: `path` is logged on this
+            # same line, so in a URL layout that embeds the principal
+            # (/api/users/alice/profile) the pair re-establishes the
+            # tag -> principal mapping for the `user:` branch. The tag still
+            # protects the `ip:` branch, which is the enumerable case #2171 was
+            # filed for, and `path` is what makes the line actionable for an
+            # operator. A deployment that puts identities in paths and needs
+            # the stronger property should pass an `identifier_extractor` and
+            # log a route TEMPLATE rather than the concrete path.
             logger.warning(
                 "Rate limit exceeded: identifier_fp=%s, path=%s, retry_after=%ds",
                 self._fingerprint(str(identifier)),

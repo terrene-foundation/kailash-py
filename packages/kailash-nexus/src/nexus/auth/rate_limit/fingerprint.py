@@ -59,7 +59,9 @@ BLOCK. Instead the two properties at stake are dispositioned separately:
   the tag is unforgeable and irreversible with no operator action at all. This
   is the same disposition -- and for the same reason -- that
   ``nexus.auth_bootstrap.build_auth_config`` already takes for a missing JWT
-  signing key.
+  signing key. Note the key is per-PROCESS, not per-host: under
+  ``uvicorn --workers N`` one machine runs N keys, so tags do not correlate
+  even within a single node.
 * **Cross-node correlation is DEGRADED, and says so LOUDLY.** A
   ``logger.warning`` at CONSTRUCTION time names the property that is off and
   the exact variable that turns it on. It fires once per middleware
@@ -70,6 +72,17 @@ A key that is PRESENT but shorter than :data:`MIN_FINGERPRINT_KEY_BYTES` raises
 :class:`InvalidFingerprintKeyError` rather than being padded or accepted. A
 short key is worse than no key, because the operator believes the control is
 wired; this mirrors ``InvalidAuthSecretError`` in ``nexus.auth_bootstrap``.
+
+That is a LENGTH floor, not an ENTROPY floor -- the same caveat
+``KAILASH_JWT_SECRET_KEY`` carries in ``.env.example``, and it matters more
+here. 32 repeats of one character clears the check, and eight 4-byte emoji
+clear it at only eight characters, because the floor counts UTF-8 BYTES. A
+guessed or dictionary-recovered key restores the ENTIRE original attack: an
+adversary who reads logs and recovers the key can recompute the MAC over the
+2**32 IPv4 space and reverse every tag ever emitted. Nothing in this module can
+verify entropy, so GENERATE the key rather than composing it::
+
+    python -c 'import secrets; print(secrets.token_urlsafe(32))'
 
 Operational consequence for rate limiting: NONE
 ------------------------------------------------
@@ -175,7 +188,13 @@ class IdentifierFingerprinter:
         """
         mac = hmac.new(
             self._key,
-            _DOMAIN + b"\x00" + identifier.encode("utf-8"),
+            # surrogatepass: a JWT claim decoded by `json.loads` can contain a
+            # lone surrogate (e.g. {"sub": "\ud800"}), which plain UTF-8
+            # encoding rejects with UnicodeEncodeError. That exception would
+            # propagate out of `dispatch` and turn the 429 into a 500 -- the
+            # precise failure the constructor-time key check exists to avoid,
+            # reintroduced on the request path by an attacker-chosen username.
+            _DOMAIN + b"\x00" + identifier.encode("utf-8", errors="surrogatepass"),
             hashlib.sha256,
         )
         return mac.hexdigest()[: max(1, min(length, 64))]
@@ -184,6 +203,23 @@ class IdentifierFingerprinter:
         # NEVER render the key. A repr lands in tracebacks and debug logs.
         scope = "deployment" if self.deployment_scoped else "process"
         return f"<IdentifierFingerprinter scope={scope}>"
+
+    def __reduce__(self):
+        """Refuse to pickle.
+
+        ``__slots__`` alone does not prevent serialization: the default
+        protocol-2 reducer would write ``_key`` into the stream, so an instance
+        crossing a ``multiprocessing`` spawn boundary or captured in a debug
+        dump would carry the keying material with it. Raising is correct rather
+        than merely inconvenient -- a fingerprinter is cheap to rebuild from the
+        environment on the far side, which is what a worker process should do
+        anyway so that every worker shares the configured key.
+        """
+        raise TypeError(
+            "IdentifierFingerprinter is not picklable: it holds keying "
+            "material. Rebuild it with build_identifier_fingerprinter() in the "
+            "target process instead."
+        )
 
 
 def resolve_fingerprint_key(
@@ -254,11 +290,12 @@ def build_identifier_fingerprinter(
         logger.warning(
             "Rate-limit identifier tags are keyed with a PROCESS-LOCAL random "
             "key because %s is not set. Tags stay unforgeable and "
-            "irreversible, but they will NOT correlate across nodes or across "
-            "restarts. Set %s to the SAME value (>= %d bytes) on every node to "
-            "restore fleet-wide correlation. Rate-limit enforcement itself is "
-            "unaffected -- buckets are keyed on the raw identifier, not on the "
-            "tag.",
+            "irreversible, but they will NOT correlate across WORKER "
+            "PROCESSES, nodes, or restarts -- under `uvicorn --workers N` a "
+            "single host produces N different tags for the same client. Set "
+            "%s to the SAME value (>= %d bytes) everywhere to restore "
+            "correlation. Rate-limit enforcement itself is unaffected -- "
+            "buckets are keyed on the raw identifier, not on the tag.",
             FINGERPRINT_KEY_ENV,
             FINGERPRINT_KEY_ENV,
             MIN_FINGERPRINT_KEY_BYTES,

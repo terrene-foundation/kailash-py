@@ -38,6 +38,38 @@
   if that sweep proceeds it likely belongs in `kailash.utils.url_credentials` beside
   `process_local_config_key` so every call site shares one implementation.
 
+### Fixed (SECURITY) — MCP resource surface no longer serves credentials
+
+Found by an adversarial review of the two fixes below, not by either issue. Both
+findings were **pre-existing but newly REACHABLE**, which per `zero-tolerance.md`
+Rule 1a makes them this change's to own.
+
+- **`workflow://{name}` served node configuration verbatim, including secrets.**
+  Two repairs combined to expose it: #2013's dead-guard fix made
+  `_extract_workflow_info` return real nodes (it had returned empty lists for every
+  genuine workflow), and #2056's template fix made the handler invocable at all.
+  Measured before the fix, the resource returned `"api_key": "sk-SUPERSECRET-abc123"`
+  and `postgres://user:hunter2@db/prod` to any MCP client. Node config, workflow
+  metadata, and the input/output schema are now redacted by key name via
+  `is_sensitive_query_key` (the canonical set, consulted first) plus a documented
+  supplement for families it does not cover (`connection_string`, `dsn`,
+  `credentials`, `passphrase`, ...). Non-sensitive parameters are untouched, so the
+  resource remains useful for agent discovery.
+- **URL-valued config is masked rather than blanked.** A credential inside a URL
+  lives in the VALUE, not the key name — `redis_url` is not in the canonical set —
+  so URL-shaped values route through the canonical `mask_url`. `config://limits`
+  now returns `redis://***@cache:6379/0`: the password is gone, the host remains.
+- **`data://` path containment was lexical and is now resolved.** The check was
+  `os.path.abspath(...).startswith(safe_base)`, unsound twice: `startswith` is a
+  prefix test, not a boundary test (`/srv/database` satisfies a `/srv/data` base),
+  and `abspath` never resolves symlinks, so a link under `./data` pointing anywhere
+  was followed and read. Both operands now go through `os.path.realpath` with an
+  `os.path.commonpath` boundary test, resolution failure denies, and the read uses
+  `O_NOFOLLOW`. Regression tests demonstrate both escapes leaking real content
+  against the old check. Per `security.md` § Path Containment this closes the
+  lexical/symlink class; it does not by itself defeat check-to-use TOCTOU on
+  intermediate directories.
+
 ### Fixed (BREAKING) — MCP resource URIs are templates, not wildcards (#2056)
 
 - **`NexusResourceManager` raised on construction wherever the official `mcp` package

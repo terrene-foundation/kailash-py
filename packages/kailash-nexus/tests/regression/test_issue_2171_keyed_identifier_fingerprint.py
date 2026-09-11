@@ -125,6 +125,35 @@ def test_repr_never_discloses_the_key():
     assert "key" not in repr(fp).lower() or "scope=" in repr(fp)
 
 
+def test_fingerprinter_refuses_to_pickle():
+    """`__slots__` does not stop pickling; the default reducer writes the key.
+
+    An instance crossing a multiprocessing spawn boundary, or captured in a
+    debug dump, would otherwise carry the keying material with it.
+    """
+    import pickle
+
+    fp = build_identifier_fingerprinter({FINGERPRINT_KEY_ENV: KEY_A})
+
+    with pytest.raises(TypeError, match="not picklable"):
+        pickle.dumps(fp)
+
+
+def test_lone_surrogate_identifier_does_not_raise():
+    """A JWT `sub` claim can decode to a lone surrogate.
+
+    Plain UTF-8 encoding rejects it, and the resulting UnicodeEncodeError would
+    escape `dispatch` and turn a 429 into a 500 -- an attacker-chosen username
+    becoming a server error on the throttle path.
+    """
+    fp = build_identifier_fingerprinter({FINGERPRINT_KEY_ENV: KEY_A})
+
+    tag = fp("user:\ud800")
+
+    assert len(tag) == 16
+    assert tag != fp("user:other")
+
+
 # --------------------------------------------------------------------------
 # Secure default: no key configured
 # --------------------------------------------------------------------------
@@ -229,22 +258,61 @@ def test_resolve_reports_deployment_scope_truthfully():
 
 
 def test_middleware_logs_a_keyed_tag_not_the_identifier(caplog):
-    """The 429 log line carries the keyed tag and never the raw identifier."""
+    """The 429 log line carries the KEYED tag and never the raw identifier.
+
+    Drives ``dispatch`` to a real 429 and reads the captured log. An earlier
+    version of this test took ``caplog``, never read it, never called
+    ``dispatch``, and asserted only that ``mw._fingerprint`` agreed with a
+    separately-built fingerprinter -- so putting ``identifier`` back into the
+    ``logger.warning`` call would have left it GREEN. It was vacuous for its
+    own name; these assertions are the ones the name promises.
+    """
+    import asyncio
+    import logging as _logging
+
     from kailash.trust.rate_limit.config import RateLimitConfig
     from nexus.auth.rate_limit.middleware import RateLimitMiddleware
 
-    async def _app(scope, receive, send):  # pragma: no cover - never invoked
-        raise AssertionError("app should not be reached")
+    class _Url:
+        path = "/api/thing"
 
-    mw = RateLimitMiddleware(
-        _app,
-        RateLimitConfig(requests_per_minute=1),
+    class _Request:
+        url = _Url()
+
+    class _AllowedResponse:
+        def __init__(self):
+            self.headers = {}
+            self.status_code = 200
+
+    middleware = RateLimitMiddleware(
+        app=None,
+        config=RateLimitConfig(requests_per_minute=1, backend="memory"),
+        identifier_extractor=lambda _request: CLIENT,
         env={FINGERPRINT_KEY_ENV: KEY_A},
     )
 
+    async def _ok(_request):
+        return _AllowedResponse()
+
+    async def _drive():
+        # Loop until the limit genuinely trips rather than assuming request 2
+        # does it; the backend enforces its own window size.
+        with caplog.at_level(_logging.WARNING):
+            for _ in range(40):
+                response = await middleware.dispatch(_Request(), _ok)
+                if getattr(response, "status_code", None) == 429:
+                    return response
+        return None
+
+    response = asyncio.run(_drive())
+
+    assert response is not None, "the limit never tripped; test would be vacuous"
+    assert caplog.text, "no WARN captured; test would be vacuous"
+
     expected = build_identifier_fingerprinter({FINGERPRINT_KEY_ENV: KEY_A})(CLIENT)
-    assert mw._fingerprint(CLIENT) == expected
-    assert mw._fingerprint(CLIENT) != CLIENT
+    assert expected in caplog.text, "the keyed tag is not what was logged"
+    assert CLIENT not in caplog.text, "the raw identifier reached the log"
+    assert "203.0.113.47" not in caplog.text, "the bare IP reached the log"
 
 
 def test_middleware_refuses_to_start_with_a_short_key():

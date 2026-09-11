@@ -9,10 +9,96 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
+from kailash.utils.url_credentials import (
+    UNPARSEABLE_URL_SENTINEL,
+    is_sensitive_query_key,
+    mask_url,
+)
 from kailash.workflow import Workflow
 from kailash_mcp import MCPServer
 
 logger = logging.getLogger(__name__)
+
+#: Marker written in place of a credential-bearing value. Deliberately
+#: grep-able, and deliberately NOT length-preserving -- a mask that echoed the
+#: original length would leak it.
+REDACTED = "[REDACTED]"
+
+#: SUPPLEMENT to :func:`kailash.utils.url_credentials.is_sensitive_query_key`,
+#: which is the SINGLE SOURCE OF TRUTH for credential-bearing key names
+#: (``rules/security.md`` § "No secrets in logs") and is consulted FIRST. It is
+#: authoritative but was built for URL QUERY keys, so it does not recognise
+#: several families that routinely appear in a NODE CONFIG -- measured:
+#: ``connection_string``, ``credentials``, ``passphrase``, ``dsn``, ``bearer``,
+#: ``aws_secret_access_key`` and ``session_key`` all return False.
+#:
+#: These are matched as SUBSTRINGS of the normalized key, not exact members, so
+#: ``db_connection_string`` and ``aws_secret_access_key`` are both caught. Add
+#: here only what the canonical set genuinely does not cover; never copy an
+#: entry that it already handles, or the two lists drift.
+_SENSITIVE_CONFIG_SUBSTRINGS = (
+    "connstr",
+    "connectionstring",
+    "credential",
+    "passphrase",
+    "privatekey",
+    "secret",
+    "password",
+    "token",
+    "apikey",
+    "bearer",
+    "sessionkey",
+    "dsn",
+    "dburl",
+    "databaseurl",
+)
+
+
+def _is_sensitive_config_key(key: str) -> bool:
+    """True when a node-config key name is credential-bearing.
+
+    Canonical set first, documented supplement second.
+    """
+    if is_sensitive_query_key(key):
+        return True
+    normalized = key.lower().replace("_", "").replace("-", "")
+    return any(marker in normalized for marker in _SENSITIVE_CONFIG_SUBSTRINGS)
+
+
+def redact_config(value: Any) -> Any:
+    """Recursively replace credential-bearing values with :data:`REDACTED`.
+
+    Node configuration routinely carries ``api_key``, ``connection_string`` and
+    ``password`` entries. ``workflow://{name}`` serves that configuration to any
+    MCP client that can reach the resource surface, so it MUST NOT be emitted
+    verbatim -- ``rules/security.md`` § "No secrets in logs" applies with more
+    force here, because this is a response body rather than a log file.
+
+    Redaction is by KEY NAME, which bounds what it can catch: a secret stored
+    under a name neither the canonical set nor the supplement recognises is
+    still emitted. Node authors who need a guarantee should keep credentials in
+    the environment and reference them by name, which is what
+    ``rules/env-models.md`` already requires.
+    """
+    if isinstance(value, dict):
+        return {
+            k: (REDACTED if _is_sensitive_config_key(str(k)) else redact_config(v))
+            for k, v in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [redact_config(item) for item in value]
+    if isinstance(value, str) and "://" in value:
+        # A URL carries its credential in the VALUE, not the key name, so
+        # key-name matching cannot see it: `redis_url` is not in the canonical
+        # set and adding a `url` substring would redact every harmless
+        # endpoint. Delegate to the canonical masker, which strips userinfo and
+        # sensitive query parameters while leaving the host and path readable
+        # -- an operator still needs to see WHICH cache the limiter points at.
+        # UNPARSEABLE_URL_SENTINEL means it was not a URL after all, so the
+        # original is returned rather than a misleading sentinel.
+        masked = mask_url(value)
+        return value if masked == UNPARSEABLE_URL_SENTINEL else masked
+    return value
 
 
 class NexusResourceManager:
@@ -227,9 +313,11 @@ class NexusResourceManager:
             "metadata": {},
         }
 
-        # Extract metadata if available
+        # Extract metadata if available. Redacted on the same grounds as node
+        # config -- metadata is author-supplied and free-form, so it is exactly
+        # where a stray credential ends up.
         if hasattr(workflow, "metadata"):
-            info["metadata"] = workflow.metadata
+            info["metadata"] = redact_config(workflow.metadata)
 
         # Extract nodes.
         #
@@ -245,7 +333,16 @@ class NexusResourceManager:
                 {
                     "id": node_id,
                     "type": getattr(node, "node_type", type(node).__name__),
-                    "parameters": getattr(node, "config", None) or {},
+                    # REDACTED, not raw. Node config routinely holds api_key /
+                    # connection_string / password, and this dict is served to
+                    # any MCP client that can read the resource surface. Two
+                    # changes in this file made that reachable at once: the
+                    # dead-guard fix above (which previously left `nodes` empty
+                    # for every real workflow) and #2056's template repair
+                    # (`workflow://*` matched nothing, so the handler was never
+                    # invoked). Emitting it verbatim would have turned a pair of
+                    # correctness fixes into a credential-disclosure surface.
+                    "parameters": redact_config(getattr(node, "config", None) or {}),
                 }
             )
 
@@ -265,8 +362,8 @@ class NexusResourceManager:
 
         # Add schema information
         info["schema"] = {
-            "inputs": self._extract_workflow_inputs(workflow),
-            "outputs": self._extract_workflow_outputs(workflow),
+            "inputs": redact_config(self._extract_workflow_inputs(workflow)),
+            "outputs": redact_config(self._extract_workflow_outputs(workflow)),
         }
 
         return info
@@ -427,17 +524,74 @@ Send `tools/list` to discover available workflows.
                 {"example": "data", "timestamp": "2024-01-01T00:00:00Z"}, indent=2
             )
 
-        # Try to read from file system (with security checks)
-        safe_base = os.path.abspath("./data")
-        requested_path = os.path.abspath(os.path.join(safe_base, resource_path))
+        # Try to read from file system (with security checks).
+        #
+        # Containment is tested on the REAL canonical form of BOTH sides, per
+        # rules/security.md Path Containment. The previous check was
+        #     requested_path.startswith(safe_base)
+        # over `abspath`-only paths, which is unsound twice over:
+        #
+        # 1. `startswith` is a PREFIX test, not a boundary test, so a sibling
+        #    directory whose name extends the base -- `/srv/database` against a
+        #    base of `/srv/data` -- satisfies it.
+        # 2. `abspath` normalizes `..` lexically but never resolves SYMLINKS, so
+        #    a link inside ./data pointing anywhere on the filesystem passed the
+        #    string check and was then read.
+        #
+        # Resolution failure is treated as denial (fail closed) rather than
+        # falling through to the read.
+        try:
+            safe_base = os.path.realpath("./data")
+            requested_path = os.path.realpath(os.path.join(safe_base, resource_path))
+        except OSError as exc:
+            logger.warning(
+                "Refusing data resource %r: path could not be resolved (%s)",
+                resource_path,
+                type(exc).__name__,
+            )
+            return None
 
-        # Security: Ensure path is within safe directory
-        if requested_path.startswith(safe_base) and os.path.exists(requested_path):
+        # Boundary-aware containment: equal to the base, or beneath it with a
+        # separator. `commonpath` raises when the paths share no root (different
+        # drives on Windows), which is itself a denial.
+        try:
+            contained = os.path.commonpath([safe_base, requested_path]) == safe_base
+        except ValueError:
+            contained = False
+
+        if not contained:
+            logger.warning(
+                "Refusing data resource %r: resolves outside the data directory",
+                resource_path,
+            )
+            return None
+
+        if not os.path.isfile(requested_path):
+            return None
+
+        try:
+            # O_NOFOLLOW refuses a symlink at the FINAL component, narrowing the
+            # check-to-use window between the realpath above and this open. It
+            # does not close it for intermediate directories; a deployment that
+            # lets an attacker create links inside ./data needs the directory
+            # locked down as well.
+            fd = os.open(requested_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
             try:
-                with open(requested_path, "r") as f:
-                    return f.read()
-            except Exception as e:
-                logger.error(f"Error reading resource {resource_path}: {e}")
+                handle = os.fdopen(fd, "r")
+            except BaseException:
+                # fdopen did not take ownership of the descriptor; close it
+                # here. On success the `with` below owns and closes it, so this
+                # arm must not also close (that would be a double close).
+                os.close(fd)
+                raise
+            with handle:
+                return handle.read()
+        except OSError as exc:
+            # Logged WITHOUT the resolved absolute path, which would disclose
+            # filesystem layout to an MCP client.
+            logger.error(
+                "Error reading data resource %r: %s", resource_path, type(exc).__name__
+            )
 
         return None
 
@@ -500,7 +654,9 @@ Send `tools/list` to discover available workflows.
                 "count": len(self.nexus._workflows),
             },
             "limits": {
-                "rate_limit": self.nexus.rate_limit_config,
+                # Redacted for the same reason as node config: a rate-limit
+                # config carries `redis_url`, which embeds a password.
+                "rate_limit": redact_config(self.nexus.rate_limit_config),
                 "max_workflows": 1000,
                 "max_connections": 10000,
             },

@@ -285,35 +285,77 @@ class TestDataResources:
 
     @pytest.mark.asyncio
     async def test_data_resource_file_read(
-        self, mock_server, resource_manager, tmp_path
+        self, mock_server, resource_manager, tmp_path, monkeypatch
     ):
-        """Test reading allowed data files."""
-        # Use a real temporary directory and file
+        """Test reading allowed data files.
+
+        Uses a REAL ``./data`` directory reached by changing the working
+        directory, rather than monkeypatching ``os.path.abspath``. The old
+        version stubbed that one function, which meant the test could not
+        observe path resolution at all -- it would have passed identically
+        against a containment check that resolved nothing.
+        """
         data_dir = tmp_path / "data"
         data_dir.mkdir()
-        config_file = data_dir / "config.json"
-        config_file.write_text('{"test": "data"}')
+        (data_dir / "config.json").write_text('{"test": "data"}')
+        monkeypatch.chdir(tmp_path)
 
-        # Patch the safe_base to use our temp directory
-        with patch("os.path.abspath") as mock_abspath:
-            # Setup abspath to return proper paths
-            def abspath_side_effect(path):
-                if path == "./data":
-                    return str(data_dir)
-                elif path.startswith(str(data_dir)):
-                    return path
-                else:
-                    # For os.path.join(safe_base, resource_path)
-                    return str(data_dir / path.split("/")[-1])
+        result = await mock_server._read("data://config.json")
 
-            mock_abspath.side_effect = abspath_side_effect
+        assert result["uri"] == "data://config.json"
+        assert result["mimeType"] == "application/json"
+        assert result["content"] == '{"test": "data"}'
 
-            handler = mock_server._read
-            result = await handler("data://config.json")
+    @pytest.mark.asyncio
+    async def test_data_resource_symlink_escape_is_refused(
+        self, mock_server, resource_manager, tmp_path, monkeypatch
+    ):
+        """A symlink inside ./data pointing outside it must NOT be readable.
 
-            assert result["uri"] == "data://config.json"
-            assert result["mimeType"] == "application/json"
-            assert result["content"] == '{"test": "data"}'
+        This is the case a lexical containment check cannot see: the path is
+        lexically inside ./data, so `abspath(...).startswith(safe_base)` is
+        True, and only resolving the REAL path reveals the escape
+        (rules/security.md Path Containment).
+        """
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        secret = tmp_path / "outside.txt"
+        secret.write_text("TOP SECRET")
+        (data_dir / "innocent.txt").symlink_to(secret)
+        monkeypatch.chdir(tmp_path)
+
+        result = await mock_server._read("data://innocent.txt")
+
+        assert "TOP SECRET" not in str(result)
+        assert "content" not in result
+        assert "error" in result
+
+    def test_sibling_directory_prefix_is_not_treated_as_contained(
+        self, resource_manager, tmp_path, monkeypatch
+    ):
+        """``/x/database`` must not count as inside ``/x/data``.
+
+        `startswith` is a PREFIX test, not a boundary test, so a sibling whose
+        name merely extends the base satisfies it:
+        ``"/x/database/leak.txt".startswith("/x/data")`` is True.
+
+        Calls ``_get_data_content`` DIRECTLY, bypassing ``_is_allowed_resource``.
+        That is deliberate and is the only way this assertion can discriminate:
+        the allow-list rejects ``..`` before the containment check is ever
+        reached, so a test routed through the resource handler would pass
+        whether the containment check were sound or not. Containment is
+        defense-in-depth and must hold on its own -- if the allow-list is ever
+        relaxed or reordered, this check becomes the only thing left.
+        """
+        (tmp_path / "data").mkdir()
+        sibling = tmp_path / "database"
+        sibling.mkdir()
+        (sibling / "leak.txt").write_text("SIBLING SECRET")
+        monkeypatch.chdir(tmp_path)
+
+        content = resource_manager._get_data_content("../database/leak.txt")
+
+        assert content is None, "sibling directory sharing the base's prefix was read"
 
     def test_mime_type_detection(self, resource_manager):
         """Test MIME type detection for various file types."""
