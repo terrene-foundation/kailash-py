@@ -37,101 +37,177 @@ class NexusResourceManager:
         self._setup_default_resources()
 
     def _setup_default_resources(self):
-        """Set up default resource providers."""
+        """Set up default resource providers.
+
+        URI templates, NOT wildcards (issue #2056)
+        ------------------------------------------
+
+        Every provider registers an RFC 6570-style ``{param}`` template whose
+        parameter names match its handler's signature exactly. Until #2056
+        these registered ``scheme://*`` while the handlers took a single
+        ``uri`` argument, and official FastMCP rejects that outright::
+
+            ValueError: Mismatch between URI parameters set() and
+                        function parameters {'uri'}
+
+        raised from ``mcp/server/fastmcp/server.py`` at the point where it
+        compares ``re.findall(r"{(\\w+)}", uri)`` against the handler's
+        parameters. ``*`` declares NO parameters while the handler declared
+        one, so ``NexusResourceManager.__init__`` raised for every deployment
+        with the official ``mcp`` package installed. ``kailash_mcp``'s own
+        non-FastMCP fallback stores handlers under the URI string verbatim and
+        imposes no such constraint, so it accepted both forms -- which is why
+        the failure looked import-order dependent rather than constant.
+
+        Handlers therefore take the template parameters and RECONSTRUCT the
+        full URI for the response's ``uri`` field, which keeps the response
+        shape byte-identical to what MCP clients already consume.
+
+        Why ``data://`` is registered at four depths
+        --------------------------------------------
+
+        FastMCP compiles a template parameter to ``(?P<name>[^/]+)``
+        (``resources/templates.py::ResourceTemplate.matches``), so ONE
+        parameter cannot span a ``/``. Measured: with ``data://{path}``
+        registered, ``data://examples/sample.json`` -- this module's own
+        documented example, pinned by ``test_data_resource_content`` -- does
+        not match and would 404. The RFC 6570 explode form ``{path*}`` is not
+        supported either; it crashes ``re.compile`` with
+        ``bad character in group name 'path*'``.
+
+        Registering one template per depth is the construction FastMCP's
+        matcher actually supports. Four is the documented ceiling, and it is a
+        real limit rather than a guess: deeper paths simply do not match any
+        template and are reported as not found, exactly as an absent file is.
+        """
 
         # Workflow definitions as resources
-        @self.server.resource("workflow://*")
-        async def get_workflow_definition(uri: str) -> Dict[str, Any]:
+        @self.server.resource("workflow://{name}")
+        async def get_workflow_definition(name: str) -> Dict[str, Any]:
             """Provide workflow definition and schema."""
-            workflow_name = uri.replace("workflow://", "")
-
-            if workflow_name not in self.nexus._workflows:
-                return {
-                    "uri": uri,
-                    "mimeType": "application/json",
-                    "error": f"Workflow '{workflow_name}' not found",
-                }
-
-            workflow = self.nexus._workflows[workflow_name]
-
-            # Extract workflow information
-            workflow_info = self._extract_workflow_info(workflow_name, workflow)
-
-            return {
-                "uri": uri,
-                "mimeType": "application/json",
-                "content": json.dumps(workflow_info, indent=2),
-            }
+            return self._workflow_response(name)
 
         # Documentation resources
-        @self.server.resource("docs://*")
-        async def get_documentation(uri: str) -> Dict[str, Any]:
+        @self.server.resource("docs://{topic}")
+        async def get_documentation(topic: str) -> Dict[str, Any]:
             """Provide documentation content."""
-            doc_path = uri.replace("docs://", "")
+            return self._documentation_response(topic)
 
-            # Map documentation paths
-            doc_content = self._get_documentation(doc_path)
-
-            if doc_content:
-                return {"uri": uri, "mimeType": "text/markdown", "content": doc_content}
-            else:
-                return {
-                    "uri": uri,
-                    "mimeType": "text/plain",
-                    "error": f"Documentation '{doc_path}' not found",
-                }
-
-        # Data resources (files, configurations, etc.)
-        @self.server.resource("data://*")
-        async def get_data_resource(uri: str) -> Dict[str, Any]:
+        # Data resources (files, configurations, etc.). One template per path
+        # depth -- see the class docstring for why a single {path} cannot work.
+        @self.server.resource("data://{seg1}")
+        async def get_data_resource(seg1: str) -> Dict[str, Any]:
             """Provide data resources."""
-            resource_path = uri.replace("data://", "")
+            return self._data_response(seg1)
 
-            # Security check - only allow specific data access
-            if not self._is_allowed_resource(resource_path):
-                return {
-                    "uri": uri,
-                    "mimeType": "application/json",
-                    "error": "Access denied to this resource",
-                }
+        @self.server.resource("data://{seg1}/{seg2}")
+        async def get_data_resource_d2(seg1: str, seg2: str) -> Dict[str, Any]:
+            """Provide data resources nested one directory deep."""
+            return self._data_response(f"{seg1}/{seg2}")
 
-            content = self._get_data_content(resource_path)
-            mime_type = self._get_mime_type(resource_path)
+        @self.server.resource("data://{seg1}/{seg2}/{seg3}")
+        async def get_data_resource_d3(
+            seg1: str, seg2: str, seg3: str
+        ) -> Dict[str, Any]:
+            """Provide data resources nested two directories deep."""
+            return self._data_response(f"{seg1}/{seg2}/{seg3}")
 
-            if content is not None:
-                return {"uri": uri, "mimeType": mime_type, "content": content}
-            else:
-                return {
-                    "uri": uri,
-                    "mimeType": "application/json",
-                    "error": f"Resource '{resource_path}' not found",
-                }
+        @self.server.resource("data://{seg1}/{seg2}/{seg3}/{seg4}")
+        async def get_data_resource_d4(
+            seg1: str, seg2: str, seg3: str, seg4: str
+        ) -> Dict[str, Any]:
+            """Provide data resources nested three directories deep."""
+            return self._data_response(f"{seg1}/{seg2}/{seg3}/{seg4}")
 
         # Configuration resources
-        @self.server.resource("config://*")
-        async def get_configuration(uri: str) -> Dict[str, Any]:
+        @self.server.resource("config://{key}")
+        async def get_configuration(key: str) -> Dict[str, Any]:
             """Provide configuration information."""
-            config_key = uri.replace("config://", "")
+            return self._configuration_response(key)
 
-            config_data = self._get_configuration(config_key)
+        # Help resources
+        @self.server.resource("help://{topic}")
+        async def get_help(topic: str) -> Dict[str, Any]:
+            """Provide context-sensitive help."""
+            return self._help_response(topic)
 
+        logger.info("Default resource providers configured")
+
+    #: Deepest ``data://`` path the registered templates can match. See
+    #: :meth:`_setup_default_resources` for why this is bounded at all.
+    DATA_MAX_PATH_SEGMENTS = 4
+
+    def _workflow_response(self, name: str) -> Dict[str, Any]:
+        """Build the ``workflow://<name>`` resource payload."""
+        uri = f"workflow://{name}"
+
+        if name not in self.nexus._workflows:
             return {
                 "uri": uri,
                 "mimeType": "application/json",
-                "content": json.dumps(config_data, indent=2),
+                "error": f"Workflow '{name}' not found",
             }
 
-        # Help resources
-        @self.server.resource("help://*")
-        async def get_help(uri: str) -> Dict[str, Any]:
-            """Provide context-sensitive help."""
-            help_topic = uri.replace("help://", "")
+        workflow = self.nexus._workflows[name]
+        workflow_info = self._extract_workflow_info(name, workflow)
 
-            help_content = self._get_help_content(help_topic)
+        return {
+            "uri": uri,
+            "mimeType": "application/json",
+            "content": json.dumps(workflow_info, indent=2),
+        }
 
-            return {"uri": uri, "mimeType": "text/markdown", "content": help_content}
+    def _documentation_response(self, topic: str) -> Dict[str, Any]:
+        """Build the ``docs://<topic>`` resource payload."""
+        uri = f"docs://{topic}"
+        doc_content = self._get_documentation(topic)
 
-        logger.info("Default resource providers configured")
+        if doc_content:
+            return {"uri": uri, "mimeType": "text/markdown", "content": doc_content}
+        return {
+            "uri": uri,
+            "mimeType": "text/plain",
+            "error": f"Documentation '{topic}' not found",
+        }
+
+    def _data_response(self, resource_path: str) -> Dict[str, Any]:
+        """Build the ``data://<path>`` resource payload."""
+        uri = f"data://{resource_path}"
+
+        # Security check - only allow specific data access
+        if not self._is_allowed_resource(resource_path):
+            return {
+                "uri": uri,
+                "mimeType": "application/json",
+                "error": "Access denied to this resource",
+            }
+
+        content = self._get_data_content(resource_path)
+        mime_type = self._get_mime_type(resource_path)
+
+        if content is not None:
+            return {"uri": uri, "mimeType": mime_type, "content": content}
+        return {
+            "uri": uri,
+            "mimeType": "application/json",
+            "error": f"Resource '{resource_path}' not found",
+        }
+
+    def _configuration_response(self, key: str) -> Dict[str, Any]:
+        """Build the ``config://<key>`` resource payload."""
+        return {
+            "uri": f"config://{key}",
+            "mimeType": "application/json",
+            "content": json.dumps(self._get_configuration(key), indent=2),
+        }
+
+    def _help_response(self, topic: str) -> Dict[str, Any]:
+        """Build the ``help://<topic>`` resource payload."""
+        return {
+            "uri": f"help://{topic}",
+            "mimeType": "text/markdown",
+            "content": self._get_help_content(topic),
+        }
 
     def _extract_workflow_info(self, name: str, workflow: Workflow) -> Dict[str, Any]:
         """Extract comprehensive workflow information.
@@ -502,8 +578,20 @@ Or check documentation:
         """Register a custom resource handler.
 
         Args:
-            pattern: URI pattern (e.g., "custom://*")
-            handler: Async function to handle resource requests
+            pattern: URI template whose ``{param}`` placeholders match
+                ``handler``'s parameter names EXACTLY -- e.g.
+                ``"custom://{name}"`` for ``async def handler(name: str)``, or
+                a parameterless concrete URI like ``"custom://status"`` for
+                ``async def handler()``.
+
+                The example here used to read ``"custom://*"``. That form is
+                rejected by official FastMCP, which raises ``ValueError:
+                Mismatch between URI parameters ... and function parameters
+                ...`` because ``*`` declares no parameters (issue #2056). A
+                template parameter matches ``[^/]+`` and so cannot span ``/``;
+                register one template per path depth if the handler needs
+                nested paths, as the built-in ``data://`` provider does.
+            handler: Async function to handle resource requests.
         """
         self.server.resource(pattern)(handler)
         logger.info(f"Registered custom resource handler for {pattern}")

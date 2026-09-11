@@ -2,6 +2,57 @@
 
 ## [Unreleased]
 
+### Fixed (SECURITY) — rate-limit identifier tags are now KEYED (#2171)
+
+- **The 429 log line's identifier tag was an unkeyed digest, so it was not private.**
+  `RateLimitMiddleware` logged `identifier_fp=<8 hex>` derived from
+  `fingerprint_secret()` — unkeyed BLAKE2b — under a comment claiming "the raw value
+  stays confined to the rate-limit backend key". The default extractor yields
+  `ip:<addr>` for unauthenticated callers, a space of 2**32 values. Measured on
+  commodity hardware: ~1.3e5 candidate digests/second/core, recovering a target IP
+  from its tag in **0.224 s** within a single /16, and the whole IPv4 space in
+  ~9 single-core-hours. For any log reader the tag was equivalent to the plaintext IP.
+- **The tag is now `HMAC-SHA256(key, DOMAIN || 0x00 || identifier)`**, truncated to
+  16 hex characters (64 bits, up from 32 — 8 hex collides at ~2**16 identifiers by
+  the birthday bound, which silently merges two offenders under one tag).
+- **Key sourcing:** `NEXUS_RATE_LIMIT_FINGERPRINT_KEY`, minimum 32 bytes. Set the
+  **same value on every node** to keep cross-node correlation, which is the property
+  the unkeyed helper existed to provide. A key that is present but too short raises
+  `InvalidFingerprintKeyError` at middleware construction — at startup, not as a 500
+  in place of a 429.
+- **No key configured is NOT a silent no-op.** Confidentiality fails **closed**: a
+  fresh random per-process key is minted, so the tag is unforgeable and irreversible
+  with no operator action. The degraded property — cross-node/cross-restart
+  correlation — is announced by a **loud warning at construction** naming the exact
+  variable to set. There is no fallback to the unkeyed digest and no dropped tag.
+- **Rate limiting itself is unaffected by key rotation or restart.** Buckets are keyed
+  on the raw identifier (`check_and_record(identifier=...)`), never on the tag, so a
+  rotation changes log tags only; it cannot reset anyone's token bucket, and an
+  attacker cannot wash away an in-progress throttle by provoking one. Log queries
+  spanning a rotation must be scoped to one key epoch.
+
+### Fixed (BREAKING) — MCP resource URIs are templates, not wildcards (#2056)
+
+- **`NexusResourceManager` raised on construction wherever the official `mcp` package
+  was installed.** All five providers registered `scheme://*` against handlers taking
+  a `uri` argument; FastMCP requires a template's `{param}` placeholders to match the
+  handler signature exactly and rejected every one with
+  `ValueError: Mismatch between URI parameters set() and function parameters {'uri'}`.
+  `kailash_mcp`'s non-FastMCP fallback accepted the same registrations, which is why
+  the failure looked import-order dependent rather than constant.
+- **New URI contract** (MCP clients consuming these resources must update):
+  `workflow://{name}`, `docs://{topic}`, `config://{key}`, `help://{topic}`, and
+  `data://` at one-to-four path segments. Response bodies are unchanged — handlers
+  reconstruct the full URI for the `uri` field.
+- **`data://` registers one template per depth on purpose.** FastMCP compiles a
+  template parameter to `[^/]+`, so a single `{path}` cannot span a `/`: with
+  `data://{path}` registered, `data://examples/sample.json` — this module's own
+  documented example — matches nothing. The RFC 6570 explode form `{path*}` is not
+  supported either (it fails `re.compile` with `bad character in group name`).
+  Four segments is the supported ceiling; deeper paths report as not found.
+- **`register_custom_resource()` now documents the template form.** The previous
+  `"custom://*"` example is the exact pattern FastMCP rejects.
+
 ### Changed (BREAKING) — `enable_auth=True` now installs real authentication, and requires a credential (#2013)
 
 - **`Nexus(enable_auth=True)` previously installed nothing.** It set three booleans
