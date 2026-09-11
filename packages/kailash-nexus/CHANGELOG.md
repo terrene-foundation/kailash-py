@@ -51,9 +51,15 @@ Rule 1a makes them this change's to own.
   Measured before the fix, the resource returned `"api_key": "sk-SUPERSECRET-abc123"`
   and `postgres://user:hunter2@db/prod` to any MCP client. Node config, workflow
   metadata, and the input/output schema are now redacted by key name via
-  `is_sensitive_query_key` (the canonical set, consulted first) plus a documented
-  supplement for families it does not cover (`connection_string`, `dsn`,
-  `credentials`, `passphrase`, ...). Non-sensitive parameters are untouched, so the
+  `is_sensitive_query_key` (the canonical set, consulted first), a substring
+  supplement for compound families it does not cover (`connection_string`, `dsn`,
+  `credentials`, `passphrase`, `authorization`, `cookie`, ...), and a token pass
+  for standalone credential words that appear as a separator-delimited component.
+  The token pass is why `x-auth` and `auth_header` are caught while `author` and
+  `oauth_provider_name` are not — a bare `auth` substring rule cannot draw that
+  line. `Authorization` / `Cookie` header configs were the M1 residual, found in
+  confirming review: the standard `{"headers": {"Authorization": "Bearer ..."}}`
+  shape was served verbatim. Non-sensitive parameters are untouched, so the
   resource remains useful for agent discovery.
 - **URL-valued config is masked rather than blanked.** A credential inside a URL
   lives in the VALUE, not the key name — `redis_url` is not in the canonical set —

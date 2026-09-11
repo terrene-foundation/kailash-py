@@ -7,6 +7,7 @@ resource providers for workflow definitions, documentation, and data access.
 import json
 import logging
 import os
+import re
 from typing import Any, Dict, List, Optional
 
 from kailash.utils.url_credentials import (
@@ -51,18 +52,64 @@ _SENSITIVE_CONFIG_SUBSTRINGS = (
     "dsn",
     "dburl",
     "databaseurl",
+    # `authorization` and `cookie` are the two most common HTTP-header key
+    # names a node config carries a live credential under
+    # (`{"headers": {"Authorization": "Bearer ..."}}`). They are matched as
+    # SUBSTRINGS of the separator-stripped key, which is safe: no common
+    # non-secret key name contains either run.
+    "authorization",
+    "cookie",
+)
+
+#: Standalone credential-bearing words matched only as a WHOLE
+#: separator-delimited token of the key. This is what distinguishes `x-auth`
+#: and `auth_header` (token `auth` -> redacted) from `author` and
+#: `oauth_provider_name` (whose `auth` is a substring, NOT a token -> kept).
+#: A substring rule for `auth` cannot draw that line; a token rule can.
+#:
+#: `key` is deliberately ABSENT -- `public_key` is not a secret, and the
+#: canonical set already draws the public/secret-key distinction. Compound
+#: key families (`api_key`, `session_key`) are caught by the substring list
+#: above, not here.
+_SENSITIVE_CONFIG_TOKENS = frozenset(
+    {
+        "auth",
+        "token",
+        "secret",
+        "password",
+        "passwd",
+        "pwd",
+        "cookie",
+        "bearer",
+        "credential",
+        "credentials",
+        "passphrase",
+    }
 )
 
 
 def _is_sensitive_config_key(key: str) -> bool:
     """True when a node-config key name is credential-bearing.
 
-    Canonical set first, documented supplement second.
+    Three passes, cheapest and most authoritative first:
+
+    1. the canonical :func:`is_sensitive_query_key` (exact-normalized match),
+    2. a substring pass for compound single-run families (``apikey``,
+       ``connectionstring``, ``authorization``, ...),
+    3. a token pass for standalone credential words that appear as a whole
+       separator-delimited component (``x-auth``, ``auth_header``).
+
+    Pass 3 exists because pass 2 cannot both catch ``x-auth`` and spare
+    ``author``: a substring ``auth`` matches both. Splitting on separators
+    first restores the token boundary the normalization destroys.
     """
     if is_sensitive_query_key(key):
         return True
     normalized = key.lower().replace("_", "").replace("-", "")
-    return any(marker in normalized for marker in _SENSITIVE_CONFIG_SUBSTRINGS)
+    if any(marker in normalized for marker in _SENSITIVE_CONFIG_SUBSTRINGS):
+        return True
+    tokens = re.split(r"[^a-z0-9]+", key.lower())
+    return any(token in _SENSITIVE_CONFIG_TOKENS for token in tokens)
 
 
 def redact_config(value: Any) -> Any:
@@ -575,6 +622,15 @@ Send `tools/list` to discover available workflows.
             # does not close it for intermediate directories; a deployment that
             # lets an attacker create links inside ./data needs the directory
             # locked down as well.
+            #
+            # Windows caveat: os.O_NOFOLLOW is absent there, so the getattr
+            # falls back to 0 and this final-component protection is dropped on
+            # Windows. That is an accepted residual, not an oversight: the
+            # realpath+commonpath containment above still holds on every
+            # platform, and creating a symlink on Windows requires either
+            # administrator privilege or Developer Mode, so the attacker who
+            # could plant one inside ./data already has more than this guard
+            # would deny them.
             fd = os.open(requested_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
             try:
                 handle = os.fdopen(fd, "r")

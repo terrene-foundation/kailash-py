@@ -177,24 +177,70 @@ def test_non_url_strings_are_left_alone():
         "session_key",
         "bearer_token",
         "dsn",
+        # HTTP-header key names -- the most common shape a node config carries a
+        # live credential under, and the M1 leak: none was caught before.
+        # `Authorization` / `Cookie` match the substring pass; `x-auth` and
+        # `auth_header` match ONLY the token pass, because their `auth` is a
+        # separator-delimited token rather than a substring the normalized form
+        # preserves distinctly from `author`.
+        "Authorization",
+        "authorization",
+        "Cookie",
+        "cookie",
+        "x-auth",
+        "auth_header",
     ],
 )
 def test_sensitive_key_names_are_redacted(key):
-    """Covers BOTH the canonical set and the documented supplement.
+    """Covers the canonical set, the substring supplement, AND the token pass.
 
     ``connection_string``, ``credentials``, ``passphrase``, ``dsn``, ``bearer``
     and ``aws_secret_access_key`` are measurably NOT in
     ``is_sensitive_query_key``'s set, which is why the supplement exists.
+    ``Authorization`` / ``x-auth`` / ``auth_header`` were the M1 residual.
     """
     assert redact_config({key: "sensitive"})[key] == REDACTED
 
 
+def test_authorization_header_config_is_not_served_verbatim():
+    """The M1 leak, end to end: the standard bearer-header node-config shape.
+
+    Before the token pass this returned ``Bearer sk-live-...`` verbatim through
+    ``workflow://`` to any MCP client, because ``headers`` recurses,
+    ``Authorization`` was not recognised, and the value has no ``://`` so the
+    URL-mask branch never fired.
+    """
+    cfg = {"headers": {"Authorization": "Bearer sk-live-SECRET", "Cookie": "sid=abc"}}
+
+    result = redact_config(cfg)
+
+    assert result["headers"]["Authorization"] == REDACTED
+    assert result["headers"]["Cookie"] == REDACTED
+    assert "sk-live-SECRET" not in json.dumps(result)
+    assert "sid=abc" not in json.dumps(result)
+
+
 @pytest.mark.parametrize(
-    "key", ["code", "name", "timeout", "public_key", "max_retries", "sandbox_mode"]
+    "key",
+    [
+        "code",
+        "name",
+        "timeout",
+        "public_key",
+        "max_retries",
+        "sandbox_mode",
+        # `auth` appears as a SUBSTRING here but not as a token; these must
+        # survive, or the token pass has over-matched.
+        "author",
+        "oauth_provider_name",
+        "authenticity",
+    ],
 )
 def test_non_sensitive_key_names_survive(key):
     """No false positives. ``public_key`` is deliberately here: a public key is
-    not a secret, and the canonical set already draws that distinction."""
+    not a secret, and the canonical set already draws that distinction.
+    ``author`` / ``oauth_provider_name`` guard the token pass against the
+    obvious over-match a bare ``auth`` substring rule would cause."""
     assert redact_config({key: "visible"})[key] == "visible"
 
 
