@@ -484,6 +484,67 @@ class TestProxyMemberReturnValueContainment:
         )
 
 
+class TestGovernedToWorkflowFailsClosed:
+    """#2227: ``governed.to_workflow()`` is a PUBLIC one-hop ungoverned bypass.
+
+    ``L3GovernedAgent`` did not override ``to_workflow``; it inherited
+    ``WrapperBase.to_workflow`` -> ``self._inner.to_workflow()`` ->
+    ``BaseAgent.to_workflow``, which emits an ``LLMAgentNode`` carrying
+    ``ungoverned=config.ungoverned`` and NO envelope evaluation (budget/
+    operational/posture live only in ``_evaluate``). So::
+
+        wf = governed.to_workflow()
+        LocalRuntime().execute(wf.build())   # inner LLM work, envelope SKIPPED
+
+    ran the inner agent from a plain public supported method -- the same class
+    as the ``innermost`` / ``to_workflow_node`` routes, and the same danger
+    documented for the removed proxy ``to_workflow`` entry. Also reachable as
+    ``MonitoredAgent(governed).to_workflow()`` (MonitoredAgent doesn't override
+    it either). Fixed by refusing, matching ``StreamingAgent.to_workflow``.
+    """
+
+    def test_governed_to_workflow_refuses(self) -> None:
+        agent = _make_agent()
+        governed = L3GovernedAgent(agent, _make_envelope(), mcp_servers=[])
+
+        with pytest.raises(GovernanceRejectedError, match="workflow_conversion"):
+            governed.to_workflow()
+
+    def test_monitored_over_governed_to_workflow_refuses(self) -> None:
+        """The bypass is reachable through an outer wrapper too."""
+        agent = _make_agent()
+        monitored = MonitoredAgent(
+            L3GovernedAgent(agent, _make_envelope(), mcp_servers=[]),
+            mcp_servers=[],
+        )
+
+        with pytest.raises(GovernanceRejectedError, match="workflow_conversion"):
+            monitored.to_workflow()
+
+    def test_ungoverned_workflow_cannot_be_built_from_a_governed_agent(self) -> None:
+        """The concrete harm: no runnable ungoverned workflow is obtainable.
+
+        The refusal happens at ``to_workflow()``, so a caller never reaches
+        ``.build()`` -- there is no ungoverned workflow to execute.
+        """
+        agent = _make_agent()
+        governed = L3GovernedAgent(agent, _make_envelope(), mcp_servers=[])
+
+        with pytest.raises(GovernanceRejectedError):
+            governed.to_workflow().build()  # never returns a builder to .build()
+
+    def test_plain_agent_to_workflow_still_works(self) -> None:
+        """Opposite pole: an UNwrapped agent's to_workflow must be unaffected.
+
+        Without this the change is indistinguishable from "to_workflow is
+        broken for everyone". A bare BaseAgent still emits a buildable workflow.
+        """
+        agent = _make_agent()
+        workflow = agent.to_workflow()
+        built = workflow.build()
+        assert built is not None
+
+
 # ---------------------------------------------------------------------------
 # 11.5: Stream backpressure
 # ---------------------------------------------------------------------------

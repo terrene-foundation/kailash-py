@@ -201,6 +201,53 @@ class L3GovernedAgent(WrapperBase):
         """Number of requests rejected by governance since creation."""
         return self._rejection_count
 
+    def to_workflow(self) -> Any:
+        """Refuse conversion to a static workflow -- fail closed (#2227).
+
+        ``WrapperBase.to_workflow`` proxies to ``self._inner.to_workflow()``,
+        which emits an ``LLMAgentNode`` carrying ``ungoverned=config.ungoverned``
+        and NO envelope evaluation -- the L3 budget/operational/posture checks
+        live only in ``run``/``run_async``. So an inherited ``to_workflow`` let a
+        holder of the wrapper do::
+
+            wf = governed.to_workflow()
+            LocalRuntime().execute(wf.build())   # inner LLM work, envelope SKIPPED
+
+        from a plain public method, no private access. This is the same class
+        as the ``innermost``/``to_workflow_node`` routes already contained, and
+        the same danger documented for the proxy ``to_workflow`` entry that was
+        removed from ``_ProtectedInnerProxy._ALLOWED_ATTRS`` -- closing the proxy
+        path while leaving the wrapper's own public method open would be half a
+        fix. It is also reachable as ``MonitoredAgent(governed).to_workflow()``,
+        which inherits this via the ``_inner`` chain.
+
+        Emitting a *governed* workflow is a larger design change (the envelope
+        evaluation would have to become a node); refusing is the correct
+        fail-closed move and matches ``StreamingAgent.to_workflow``, which
+        already raises for its own reason. Governed execution goes through
+        ``run``/``run_async``, where the envelope is enforced.
+
+        Raised as :class:`GovernanceRejectedError` rather than the
+        not-implemented error ``StreamingAgent`` uses: this is a deliberate
+        governance refusal, not an unimplemented method, and the bare
+        not-implemented form trips the repo's zero-tolerance stub gate. The
+        dimension names the refused operation so the audit trail is precise.
+
+        Raises:
+            GovernanceRejectedError: always. A governed agent has no ungoverned
+                static-workflow form; use ``run``/``run_async``.
+        """
+        raise GovernanceRejectedError(
+            dimension="workflow_conversion",
+            detail=(
+                "L3GovernedAgent cannot be converted to a static workflow -- the "
+                "emitted LLMAgentNode would run the inner agent with the "
+                "governance envelope SKIPPED (budget/operational/posture are "
+                "enforced only in run()/run_async()). Use the governed agent's "
+                "run()/run_async(), which evaluate the envelope before execution"
+            ),
+        )
+
     def _evaluate_financial(self, inputs: dict[str, Any]) -> None:
         """Check financial constraints.
 
