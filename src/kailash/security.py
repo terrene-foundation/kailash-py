@@ -111,12 +111,15 @@ See Also:
     - :doc:`/guides/security` for comprehensive security best practices
 """
 
+import importlib.util
 import logging
 import os
 import re
+import sys
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -437,257 +440,367 @@ def validate_command_string(command: str, config: SecurityConfig | None = None) 
     return command
 
 
-# P0D-002: Module-level cache for allowed_types in sanitize_input().
-# Previously, sanitize_input() performed 13+ lazy imports (pandas, numpy, torch,
-# tensorflow, scipy, sklearn, xgboost, lightgbm, matplotlib, plotly, statsmodels,
-# PIL, spacy, networkx, prophet) on EVERY call when allowed_types=None.
-# This caused ~1.6ms overhead per node from import machinery lookups.
-# The cache is computed once on first access and reused for all subsequent calls.
+# P0D-002 / #2000: Presence-keyed, lazily-resolved cache for the allow-list that
+# sanitize_input() applies when the caller passes allowed_types=None.
+#
+# WHY sys.modules INSTEAD OF import
+# ---------------------------------
+# The allow-list is consumed by exactly one operation: ``isinstance(value, t)``.
+# A value can only BE an instance of ``torch.Tensor`` if the module defining that
+# class has already executed in this process -- that is, if ``torch`` is already
+# in ``sys.modules``. So consulting ``sys.modules`` instead of *importing* the
+# framework is VERDICT-PRESERVING: every value the eager implementation would
+# have accepted is still accepted, because holding such a value requires the
+# framework to have been loaded first.
+#
+# The previous implementation imported every installed optional framework
+# (torch, sklearn, scipy, pandas, xgboost, lightgbm, plotly, PIL, networkx, ...)
+# the first time any node validated a parameter. On a machine with torch and
+# sklearn installed that cost 7-9s on the FIRST PythonCodeNode execution of a
+# process (kailash-py#2000), and it made node execution fail outright on a broken
+# or partially-installed ML stack.
+#
+# SECURITY DIRECTION -- and the TWO places the verdict genuinely changed
+# ----------------------------------------------------------------------
+# For the optional-framework groups below the substitution is verdict-preserving:
+# a value can only be an instance of a framework's type if that framework is
+# loaded, so keying on sys.modules admits exactly what importing admitted.
+# Resolution failures are logged at WARNING and fail closed -- the group's types
+# are absent, so such values are rejected rather than silently admitted.
+#
+# Two verdicts DID change, and the blanket claim "this can only ever be narrower"
+# that an earlier revision of this comment made was FALSE. Recorded explicitly so
+# the next reader does not have to rediscover them:
+#
+#   1. sklearn under coverage (WIDER than before). The old sklearn branch was
+#      wrapped in `if "coverage" not in sys.modules`, so a process running under
+#      coverage REJECTED BaseEstimator/TransformerMixin values that every normal
+#      process accepted. That guard existed to dodge the import cost/instrument-
+#      ation conflict, not to express a security policy, and nothing imports
+#      sklearn here any more -- so it is gone and coverage runs now agree with
+#      production. This is a deliberate widening, limited to processes running
+#      under coverage, and it makes the security surface stop depending on
+#      whether the code is being measured.
+#   2. The pandas name-based branch in sanitize_input() -- see the comment at
+#      that block, which preserves its old verdict exactly via find_spec.
+_BASE_ALLOWED_TYPES: tuple[type, ...] = (
+    str,
+    int,
+    float,
+    bool,
+    list,
+    dict,
+    tuple,
+    set,
+    type(None),
+)
+
+
+def _resolve_pandas_types() -> list[type]:
+    import pandas as pd
+
+    return [
+        pd.DataFrame,
+        pd.Series,
+        pd.Index,
+        pd.MultiIndex,
+        pd.Categorical,
+        pd.Timestamp,
+        pd.Timedelta,
+        pd.Period,
+        pd.DatetimeIndex,
+        pd.TimedeltaIndex,
+        pd.PeriodIndex,
+    ]
+
+
+def _resolve_numpy_types() -> list[type]:
+    import numpy as np
+
+    numpy_types: list[type] = [
+        np.ndarray,
+        np.ma.MaskedArray,
+        np.int8,
+        np.int16,
+        np.int32,
+        np.int64,
+        np.uint8,
+        np.uint16,
+        np.uint32,
+        np.uint64,
+        np.float16,
+        np.float32,
+        np.float64,
+        np.complex64,
+        np.complex128,
+        np.bool_,
+        np.object_,
+        np.datetime64,
+        np.timedelta64,
+    ]
+
+    if hasattr(np, "matrix"):
+        numpy_types.append(np.matrix)
+    if hasattr(np, "string_"):
+        numpy_types.append(getattr(np, "string_"))
+    elif hasattr(np, "bytes_"):
+        numpy_types.append(np.bytes_)
+    if hasattr(np, "unicode_"):
+        numpy_types.append(getattr(np, "unicode_"))
+    elif hasattr(np, "str_"):
+        numpy_types.append(np.str_)
+    if hasattr(np, "float128"):
+        numpy_types.append(np.float128)
+    if hasattr(np, "complex256"):
+        numpy_types.append(np.complex256)
+    if hasattr(np, "generic"):
+        numpy_types.append(np.generic)
+
+    return numpy_types
+
+
+def _resolve_torch_types() -> list[type]:
+    import torch
+
+    torch_types: list[type] = [
+        torch.Tensor,
+        torch.nn.Module,
+        torch.nn.Parameter,
+    ]
+    for cuda_type_name in ("FloatTensor", "DoubleTensor", "IntTensor", "LongTensor"):
+        cuda_type = getattr(torch.cuda, cuda_type_name, None)
+        if cuda_type is not None:
+            torch_types.append(cuda_type)
+    return torch_types
+
+
+def _resolve_tensorflow_types() -> list[type]:
+    import importlib
+
+    tf = importlib.import_module("tensorflow")
+    return [
+        tf.Tensor,
+        tf.Variable,
+        tf.constant,
+        tf.keras.Model,
+        tf.keras.layers.Layer,
+        tf.data.Dataset,
+    ]
+
+
+def _resolve_scipy_sparse_types() -> list[type]:
+    import scipy.sparse
+
+    return [
+        scipy.sparse.csr_matrix,
+        scipy.sparse.csc_matrix,
+        scipy.sparse.coo_matrix,
+        scipy.sparse.dia_matrix,
+        scipy.sparse.dok_matrix,
+        scipy.sparse.lil_matrix,
+    ]
+
+
+def _resolve_sklearn_types() -> list[type]:
+    from sklearn.base import BaseEstimator, TransformerMixin
+
+    return [BaseEstimator, TransformerMixin]
+
+
+def _resolve_xgboost_types() -> list[type]:
+    import importlib
+
+    xgb = importlib.import_module("xgboost")
+    return [xgb.DMatrix, xgb.Booster]
+
+
+def _resolve_lightgbm_types() -> list[type]:
+    import importlib
+
+    lgb = importlib.import_module("lightgbm")
+    return [lgb.Dataset, lgb.Booster]
+
+
+def _resolve_matplotlib_types() -> list[type]:
+    from matplotlib.axes import Axes
+    from matplotlib.figure import Figure
+
+    return [Figure, Axes]
+
+
+def _resolve_plotly_types() -> list[type]:
+    import plotly.graph_objects as go
+
+    return [go.Figure]
+
+
+def _resolve_statsmodels_types() -> list[type]:
+    import importlib
+
+    sm = importlib.import_module("statsmodels.api")
+    return [sm.OLS, sm.GLM, sm.GLS, sm.WLS]
+
+
+def _resolve_pillow_types() -> list[type]:
+    from PIL import Image
+
+    return [Image.Image]
+
+
+def _resolve_spacy_types() -> list[type]:
+    import importlib
+
+    spacy_tokens = importlib.import_module("spacy.tokens")
+    return [spacy_tokens.Doc, spacy_tokens.Span, spacy_tokens.Token]
+
+
+def _resolve_networkx_types() -> list[type]:
+    import networkx as nx
+
+    return [nx.Graph, nx.DiGraph, nx.MultiGraph, nx.MultiDiGraph]
+
+
+def _resolve_prophet_types() -> list[type]:
+    import importlib
+
+    prophet_mod = importlib.import_module("prophet")
+    prophet_forecaster = importlib.import_module("prophet.forecaster")
+    return [prophet_mod.Prophet, prophet_forecaster.Prophet]
+
+
+# Each entry is (probe module names, resolver). The group contributes its types
+# only when at least one probe module is already in sys.modules. A probe is the
+# module in which the group's types are DEFINED (or the package whose __init__
+# unconditionally executes that module), which is precisely the module that must
+# have run for an instance of those types to exist.
+#
+# `cv2` had an entry in the eager implementation that imported OpenCV and added
+# ZERO types to the allow-list; it is intentionally not carried over, because it
+# only ever cost import time.
+_OPTIONAL_TYPE_GROUPS: tuple[tuple[tuple[str, ...], Callable[[], list[type]]], ...] = (
+    (("pandas",), _resolve_pandas_types),
+    (("numpy",), _resolve_numpy_types),
+    (("torch",), _resolve_torch_types),
+    (("tensorflow",), _resolve_tensorflow_types),
+    (("scipy.sparse",), _resolve_scipy_sparse_types),
+    (("sklearn.base",), _resolve_sklearn_types),
+    (("xgboost",), _resolve_xgboost_types),
+    (("lightgbm",), _resolve_lightgbm_types),
+    (("matplotlib.figure", "matplotlib.axes"), _resolve_matplotlib_types),
+    (("plotly.graph_objects",), _resolve_plotly_types),
+    (("statsmodels.api",), _resolve_statsmodels_types),
+    (("PIL.Image",), _resolve_pillow_types),
+    (("spacy.tokens",), _resolve_spacy_types),
+    (("networkx",), _resolve_networkx_types),
+    (("prophet",), _resolve_prophet_types),
+)
+
+_OPTIONAL_PROBE_NAMES: tuple[str, ...] = tuple(
+    dict.fromkeys(name for probes, _ in _OPTIONAL_TYPE_GROUPS for name in probes)
+)
+
+# Single-entry cache holding (loaded-framework signature, frozen allow-list).
+# Stored as ONE tuple so a concurrent reader always observes a consistent pair:
+# a torn read of two separate globals could otherwise pair a stale (narrower)
+# allow-list with a fresh signature and cache it indefinitely.
+_ALLOWED_TYPES_CACHE: tuple[tuple[str, ...], tuple[type, ...]] | None = None
+
+# Back-compat mirror of the most recently computed allow-list. Nothing in the
+# SDK reads it; it is asserted by
+# tests/tier2_integration/runtime/test_phase0d_optimizations.py as the
+# module-level P0D-002 cache symbol, so it is kept and kept accurate.
 _CACHED_ALLOWED_TYPES: tuple[type, ...] | None = None
 
 
-def _get_cached_allowed_types() -> list[type]:
-    """Return cached allowed_types list, computing on first call.
+_MODULE_INSTALLED_CACHE: dict[str, bool] = {}
 
-    P0D-002: This eliminates 13+ per-call lazy imports that caused ~1.6ms
-    overhead per sanitize_input() invocation.
+
+def _module_is_installed(module_name: str) -> bool:
+    """Is ``module_name`` importable here, without importing it?
+
+    ``find_spec`` locates a module without executing it, so this answers
+    "installed?" at no import cost. Memoised because the answer cannot change
+    within a process without a path-hook change, and the callers sit on the
+    node-execution hot path. The cache is keyed by name and bounded by the small
+    fixed set of names the SDK ever asks about.
     """
-    global _CACHED_ALLOWED_TYPES
-    if _CACHED_ALLOWED_TYPES is not None:
+    cached = _MODULE_INSTALLED_CACHE.get(module_name)
+    if cached is not None:
+        return cached
+    if module_name in sys.modules:
+        installed = True
+    else:
+        try:
+            installed = importlib.util.find_spec(module_name) is not None
+        except (ImportError, AttributeError, ValueError):
+            installed = False
+    _MODULE_INSTALLED_CACHE[module_name] = installed
+    return installed
+
+
+def _loaded_optional_signature() -> tuple[str, ...]:
+    """Return the probe modules currently present in sys.modules.
+
+    This is the cache key. It is recomputed on every call (a handful of dict
+    lookups, ~1us) so that a framework imported AFTER the first call is picked
+    up -- without it, presence-keyed resolution would permanently miss any
+    framework loaded later and wrongly reject its values.
+    """
+    modules = sys.modules
+    return tuple(name for name in _OPTIONAL_PROBE_NAMES if name in modules)
+
+
+def _get_cached_allowed_types() -> list[type]:
+    """Return the allow-list for sanitize_input(), resolved from loaded modules.
+
+    Builtin types are always present. An optional framework's types are added
+    only when that framework is already imported in this process, which is a
+    necessary condition for any value of those types to exist. No heavy import
+    is ever performed here (#2000).
+    """
+    global _ALLOWED_TYPES_CACHE, _CACHED_ALLOWED_TYPES
+
+    signature = _loaded_optional_signature()
+
+    entry = _ALLOWED_TYPES_CACHE  # single atomic read of the (key, value) pair
+    if entry is not None and entry[0] == signature:
         # Return a mutable copy so callers can safely extend if needed
-        return list(_CACHED_ALLOWED_TYPES)
+        return list(entry[1])
 
-    allowed_types: list[type] = [
-        str,
-        int,
-        float,
-        bool,
-        list,
-        dict,
-        tuple,
-        set,
-        type(None),
-    ]
+    allowed_types: list[type] = list(_BASE_ALLOWED_TYPES)
+    loaded = frozenset(signature)
+    resolution_failed = False
+    for probes, resolve in _OPTIONAL_TYPE_GROUPS:
+        if loaded.isdisjoint(probes):
+            continue
+        try:
+            allowed_types.extend(resolve())
+        except (ImportError, AttributeError, OSError) as exc:
+            resolution_failed = True
+            # Fail closed and loudly: the framework is loaded but its types could
+            # not be resolved, so values of those types will now be REJECTED by
+            # sanitize_input(). Never silently pretend the group was resolved.
+            logger.warning(
+                "Optional type group %s is loaded but its allow-list types could "
+                "not be resolved (%s: %s); values of those types will be rejected "
+                "by input sanitization.",
+                "/".join(probes),
+                type(exc).__name__,
+                exc,
+            )
 
-    # Core data science types
-    try:
-        import pandas as pd
-
-        allowed_types.extend(
-            [
-                pd.DataFrame,
-                pd.Series,
-                pd.Index,
-                pd.MultiIndex,
-                pd.Categorical,
-                pd.Timestamp,
-                pd.Timedelta,
-                pd.Period,
-                pd.DatetimeIndex,
-                pd.TimedeltaIndex,
-                pd.PeriodIndex,
-            ]
-        )
-    except ImportError:
-        pass
-
-    try:
-        import numpy as np
-
-        numpy_types: list[type] = [
-            np.ndarray,
-            np.ma.MaskedArray,
-            np.int8,
-            np.int16,
-            np.int32,
-            np.int64,
-            np.uint8,
-            np.uint16,
-            np.uint32,
-            np.uint64,
-            np.float16,
-            np.float32,
-            np.float64,
-            np.complex64,
-            np.complex128,
-            np.bool_,
-            np.object_,
-            np.datetime64,
-            np.timedelta64,
-        ]
-
-        if hasattr(np, "matrix"):
-            numpy_types.append(np.matrix)
-        if hasattr(np, "string_"):
-            numpy_types.append(getattr(np, "string_"))
-        elif hasattr(np, "bytes_"):
-            numpy_types.append(np.bytes_)
-        if hasattr(np, "unicode_"):
-            numpy_types.append(getattr(np, "unicode_"))
-        elif hasattr(np, "str_"):
-            numpy_types.append(np.str_)
-        if hasattr(np, "float128"):
-            numpy_types.append(np.float128)
-        if hasattr(np, "complex256"):
-            numpy_types.append(np.complex256)
-        if hasattr(np, "generic"):
-            numpy_types.append(np.generic)
-
-        allowed_types.extend(numpy_types)
-    except ImportError:
-        pass
-
-    # Deep learning frameworks
-    try:
-        import torch
-
-        torch_types: list[type] = [
-            torch.Tensor,
-            torch.nn.Module,
-            torch.nn.Parameter,
-        ]
-        for cuda_type_name in (
-            "FloatTensor",
-            "DoubleTensor",
-            "IntTensor",
-            "LongTensor",
-        ):
-            cuda_type = getattr(torch.cuda, cuda_type_name, None)
-            if cuda_type is not None:
-                torch_types.append(cuda_type)
-        allowed_types.extend(torch_types)
-    except ImportError:
-        pass
-
-    try:
-        import importlib
-
-        tf = importlib.import_module("tensorflow")
-        allowed_types.extend(
-            [
-                tf.Tensor,
-                tf.Variable,
-                tf.constant,
-                tf.keras.Model,
-                tf.keras.layers.Layer,
-                tf.data.Dataset,
-            ]
-        )
-    except (ImportError, AttributeError):
-        pass
-
-    # Scientific computing
-    try:
-        import scipy.sparse
-
-        allowed_types.extend(
-            [
-                scipy.sparse.csr_matrix,
-                scipy.sparse.csc_matrix,
-                scipy.sparse.coo_matrix,
-                scipy.sparse.dia_matrix,
-                scipy.sparse.dok_matrix,
-                scipy.sparse.lil_matrix,
-            ]
-        )
-    except ImportError:
-        pass
-
-    # Machine learning frameworks
-    try:
-        import sys
-
-        if "coverage" not in sys.modules:
-            from sklearn.base import BaseEstimator, TransformerMixin
-
-            allowed_types.extend([BaseEstimator, TransformerMixin])
-    except ImportError:
-        pass
-
-    try:
-        import importlib as _importlib
-
-        xgb = _importlib.import_module("xgboost")
-        allowed_types.extend([xgb.DMatrix, xgb.Booster])
-    except (ImportError, AttributeError):
-        pass
-
-    try:
-        import importlib as _importlib2
-
-        lgb = _importlib2.import_module("lightgbm")
-        allowed_types.extend([lgb.Dataset, lgb.Booster])
-    except (ImportError, AttributeError, OSError):
-        pass
-
-    # Data visualization
-    try:
-        from matplotlib.axes import Axes
-        from matplotlib.figure import Figure
-
-        allowed_types.extend([Figure, Axes])
-    except ImportError:
-        pass
-
-    try:
-        import plotly.graph_objects as go
-
-        allowed_types.append(go.Figure)
-    except ImportError:
-        pass
-
-    # Statistical modeling
-    try:
-        import importlib as _importlib3
-
-        sm = _importlib3.import_module("statsmodels.api")
-        allowed_types.extend([sm.OLS, sm.GLM, sm.GLS, sm.WLS])
-    except (ImportError, AttributeError):
-        pass
-
-    # Image processing
-    try:
-        from PIL import Image
-
-        allowed_types.append(Image.Image)
-    except ImportError:
-        pass
-
-    try:
-        import cv2  # noqa: F401
-    except ImportError:
-        pass
-
-    # NLP libraries
-    try:
-        import importlib as _importlib4
-
-        spacy_tokens = _importlib4.import_module("spacy.tokens")
-        allowed_types.extend([spacy_tokens.Doc, spacy_tokens.Span, spacy_tokens.Token])
-    except (ImportError, AttributeError):
-        pass
-
-    # Graph/Network analysis
-    try:
-        import networkx as nx
-
-        allowed_types.extend([nx.Graph, nx.DiGraph, nx.MultiGraph, nx.MultiDiGraph])
-    except ImportError:
-        pass
-
-    # Time series
-    try:
-        import importlib as _importlib5
-
-        prophet_mod = _importlib5.import_module("prophet")
-        prophet_forecaster = _importlib5.import_module("prophet.forecaster")
-        allowed_types.extend([prophet_mod.Prophet, prophet_forecaster.Prophet])
-    except (ImportError, AttributeError):
-        pass
-
-    # Freeze as tuple for thread safety and immutability
-    _CACHED_ALLOWED_TYPES = tuple(allowed_types)
-    return list(_CACHED_ALLOWED_TYPES)
+    frozen = tuple(allowed_types)
+    _CACHED_ALLOWED_TYPES = frozen
+    if not resolution_failed:
+        _ALLOWED_TYPES_CACHE = (signature, frozen)
+    else:
+        # Do NOT cache a partial result. A framework can be mid-initialisation
+        # (its parent package in sys.modules before its submodules finish), and
+        # caching that transient failure would reject its values for the whole
+        # process life with no way back. Retrying costs an attribute access --
+        # the framework is already imported, so no import is repeated.
+        _ALLOWED_TYPES_CACHE = None
+    return list(frozen)
 
 
 @contextmanager
@@ -1048,20 +1161,37 @@ def sanitize_input(
     type_allowed = any(isinstance(value, t) for t in valid_types)
 
     # Force allow pandas DataFrame - it should always be allowed regardless of mocking
-    # This handles test interference where pandas might be mocked
-    try:
-        import pandas as pd
+    # This handles test interference where pandas might be mocked.
+    #
+    # #2000: this block no longer IMPORTS pandas, but its verdict is preserved
+    # EXACTLY, which takes two different gates:
+    #   * the name-based branch never needed pandas loaded -- it only reads the
+    #     value's own class. It historically ran whenever pandas was INSTALLED
+    #     (the `import pandas` above it succeeded), so it is gated on
+    #     installed-ness, checked via find_spec, which locates without executing.
+    #     Gating it on loaded-ness instead would REJECT a polars/spark frame that
+    #     was previously accepted; gating it on nothing would ACCEPT one on a
+    #     machine with no pandas at all, where it was previously rejected.
+    #   * the isinstance branch needs the real class, and a value can only BE a
+    #     pandas DataFrame if pandas is already loaded, so loaded-ness is the
+    #     exact gate there and costs no import.
+    if not type_allowed and _module_is_installed("pandas"):
+        if hasattr(value, "__class__") and "DataFrame" in str(value.__class__):
+            # Covers a real DataFrame and a mock standing in for one alike.
+            type_allowed = True
+        elif "pandas" in sys.modules:
+            try:
+                import pandas as pd
 
-        if isinstance(value, pd.DataFrame):
-            type_allowed = True
-        # Also handle the case where DataFrame is mocked but still has the right type name
-        elif hasattr(value, "__class__") and "DataFrame" in str(value.__class__):
-            type_allowed = True
-    except ImportError:
-        pass
+                if isinstance(value, pd.DataFrame):
+                    type_allowed = True
+            except ImportError:
+                pass
 
     # Additional check for numpy scalar types
-    if not type_allowed:
+    # #2000: gated on sys.modules. A value can only BE a numpy scalar if numpy is
+    # already loaded, so this gate is exact and imports nothing.
+    if not type_allowed and "numpy" in sys.modules:
         try:
             import numpy as np
 
