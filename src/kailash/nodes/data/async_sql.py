@@ -4604,11 +4604,22 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 # dropping the entry discards the ``ref_count`` saying other
                 # nodes still hold it. ``dispose_pool_sync`` refuses a live
                 # loop on its own; only what it actually released is dropped.
-                for pool_key, (adapter, _ref_count) in list(cls._shared_pools.items()):
+                for pool_key, entry in list(cls._shared_pools.items()):
+                    adapter = entry[0]
                     if dispose_pool_sync(adapter, label=redact_pool_key(pool_key)):
                         # Released — drop the bookkeeping. Refused entries stay
                         # (their loop is still live and still serving).
-                        cls._shared_pools.pop(pool_key, None)
+                        #
+                        # Identity-re-checked at delete time, matching
+                        # `_unregister_pool` and `dispose_sync`. `_shared_pools`
+                        # is a plain class-level dict shared across THREADS and
+                        # this loop holds no mutex, so another thread can
+                        # replace the entry between the snapshot above and this
+                        # pop — and popping by key alone would strip the
+                        # bookkeeping off its live pool.
+                        current = cls._shared_pools.get(pool_key)
+                        if current is not None and current[0] is adapter:
+                            cls._shared_pools.pop(pool_key, None)
                 cls._pool_lock = asyncio.Lock()
                 cls._pool_lock_loop_id = id(loop)
 
@@ -5746,13 +5757,49 @@ class AsyncSQLDatabaseNode(AsyncNode):
                     ):
 
                         if self._pool_key in self._shared_pools:
-                            # Validate pool's event loop is still running before reuse
+                            # Validate the pool's event loop before reuse.
+                            #
+                            # Issue #2211: this used to be
+                            # ``try: asyncio.get_running_loop() ... except
+                            # RuntimeError: <treat as stale>``. ``_get_adapter``
+                            # is ``async def``, so a loop is ALWAYS running here
+                            # and that call can never raise — the check asked
+                            # "am I in a loop?" (always yes) instead of "is THIS
+                            # pool's loop alive?", and the stale branch was dead
+                            # code. The comparison that matters is identity
+                            # against the loop the pool was actually created on,
+                            # which ``_register_pool`` stamps on the adapter.
+                            #
+                            # It matters because the pool key embeds
+                            # ``str(id(loop))`` and CPython reuses an address:
+                            # a NEW loop can land on a dead loop's id, generate
+                            # the identical key, and adopt an adapter whose
+                            # transports belong to a loop that will never run
+                            # again.
                             adapter, ref_count = self._shared_pools[self._pool_key]
+                            pool_loop = asyncio.get_running_loop()
+                            stamped_loop = getattr(adapter, _POOL_LOOP_ATTR, None)
 
-                            try:
-                                # Check if we have a running event loop
-                                pool_loop = asyncio.get_running_loop()
-                                # If we got here, loop is running - safe to reuse
+                            if (
+                                stamped_loop is not None
+                                and stamped_loop is not pool_loop
+                            ):
+                                logger.warning(
+                                    "async_sql.stale_shared_pool_evicted",
+                                    extra={
+                                        "pool_key": redact_pool_key(self._pool_key),
+                                        "reason": "cached adapter belongs to a "
+                                        "different event loop (pool-key id() "
+                                        "reuse); building a fresh pool",
+                                    },
+                                )
+                                del self._shared_pools[self._pool_key]
+                                dispose_pool_sync(
+                                    adapter,
+                                    label=redact_pool_key(self._pool_key),
+                                )
+                                # Fall through to create new pool
+                            else:
                                 self._shared_pools[self._pool_key] = (
                                     adapter,
                                     ref_count + 1,
@@ -5763,13 +5810,6 @@ class AsyncSQLDatabaseNode(AsyncNode):
                                     f"Using class-level shared pool for {self.id}"
                                 )
                                 return self._adapter
-                            except RuntimeError:
-                                # Loop is closed - remove stale pool
-                                logger.warning(
-                                    f"Removing stale pool for {redact_pool_key(self._pool_key)} - event loop closed"
-                                )
-                                del self._shared_pools[self._pool_key]
-                                # Fall through to create new pool
 
                         # Create new shared pool
                         self._adapter = await self._create_adapter()
@@ -6860,13 +6900,43 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 )
                 continue
 
-            # Check if pool's event loop differs from current
-            if pool_loop_id != current_loop_id:
-                pools_to_remove.append(pool_key)
+            # Check if the pool's event loop is actually DEAD.
+            #
+            # Issue #2211: this used to mark a pool stale purely because its
+            # loop id differed from the caller's. "A different loop" is not
+            # "a dead loop" — `_shared_pools` is class-level and two threads in
+            # one process legitimately hold live pools under different loop
+            # ids, so the id comparison alone disconnected a pool another live
+            # loop was serving from. And because `disconnect()` nulls the
+            # enterprise pool and frees the registry slot BEFORE awaiting the
+            # driver close, even a timed-out cross-loop disconnect left that
+            # loop's nodes holding a stripped adapter AND an untracked open
+            # pool — the #2211 leak, re-created by the routine meant to prevent
+            # it, reachable from the read-only `get_pool_metrics()`.
+            #
+            # The loop stamp `_register_pool` writes is the real answer; the id
+            # comparison stays as the cheap pre-filter in front of it.
+            if pool_loop_id == current_loop_id:
+                continue
+
+            adapter = cls._shared_pools[pool_key][0]
+            stamped_loop = getattr(adapter, _POOL_LOOP_ATTR, None)
+            if _loop_is_usable(stamped_loop):
                 logger.debug(
-                    f"AsyncSQLDatabaseNode: Marked stale pool {redact_pool_key(pool_key)} "
-                    f"(loop {pool_loop_id} != current {current_loop_id})"
+                    "async_sql.foreign_but_live_pool_kept",
+                    extra={
+                        "pool_key": redact_pool_key(pool_key),
+                        "reason": "pool belongs to a DIFFERENT but still-live "
+                        "event loop; it is not this caller's to reclaim",
+                    },
                 )
+                continue
+
+            pools_to_remove.append(pool_key)
+            logger.debug(
+                f"AsyncSQLDatabaseNode: Marked stale pool {redact_pool_key(pool_key)} "
+                f"(loop {pool_loop_id} != current {current_loop_id})"
+            )
 
         # Phase 2: Cleanup stale pools
         for pool_key in pools_to_remove:
@@ -7926,9 +7996,22 @@ class AsyncSQLDatabaseNode(AsyncNode):
         released = 0
         refused = 0
         keep: list[DatabaseAdapter] = []
+        primary_released = False
+        seen: list[DatabaseAdapter] = []
         for adapter in (self._adapter, *self._owned_adapters):
             if adapter is None:
                 continue
+            # `_create_adapter` appends every adapter it builds to
+            # `_owned_adapters`, so `self._adapter` is normally in this sequence
+            # TWICE. Without de-duplication a refused adapter would be appended
+            # to `keep` once per occurrence and `_owned_adapters` would grow by
+            # one on every refused call — and DataFlow's eviction path re-runs
+            # this on every parked node on every eviction. The
+            # `_OWNED_ADAPTERS_CAP` bound lives only in `_create_adapter` and
+            # would never see it.
+            if any(a is adapter for a in seen):
+                continue
+            seen.append(adapter)
             if not dispose_pool_sync(adapter, label=f"node {self.id}"):
                 # Refused by the primitive's own live-loop guard. The node-level
                 # check above passed, so this adapter's pool is bound to a
@@ -7940,6 +8023,8 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 keep.append(adapter)
                 continue
             released += 1
+            if adapter is self._adapter:
+                primary_released = True
             if self._pool_key:
                 # Drop the shared-pool bookkeeping too, so the next node with
                 # this key builds a fresh pool instead of reusing a terminated
@@ -7961,8 +8046,18 @@ class AsyncSQLDatabaseNode(AsyncNode):
             # Partial release. Hand the un-released adapters back so the node
             # still owns them, and tell the caller this node STILL OWES a
             # teardown — DataFlow parks it for close() on that finding.
+            #
+            # `self._adapter` is NOT repointed at an arbitrary survivor. A
+            # refused adapter is one bound to a DIFFERENT, still-live loop than
+            # this node's `_pool_loop`; promoting it to primary would leave the
+            # node's loop stamp describing a loop that is not its adapter's, so
+            # the node-level guard would wave every later call through on a
+            # stale premise. The primary is cleared iff it was itself released,
+            # and `_connected` follows the primary.
             self._owned_adapters[:] = keep
-            self._adapter = keep[0]
+            if primary_released:
+                self._adapter = None
+                self._connected = False
             return False
 
         self._owned_adapters.clear()

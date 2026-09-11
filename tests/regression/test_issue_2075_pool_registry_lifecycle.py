@@ -24,6 +24,7 @@ under test is database-agnostic.
 
 import asyncio
 import gc
+import threading
 
 import pytest
 
@@ -177,6 +178,101 @@ async def test_dispose_sync_refuses_while_the_pool_loop_is_live(tmp_path):
     assert result["result"]["data"][0]["v"] == 3
 
     await node.cleanup()
+
+
+def test_a_pool_key_collision_across_loops_does_not_reuse_the_dead_adapter(
+    tmp_path, monkeypatch
+):
+    """A key collision must build a fresh pool, not adopt a dead loop's adapter.
+
+    Pool keys embed ``str(id(loop))`` and CPython reuses an address, so a NEW
+    loop can generate the IDENTICAL key to a loop that has since closed. The
+    reuse branch's "validate pool's event loop is still running" guard could
+    not catch that: it was ``asyncio.get_running_loop()`` inside an ``async
+    def``, which always succeeds, so it asked "am I in a loop?" rather than "is
+    THIS pool's loop alive?" and its stale branch was unreachable. The check is
+    now an identity comparison against the loop the adapter was registered on.
+
+    The collision is forced here by pinning the key, because waiting for a real
+    ``id()`` reuse is not a test.
+    """
+    monkeypatch.setattr(
+        AsyncSQLDatabaseNode,
+        "_generate_pool_key",
+        lambda self: "issue2075|collided|fixed-key|10|20",
+    )
+
+    first = _sqlite_node(tmp_path, "collide_a")
+    second = _sqlite_node(tmp_path, "collide_a")  # same DSN, so same key anyway
+
+    async def _run(node):
+        await node.async_run(query="SELECT 1", result_format="dict")
+        return node._adapter
+
+    adapter_a = asyncio.run(_run(first))  # loop 1 — created, then CLOSED
+    assert adapter_a is not None
+    loop_a = getattr(adapter_a, "_kailash_pool_loop", None)
+    assert loop_a is not None and loop_a.is_closed()
+
+    adapter_b = asyncio.run(_run(second))  # loop 2 — same key, different loop
+
+    assert adapter_b is not adapter_a, (
+        "the second node adopted an adapter whose event loop is closed — every "
+        "query through it would fail, and dispose_sync() could force-close it "
+        "while the new loop believed it owned a live pool"
+    )
+    assert getattr(adapter_b, "_kailash_pool_loop", None) is not loop_a
+
+    first.dispose_sync()
+    second.dispose_sync()
+
+
+def test_a_refused_dispose_sync_does_not_grow_owned_adapters(tmp_path):
+    """Repeated refusals must not accumulate duplicate adapter references.
+
+    ``_create_adapter`` appends everything it builds to ``_owned_adapters``, so
+    ``self._adapter`` is normally in ``(self._adapter, *self._owned_adapters)``
+    TWICE. Re-parking the survivors without de-duplication grew the list by one
+    per refused call — and DataFlow re-runs ``dispose_sync()`` on every parked
+    node on every cache eviction, so a process with a loop per request would
+    trade #2211's pool leak for an adapter-reference leak. ``_OWNED_ADAPTERS_CAP``
+    lives only in ``_create_adapter`` and never sees this path.
+    """
+    node = _sqlite_node(tmp_path, "refused_growth")
+
+    async def _attach():
+        await node.async_run(query="SELECT 1", result_format="dict")
+
+    asyncio.run(_attach())  # loop dies
+
+    adapter = node._adapter
+    assert adapter is not None
+    assert any(
+        a is adapter for a in node._owned_adapters
+    ), "premise: the primary adapter is also in _owned_adapters"
+
+    # Force refusal: stamp the adapter with a loop that is alive.
+    live_loop = asyncio.new_event_loop()
+    try:
+        setattr(adapter, "_kailash_pool_loop", live_loop)
+        sizes = []
+        for _ in range(5):
+            assert node.dispose_sync() is False
+            sizes.append(len(node._owned_adapters))
+        assert sizes == [
+            1,
+            1,
+            1,
+            1,
+            1,
+        ], f"_owned_adapters grew across refused dispose_sync() calls: {sizes}"
+        assert node._adapter is adapter, (
+            "a refused adapter must stay the primary — repointing it would "
+            "leave _pool_loop describing a loop that is not its adapter's"
+        )
+    finally:
+        live_loop.close()
+        node.dispose_sync()
 
 
 def test_driver_terminate_is_actually_called_on_a_dead_loop_pool():
@@ -358,21 +454,67 @@ async def test_get_pool_metrics_does_not_kill_another_loops_live_pool(tmp_path):
     assert getattr(adapter, "_kailash_pool_loop", None) is asyncio.get_running_loop()
     count = AsyncSQLDatabaseNode.pool_count()
 
-    # Force the cross-loop branch: make the cached lock claim a foreign loop id.
+    # A pool belonging to a DIFFERENT loop that is STILL ALIVE. Built in a
+    # worker thread with its own running loop, so both are genuinely live at
+    # once — an earlier revision of this test faked the branch by poking
+    # `_pool_lock_loop_id` while the bystander's key still carried the CURRENT
+    # loop id, which meant `_cleanup_closed_loop_pools` skipped it and the
+    # test's title generalized past what it could observe.
+    foreign = {}
+    ready = threading.Event()
+    release = threading.Event()
+
+    def _worker():
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            other = _sqlite_node(tmp_path, "metrics_foreign")
+            loop.run_until_complete(
+                other.async_run(query="SELECT 1", result_format="dict")
+            )
+            foreign["node"] = other
+            foreign["adapter"] = other._adapter
+            foreign["loop"] = loop
+            ready.set()
+            # Hold the loop OPEN (but idle) across the assertions below.
+            release.wait(timeout=30)
+            loop.run_until_complete(other.cleanup())
+        finally:
+            loop.close()
+
+    worker = threading.Thread(target=_worker, daemon=True)
+    worker.start()
+    assert ready.wait(timeout=30), "worker thread never built its pool"
+
+    foreign_adapter = foreign["adapter"]
+    assert foreign_adapter is not None
+    assert foreign["loop"] is not asyncio.get_running_loop()
+    assert not foreign["loop"].is_closed()
+    count_with_foreign = AsyncSQLDatabaseNode.pool_count()
+    assert count_with_foreign == count + 1
+
+    # Force the cross-loop branch of _get_pool_lock too.
     AsyncSQLDatabaseNode._pool_lock = asyncio.Lock()
     AsyncSQLDatabaseNode._pool_lock_loop_id = -1
 
     await AsyncSQLDatabaseNode.get_pool_metrics()
 
-    assert (
-        AsyncSQLDatabaseNode.pool_count() == count
-    ), "a read-only get_pool_metrics() call deregistered a live pool"
+    assert AsyncSQLDatabaseNode.pool_count() == count_with_foreign, (
+        f"a read-only get_pool_metrics() call deregistered a live pool: "
+        f"{AsyncSQLDatabaseNode.pool_count()} != {count_with_foreign}"
+    )
+    assert getattr(foreign_adapter, "_enterprise_pool", None) is not None, (
+        "get_pool_metrics() disconnected a pool belonging to a DIFFERENT but "
+        "still-live event loop — 'a different loop id' is not 'a dead loop'"
+    )
     result = await node.async_run(query="SELECT 5 AS v", result_format="dict")
     assert result["result"]["data"][0]["v"] == 5, (
         "get_pool_metrics() terminated a pool that was still serving queries — "
         "the kailash 2.65.0 regression, reached from a public diagnostic"
     )
 
+    release.set()
+    worker.join(timeout=30)
     await node.cleanup()
 
 
