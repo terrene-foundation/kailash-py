@@ -47,11 +47,15 @@ Examples:
 """
 
 import ast
+import functools
 import importlib.util
 import inspect
+import io
 import json
 import logging
 import os
+import sys
+import tokenize
 import traceback
 from collections.abc import Callable
 from datetime import date, datetime
@@ -192,6 +196,121 @@ class SafeCodeChecker(ast.NodeVisitor):
         self.generic_visit(node)
 
 
+class _LazyModule:
+    """Deferred binding for a sandbox-allowed module (#2000).
+
+    ``CodeExecutor`` makes every module in its allow-list available to user code
+    as a bare name, without the user writing an ``import``. Materialising that
+    convenience eagerly meant importing pandas, numpy, scipy, sklearn,
+    matplotlib and friends on the FIRST ``PythonCodeNode`` execution of every
+    process -- 7-9s of stall for code that referenced none of them, and a hard
+    failure on a broken or partial ML install.
+
+    Modules the code actually mentions are imported for real. Every other
+    allowed module is bound to one of these proxies instead, so a purely dynamic
+    reference (``globals()["pandas"]``) still resolves, while code that never
+    touches the name pays nothing. The underlying module is imported on first
+    attribute access and memoised on the proxy.
+
+    A module that is not installed is never bound at all (neither really nor
+    lazily), so referencing it still raises ``NameError`` exactly as before.
+    """
+
+    __slots__ = ("_kailash_module_name", "_kailash_module")
+
+    def __init__(self, module_name: str) -> None:
+        object.__setattr__(self, "_kailash_module_name", module_name)
+        object.__setattr__(self, "_kailash_module", None)
+
+    def _kailash_resolve(self):
+        """Import and memoise the real module. Import errors propagate."""
+        module = object.__getattribute__(self, "_kailash_module")
+        if module is None:
+            module = importlib.import_module(
+                object.__getattribute__(self, "_kailash_module_name")
+            )
+            object.__setattr__(self, "_kailash_module", module)
+        return module
+
+    def __getattr__(self, name: str):
+        # Guard the proxy's own slots so an unset slot cannot recurse.
+        if name.startswith("_kailash_"):
+            raise AttributeError(name)
+        return getattr(self._kailash_resolve(), name)
+
+    def __dir__(self):
+        return dir(self._kailash_resolve())
+
+    def __repr__(self) -> str:
+        name = object.__getattribute__(self, "_kailash_module_name")
+        loaded = object.__getattribute__(self, "_kailash_module") is not None
+        return (
+            f"<lazily-bound module {name!r} ({'loaded' if loaded else 'not loaded'})>"
+        )
+
+
+@functools.lru_cache(maxsize=256)
+def _referenced_identifiers(code: str) -> frozenset[str]:
+    """Return every identifier token appearing in ``code``.
+
+    This is a deliberate over-approximation of "names the code might use as a
+    module": it includes keywords, attribute names and string-free identifiers
+    alike. Over-approximating is the safe direction -- a name wrongly included
+    only means that module is imported eagerly, exactly as before #2000.
+
+    If the source cannot be tokenised an EMPTY set is returned, which binds every
+    allowed module lazily. That is safe because code that cannot be tokenised
+    cannot be compiled or executed either.
+    """
+    try:
+        return frozenset(
+            token.string
+            for token in tokenize.generate_tokens(io.StringIO(code).readline)
+            if token.type == tokenize.NAME
+        )
+    except (tokenize.TokenError, IndentationError, SyntaxError, ValueError):
+        return frozenset()
+
+
+# Memoised per allow-list. Keys are the two module allow-lists the SDK ships
+# (sync and async), so this holds at most a couple of entries; the cap below
+# stops a caller that builds bespoke allow-lists from growing it without bound.
+_IMPORTABLE_MODULES_CACHE: dict[frozenset[str], frozenset[str]] = {}
+_IMPORTABLE_MODULES_CACHE_MAX = 16
+
+
+def _importable_modules(module_names) -> frozenset[str]:
+    """Return the subset of ``module_names`` that can be imported here.
+
+    Uses ``find_spec``, which locates a module without executing it, so this
+    never pays an import cost. The result is memoised: the whole sweep is a
+    single-digit-millisecond, once-per-process cost.
+    """
+    key = frozenset(module_names)
+    cached = _IMPORTABLE_MODULES_CACHE.get(key)
+    if cached is not None:
+        return cached
+
+    importable: set[str] = set()
+    for name in key:
+        if name in sys.modules:
+            importable.add(name)
+            continue
+        try:
+            if importlib.util.find_spec(name) is not None:
+                importable.add(name)
+        except (ImportError, AttributeError, ValueError):
+            # DEBUG, not WARNING: the allow-list is the union of supported
+            # user-code imports; missing entries are normal on slim installs.
+            logger.debug("Module %s not available", name)
+
+    result = frozenset(importable)
+    if len(_IMPORTABLE_MODULES_CACHE) >= _IMPORTABLE_MODULES_CACHE_MAX:
+        _IMPORTABLE_MODULES_CACHE.clear()
+    _IMPORTABLE_MODULES_CACHE[key] = result
+    return result
+
+
 class CodeExecutor:
     """Safe executor for Python code.
 
@@ -311,6 +430,46 @@ class CodeExecutor:
                 f"Error position: {' ' * (e.offset - 1) if e.offset else ''}^"
             )
 
+    def _build_module_bindings(self, code: str) -> dict[str, Any]:
+        """Bind the allow-listed modules for one execution namespace (#2000).
+
+        A module whose name appears anywhere in ``code`` is imported eagerly, so
+        user code gets the genuine module object with no proxy semantics. Every
+        other installed allow-listed module is bound to a :class:`_LazyModule`,
+        which imports on first attribute access -- preserving the ability to
+        reach a module dynamically while costing nothing when nobody does.
+
+        A module that is not installed is not bound at all, so referencing it
+        raises ``NameError`` exactly as it did before this change.
+        """
+        referenced = _referenced_identifiers(code)
+        installed = _importable_modules(self.allowed_modules)
+        skip_scipy_in_ci = bool(os.environ.get("CI"))
+
+        bindings: dict[str, Any] = {}
+        for module_name in self.allowed_modules:
+            if module_name == "scipy" and skip_scipy_in_ci:
+                # Pre-existing carve-out for scipy version conflicts in CI. Kept
+                # so CI behaviour does not change; with lazy binding it is free.
+                logger.debug("Skipping scipy binding in CI environment")
+                continue
+            if module_name not in installed:
+                logger.debug("Module %s not available", module_name)
+                continue
+            if module_name in referenced:
+                try:
+                    bindings[module_name] = importlib.import_module(module_name)
+                except ImportError as exc:
+                    # Installed but not importable (broken install, missing
+                    # native dependency). Leave the name unbound, as before.
+                    logger.debug(
+                        "Module %s could not be imported: %s", module_name, exc
+                    )
+                continue
+            bindings[module_name] = _LazyModule(module_name)
+
+        return bindings
+
     def execute_code(
         self, code: str, inputs: dict[str, Any], node_instance=None
     ) -> dict[str, Any]:
@@ -353,66 +512,16 @@ class CodeExecutor:
                 }
             }
 
-        # Add allowed modules
-        # Check if we're running under coverage to avoid instrumentation conflicts
-        import sys
-
-        if "coverage" in sys.modules:
-            # Under coverage, use lazy loading for problematic modules
-            problematic_modules = {
-                "numpy",
-                "scipy",
-                "sklearn",
-                "pandas",
-                "matplotlib",
-                "seaborn",
-                "plotly",
-                "array",
-            }
-            safe_modules = self.allowed_modules - problematic_modules
-
-            # Eagerly load safe modules
-            for module_name in safe_modules:
-                try:
-                    module = importlib.import_module(module_name)
-                    namespace[module_name] = module  # type: ignore[reportArgumentType]
-                except ImportError:
-                    # DEBUG, not WARNING: the allowed_modules list is the union
-                    # of supported user-code imports; missing entries are normal
-                    # on slim installs and the lazy fallback below handles the
-                    # case where user code actually references them.
-                    logger.debug(f"Module {module_name} not available")
-
-            # Add lazy loader for problematic modules
-            class LazyModuleLoader:
-                def __getattr__(self, name):
-                    if name in problematic_modules:
-                        return importlib.import_module(name)
-                    raise AttributeError(f"Module {name} not found")
-
-            # Make problematic modules available through lazy loading
-            for module_name in problematic_modules:
-                try:
-                    # Try to import the module directly
-                    module = importlib.import_module(module_name)
-                    namespace[module_name] = module  # type: ignore[reportArgumentType]
-                except ImportError:
-                    # If import fails, use lazy loader as fallback
-                    namespace[module_name] = LazyModuleLoader()  # type: ignore[reportArgumentType]
-        else:
-            # Normal operation - eagerly load all modules
-            for module_name in self.allowed_modules:
-                try:
-                    # Skip scipy in CI due to version conflicts
-                    if module_name == "scipy" and os.environ.get("CI"):
-                        logger.warning("Skipping scipy import in CI environment")
-                        continue
-                    module = importlib.import_module(module_name)
-                    namespace[module_name] = module  # type: ignore[reportArgumentType]
-                except ImportError:
-                    # DEBUG, not WARNING: see comment above — allowed_modules is
-                    # a superset; missing entries are expected on slim installs.
-                    logger.debug(f"Module {module_name} not available")
+        # Add allowed modules (#2000).
+        # Modules the code actually names are imported for real; the rest are
+        # bound to a lazy proxy. This replaces the previous behaviour of
+        # importing every allow-listed module (pandas, numpy, scipy, sklearn,
+        # matplotlib, ...) on every execution, which cost 7-9s on the first
+        # execution of a process regardless of what the code referenced.
+        # The former "running under coverage" special case is gone with it: it
+        # existed only to dodge instrumentation conflicts from those eager
+        # imports, which no longer happen.
+        namespace.update(self._build_module_bindings(code))
 
         # Add global utility functions to namespace
         try:
