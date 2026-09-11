@@ -474,3 +474,45 @@ class TestNoAllowlistedMemberYieldsALiveHandle:
         verdict = view.verify_action(ADDR, "read_docs", {})
         verdict.audit_details["smuggled"] = True
         assert "smuggled" not in view.verify_action(ADDR, "read_docs", {}).audit_details
+
+
+class TestFrozenMappingResidual:
+    """Pins the documented limit of ``FrozenMapping`` so it stays known.
+
+    A ``dict`` subclass cannot block an UNBOUND base-class call. This is the
+    same class of limitation ``readonly_proxy`` documents about
+    ``object.__getattribute__``: a caller writing ``dict.__setitem__(m, k, v)``
+    is executing arbitrary Python, not reading an attribute, and both issues
+    are scoped to ordinary attribute access.
+
+    It is asserted here so that (a) nobody believes the mapping fields are
+    absolutely immune, and (b) if a future change adopts a type that DOES close
+    it, this test fails and forces the docstring to be corrected with it.
+    """
+
+    def test_ordinary_mutation_is_refused(self) -> None:
+        mapping = FrozenMapping({"a": 1})
+        for mutate in (
+            lambda: mapping.__setitem__("x", 1),
+            lambda: mapping.update({"x": 1}),
+            lambda: mapping.clear(),
+            lambda: mapping.pop("a"),
+            lambda: mapping.setdefault("x", 1),
+        ):
+            with pytest.raises(TypeError):
+                mutate()
+        assert dict(mapping) == {"a": 1}
+
+    def test_unbound_base_call_is_the_known_residual(self) -> None:
+        """NOT closable for a dict subclass. Documented, not fixed."""
+        mapping = FrozenMapping({"a": 1})
+        dict.__setitem__(mapping, "x", 1)
+        assert mapping["x"] == 1
+
+    def test_sequence_dimensions_have_no_equivalent_escape(self) -> None:
+        """The fields the #2226 attack actually used are closed completely."""
+        actions = OperationalConstraintConfig(allowed_actions=["read"]).allowed_actions
+
+        assert isinstance(actions, tuple)
+        assert not hasattr(actions, "__setitem__")
+        assert not hasattr(actions, "append")

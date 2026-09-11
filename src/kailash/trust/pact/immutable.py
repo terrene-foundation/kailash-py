@@ -45,11 +45,37 @@ reduction below.
 
 Scope, stated honestly
 ----------------------
-These types make the CONTAINER immutable. They do not deep-freeze arbitrary
-values placed inside them: a ``FrozenMapping`` whose value is a plain ``list``
-still hands out a mutable list. Governance value objects hold scalars and nested
-frozen models, so this is sufficient there -- but it is a boundary, not a
-guarantee about arbitrary payloads.
+These types make the CONTAINER immutable against ORDINARY use. Three limits,
+each measured rather than assumed:
+
+1. **A ``dict`` subclass cannot block an unbound base-class call.**
+   ``fm["k"] = v`` raises, but ``dict.__setitem__(fm, "k", v)`` reaches the base
+   implementation and succeeds -- as do ``dict.update(fm, ...)`` and
+   ``dict.clear(fm)``. This is not closable in pure Python for any ``dict``
+   subclass, and it is the SAME class of limitation
+   :mod:`kailash.trust.readonly_proxy` already documents about
+   ``object.__getattribute__`` and pins in ``TestGovernanceBypassViaDirectRun``:
+   a caller writing an explicit unbound call is executing arbitrary Python, not
+   reading an attribute. It is pinned by
+   ``TestFrozenMappingResidual`` so it stays a known boundary rather than an
+   unexamined hole.
+
+   ``tuple`` has NO equivalent escape -- it has no ``__setitem__`` at all -- so
+   the SEQUENCE dimensions, where the #2226 escalation actually lived, are
+   closed completely. The residual applies only to the three mapping fields
+   (``TeamConfig.metadata``, ``ConfidenceThresholdConfig.per_action``,
+   ``PlanSuspension.snapshot``), none of which is read by a verdict path.
+
+2. **No deep freeze.** A ``FrozenMapping`` whose value is a plain ``list``
+   still hands out a mutable list. Governance value objects hold scalars and
+   nested frozen models, so this is sufficient there -- but it is a boundary,
+   not a guarantee about arbitrary payloads.
+
+3. **Defaults need ``default_factory=FrozenMapping``.** Pydantic does not run
+   field validators on DEFAULTS, so annotating a field as
+   :data:`FrozenAnyMapping` while leaving ``default_factory=dict`` yields a
+   plain mutable dict on every default-constructed model -- the fail-open case,
+   and usually the common one.
 """
 
 from __future__ import annotations
