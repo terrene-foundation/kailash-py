@@ -28,6 +28,16 @@ provider flows to the node's #1947 fail-loud gate — the single, structural
 fail-loud point. The mock provider is legitimate; ONLY the silent keyless
 default was the hazard.
 
+#2220 — `resolve_agent_provider` NO LONGER composes this helper for a
+model-bearing call. `detect_provider_from_env` answers "which credentials
+exist", and #2069 left that answer standing in for "which vendor serves this
+model" whenever a key was present, so an unregistered model still resolved
+silently to `openai`. The two questions are unrelated; only `llm_provider=`
+or the registry prefix table may answer the second. This helper keeps its own
+contract unchanged and is still correct for the call sites that genuinely ask
+the credential question (RAG nodes, the Nexus deployment surface) — it is the
+COMPOSITION that was wrong, not the helper.
+
 The kaizen test harness runs deliberately keyless (the root `conftest.py`
 cost-guard actively scrubs provider secrets) with the mock provider registered
 in `tests/conftest.py`. It opts back into keyless->mock via the EXPLICIT
@@ -108,20 +118,34 @@ def resolve_agent_provider(model: Optional[str], *, component: str = "") -> str:
     substring table is a weaker duplicate of the registry-derived one and is
     pinned to no registry.
 
-    ORDER, AND WHY MODEL BEATS ENVIRONMENT
-    --------------------------------------
-    The model wins. A ``claude-*`` model must dispatch to Anthropic even when
+    ONLY THE MODEL ANSWERS THE VENDOR QUESTION (#2220)
+    --------------------------------------------------
+    The model wins, and when the model cannot answer, NOTHING here answers.
+    A ``claude-*`` model must dispatch to Anthropic even when
     ``OPENAI_API_KEY`` happens to be set; the env-first order sent it to
     OpenAI, which is a silent wrong-vendor dispatch.
 
-    The env fallback is retained for models OUTSIDE the registry's prefixes
-    (local/Ollama builds, ``chatgpt-4o-latest``, fine-tuned names). Stated
-    plainly rather than glossed: for such a model the fallback is a GUESS, and
-    it can pick a vendor that does not serve the model. That is not a
-    regression — it is exactly what every caller already got by leaving
-    ``llm_provider`` unset — and it is strictly narrowed here, because every
-    registry-recognised model now bypasses the guess entirely. Callers who
-    need certainty for an unregistered model pass ``llm_provider`` explicitly.
+    #2069 fixed that only for the KEYLESS case. With a credential present —
+    the common developer configuration — an unregistered model still resolved
+    through the env fallback, so ``model="llama-3.1"`` with ``OPENAI_API_KEY``
+    exported dispatched a LOCAL model's prompt to OpenAI: off the machine,
+    billed, and with no log line, warning, or exception.
+
+    The env fallback is therefore NO LONGER consulted for a model-bearing
+    call. A credential says which vendor the caller holds an ACCOUNT with; it
+    never says which vendor SERVES THIS MODEL. Those are unrelated facts, and
+    no quantity of credential evidence bridges them. Ollama makes the gap
+    structural rather than incidental: it serves arbitrary model names, so no
+    prefix can identify it and every local model name misses the registry by
+    construction — the guess was not an edge case, it was the whole Ollama
+    population.
+
+    Callers with a model outside the registry's prefixes (local/Ollama builds,
+    ``chatgpt-4o-latest``, fine-tuned ``ft:`` names) pass ``llm_provider``
+    explicitly. That is a BREAKING change for anyone who relied on the guess,
+    which is the point: that reliance was silent and sometimes wrong, and it
+    now fails at config-construction time — before any network call — with an
+    error naming the model and the exact kwarg that fixes it.
 
     Args:
         model: The model identifier the agent will run.
@@ -131,10 +155,11 @@ def resolve_agent_provider(model: Optional[str], *, component: str = "") -> str:
         A provider name suitable for ``BaseAgentConfig.llm_provider``.
 
     Raises:
-        ConfigurationError: The provider could not be resolved from either the
-            model or the environment. Fails LOUD and names the fix — never
-            returns ``None`` into the ``LLMAgentNode`` #1947 gate, whose error
-            cannot say which model or component was responsible.
+        ConfigurationError: No registered provider prefix serves the model (or
+            no usable model was supplied). Fails LOUD and names the fix —
+            never returns ``None`` into the ``LLMAgentNode`` #1947 gate, whose
+            error cannot say which model or component was responsible, and
+            never guesses a vendor from an unrelated credential.
     """
     from kaizen.config.providers import ConfigurationError
     from kaizen.llm.provider import LlmProvider, UnknownModelProvider
@@ -145,15 +170,42 @@ def resolve_agent_provider(model: Optional[str], *, component: str = "") -> str:
         try:
             return LlmProvider.from_model(model).name
         except UnknownModelProvider:
-            from_env = detect_provider_from_env()
-            if from_env is not None:
-                return from_env
+            # #2220 — the environment is NOT consulted for a vendor answer.
+            #
+            # Reaching here means no registered prefix serves the model, so
+            # any env-derived answer would be a GUESS keyed on a fact about
+            # the caller's ACCOUNTS rather than about the MODEL. The previous
+            # code returned that guess, which is how an Ollama user's prompt
+            # reached OpenAI under an unrelated exported key.
+            #
+            # The test-harness opt-in is deliberately still honoured: it is
+            # not a credential guess but an EXPLICIT flag that a real caller
+            # never sets, and "mock" dispatches nowhere off-machine. Keeping
+            # it preserves #1952's deliberately-keyless unit suite.
+            #
+            # Checked BEFORE any credential, which is a deliberate change of
+            # precedence: pre-#2220 the flag was reached only when no key was
+            # set, so a harness with a stray key exported resolved to that
+            # key's vendor instead. The invariant this function now holds is
+            # that for an unregistered model the outcome does not depend on
+            # WHICH credentials exist — so the flag's answer cannot depend on
+            # them either. Real callers never set it and reach the raise
+            # below whatever their environment holds.
+            if _keyless_mock_allowed():
+                return "mock"
         raise ConfigurationError(
             f"Could not resolve an LLM provider for model {model!r}{where}. "
-            "The model is not served by any registered provider prefix, and no "
-            "provider could be detected from the environment. Fix by passing "
-            "llm_provider= explicitly on the agent config, or by setting a "
-            "provider credential (e.g. OPENAI_API_KEY / ANTHROPIC_API_KEY)."
+            "No registered provider prefix serves this model. A provider "
+            "credential in the environment (OPENAI_API_KEY / "
+            "ANTHROPIC_API_KEY) is NOT used to answer this: it says which "
+            "vendor you hold an account with, never which vendor serves this "
+            "model, and guessing from it dispatched local-model prompts to "
+            "third-party APIs (#2220). Fix by passing llm_provider= "
+            "explicitly on the agent config — for example "
+            'llm_provider="ollama" for a locally-served model, or '
+            'llm_provider="openai" for an OpenAI model whose name carries no '
+            'registered prefix (such as "chatgpt-4o-latest" or a fine-tuned '
+            '"ft:..." name).'
         )
 
     # Distinguish "no model" from "a model of the wrong type" — reporting

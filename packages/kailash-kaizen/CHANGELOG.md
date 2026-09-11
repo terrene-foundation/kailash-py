@@ -13,6 +13,26 @@ range such as `>=2.0`.
 
 ## [Unreleased]
 
+### Changed (BREAKING)
+
+- **An unrecognised model name is no longer routed to whichever vendor you happen to hold an API key for (#2220).** If you set a model the framework does not recognise and did *not* say which provider serves it, Kaizen used to pick a provider from your environment: whichever of `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` was set. That is a guess, and for local models it was reliably the wrong one. Running `AgentConfig(model="llama-3.1")` on a machine with `OPENAI_API_KEY` exported — very common, and often exported for some unrelated tool — sent your prompt, and any documents retrieved into it, to **OpenAI**. It was billed to your account. Nothing warned: no error, no log line. Users who chose a local Ollama model specifically so their data stayed on their machine were the ones most affected, because Ollama serves arbitrary model names and so *no* local model could ever be recognised.
+
+  This was only half-fixed in 2.46.0. That release made unrecognised models fail loudly when **no** API key was set, but left the guess in place whenever one was — which is the normal developer setup, so in practice the problem shipped intact.
+
+  Kaizen now refuses to guess. An unrecognised model raises `ConfigurationError` naming the model and the fix, at the moment you build the config — **before any network call is made**.
+
+  **Migration — one argument.** If you see this error, say which provider serves your model:
+
+  ```python
+  # Before — worked by luck, or silently went to the wrong vendor
+  AgentConfig(model="llama-3.1")
+
+  # After — say where it runs
+  AgentConfig(model="llama-3.1", llm_provider="ollama")
+  ```
+
+  This affects you **only** if you relied on the guess. Recognised model names (anything starting `gpt-`, `o1-`, `o3-`, `o4-`, `claude-`, `gemini-`, `deepseek-`) are unchanged, with or without a key set, and anyone already passing `llm_provider=` is unaffected. If your model *is* served by OpenAI but its name carries no recognised prefix — `chatgpt-4o-latest`, or a fine-tuned `ft:...` name — you now pass `llm_provider="openai"` explicitly. That case previously worked, and losing it is the deliberate cost of the fix: the framework cannot tell such a name apart from `llama-3.1`, and being right by luck for one is exactly what made it wrong for the other.
+
 ### Fixed
 
 - **A documented `timeout` you set on `LLMAgentNode` now actually bounds the LLM request (#2209).** The parameter was declared, documented ("Request timeout in seconds", default 120) and read — then dropped on the real dispatch path, reaching only the LangChain branch. Meanwhile every HTTP transport was built with a hardcoded 60-second limit and neither `LlmClient.complete()` nor `stream()` accepted a timeout at all, so an application could not change the LLM wire timeout by any means. A generation that ran past 60 s failed, and — because the failure surfaced downstream as a schema error rather than a timeout — was expensive to diagnose. Three things change together, because any one alone still leaves the value stranded: `LLMAgentNode` forwards `timeout` to the real dispatch (both the first call and every tool-replay call), `complete()` / `stream()` accept a per-request `timeout` (the contract `embed()` already had), and a new `LlmDeployment.timeout` field sets the client-level transport limit. **Behaviour change to note:** `LLMAgentNode`'s declared default of 120 s now genuinely applies, where the effective ceiling used to be the transport's 60 s. Leave `LlmDeployment.timeout` unset and nothing else moves — the transport default is still 60 s.
