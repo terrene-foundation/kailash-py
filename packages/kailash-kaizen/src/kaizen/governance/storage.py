@@ -52,11 +52,11 @@ Example:
 
 import json
 import logging
-import warnings
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from kailash.runtime import AsyncLocalRuntime
+from kailash.utils.finalizer import warn_unclosed
 from kailash.workflow.builder import WorkflowBuilder
 from kaizen.governance.approval_manager import (
     ApprovalStatus,
@@ -649,17 +649,29 @@ class ExternalAgentApprovalStorage:
             self.runtime.release()
             self.runtime = None
 
-    def __del__(self, _warnings=warnings):
+    def __del__(self, _warn=warn_unclosed):
+        # Warn and RETURN. This finalizer performs no cleanup, deliberately
+        # (#2107; the same disposition landed across `src/kailash`).
+        #
+        # The previous body called `self.close()` inside a handler whose whole
+        # body was `pass`. That guard is INERT against the hazard it looks like
+        # it addresses: a finalizer fires at an arbitrary bytecode boundary on
+        # whichever thread drops the last reference, so `close()` ->
+        # `self.runtime.release()` can re-enter a non-reentrant lock already
+        # held by the interrupted thread — and a deadlock is not an exception,
+        # so nothing is ever raised for the handler to catch. What the handler
+        # DID accomplish was swallowing genuine release failures, which is
+        # `zero-tolerance.md` Rule 3 on its own terms.
+        #
+        # The usual Rule 3 remedy — log in the except branch — is actively
+        # harmful here: it takes the very lock whose re-entry is the deadlock.
+        # So the fix is to delete the cleanup call, not to instrument its
+        # failure path. With no call there is no exception, hence no handler.
+        #
+        # Deterministic release stays the caller's job via `close()`; this
+        # ResourceWarning is what makes a caller who forgot findable.
         if getattr(self, "runtime", None) is not None:
-            _warnings.warn(
-                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
-                ResourceWarning,
-                source=self,
-            )
-            try:
-                self.close()
-            except Exception:
-                pass
+            _warn(self, "Call close() explicitly to release the runtime reference.")
 
     async def get_expired_pending_requests(
         self,

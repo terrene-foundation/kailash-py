@@ -29,7 +29,7 @@ from kailash.nodes.code.python import PythonCodeNode  # noqa: F401
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
-from kaizen.core._provider_env import detect_provider_from_env
+from kaizen.core._provider_env import resolve_node_provider
 
 from ..ai.llm_agent import LLMAgentNode  # noqa: F401
 
@@ -852,7 +852,10 @@ class ConversationalRAGNode(WorkflowNode):
                 "LLMAgentNode",
                 node_id="coreference_resolver",
                 config={
-                    "provider": detect_provider_from_env(),
+                    "provider": resolve_node_provider(
+                        _DEFAULT_LLM_MODEL,
+                        component="ConversationalRAGNode._create_workflow",
+                    ),
                     "system_prompt": """Resolve coreferences in the user query based on conversation context.
 
 Replace pronouns (it, they, this, that, these, those) and other references with their specific antecedents from the conversation history.
@@ -925,7 +928,10 @@ If no coreferences found, return the original query.""",
             "LLMAgentNode",
             node_id="response_generator",
             config={
-                "provider": detect_provider_from_env(),
+                "provider": resolve_node_provider(
+                    _DEFAULT_LLM_MODEL,
+                    component="ConversationalRAGNode._create_workflow",
+                ),
                 "system_prompt": f"""Generate a contextual response considering the conversation history.
 
 Guidelines:
@@ -959,7 +965,10 @@ Keep responses conversational and engaging.""",
                 "LLMAgentNode",
                 node_id="context_summarizer",
                 config={
-                    "provider": detect_provider_from_env(),
+                    "provider": resolve_node_provider(
+                        _DEFAULT_LLM_MODEL,
+                        component="ConversationalRAGNode._create_workflow",
+                    ),
                     "system_prompt": """Summarize the conversation history concisely.
 
 Focus on:

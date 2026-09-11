@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from kailash.diagnostics.protocols import TraceEvent, TraceEventStatus
+from kailash.utils.finalizer import warn_unclosed
 
 __all__ = [
     "SQLiteSink",
@@ -473,18 +474,21 @@ class SQLiteSink:
 
     # ── Finalizer — ResourceWarning only, no real cleanup ──────────
 
-    def __del__(self, _warnings: Any = None) -> None:  # pragma: no cover
-        if _warnings is None:
-            import warnings as _warnings_module
-
-            _warnings = _warnings_module
+    def __del__(self, _warn: Any = warn_unclosed) -> None:  # pragma: no cover
+        # Warn and RETURN — already the case here; what changed is HOW (#2107).
+        #
+        # Two fixes. First, the helper is pinned as a default argument
+        # (evaluated at `def` time) instead of being imported lazily inside the
+        # finalizer: a finalizer can fire during interpreter shutdown, when
+        # module globals are being rebound to None and a fresh import is the
+        # least reliable thing to attempt.
+        #
+        # Second, the handler that wrapped the warn is gone. Exceptions are
+        # deliberately NOT caught in a finalizer: CPython already prints
+        # anything that escapes `__del__` as "Exception ignored in:" with a
+        # traceback and continues, so not catching is both the safe option AND
+        # the loud one. The handler turned that printed diagnostic into
+        # silence while buying nothing — its "interpreter shutdown" rationale
+        # is what pinning the default argument actually addresses.
         if not getattr(self, "_closed", True):
-            try:
-                _warnings.warn(
-                    "SQLiteSink not closed; call sink.close() to release "
-                    "the sqlite3 connection",
-                    ResourceWarning,
-                    stacklevel=2,
-                )
-            except Exception:  # interpreter shutdown
-                pass
+            _warn(self, "Call sink.close() to release the sqlite3 connection.")
