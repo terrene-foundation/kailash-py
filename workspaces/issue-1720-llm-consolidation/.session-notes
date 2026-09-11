@@ -1,192 +1,69 @@
-# Session Notes — cont-30 (core 2.65.0 + dataflow 2.20.1 PUBLISHED; D1 and D2 discharged)
+# Session Notes — cont-31 (fleet fully DRAINED; /sweep reconciled 2 archived security drafts)
 
 ## Where we are
 
-**`kailash 2.65.0` and `kailash-dataflow 2.20.1` are on PyPI.** PR #2228 promoted `dev` → `main`
-at `4a98750d8`; both tags pushed, both publish runs succeeded, both verified live against the
-version-pinned PyPI endpoint with a 404 control. **cont-29's D1 and D2 are DONE.**
+**All backlog remote/local branches/refs/worktrees are landed in `dev` and drained.** No lane
+branches on the remote, no `worktree-agent-*` orphan refs, no worktrees beyond the primary
+checkout. The only remote heads are `dev`, `main`, and the held `promote/2026-09-11-cont30`.
 
-Before tagging, the 2.65.0 changelog was cut from `[Unreleased]` and **three shipped fixes had no
-entry at all** — found by enumerating `git log --no-merges v2.64.0..origin/dev -- src/` against the
-section rather than reading the section. The worst was #2128, a brief-scrubber ReDoS reachable from
-user-supplied text, hiding inside a commit subjected `fix(tests)`.
+**One promotion is open and HELD AT THE OWNER GATE: PR #2229 (`dev` → `main`, cont-30 wave).**
+It is deliberately NOT admin-merged. CodeQL became a REQUIRED status check and reds on
+PRE-EXISTING advisory alerts (11466 / 11467 / 11465 / 11530), and the PR is REVIEW_REQUIRED.
+The owner tightened protection, so overriding it is the owner's call — do NOT admin-override.
+Options for the owner: dismiss those four advisory alerts, or authorize an admin override.
 
-**Two traps this session, both in `.launch-ledger.md`:** a `dev → main` promotion DELETES the trunk
-(`delete_branch_on_merge` is true and the PR head IS `dev`) — cut a `promote/<date>` branch next
-time; and `pip install` cannot distinguish "unpublished" from "index cache lag" (the control
-returns the same string) — use the version-pinned JSON endpoint.
+**Landing ≠ closing (the trunk model's honest cost).** Every governance-cluster fix
+(#2225 / #2226 / #2227 / #2222 / #2221 / #2220) is LANDED on `dev` but still reads OPEN on
+GitHub, because auto-close fires on merge to `main` (the default branch) — i.e. on PROMOTION,
+not on the dev landing. They close when #2229 (and the follow-up promotion) reach `main`.
 
-**cont-29's earlier framing is superseded:** core is no longer unreleased.
+## This session (/sweep + /wrapup)
 
-Census clean: 2 local branches, 2 remote, **1 worktree**, 0 orphans, 0 open PRs.
-Everything landed into `dev` and drained the same session.
+`/sweep` reconciled three untracked workspace drafts against current `origin/dev` (wave-loop
+MUST-7). Both security findings were STALE — already fixed on dev — so filing either would have
+re-opened a closed issue (specification-verification.md faithful-wrong-fix):
 
-## Read first
+- `issue-roview.md` (read-only-view `__getattr__` bypass) → RESOLVED by lane L13 (`f1de3d68f`):
+  `_ReadOnlyGovernanceView` now extends `ReadOnlyAttributeProxy`, which guards `__getattribute__`
+  (`src/kailash/trust/readonly_proxy.py`) + `__setattr__`, closing `view._engine.<mutation>`.
+- `issue-capdeleg.md` (raw `capabilities_delegated`) → RESOLVED by GH #2225: both sites route
+  through `delegated_capabilities()` (`src/kailash/trust/action_policy.py`) = `allowed - blocked`.
 
-1. § Next-session directives — the only imperative surface
-2. § Traps — measured, do not rediscover
-3. `.launch-ledger.md` — lane roster, the corrections table, the instrument-error table
+Both drafts are annotated **DO-NOT-FILE** and committed to dev (`9676e5f16`) as a durable
+reconciliation record; `probe_roview.py` retained as the verification trail (superseded).
 
----
+## OPEN WORK — durable, for the next session
 
-## TWO cont-28 DIRECTIVES WERE FALSIFIED THIS SESSION
+1. **UNVERIFIED security residual (BUG-class, /analyze task):** archived ref
+   `refs/archive/2026-08-21/feat/outstanding-issues-consolidation`, commit `d684ce20f`
+   ("security: fix 1 CRITICAL + 5 HIGH findings from red team", 2026-04-05) fixed 1 CRIT + 5 HIGH
+   across 7 files. The CRITICAL (read-only view) landed via L13, but the **5 HIGH** findings
+   (touching `dataflow/fabric/serving.py`, `dataflow/features/express.py`, `nodes/api/rest.py`,
+   `trust/pact/context.py`, `pact/engine.py`) are UNVERIFIED on dev — `git cherry origin/dev
+   d684ce20f` = `+` (not landed as a unit). Reconcile per-finding against dev; file only what is
+   genuinely still open. Detail preserved in `issue-roview.md` RESIDUAL note.
+2. **Journal codify backlog:** 18 candidates in `journal/.pending/` await `/codify` (Phase 05).
+3. **Owner decision queue (surfaced, on record, NOT agent-actionable):** promote #2229 (dismiss
+   the 4 CodeQL advisories OR authorize admin override); audit-chain keying design (F1 unkeyed
+   chain + 2 sibling verifiers); L3GovernedAgent threat model; PythonCodeNode `__globals__`
+   disclosure; kaizen 2.47.0 breaking release; AccessDecision schema (#2141/#2166/#2194);
+   `! rm .git-merge-msg.tmp` (state-file guard blocks the agent on the `.git-` prefix); the held
+   refs + stashes prune (held per owner's "no prune without owner's word").
 
-**"Eight packages overdue; none have ever published" is FALSE.** Every package was already on
-PyPI at its declared version. Real unreleased content was 8 commits in mcp, 1 each in
-kaizen/dataflow/align/pact, ZERO in kaizen-agents/nexus/ml/core. The "forced order" no longer
-binds — it assumed nothing had published.
+## STANDING ORDER (D0) — every agent, every lane
 
-**"Anchor a package's release scope at ITS OWN version bump" is WRONG.** That fixed the
-core-tag under-report and introduced an over-report: kaizen bumped 08-06 but published 08-17,
-so a bump-anchored diff showed 630 files against a true unreleased set of 1. **Anchor at the
-PyPI UPLOAD TIME.** Reusable, fails loud rather than printing zeros:
-`workspaces/issue-1720-llm-consolidation/measure_content_parity.py`. The strongest instrument
-is stronger still: download the published wheel and diff its shipped `.py` files.
+LAND ALL remote/local branches/refs/worktrees into `dev` immediately, and DRAIN on completion:
+`git checkout dev && git merge --no-ff <branch> && git push origin dev`, then reap the worktree,
+delete the branch (local + remote), re-census. **Landing in `dev` costs ZERO CI. Never open a PR
+against `dev`.** In every lane brief STEP 0: a vanished worktree means SUCCESS, not data loss.
+`dev` → `main` is the ONE deliberate promotion (one gate run), owner-gated.
 
----
+## Traps carried forward
 
-## Next-session directives
-
-**D0. LAND EVERYTHING INTO `dev`, DRAIN IMMEDIATELY.** Every agent, every lane, every remote
-and local branch/ref/worktree. `git checkout dev && git merge --no-ff <branch> && git push
-origin dev`, then reap the worktree, delete the branch (local AND remote), re-run the census.
-Landing in `dev` costs ZERO CI — verified by matching run `headSha` against the pushed commit,
-not by counting runs on the branch. `dev` → `main` stays ONE deliberate promotion.
-
-**D0a. TELL EVERY LANE ITS WORKTREE GETS REAPED ON LANDING.** In STEP 0, beside the cwd
-assertion: *"a vanished worktree means SUCCESS, not data loss — do not recover it."* Without
-it a lane burns ~10 min recovering commits from dangling objects and recreates a ref you must
-clean up.
-
-**D0b. LIST SIBLING LANES' ISSUE NUMBERS IN EVERY BRIEF** (numbers only — `repo-scope-discipline`
-bars reading their contents). Two of one lane's nine fixes were duplicates it could not see.
-
-**D0c. VERIFY THE AGENT'S TOOL INVENTORY BEFORE DELEGATING IMPLEMENTATION.** `security-reviewer`
-is `Read, Grep, Glob` — sending it edits and commits wastes a full run (`agents.md`).
-
-**D1. Core `kailash` 2.65.0 MUST be released — highest priority.**
-`src/kailash/trust/readonly_proxy.py` is new in 2.65.0 and dependent packages now floor on
-`kailash>=2.65.0`. Until core ships those floors are unsatisfiable.
-
-**D2. `kailash-dataflow 2.20.1` is prepped on `main`, deliberately unpublished.** Only a pushed
-tag publishes: annotated tag on the merge commit → `publish-pypi.yml` (OIDC, no manual twine).
-Tag names `mcp-v*`, `kaizen-v*`, `dataflow-v*`.
-
-**D3. Four CodeQL alerts need OWNER dismissal** — 11466, 11467, 11465 (#2044), 11530 (#2127).
-Per-alert proof text is in those issue comments, ready to paste. An agent may not self-sign
-Rule-1b condition 4. Also: alert 11547's existing dismissal names `hash_api_key`, a function
-that no longer exists (now `derive_secret_digest`) — wording stale, substance fine.
-
-**D4. Owner authorization owed on the containers.** 51 archive refs + 5 stashes, INDEPENDENTLY
-re-adjudicated this session (every row got a verdict; none UNDETERMINED). **Safe to prune: 49
-refs + all 5 stashes.** HOLD TWO:
-- `refs/archive/2026-08-21/release/license-update-v0.9.10` — **HARMFUL**, verified first-hand:
-  a 242-line LICENSE carrying a "PROHIBITION ON STANDALONE COMMERCIAL DISTRIBUTION" block vs
-  trunk's stock 201-line Apache-2.0 with zero occurrences. Quarantine as audit evidence; never
-  land.
-- `refs/archive/2026-08-21/feat/outstanding-issues-consolidation` — hold until #2226/#2227 land.
-  It is the only copy of that red-team round.
-
-**D5. Pre-push guard STILL not installed** — an agent write into `.git` is hook-BLOCKED,
-confirmed first-hand. Owner one-liner:
-`ln -sf ../../scripts/ci/dev-push-stopgap.sh .git/hooks/pre-push`
-
-**D6. Do not implement #2141 / #2166 / #2194** without the co-owner's schema decision.
-Re-validate: `gh issue view 2166 --json comments -q '.comments|length'` → 0 means still blocked.
-
----
-
-## Sweep results (cont-29)
-
-- **Sweep 4 (refs):** 2 local, 2 remote, 0 `worktree-agent-*` orphans, 0 open PRs. Enumerated
-  UNFILTERED; `--no-merged` used only to RANK (it returned empty — everything was landed).
-- **Sweep 5 (specs): REPO-LEVEL mode — 85 scanned, 0 orphans, 0 coverage gaps, 0 stubs.**
-  cont-28's 22 orphans are CLOSED. The instrument was CONTROLLED: a planted spec with two
-  bogus symbols returned `orphans=2`, so the zero is a true negative, not a blinded matcher.
-- **Sweep 6 (worktrees):** 1 tree (the primary). All lane trees reaped on landing.
-- **Sweep N (deferred-quality):** 0 items (control: the `security` label returns 11, so the
-  filter works).
-
----
-
-## Traps (measured — do not rediscover)
-
-**NEW this session**
-
-- **`gh issue close`: ONE per Bash command.** Batching ≥2 trips
-  `git/issue-closure-evidence-undetermined` even with full 40-char SHAs. Six data points: all
-  3 singles silent, all 3 batches fired. Inline the full 40-char SHA too.
-- **Scratch files must NOT start with `.git`** — `rm`/`mv` on `.git-merge-msg.tmp` trips the
-  state-file guard lexically. One such file sits untracked in the repo root; owner-removable.
-- **Never `git pull --rebase` when HEAD is a merge commit** — it flattens the merge into picks
-  and stalls. `git rebase --abort` restores it; use `git merge origin/dev`.
-- **`pip check` and `import` answer different questions.** `pip check` said "No broken
-  requirements found" while `import kailash_mcp.client` raised `ModuleNotFoundError` — the
-  package declared a floor lower than a module it imports at module scope.
-- **`importlib.reload` does NOT restore module state** — re-executes into the existing
-  `__dict__` without deleting stale attributes.
-- **The venv's `.pth` resolves sibling packages to the MAIN checkout**, so a worktree pytest
-  run silently tests main-checkout code for anything not on `PYTHONPATH`.
-- **CodeQL's CHECK and its WORKFLOW report independently** — the check said `failure` while
-  the workflow said `success`. Pin the head SHA and read the check.
-- **CodeQL classifies `fingerprint_secret(...)`'s RETURN as a SOURCE, not a conduit** (SARIF
-  has no `codeFlows`; the sensitive node IS the expression). No barrier — model row or custom
-  `.ql` — can clear it. The durable fix is RENAMING the helper (51 non-test sites, 13 files,
-  4 packages, + a deprecation cycle). Not filed.
-
-**CARRIED (still true)**
-
-- `tools/sweep-redteam.py --all` scans `workspaces/*/specs`, EMPTY here — a vacuous green. Run
-  per-spec over `specs/*.md`. It EXITS NON-ZERO on findings; `|| continue` skips exactly the
-  specs WITH findings.
-- `pip list` in this `.venv` prints NOTHING even for installed packages. Import and print
-  `__file__` instead.
-- pre-commit stashes unstaged files during a commit — never run a suite in the background
-  while committing.
-- Orphaned `/tmp/mock*.py` daemons hold ports 8771-8773 since 2026-09-06. A stray
-  `/private/tmp/bisect.py` shadows the stdlib — do not run Python from `/tmp`.
-- Validate formatting with `pre-commit run`, never venv-local `isort`/`ruff format` (pinned
-  isort 5.13.2, black). Cold runs exceed 2 minutes.
-- Root `tests/` and `packages/*/tests/` cannot share one pytest process. Always
-  `.venv/bin/python -m pytest`. `.env` `OPENAI_API_KEY` is INVALID.
-- `cmd | tail; echo $?` captures tail's status. `grep -q` under `set -o pipefail` inverts —
-  use `grep -c`. zsh: unmatched glob aborts the block, missing output reads as empty, no
-  word-splitting on unquoted `$VAR`.
-- Cancelled duplicate CI runs read as `fail` — classify with
-  `gh run list --commit <sha> --json conclusion`.
-- `git cherry` overstates unlanded work ~18×. A branch name is not evidence of its commits.
-
-## The session's dominant error class
-
-**Eight instances, orchestrator and lanes alike: an instrument returned a plausible value for a
-question nobody had checked it could answer.** A branch-scoped CI query answering "runs ever"
-not "runs from my push"; a `+`-only diff filter reading black-reflowed lines as new code; an
-unanchored `2\.20\.0` matching `172.20.0.0`; a control grep pointed at a nonexistent path;
-`collected 4910` from a failed `cd`; `[exited with code 0]` that was `tail`'s status; a
-`^FAILED` anchor defeated by pytest's ANSI escape; a docstring mention counted as a call.
-
-**The guard that caught every one: fire the check at a case whose answer you already know, and
-confirm it can return the OTHER answer.** Full table in `.launch-ledger.md`.
-
-## Outstanding ledger (forest)
-
-| id | workstream | state |
-| --- | --- | --- |
-| `core-2.65.0` | core release; dependent floors need it | **OPEN — highest priority** (D1) |
-| `dataflow-2.20.1` | prepped on main, needs a tag | OPEN (D2) |
-| `codeql-dismissals` | 4 alerts need owner action | OPEN — owner (D3) |
-| `container-authz` | 49 refs + 5 stashes prunable; 2 held | OPEN — owner (D4) |
-| `2226` `2227` | governance-proxy residuals from #2224 | OPEN |
-| `2225` | `capabilities_delegated` advertises denied capabilities | OPEN |
-| `2222` | MiddlewareAccessControlManager TypeError, 3 methods | OPEN |
-| `2221` | `verify_chain()` passes a WIPED audit store | OPEN |
-| `2220` | provider residual, live in published kaizen 2.46.0 | OPEN |
-| `fingerprint-rename` | durable fix for the CodeQL name-heuristic class | OPEN — not filed |
-| `2203-w2` `2203-w3` | MCP → Modern 2026-07-28; conformance suites | OPEN, approved |
-| `a2a-residuals` | trust.verify oracle, jti replay, TTL cap | OPEN |
-| `2141` `2166` `2194` | blocked on co-owner schema decision | BLOCKED (D6) |
-| `promo-thresholds` | re-derive 10/72 from ≥14d trunk data | OPEN — dated |
-
-**Closed this session (12):** #2218 #2219 #2149 #2157 #2029 #2128 #2162 #2163 #2057 #2175
-#2118 #2151.
-**Filed (7):** #2220 #2221 #2222 #2224 #2225 #2226 #2227.
+- A `dev → main` promotion DELETES the trunk (`delete_branch_on_merge` true + PR head IS `dev`):
+  cut a `promote/<date>` branch for the promotion PR, never PR `dev` itself.
+- A pre-commit AUTO-FORMATTER (Black/isort/whitespace) that modifies a staged file ABORTS the
+  commit ("files were modified by this hook"); `git commit ... 2>&1 | tail -2` HIDES that line and
+  a following no-op `git push` reads as "Everything up-to-date". Re-verify HEAD advanced + `git
+  fetch` origin before claiming a push landed. (Hit and corrected this session.)
+- `.git-`-prefixed scratch filenames trip the state-file guard — never name scratch `.git*`.
