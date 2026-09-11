@@ -439,6 +439,7 @@ class WorkflowGenerator:
         node_config = {
             "provider": resolve_node_provider(
                 self.config.model or os.environ.get("DEFAULT_LLM_MODEL"),
+                explicit=self.config.llm_provider,
                 component="WorkflowGenerator.generate_fallback_workflow",
             ),
             "model": self.config.model or os.environ.get("DEFAULT_LLM_MODEL"),

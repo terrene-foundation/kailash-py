@@ -385,23 +385,20 @@ def resolve_node_provider(
     if explicit:
         return explicit
 
-    # Harness opt-in, checked BEFORE the registry and BEFORE any credential.
+    # The harness mock opt-in is deliberately NOT checked here.
     #
-    # Precedence copied deliberately from `resolve_agent_provider`, which
-    # made the same move for the same reason: the kaizen unit suite runs
-    # keyless with the mock provider registered, and every site routed here
-    # previously reached "mock" through `detect_provider_from_env`'s keyless
-    # branch. Checking the flag first keeps that suite working for BOTH
-    # registered and unregistered models, and keeps the #2220 invariant that
-    # an outcome never depends on WHICH credentials happen to exist. The flag
-    # is flag-vs-flag, never credential-keyed; a real caller never sets it,
-    # and "mock" dispatches nowhere off-machine.
+    # An earlier revision short-circuited to "mock" ahead of the registry, so
+    # the deliberately-keyless kaizen unit suite would keep working for
+    # registered models too. That was wrong, and measurably so: it made a
+    # REGISTERED model's provider depend on a harness flag, and #1946's RAG
+    # tests — which set a real credential and assert the sites resolve to a
+    # real provider — saw "mock" at all seven modules.
     #
-    # Vetoed by an explicit real-LLM run so a `requires_real_llm` test fails
-    # loud instead of asserting green against fabricated content.
-    if _keyless_mock_allowed() and not _real_llm_run():
-        return "mock"
-
+    # `resolve_agent_provider` already honours the flag, on a registry MISS
+    # only. Delegating to it unchanged gives this path exactly that
+    # precedence, which is the point: two predicates that disagree about when
+    # the harness wins are two contracts, and the drift between them is what
+    # #2220 was in the first place.
     from kaizen.config.providers import ConfigurationError
 
     if isinstance(model, str) and model.strip():
