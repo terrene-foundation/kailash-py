@@ -102,30 +102,97 @@ def test_fallback_pool_key_format_is_grep_able():
     assert 'f"fallback_{id(self)}_{self._pool_key}"' in source
 
 
-def test_dedicated_path_registers_in_process_registry():
-    """Dedicated pool path (share_pool=False) ALSO registers in registry.
+def test_get_adapter_has_no_raw_registry_assignment():
+    """Every registration goes through ``_register_pool`` — no raw poke.
 
-    The cap is process-wide; ``share_pool=False`` does NOT exempt the
-    pool from the cap. Tested structurally by reading the source.
+    Issue #2075 replaced the three inline ``_PROCESS_POOL_REGISTRY[...] = ...``
+    assignments with one helper, because the three-site shape is what let the
+    REMOVAL side never get written at all: nothing freed a slot when a pool
+    closed, so ``pool_count()`` counted adapter objects instead of pools.
+    Structural, and deliberately phrased as an ABSENCE — a new branch that
+    registers a pool by hand would also skip ``_ensure_reaper_started()``.
     """
     source = inspect.getsource(AsyncSQLDatabaseNode._get_adapter)
-    # The dedicated branch must register in the registry
-    assert 'dedicated_key = f"dedicated_{id(self)}"' in source
-    assert "_PROCESS_POOL_REGISTRY[dedicated_key] = self._adapter" in source
+    assert "_PROCESS_POOL_REGISTRY[" not in source, (
+        "a raw registry assignment reappeared in _get_adapter; register via "
+        "_register_pool() so registration and reaper startup cannot drift"
+    )
+    assert source.count("_register_pool(") == 3, (
+        "expected exactly three registration sites (shared, fallback, "
+        "dedicated); each is a path that must honour the process-wide cap"
+    )
 
 
-def test_shared_path_registers_in_process_registry():
+@pytest.mark.asyncio
+async def test_dedicated_path_registers_in_process_registry(tmp_path):
+    """Dedicated pool path (share_pool=False) ALSO registers in registry.
+
+    The cap is process-wide; ``share_pool=False`` does NOT exempt the pool.
+    Behavioural per ``rules/testing.md`` § "Behavioral Regression Tests Over
+    Source-Grep" — the source-grep form of this test broke on the #2075
+    refactor while the invariant it guards was intact.
+    """
+    before = AsyncSQLDatabaseNode.pool_count()
+    node = AsyncSQLDatabaseNode(
+        node_id="dpi_b4_dedicated",
+        connection_string=f"sqlite:///{tmp_path / 'dedicated.db'}",
+        database_type="sqlite",
+        share_pool=False,
+    )
+    await node.async_run(query="SELECT 1", result_format="dict")
+    try:
+        assert AsyncSQLDatabaseNode.pool_count() == before + 1
+        keys = [k for k in _PROCESS_POOL_REGISTRY if k.startswith("dedicated_")]
+        assert keys, "share_pool=False pool did not register under a dedicated_ key"
+        assert any(
+            _PROCESS_POOL_REGISTRY[k] is node._adapter for k in keys
+        ), "the dedicated key does not point at this node's adapter"
+    finally:
+        await node.cleanup()
+
+
+@pytest.mark.asyncio
+async def test_shared_path_registers_in_process_registry(tmp_path):
     """Shared-path pool also registers (cap honours both shared + fallback)."""
-    source = inspect.getsource(AsyncSQLDatabaseNode._get_adapter)
-    # Both branches register in the same registry
-    assert "_PROCESS_POOL_REGISTRY[self._pool_key] = self._adapter" in source
+    before = AsyncSQLDatabaseNode.pool_count()
+    node = AsyncSQLDatabaseNode(
+        node_id="dpi_b4_shared",
+        connection_string=f"sqlite:///{tmp_path / 'shared.db'}",
+        database_type="sqlite",
+    )
+    await node.async_run(query="SELECT 1", result_format="dict")
+    try:
+        assert AsyncSQLDatabaseNode.pool_count() == before + 1
+        assert node._pool_key is not None
+        assert _PROCESS_POOL_REGISTRY.get(node._pool_key) is node._adapter
+    finally:
+        await node.cleanup()
 
 
-def test_get_adapter_calls_ensure_reaper_started_on_pool_creation():
-    """Every successful pool creation triggers reaper startup."""
-    source = inspect.getsource(AsyncSQLDatabaseNode._get_adapter)
-    # All three creation branches (shared, fallback, dedicated) call it
-    assert source.count("_ensure_reaper_started()") >= 3
+@pytest.mark.asyncio
+async def test_pool_creation_starts_the_reaper_for_this_loop(tmp_path):
+    """Every successful pool creation triggers reaper startup.
+
+    Behavioural replacement for the ``source.count("_ensure_reaper_started()")
+    >= 3`` grep: with registration funnelled through ``_register_pool`` there
+    is now exactly ONE call site, and counting it proves nothing. What the
+    invariant actually means is that a task exists to reap this loop's pools.
+    """
+    loop_key = id(asyncio.get_running_loop())
+    async_sql_module._REAPER_TASKS.pop(loop_key, None)
+
+    node = AsyncSQLDatabaseNode(
+        node_id="dpi_b4_reaper",
+        connection_string=f"sqlite:///{tmp_path / 'reaper.db'}",
+        database_type="sqlite",
+    )
+    await node.async_run(query="SELECT 1", result_format="dict")
+    try:
+        assert (
+            loop_key in async_sql_module._REAPER_TASKS
+        ), "pool creation did not start the idle-pool reaper for this loop"
+    finally:
+        await node.cleanup()
 
 
 # ----------------------------------------------------------------------------
