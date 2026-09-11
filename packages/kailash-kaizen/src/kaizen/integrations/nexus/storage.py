@@ -37,11 +37,11 @@ Example:
 
 import json
 import logging
-import warnings
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from kailash.runtime import AsyncLocalRuntime
+from kailash.utils.finalizer import warn_unclosed
 from kailash.workflow.builder import WorkflowBuilder
 from kaizen.integrations.nexus.models import register_session_models
 from kaizen.integrations.nexus.session_manager import CrossChannelSession
@@ -603,17 +603,20 @@ class SessionStorage:
             self.runtime.release()
             self.runtime = None
 
-    def __del__(self, _warnings=warnings):
+    def __del__(self, _warn=warn_unclosed):
+        # Warn and RETURN. No cleanup, deliberately — see the sibling
+        # finalizer in `kaizen/governance/storage.py` for the full reasoning,
+        # and #2107 for the disposition this mirrors.
+        #
+        # In short: `close()` -> `self.runtime.release()` from a finalizer can
+        # re-enter a non-reentrant lock held by the thread the finalizer
+        # interrupted, and the swallow-and-continue guard that used to wrap it
+        # could not help, because a deadlock is not an exception. It only
+        # hid real release failures. (The prior shape is described in prose
+        # rather than quoted, so it does not trip this repository's own Rule 3
+        # scanners — the same precedent `kailash/utils/finalizer.py` sets.)
         if getattr(self, "runtime", None) is not None:
-            _warnings.warn(
-                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
-                ResourceWarning,
-                source=self,
-            )
-            try:
-                self.close()
-            except Exception:
-                pass
+            _warn(self, "Call close() explicitly to release the runtime reference.")
 
 
 # Export storage class

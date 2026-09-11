@@ -9,7 +9,6 @@ them for backwards compatibility and keeps the Kaizen-specific DataFlow-backed
 """
 
 import os
-import warnings
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -28,6 +27,7 @@ from kailash.trust.audit_store import (  # noqa: F401
 )
 from kailash.trust.chain import ActionResult, AuditAnchor
 from kailash.trust.exceptions import TrustStoreDatabaseError
+from kailash.utils.finalizer import warn_unclosed
 from kailash.workflow.builder import WorkflowBuilder
 
 
@@ -526,15 +526,21 @@ class PostgresAuditStore(AuditStore):
             self.runtime.release()
             self.runtime = None
 
-    def __del__(self, _warnings=warnings):
+    def __del__(self, _warn=warn_unclosed):
+        # Warn and RETURN. No cleanup, deliberately (#2107).
+        #
+        # The previous body called `self.runtime.release()` inside a handler
+        # whose whole body was a no-op. That guard was inert against the
+        # hazard it resembles: a finalizer fires at an arbitrary bytecode
+        # boundary on whichever thread drops the last reference, so `release()`
+        # can re-enter a non-reentrant lock held by the very thread it
+        # interrupted — and a deadlock is not an exception, so nothing is ever
+        # raised for the handler to catch. What it DID do was hide genuine
+        # release failures (`zero-tolerance.md` Rule 3).
+        #
+        # Logging in the handler — the usual Rule 3 remedy — would be worse
+        # here: it takes the very lock whose re-entry is the deadlock. So the
+        # cleanup call is deleted rather than instrumented. Deterministic
+        # release stays the caller's job via `close()`.
         if getattr(self, "runtime", None) is not None:
-            _warnings.warn(
-                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
-                ResourceWarning,
-                source=self,
-            )
-            try:
-                self.runtime.release()
-                self.runtime = None
-            except Exception:
-                pass
+            _warn(self, "Call close() explicitly to release the runtime reference.")

@@ -36,17 +36,28 @@ silently to `openai`. The two questions are unrelated; only `llm_provider=`
 or the registry prefix table may answer the second. This helper keeps its own
 contract unchanged — it is the COMPOSITION that was wrong, not the helper.
 
-SCOPE OF THAT FIX, STATED HONESTLY: it covers `resolve_agent_provider`, whose
-only production consumer is `AgentConfig`. Other sites call this helper
-DIRECTLY and pair its answer with a model in the same node config, which is
-the same wrong-vendor composition through a different door — measured live on
-`kaizen.core.agents.Agent(config={"model": "llama-3.1"})`, which still returns
-"openai" under an exported OPENAI_API_KEY. Known doors: `core/agents.py`
-(`_get_provider_for_config`), `core/base_agent.py`, `core/workflow_generator.py`,
-`signatures/core.py`, `integrations/nexus/{base,deployment_cache}.py`, and the
-`nodes/rag/*` family. Those are NOT fixed here (they exceed this change's
-budget and blast radius) and are tracked on #2220. Do not read this module's
-fail-closed contract as a package-wide guarantee; it is not one yet.
+#2220 RESIDUAL — the other doors are now closed too. The paragraph that used
+to stand here said they were not, and that was accurate when written: the
+primary fix covered `resolve_agent_provider`, whose only production consumer
+is `AgentConfig`, while ~33 other sites called `detect_provider_from_env`
+DIRECTLY and paired its answer with a model in the same node config. Measured
+then, with the primary fix applied:
+
+    Agent(config={"model": "llama-3.1"})._get_provider_for_config()
+      -> 'openai' under OPENAI_API_KEY, 'anthropic' under ANTHROPIC_API_KEY
+
+Those sites now route through `resolve_node_provider` below: `core/agents.py`,
+`core/base_agent.py`, `core/workflow_generator.py`, `signatures/core.py`,
+`integrations/nexus/base.py`, and the whole `nodes/rag/*` family. The two
+cache-key sites (`core/mixins/caching_mixin.py`,
+`integrations/nexus/deployment_cache.py`) use `describe_node_provider`, which
+mirrors the same answer without ever raising.
+
+The one remaining direct caller of `detect_provider_from_env` is
+`resolve_node_provider` itself, on its no-model path, and
+`tests/unit/test_provider_routing_shape.py` fails CI if a new one appears — so
+the fail-closed contract IS now a package-wide guarantee for model-bearing
+calls, which it deliberately was not before.
 
 A prefix HIT is also not proof of a remote vendor: Ollama serves
 `deepseek-r1:7b` and `gpt-oss:20b`, which match the `deepseek-` and `gpt-`
@@ -106,6 +117,15 @@ def _keyless_mock_allowed() -> bool:
 def detect_provider_from_env() -> Optional[str]:
     """
     Env-first provider fallback: openai -> anthropic -> None (keyless).
+
+    .. warning::
+
+       This answers "WHICH CREDENTIALS EXIST", and nothing else. It is NOT
+       an answer to "which vendor serves this model", and pairing its result
+       with a model in the same node config IS the #2220 defect. A
+       model-bearing caller MUST use :func:`resolve_node_provider` below; a
+       direct call from such a site is rejected by the shape guard in
+       ``tests/unit/test_provider_routing_shape.py``.
 
     Returns:
         "openai" if OPENAI_API_KEY is set, else "anthropic" if
@@ -256,7 +276,13 @@ def resolve_agent_provider(model: Optional[str], *, component: str = "") -> str:
             'llm_provider="ollama" for a locally-served model, or '
             'llm_provider="openai" for an OpenAI model whose name carries no '
             'registered prefix (such as "chatgpt-4o-latest" or a fine-tuned '
-            '"ft:..." name).'
+            '"ft:..." name). Where the calling API exposes no llm_provider '
+            "argument (the RAG node constructors, which read their model from "
+            "DEFAULT_LLM_MODEL), declare the matching half in the environment "
+            "instead: DEFAULT_LLM_PROVIDER (or KAIZEN_DEFAULT_PROVIDER). That "
+            "is a setting whose only purpose is to name a provider, so it is "
+            "read as configuration; a credential is not, which is why "
+            "OPENAI_API_KEY / ANTHROPIC_API_KEY are ignored here."
         )
 
     # Distinguish "no model" from "a model of the wrong type" — reporting
@@ -271,3 +297,169 @@ def resolve_agent_provider(model: Optional[str], *, component: str = "") -> str:
         "Pass a model, and pass llm_provider= explicitly if the model is not "
         "served by a registered provider prefix."
     )
+
+
+def _declared_provider() -> Optional[str]:
+    """A provider the operator DECLARED, or ``None``.
+
+    Distinct in kind from a credential. ``KAIZEN_DEFAULT_PROVIDER`` (already
+    honoured by ``kaizen.config.providers.auto_detect_provider``) and
+    ``DEFAULT_LLM_PROVIDER`` (already paired with ``DEFAULT_LLM_MODEL`` in
+    ``kaizen.llm.reasoning``) exist for no purpose other than naming a
+    provider, so reading one is reading configuration — not inferring a vendor
+    from an unrelated fact, which is what #2220 removed.
+
+    Neither name is introduced here; both are pre-existing settings in this
+    package, and this function is the single place the node path reads them.
+    """
+    for var in ("KAIZEN_DEFAULT_PROVIDER", "DEFAULT_LLM_PROVIDER"):
+        value = os.environ.get(var)
+        if value and value.strip():
+            return value.strip().lower()
+    return None
+
+
+def resolve_node_provider(
+    model: Optional[str],
+    *,
+    explicit: Optional[str] = None,
+    component: str = "",
+) -> Optional[str]:
+    """Provider resolution for an ``LLMAgentNode`` config (#2220 residual).
+
+    THE ONE PREDICATE EVERY MODEL-BEARING SITE ROUTES THROUGH
+    ---------------------------------------------------------
+    #2220's primary fix closed the composition at
+    :func:`resolve_agent_provider`, whose only production consumer is
+    ``AgentConfig``. Roughly thirty other sites built an ``LLMAgentNode``
+    config by calling :func:`detect_provider_from_env` DIRECTLY and writing
+    its answer into the same dict as a ``model`` key — the identical
+    "a credential answers the vendor question" composition through a
+    different door, measured live at
+    ``Agent(config={"model": "llama-3.1"})._get_provider_for_config()`` and
+    at every ``nodes/rag/*`` workflow builder.
+
+    Repairing those sites one by one would leave the class open: the next
+    node added re-opens it. So they all delegate HERE instead, and a shape
+    guard fails CI when a new site calls the env helper directly.
+
+    THE DISTINCTION THIS FUNCTION ENCODES
+    -------------------------------------
+    The question a caller is entitled to ask depends on whether it has a
+    MODEL in hand, and that is the whole of it:
+
+    * **A model was supplied** -> only the model may answer. Delegates to
+      :func:`resolve_agent_provider`, which consults the registry-derived
+      prefix table and RAISES ``ConfigurationError`` when no registered
+      prefix serves the model. The environment is never consulted. A
+      credential says which vendor the caller holds an ACCOUNT with; it
+      never says which vendor SERVES THIS MODEL.
+    * **No model was supplied** -> there is no model whose vendor could be
+      mis-attributed, so "which credentials exist" IS the right question and
+      :func:`detect_provider_from_env` answers it. This is #1952's
+      unchanged contract, NOT a fallback for the case above, and it is
+      deliberately not reached when a model is present.
+
+    No new name table, substring test, or vendor heuristic is introduced:
+    guessing a vendor from a model name is the defect, not the fix.
+
+    Args:
+        model: The model the node will run, or ``None``/empty when the node
+            configures no model and leaves ``LLMAgentNode``'s own default.
+        explicit: A provider the caller configured explicitly. Always wins,
+            unvalidated and unmodified — an explicit choice is the one
+            signal that is never a guess.
+        component: Short caller identifier surfaced in the error message, so
+            a raise names which node config was responsible.
+
+    Returns:
+        A provider name for the node config, or ``None`` when no model was
+        supplied and the environment is keyless (flowing to ``LLMAgentNode``'s
+        #1947 fail-loud gate, exactly as before).
+
+    Raises:
+        ConfigurationError: A model was supplied and no registered provider
+            prefix serves it. The message names the model and the exact
+            ``llm_provider=`` kwarg that fixes it.
+    """
+    if explicit:
+        return explicit
+
+    # Harness opt-in, checked BEFORE the registry and BEFORE any credential.
+    #
+    # Precedence copied deliberately from `resolve_agent_provider`, which
+    # made the same move for the same reason: the kaizen unit suite runs
+    # keyless with the mock provider registered, and every site routed here
+    # previously reached "mock" through `detect_provider_from_env`'s keyless
+    # branch. Checking the flag first keeps that suite working for BOTH
+    # registered and unregistered models, and keeps the #2220 invariant that
+    # an outcome never depends on WHICH credentials happen to exist. The flag
+    # is flag-vs-flag, never credential-keyed; a real caller never sets it,
+    # and "mock" dispatches nowhere off-machine.
+    #
+    # Vetoed by an explicit real-LLM run so a `requires_real_llm` test fails
+    # loud instead of asserting green against fabricated content.
+    if _keyless_mock_allowed() and not _real_llm_run():
+        return "mock"
+
+    from kaizen.config.providers import ConfigurationError
+
+    if isinstance(model, str) and model.strip():
+        try:
+            return resolve_agent_provider(model, component=component)
+        except ConfigurationError:
+            # The registry cannot name a vendor for this model. Before
+            # refusing, honour an explicitly DECLARED provider.
+            #
+            # This is not the guess #2220 removed, and the distinction is the
+            # whole point: `DEFAULT_LLM_PROVIDER` / `KAIZEN_DEFAULT_PROVIDER`
+            # are settings whose ONLY purpose is to name a provider, so setting
+            # one is an affirmative statement by the operator. A credential is
+            # not — it says which vendor they hold an account with, and it is
+            # routinely exported for an unrelated tool. Reading the first is
+            # config; reading the second as a vendor answer was the defect.
+            #
+            # It is checked AFTER the registry, never before, so declaring a
+            # default cannot silently redirect a model the registry does know
+            # (a `claude-*` model still goes to Anthropic). It replaces the
+            # raise, and nothing else.
+            #
+            # This is also the migration path for callers that expose no
+            # `llm_provider` argument — the RAG node constructors take their
+            # model from `DEFAULT_LLM_MODEL`, so `DEFAULT_LLM_PROVIDER` is the
+            # matching half and the two are meant to be set together.
+            declared = _declared_provider()
+            if declared:
+                return declared
+            raise
+
+    # No model in hand. See the docstring: this is the credential question,
+    # asked by a caller that has no model to mis-attribute, and it is the
+    # ONLY path on which the environment still answers.
+    return detect_provider_from_env()
+
+
+def describe_node_provider(
+    model: Optional[str], *, explicit: Optional[str] = None
+) -> str:
+    """Non-dispatching mirror of :func:`resolve_node_provider`, for CACHE KEYS.
+
+    #1948 put the resolved provider into two cache keys so a result computed
+    under one provider is never replayed after the provider changes. Those
+    keys must track whatever the dispatch path resolves — but a cache key
+    must never RAISE, and it never sends anything anywhere.
+
+    So this returns the same answer :func:`resolve_node_provider` would, and
+    substitutes the sentinel ``"<unresolved>"`` where that would raise. That
+    is strictly stronger than the previous ``llm_provider or
+    detect_provider_from_env()``: the key for an unregistered model no longer
+    varies with which credentials happen to be exported, which is #2220's
+    invariant applied to the key itself. A sentinel here cannot cause a wrong
+    dispatch, because the dispatch path raises on this same input.
+    """
+    from kaizen.config.providers import ConfigurationError
+
+    try:
+        return str(resolve_node_provider(model, explicit=explicit))
+    except ConfigurationError:
+        return "<unresolved>"

@@ -35,7 +35,7 @@ from kailash.nodes.code.python import PythonCodeNode  # noqa: F401
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
-from kaizen.core._provider_env import detect_provider_from_env
+from kaizen.core._provider_env import resolve_node_provider
 
 from ..ai.llm_agent import LLMAgentNode  # noqa: F401
 
@@ -859,7 +859,9 @@ class RAGEvaluationNode(WorkflowNode):
             "LLMAgentNode",
             node_id="faithfulness_evaluator",
             config={
-                "provider": detect_provider_from_env(),
+                "provider": resolve_node_provider(
+                    self.llm_judge_model, component="RAGEvaluationNode._create_workflow"
+                ),
                 "system_prompt": """Evaluate the faithfulness of each generated answer to its retrieved contexts.
 
 Faithfulness measures whether the answer is grounded in the retrieved information.
@@ -887,7 +889,9 @@ Return a JSON ARRAY with exactly one object per test, in the SAME numbered order
             "LLMAgentNode",
             node_id="relevance_evaluator",
             config={
-                "provider": detect_provider_from_env(),
+                "provider": resolve_node_provider(
+                    self.llm_judge_model, component="RAGEvaluationNode._create_workflow"
+                ),
                 "system_prompt": """Evaluate the relevance of each answer to its query.
 
 The user message contains one or more numbered tests (Test 1, Test 2, ...). For
@@ -937,7 +941,10 @@ Return a JSON ARRAY with exactly one object per test, in the SAME numbered order
                 "LLMAgentNode",
                 node_id="answer_quality_evaluator",
                 config={
-                    "provider": detect_provider_from_env(),
+                    "provider": resolve_node_provider(
+                        self.llm_judge_model,
+                        component="RAGEvaluationNode._create_workflow",
+                    ),
                     "system_prompt": """Compare each generated answer with its reference answer.
 
 The user message contains one or more numbered tests (Test 1, Test 2, ...). For

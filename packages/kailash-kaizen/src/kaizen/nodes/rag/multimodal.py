@@ -28,7 +28,7 @@ from kailash.nodes.code.python import PythonCodeNode  # noqa: F401
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow import Workflow
 from kailash.workflow.builder import WorkflowBuilder
-from kaizen.core._provider_env import detect_provider_from_env
+from kaizen.core._provider_env import resolve_node_provider
 
 from ..ai.llm_agent import LLMAgentNode  # noqa: F401
 
@@ -127,7 +127,9 @@ class MultimodalRAGNode(WorkflowNode):
             "LLMAgentNode",
             node_id="query_analyzer",
             config={
-                "provider": detect_provider_from_env(),
+                "provider": resolve_node_provider(
+                    _DEFAULT_LLM_MODEL, component="MultimodalRAGNode._create_workflow"
+                ),
                 "system_prompt": """Analyze the query to determine required modalities.
 
 Identify:
@@ -389,7 +391,10 @@ def retrieve_multimodal(encoded_data, modality_analysis):
             "LLMAgentNode",
             node_id="response_generator",
             config={
-                "provider": detect_provider_from_env(),
+                "provider": resolve_node_provider(
+                    _DEFAULT_VISION_MODEL,
+                    component="MultimodalRAGNode._create_workflow",
+                ),
                 "system_prompt": """Generate a comprehensive response using both text and image results.
 
 Structure your response to:

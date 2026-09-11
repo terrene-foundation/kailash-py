@@ -36,7 +36,7 @@ from kaizen.signatures import InputField, OutputField, Signature
 from kaizen.tools.types import ToolCategory, ToolDefinition, ToolParameter
 
 from ._log_hygiene import log_full_payload, safe_log_extra, summarize_payload
-from ._provider_env import detect_provider_from_env as _detect_provider
+from ._provider_env import resolve_node_provider
 from .a2a_mixin import A2AMixin
 from .agent_loop import AgentLoop
 from .config import BaseAgentConfig
@@ -530,8 +530,20 @@ class BaseAgent(MCPMixin, A2AMixin, OutputExtractionMixin, ControlProtocolMixin,
         Returns:
             WorkflowBuilder: Workflow representation ready for execution.
         """
-        # Memo is provider-aware (env-dependent resolution -> rebuild on drift).
-        current_provider = self.config.llm_provider or _detect_provider()
+        # Memo is provider-aware (resolution can change -> rebuild on drift).
+        #
+        # #2220 residual: resolved from the MODEL, not from the environment.
+        # This was `self.config.llm_provider or _detect_provider()`, and
+        # `node_config["model"]` is set 12 lines below from the SAME config —
+        # so for any model outside the registry's prefixes (every locally
+        # served one) an exported OPENAI_API_KEY/ANTHROPIC_API_KEY decided the
+        # vendor. A credential names the account you hold, never the vendor
+        # that serves this model.
+        current_provider = resolve_node_provider(
+            self.config.model,
+            explicit=self.config.llm_provider,
+            component="BaseAgent.to_workflow",
+        )
         if self._workflow is not None and self._workflow_provider == current_provider:
             return self._workflow
 
