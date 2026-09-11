@@ -543,9 +543,17 @@ def _loop_is_usable(loop: Optional[asyncio.AbstractEventLoop]) -> bool:
     """True when ``loop`` exists and has not been closed.
 
     A pool bound to a usable loop is potentially SERVING A QUERY RIGHT NOW, so
-    nothing in this module may force-close it (``kailash`` 2.65.0 fixed exactly
-    that regression on the reaper path). A pool bound to a closed loop can
-    never serve another query, and its sockets can only be released by force.
+    a caller on ANOTHER loop must not force-close it. A pool bound to a closed
+    loop can never serve another query, and its sockets can only be released by
+    force.
+
+    Distinct from what ``kailash`` 2.65.0 fixed: that fix was the ACTIVITY
+    CLOCK (``_ActivityTrackingPool.acquire`` refreshes ``_last_activity_at``,
+    so an actively-serving pool no longer ages into ``is_idle``). It did NOT
+    establish loop OWNERSHIP — a genuinely-idle-but-LIVE pool on a foreign loop
+    was still reapable until issue #2211 review F1 gated the reaper with this
+    predicate. The two are independent: 2.65.0 keeps a busy pool out of the
+    idle set; this keeps a foreign live pool out of THIS loop's disposal.
     """
     return loop is not None and not loop.is_closed()
 
@@ -4000,19 +4008,36 @@ def _register_pool(pool_key: str, adapter: Any) -> None:
     reaper start cannot drift apart (they did not, but the three-site shape is
     what let the removal side never get written at all).
     """
-    # Stamp the owning loop so dispose_pool_sync can refuse this adapter while
-    # that loop is still usable, without trusting its caller to check.
+    # Stamp the owning loop BEFORE the registry insertion so no foreign reader
+    # can ever observe a registry-resident adapter without its loop stamp
+    # (issue #2211 review F2).
+    _stamp_pool_loop(adapter)
+    _PROCESS_POOL_REGISTRY[pool_key] = adapter
+    _ensure_reaper_started()
+
+
+def _stamp_pool_loop(adapter: Any) -> None:
+    """Record the loop ``adapter``'s pool was created on, for the disposal guards.
+
+    ``dispose_pool_sync``, the reaper, and ``_cleanup_closed_loop_pools`` all
+    decide "is this pool's loop still live, and is it mine to reap?" from this
+    stamp. A stamp is a STRONG reference to the loop OBJECT — deliberately, so a
+    dead loop's ``id()`` cannot be reused by a new loop while the adapter that
+    embeds it in its pool key is alive (issue #2211 review, key-collision
+    class). MUST be set before the adapter becomes reachable via any shared
+    dict, or a concurrent reader sees it unstamped and, absent a fail-closed
+    reader, force-closes a brand-new live pool (F2).
+    """
     try:
         setattr(adapter, _POOL_LOOP_ATTR, _running_loop_or_none())
     except AttributeError:
-        # __slots__ adapter — it simply loses the self-guard and falls back to
-        # the caller contract. Logged so the gap is visible rather than silent.
+        # __slots__ adapter — it loses the self-guard and falls back to the
+        # caller contract. Every shipping adapter has a __dict__; this is the
+        # latent path for a future third-party one. Logged, not silent.
         logger.debug(
             "async_sql.pool_loop_stamp_failed",
             extra={"adapter_type": type(adapter).__name__},
         )
-    _PROCESS_POOL_REGISTRY[pool_key] = adapter
-    _ensure_reaper_started()
 
 
 def _unregister_pool(owner: Any) -> int:
@@ -4242,7 +4267,58 @@ async def _idle_pool_reaper_loop() -> None:
                     # Defensive — never let a bad pool break the reaper.
                     continue
 
-                # Close + reap.
+                # Issue #2211 review F1: LOOP OWNERSHIP. ``_PROCESS_POOL_REGISTRY``
+                # is process-wide and holds pools from ALL live loops, but this
+                # reaper runs on ONE. Every OTHER disposal path in this module is
+                # gated by ``_loop_is_usable``; the reaper was not, so two live
+                # loops sharing one DataFlow meant L1's reaper could disconnect
+                # L2's genuinely-idle-but-LIVE pool cross-loop — freeing its
+                # slot, nulling its pool, and stranding sockets when the driver
+                # close raised loop-mismatch. kailash 2.65.0 fixed the ACTIVITY
+                # CLOCK (an actively-serving pool no longer ages into idleness);
+                # it did NOT establish loop ownership, so an idle-but-live
+                # FOREIGN pool was still reapable. Reap only:
+                #   * OWN-loop idle pools — gracefully, via ``await disconnect()``
+                #     on this reaper's loop (that IS the pool's loop); and
+                #   * DEAD-loop pools — synchronously, via ``dispose_pool_sync``
+                #     (their loop can never run the awaitable close again).
+                # An unstamped-but-resident entry FAILS CLOSED (kept), covering
+                # both the F2 stamp window and the latent __slots__ adapter.
+                stamped_loop = getattr(entry, _POOL_LOOP_ATTR, None)
+                reaper_loop = _running_loop_or_none()
+                if stamped_loop is None:
+                    # Cannot attribute this pool to a loop — do not force-close it.
+                    continue
+                if _loop_is_usable(stamped_loop) and stamped_loop is not reaper_loop:
+                    # Foreign and still live — not this reaper's to reap.
+                    continue
+
+                if not _loop_is_usable(stamped_loop):
+                    # Dead loop: the awaitable close can never complete on it.
+                    # dispose_pool_sync terminates synchronously AND unregisters.
+                    try:
+                        dispose_pool_sync(entry, label=redact_pool_key(key))
+                        if hasattr(idle_target, "_reaped_count"):
+                            idle_target._reaped_count += 1
+                        logger.info(
+                            "async_sql.pool_reaped",
+                            extra={
+                                "pool_key": redact_pool_key(key),
+                                "mode": "sync_dead_loop",
+                                "registry_size_after": len(_PROCESS_POOL_REGISTRY),
+                            },
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "async_sql.pool_reap_error",
+                            extra={
+                                "pool_key": redact_pool_key(key),
+                                "error": str(e),
+                            },
+                        )
+                    continue
+
+                # Own-loop idle pool — graceful close on its own loop.
                 try:
                     # Reap through ``disconnect()`` where the entry has one:
                     # closing the EnterpriseConnectionPool directly leaves the
@@ -5813,6 +5889,21 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
                         # Create new shared pool
                         self._adapter = await self._create_adapter()
+                        # Issue #2211 review F2: STAMP BEFORE the adapter is
+                        # reachable via the class-level ``_shared_pools`` dict.
+                        # The creator holds a per-pool-key lock; a foreign
+                        # reader (``get_pool_metrics`` -> ``_cleanup_closed_loop_pools``,
+                        # or ``_get_pool_lock`` eviction) holds a DIFFERENT lock,
+                        # so between the insertion and the stamp it would read
+                        # the entry unstamped, see ``_loop_is_usable(None)`` ==
+                        # False, and force-close a brand-new LIVE pool. There is
+                        # no ``await`` between this stamp and the two dict
+                        # insertions below, so within this loop the trio is
+                        # effectively atomic; the stamp-first order closes the
+                        # cross-THREAD window that the GIL does not (two Python
+                        # statements are not one). ``_register_pool`` re-stamps
+                        # idempotently.
+                        _stamp_pool_loop(self._adapter)
                         self._shared_pools[self._pool_key] = (self._adapter, 1)
                         AsyncSQLDatabaseNode._total_pools_created += 1  # type: ignore[attr-defined]  # ADR-017
                         # DPI-B2/B4: register in process-wide registry so
@@ -6921,6 +7012,20 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
             adapter = cls._shared_pools[pool_key][0]
             stamped_loop = getattr(adapter, _POOL_LOOP_ATTR, None)
+            if stamped_loop is None:
+                # Issue #2211 review F2: unstamped (or sync-context) but
+                # registry-resident. A brand-new shared pool is inserted into
+                # ``_shared_pools`` and stamped as an effectively-atomic pair
+                # (no ``await`` between), but a foreign reader on another THREAD
+                # holds a different lock and could catch it mid-pair. FAIL
+                # CLOSED — an adapter we cannot attribute to a live loop is
+                # KEPT, never reaped. Also covers the latent ``__slots__``
+                # adapter that cannot be stamped (F4) in the safe direction.
+                logger.debug(
+                    "async_sql.unstamped_resident_pool_kept",
+                    extra={"pool_key": redact_pool_key(pool_key)},
+                )
+                continue
             if _loop_is_usable(stamped_loop):
                 logger.debug(
                     "async_sql.foreign_but_live_pool_kept",

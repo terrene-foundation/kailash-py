@@ -25,12 +25,16 @@ under test is database-agnostic.
 import asyncio
 import gc
 import threading
+import time
 
 import pytest
 
 from kailash.nodes.data.async_sql import (
     _POOL_DEFAULTS,
+    _POOL_LOOP_ATTR,
+    _PROCESS_POOL_REGISTRY,
     AsyncSQLDatabaseNode,
+    _idle_pool_reaper_loop,
     dispose_pool_sync,
     set_pool_defaults,
 )
@@ -586,3 +590,159 @@ def test_dispose_sync_releases_a_pool_whose_loop_is_closed(tmp_path):
     )
     assert adapter is not None  # the slot was freed without relying on GC
     gc.collect()
+
+
+# ---------------------------------------------------------------------------
+# Issue #2211 review, second round — F1 (reaper) + F2 (stamp window).
+# The deterministic over-close is closed; these pin the two MEDIUM residuals
+# in the SAME availability class the reviewer found still open.
+# ---------------------------------------------------------------------------
+
+
+def test_reaper_does_not_reap_an_idle_but_LIVE_foreign_loop_pool(
+    tmp_path, restore_pool_defaults
+):
+    """F1: the idle-pool reaper is process-wide but runs on ONE loop.
+
+    ``_idle_pool_reaper_loop`` walks ``_PROCESS_POOL_REGISTRY``, which holds
+    pools from EVERY live loop, and force-closes each ``is_idle`` entry — but
+    it was the one disposal path with no loop-ownership gate. Two live loops
+    sharing one process: L2's pool goes idle between bursts, L1's reaper wakes
+    and disconnects L2's LIVE adapter cross-loop. ``disconnect()`` nulls the
+    enterprise pool and frees the registry slot BEFORE awaiting the (doomed
+    cross-loop) driver close, so L2 is left holding a stripped adapter even
+    when the await then errors.
+
+    kailash 2.65.0 does NOT cover this: that fix keeps an ACTIVELY-SERVING
+    pool out of the idle set (the activity clock). A genuinely-idle-but-live
+    foreign pool is a different thing, and was still reapable.
+
+    The reviewer noted this cross-loop reaper path was untested. It is now.
+    """
+    set_pool_defaults(max_pool_count_per_process=50, idle_timeout=4)
+
+    foreign = {}
+    ready = threading.Event()
+    release = threading.Event()
+
+    def _worker():
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            node = _sqlite_node(tmp_path, "reaper_foreign")
+            loop.run_until_complete(
+                node.async_run(query="SELECT 1", result_format="dict")
+            )
+            adapter = node._adapter
+            # Force it IDLE without touching liveness: age the activity clock
+            # past idle_timeout. The loop stays open (below), so the pool is
+            # idle AND live — exactly the case the guard must protect.
+            ep = getattr(adapter, "_enterprise_pool", None)
+            assert ep is not None, "expected a Production* adapter"
+            ep._last_activity_at = time.monotonic() - 3600
+            foreign["node"] = node
+            foreign["adapter"] = adapter
+            foreign["loop"] = loop
+            ready.set()
+            release.wait(timeout=30)
+            loop.run_until_complete(node.cleanup())
+        finally:
+            loop.close()
+
+    worker = threading.Thread(target=_worker, daemon=True)
+    worker.start()
+    assert ready.wait(timeout=30), "worker never built its pool"
+
+    foreign_adapter = foreign["adapter"]
+    assert not foreign["loop"].is_closed()
+    assert foreign_adapter in _PROCESS_POOL_REGISTRY.values()
+    count = AsyncSQLDatabaseNode.pool_count()
+
+    async def _run_one_reaper_pass():
+        # A reaper on L1 (this loop, distinct from L2 in the worker thread),
+        # sleeping idle_timeout//4 == 1s, then one pass over the process-wide
+        # registry.
+        task = asyncio.ensure_future(_idle_pool_reaper_loop())
+        await asyncio.sleep(2.0)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    # L1 is a fresh loop in THIS (main) thread, genuinely distinct from L2.
+    l1 = asyncio.new_event_loop()
+    try:
+        assert l1 is not foreign["loop"]
+        l1.run_until_complete(_run_one_reaper_pass())
+    finally:
+        l1.close()
+
+    assert getattr(foreign_adapter, "_enterprise_pool", None) is not None, (
+        "the reaper on L1 stripped L2's idle-but-LIVE adapter cross-loop — "
+        "the enterprise pool was nulled by a disconnect that was not this "
+        "reaper's to perform (F1)"
+    )
+    assert (
+        foreign_adapter in _PROCESS_POOL_REGISTRY.values()
+    ), "the reaper deregistered a live foreign pool"
+    assert AsyncSQLDatabaseNode.pool_count() == count
+
+    # L2's adapter still holds its live enterprise pool (asserted above), so it
+    # can still serve. Driving L2's loop from this thread would be unsafe (two
+    # threads running one loop), so liveness is asserted via the retained pool
+    # state, not by issuing a cross-thread query.
+
+    release.set()
+    worker.join(timeout=30)
+
+
+@pytest.mark.asyncio
+async def test_cleanup_keeps_an_unstamped_registry_resident_pool(tmp_path):
+    """F2: the stamp lands AFTER _shared_pools insertion — a cross-thread window.
+
+    A brand-new shared pool is inserted into the class-level ``_shared_pools``
+    and stamped with ``_POOL_LOOP_ATTR`` as an effectively-atomic pair (no
+    ``await`` between). But the creator holds a per-pool-key lock while a
+    foreign reader (``get_pool_metrics`` -> ``_cleanup_closed_loop_pools``)
+    holds a DIFFERENT lock, so on another thread that reader can observe the
+    entry present-but-UNSTAMPED. Before the fix it then read
+    ``_loop_is_usable(None)`` -> False -> marked the brand-new LIVE pool stale
+    and disconnected it.
+
+    The stamp now lands BEFORE insertion (remedy a), and the reader treats an
+    unstamped-but-resident adapter as KEEP (remedy b) as defence in depth. This
+    pins the READER: an unstamped resident entry under a foreign loop-id key
+    MUST survive a cleanup pass.
+    """
+    node = _sqlite_node(tmp_path, "unstamped")
+    await node.async_run(query="SELECT 1", result_format="dict")
+    adapter = node._adapter
+    assert adapter is not None
+
+    current_loop_id = id(asyncio.get_event_loop())
+    # A key whose embedded loop id is NOT the current loop, so the cheap
+    # prefilter does not skip it and the stamp check is actually reached.
+    foreign_key = f"{current_loop_id + 1}|sqlite|/tmp/unstamped.db|10|20"
+
+    # Simulate the window: resident in _shared_pools, NOT yet stamped.
+    original_stamp = getattr(adapter, _POOL_LOOP_ATTR, None)
+    try:
+        if hasattr(adapter, _POOL_LOOP_ATTR):
+            delattr(adapter, _POOL_LOOP_ATTR)
+        AsyncSQLDatabaseNode._shared_pools[foreign_key] = (adapter, 1)
+
+        await AsyncSQLDatabaseNode._cleanup_closed_loop_pools()
+
+        assert foreign_key in AsyncSQLDatabaseNode._shared_pools, (
+            "cleanup reaped an unstamped-but-resident pool — the F2 window "
+            "where a brand-new live pool is visible before its stamp"
+        )
+        assert (
+            getattr(adapter, "_enterprise_pool", None) is not None
+        ), "cleanup disconnected an unstamped-but-resident live adapter"
+    finally:
+        AsyncSQLDatabaseNode._shared_pools.pop(foreign_key, None)
+        if original_stamp is not None:
+            setattr(adapter, _POOL_LOOP_ATTR, original_stamp)
+        await node.cleanup()
