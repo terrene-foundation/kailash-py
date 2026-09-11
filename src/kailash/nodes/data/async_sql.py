@@ -550,6 +550,12 @@ def _loop_is_usable(loop: Optional[asyncio.AbstractEventLoop]) -> bool:
     return loop is not None and not loop.is_closed()
 
 
+# Attribute stamped on every REGISTERED adapter naming the event loop its pool
+# was created on. Lets :func:`dispose_pool_sync` refuse a live pool on its own
+# rather than trusting each caller to check first (issue #2211 review, H1).
+_POOL_LOOP_ATTR = "_kailash_pool_loop"
+
+
 def dispose_pool_sync(owner: Any, *, label: str) -> bool:
     """Force-release ``owner``'s driver pool from OUTSIDE its owning loop.
 
@@ -567,10 +573,21 @@ def dispose_pool_sync(owner: Any, *, label: str) -> bool:
     none leaves ``owner`` untouched and returns False, so the caller can say so
     rather than assume a release happened.
 
-    CALLER CONTRACT: check :func:`_loop_is_usable` first. This function does
-    NOT verify the loop is dead — it cannot, because ``owner`` may be a bare
-    pool object with no loop handle — and calling it on a live pool aborts
-    connections underneath their users.
+    SELF-GUARDING. Every adapter registered through :func:`_register_pool`
+    carries :data:`_POOL_LOOP_ATTR` naming the loop its pool was created on,
+    and this function REFUSES any owner whose loop is still usable — a usable
+    loop means a caller may be mid-query, and aborting it is the regression
+    kailash 2.65.0 fixed on the reaper path. The guard lives here rather than
+    at each call site because a call site that forgets it looks exactly like
+    one that does not need it: the first revision of this change added a
+    caller (``_get_pool_lock``'s cross-loop eviction) that iterated a
+    CLASS-LEVEL dict holding adapters from several concurrently-live loops and
+    terminated all of them, reachable from the public read-only
+    ``get_pool_metrics()``.
+
+    An owner with no stamp — a bare driver pool, or an adapter that was never
+    registered — cannot be checked and proceeds. Callers holding such an owner
+    are responsible for knowing its loop is dead.
 
     Args:
         owner: An adapter (``_pool`` / ``_enterprise_pool`` / ``_connection``)
@@ -579,11 +596,23 @@ def dispose_pool_sync(owner: Any, *, label: str) -> bool:
             (``rules/security.md`` § no secrets in logs).
 
     Returns:
-        True when at least one driver handle was actually terminated.
+        True when the release was PERFORMED, False when it was REFUSED.
+        Deliberately not "a handle was terminated": a file-backed SQLite
+        adapter holds no driver handle between queries, so it has nothing to
+        terminate and is still fully released — its registry slot is freed.
+        Callers need refused-vs-performed to decide whether the owner still
+        owes a teardown; the handle count goes to the log.
     """
+    if _loop_is_usable(getattr(owner, _POOL_LOOP_ATTR, None)):
+        logger.debug(
+            "async_sql.sync_dispose_refused_live_loop",
+            extra={"pool": label},
+        )
+        return False
+
     _unregister_pool(owner)
 
-    terminated = False
+    terminated = 0
     for attr in ("_pool", "_enterprise_pool", "_connection"):
         handle = getattr(owner, attr, None)
         if handle is None:
@@ -605,14 +634,19 @@ def dispose_pool_sync(owner: Any, *, label: str) -> bool:
         if attr == "_enterprise_pool":
             # EnterpriseConnectionPool wraps an inner adapter; recurse so its
             # driver handle is reached too.
-            terminated |= dispose_pool_sync(handle, label=f"{label} enterprise")
+            dispose_pool_sync(handle, label=f"{label} enterprise")
             inner = getattr(handle, "_adapter", None)
             if inner is not None:
-                terminated |= dispose_pool_sync(inner, label=f"{label} inner")
+                dispose_pool_sync(inner, label=f"{label} inner")
             continue
-        terminated |= _terminate_driver_handle_sync(handle, label=f"{label}.{attr}")
+        if _terminate_driver_handle_sync(handle, label=f"{label}.{attr}"):
+            terminated += 1
 
-    return terminated
+    logger.debug(
+        "async_sql.pool_disposed_sync",
+        extra={"pool": label, "handles_terminated": terminated},
+    )
+    return True
 
 
 def _terminate_driver_handle_sync(handle: Any, *, label: str) -> bool:
@@ -2639,6 +2673,18 @@ class SQLiteAdapter(DatabaseAdapter):
         ``PostgreSQLAdapter.disconnect`` (issue #2079). aiosqlite has no
         forced-close primitive, so there is no ``force`` escalation here — the
         bound alone converts an unbounded wait into a logged abandonment.
+
+        Issue #2075 note: this adapter is the ONE place where "claim-then-close
+        implies the disposal barrier runs" does not hold. ``connect()``
+        deliberately never assigns ``self._pool`` (see its comment), so the
+        ``else`` arm is taken on EVERY disconnect and the barrier — which is
+        where ``_unregister_pool`` lives — is never entered. No registered
+        adapter is a bare ``SQLiteAdapter`` today (``_create_adapter`` only ever
+        builds the ``Production*`` subclasses, and ``ProductionSQLiteAdapter``
+        unregisters through its ``_enterprise_pool`` branch), so the slot does
+        clear in practice. The explicit call below removes the dependence on
+        that fact, so a future adapter registering without an enterprise pool
+        does not inherit a silent leak.
         """
         pool = self._pool
         if pool is not None:
@@ -2649,6 +2695,7 @@ class SQLiteAdapter(DatabaseAdapter):
                     label=f"sqlite pool {id(pool)}",
                 )
         else:
+            _unregister_pool(self)
             await _await_pending_disposal(self)
         # Issue #1051: close the reused :memory: connection (untracked by the
         # pool path, which is None for :memory:). Without this it survives to
@@ -3953,6 +4000,17 @@ def _register_pool(pool_key: str, adapter: Any) -> None:
     reaper start cannot drift apart (they did not, but the three-site shape is
     what let the removal side never get written at all).
     """
+    # Stamp the owning loop so dispose_pool_sync can refuse this adapter while
+    # that loop is still usable, without trusting its caller to check.
+    try:
+        setattr(adapter, _POOL_LOOP_ATTR, _running_loop_or_none())
+    except AttributeError:
+        # __slots__ adapter — it simply loses the self-guard and falls back to
+        # the caller contract. Logged so the gap is visible rather than silent.
+        logger.debug(
+            "async_sql.pool_loop_stamp_failed",
+            extra={"adapter_type": type(adapter).__name__},
+        )
     _PROCESS_POOL_REGISTRY[pool_key] = adapter
     _ensure_reaper_started()
 
@@ -3971,8 +4029,17 @@ def _unregister_pool(owner: Any) -> int:
     a future one might, and a registry slot must be freed by the object that
     actually owns it.
 
+    A ``None`` owner frees NOTHING and returns 0. Without that guard the
+    ``_enterprise_pool`` disjunct below would evaluate ``None is None`` for
+    every adapter that has no enterprise pool — i.e. most of them — and empty
+    the registry, leaving ``pool_count()`` reporting 0 and the process-wide cap
+    unenforceable. No in-tree caller passes None; the guard is here because
+    this is a module-level helper reachable from a public node method.
+
     Never raises — this runs inside teardown.
     """
+    if owner is None:
+        return 0
     freed = 0
     try:
         items = list(_PROCESS_POOL_REGISTRY.items())
@@ -3989,6 +4056,14 @@ def _unregister_pool(owner: Any) -> int:
     for key, entry in items:
         if entry is owner or getattr(entry, "_enterprise_pool", None) is owner:
             try:
+                # Re-check identity AT DELETE TIME, not just at match time. The
+                # fallback and dedicated key shapes embed ``id(node)``, and
+                # CPython reuses an address after free — so between this
+                # snapshot and the delete another thread can register a NEW
+                # adapter at the same key, and deleting by key alone would free
+                # its live slot.
+                if _PROCESS_POOL_REGISTRY.get(key) is not entry:
+                    continue
                 del _PROCESS_POOL_REGISTRY[key]
                 freed += 1
             except KeyError:
@@ -4519,9 +4594,21 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 # resulting "coroutine was never awaited" RuntimeWarning was
                 # the only trace. dispose_pool_sync() performs the release the
                 # comment always claimed, and logs what it could not do.
+                #
+                # It does NOT clear the whole dict any more. ``_shared_pools``
+                # is CLASS-level and its keys embed the owning loop id, so it
+                # legitimately holds adapters from several concurrently-live
+                # loops (two threads in one process). Terminating all of them
+                # — reachable from the public read-only ``get_pool_metrics()``
+                # — would abort a pool another live loop is serving from, and
+                # dropping the entry discards the ``ref_count`` saying other
+                # nodes still hold it. ``dispose_pool_sync`` refuses a live
+                # loop on its own; only what it actually released is dropped.
                 for pool_key, (adapter, _ref_count) in list(cls._shared_pools.items()):
-                    dispose_pool_sync(adapter, label=redact_pool_key(pool_key))
-                cls._shared_pools.clear()
+                    if dispose_pool_sync(adapter, label=redact_pool_key(pool_key)):
+                        # Released — drop the bookkeeping. Refused entries stay
+                        # (their loop is still live and still serving).
+                        cls._shared_pools.pop(pool_key, None)
                 cls._pool_lock = asyncio.Lock()
                 cls._pool_lock_loop_id = id(loop)
 
@@ -5063,9 +5150,19 @@ class AsyncSQLDatabaseNode(AsyncNode):
         self._owned_adapters: list[DatabaseAdapter] = []
         self._connected = False
         # Issue #2211: the event loop this node's pool is bound to, stamped by
-        # ``_get_adapter`` at attach time. None until an adapter is attached,
-        # or when it was attached in a sync context.
+        # ``_get_adapter`` at attach time. None ONLY before the first attach —
+        # ``_get_adapter`` is ``async def``, so the loop is always resolvable
+        # once it runs. That matters because ``_loop_is_usable(None)`` is
+        # False, i.e. a None stamp reads as "dead loop, safe to force-close":
+        # the fail-OPEN direction. It is safe only because a node with no
+        # attach also has ``_adapter is None``, so ``dispose_sync`` finds
+        # nothing to release. Any future code path that attaches an adapter
+        # WITHOUT going through ``_get_adapter`` must stamp this itself.
         self._pool_loop: Optional[asyncio.AbstractEventLoop] = None
+        # Issue #2211: True when the attached adapter's pool belongs to
+        # SOMEONE ELSE (the runtime ConnectionPoolManager), so this node must
+        # never force-close it. Stamped per attach by ``_get_adapter``.
+        self._pool_is_borrowed: bool = False
         # Extract access control manager before passing to parent
         self.access_control_manager = config.pop("access_control_manager", None)
 
@@ -5603,6 +5700,12 @@ class AsyncSQLDatabaseNode(AsyncNode):
             # fixing #2211 and re-introducing the reaped-live-pool regression
             # fixed in kailash 2.65.0.
             self._pool_loop = _running_loop_or_none()
+            # Issue #2211: a fresh attach owns its pool until a branch below
+            # says otherwise. Reset per attach, not once per node: a node can
+            # build several adapters over its lifetime (retry path,
+            # runtime-pool fallback) and the ownership answer differs between
+            # them.
+            self._pool_is_borrowed = False
 
             # PRIORITY 0: Use externally provided pool (bypasses all internal pool management)
             if self._external_pool is not None:
@@ -5618,6 +5721,15 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 if runtime_adapter:
                     self._adapter = runtime_adapter
                     self._connected = True
+                    # Issue #2211: BORROWED, not owned. On this path
+                    # ``_create_adapter_with_runtime_pool`` injects the
+                    # RUNTIME's pool as ``adapter._pool``; the runtime's
+                    # ConnectionPoolManager owns its lifetime and other nodes
+                    # share it. ``dispose_sync()`` must refuse it for the same
+                    # reason it refuses an ``external_pool`` — a synchronous
+                    # ``terminate()`` from a finaliser would abort a pool
+                    # belonging to whoever else is still using it.
+                    self._pool_is_borrowed = True
                     logger.debug(
                         f"Using runtime-coordinated connection pool for {self.id}"
                     )
@@ -7010,7 +7122,15 @@ class AsyncSQLDatabaseNode(AsyncNode):
             # Redacted: the raw pool key carries the connection string with
             # credentials; this diagnostic dict is commonly logged/serialized
             # by callers, so mask before exposing (issue #1260).
-            "pool_key": redact_pool_key(self._pool_key),
+            #
+            # ``None`` is preserved rather than redacted. ``redact_pool_key``
+            # is a LOG helper and returns "" for a missing key by contract,
+            # which is correct in a log line and wrong here: this is a
+            # diagnostic VALUE, and "" asserts "there is a key and it is
+            # empty" where the truth is "this node has no pool key yet".
+            # ``test_pool_info_method`` has asserted ``is None`` all along and
+            # failed on every run.
+            "pool_key": (redact_pool_key(self._pool_key) if self._pool_key else None),
             "connected": self._connected,
         }
 
@@ -7766,12 +7886,34 @@ class AsyncSQLDatabaseNode(AsyncNode):
         Idempotent, never raises: safe from ``__del__`` and from a cache
         eviction path that cannot know the node's state.
         """
-        if getattr(self, "_external_pool", None) is not None:
-            # Injected pool — the caller owns the connection's lifetime.
+        if getattr(self, "_external_pool", None) is not None or getattr(
+            self, "_pool_is_borrowed", False
+        ):
+            # BORROWED pool — a caller-injected `external_pool`, or the
+            # runtime ConnectionPoolManager's shared pool. Someone else owns
+            # its lifetime and other holders may still be using it, so a
+            # synchronous terminate here would abort it under them.
+            logger.debug(
+                "async_sql.sync_dispose_skipped_borrowed_pool",
+                extra={"node_id": getattr(self, "id", "unknown")},
+            )
             return False
 
+        if self._adapter is None and not self._owned_adapters:
+            # Nothing to release — typically because a graceful ``cleanup()``
+            # already ran. Answered BEFORE the live-loop check below, which
+            # would otherwise refuse a node that owes nothing and make its
+            # owner park it forever: the refusal exists to protect a pool that
+            # is still open, and there is no pool here.
+            return True
+
         if _loop_is_usable(getattr(self, "_pool_loop", None)):
-            logger.warning(
+            # DEBUG, not WARNING: refusal is the DESIGNED outcome for a live
+            # loop, and DataFlow's eviction path re-checks every parked node on
+            # every eviction, so a WARNING here emits one line per parked node
+            # per eviction in a two-live-loop process — burying the warnings
+            # that do mean something.
+            logger.debug(
                 "async_sql.sync_dispose_refused",
                 extra={
                     "node_id": getattr(self, "id", "unknown"),
@@ -7781,12 +7923,23 @@ class AsyncSQLDatabaseNode(AsyncNode):
             )
             return False
 
-        terminated = 0
+        released = 0
+        refused = 0
+        keep: list[DatabaseAdapter] = []
         for adapter in (self._adapter, *self._owned_adapters):
             if adapter is None:
                 continue
-            if dispose_pool_sync(adapter, label=f"node {self.id}"):
-                terminated += 1
+            if not dispose_pool_sync(adapter, label=f"node {self.id}"):
+                # Refused by the primitive's own live-loop guard. The node-level
+                # check above passed, so this adapter's pool is bound to a
+                # DIFFERENT, still-live loop than the node's own. Keep it AND
+                # its bookkeeping, and report the refusal upward — dropping the
+                # reference here would strand an open pool exactly the way
+                # #2211's eviction did.
+                refused += 1
+                keep.append(adapter)
+                continue
+            released += 1
             if self._pool_key:
                 # Drop the shared-pool bookkeeping too, so the next node with
                 # this key builds a fresh pool instead of reusing a terminated
@@ -7796,13 +7949,25 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 if entry is not None and entry[0] is adapter:
                     del self._shared_pools[self._pool_key]
 
+        logger.debug(
+            "async_sql.node_disposed_sync",
+            extra={
+                "node_id": self.id,
+                "adapters_released": released,
+                "adapters_refused": refused,
+            },
+        )
+        if refused:
+            # Partial release. Hand the un-released adapters back so the node
+            # still owns them, and tell the caller this node STILL OWES a
+            # teardown — DataFlow parks it for close() on that finding.
+            self._owned_adapters[:] = keep
+            self._adapter = keep[0]
+            return False
+
         self._owned_adapters.clear()
         self._adapter = None
         self._connected = False
-        logger.debug(
-            "async_sql.node_disposed_sync",
-            extra={"node_id": self.id, "handles_terminated": terminated},
-        )
         return True
 
     def __del__(self, _warnings=warnings):

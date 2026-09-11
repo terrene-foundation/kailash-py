@@ -30,6 +30,7 @@ import pytest
 from kailash.nodes.data.async_sql import (
     _POOL_DEFAULTS,
     AsyncSQLDatabaseNode,
+    dispose_pool_sync,
     set_pool_defaults,
 )
 
@@ -176,6 +177,237 @@ async def test_dispose_sync_refuses_while_the_pool_loop_is_live(tmp_path):
     assert result["result"]["data"][0]["v"] == 3
 
     await node.cleanup()
+
+
+def test_driver_terminate_is_actually_called_on_a_dead_loop_pool():
+    """The ``terminate()`` branch — the whole PostgreSQL/MySQL fix — executes.
+
+    Every other test here is SQLite-backed, and a file-backed SQLite adapter
+    holds NO driver handle between queries, so none of them can reach
+    ``_terminate_driver_handle_sync``'s ``terminate()`` call: they would all
+    pass identically if that function were ``return False``. asyncpg and
+    aiomysql both expose a synchronous ``terminate()``, and before #2211 a GC'd
+    PostgreSQL/MySQL node released nothing at all — this is the instrument for
+    that claim, with a stub standing in for the driver pool so no server is
+    needed.
+    """
+    calls = []
+
+    class _FakeDriverPool:
+        """Minimal asyncpg/aiomysql shape: a synchronous ``terminate()``."""
+
+        def terminate(self):
+            calls.append("terminate")
+
+    class _FakeAdapter:
+        def __init__(self):
+            self._pool = _FakeDriverPool()
+            self._enterprise_pool = None
+            self._connection = None
+
+    adapter = _FakeAdapter()
+    # No _POOL_LOOP_ATTR stamp -> unregistered owner -> the guard lets it past,
+    # which is the documented contract for a bare/unregistered owner.
+    assert dispose_pool_sync(adapter, label="fake pg pool") is True
+
+    assert calls == ["terminate"], (
+        f"driver terminate() was not called (calls={calls}); the "
+        "PostgreSQL/MySQL half of the #2211 fix never runs"
+    )
+    assert adapter._pool is None, "the terminated handle was not claimed/cleared"
+
+
+def test_a_driver_whose_terminate_raises_is_reported_not_swallowed(caplog):
+    """A failed force-close is logged at WARNING, never silently absorbed.
+
+    There is no recovery past this point — the loop that owned the handle is
+    gone — so the only correct disposition is to surface it. zero-tolerance
+    Rule 3: teardown may continue, but not silently.
+    """
+
+    class _ExplodingPool:
+        def terminate(self):
+            raise RuntimeError("Event loop is closed")
+
+    class _FakeAdapter:
+        def __init__(self):
+            self._pool = _ExplodingPool()
+            self._enterprise_pool = None
+            self._connection = None
+
+    with caplog.at_level("WARNING", logger="kailash.nodes.data.async_sql"):
+        dispose_pool_sync(_FakeAdapter(), label="exploding pool")
+
+    assert any(
+        "pool_sync_terminate_failed" in r.getMessage() for r in caplog.records
+    ), f"terminate() failure was not logged; records={[r.getMessage() for r in caplog.records]}"
+
+
+@pytest.mark.asyncio
+async def test_slot_is_freed_when_disposal_STARTS_not_when_it_SUCCEEDS(tmp_path):
+    """Known trade-off, pinned: the count is "released", not "socket closed".
+
+    ``_disposal_barrier`` frees the slot on ENTRY, before the driver close is
+    awaited, so a close that times out leaves the slot freed while the pool may
+    still be open. That is deliberate — a slot held for a five-second close is
+    a slot the cap wrongly denies to a caller that needs one now — but it
+    inverts #2075's failure direction from over-count to under-count, and an
+    undocumented, untested trade-off is indistinguishable from an oversight.
+
+    The boundary measured here is precise, and is NOT "any failed close frees
+    the slot": disposal must actually REACH the barrier. A disconnect that
+    raises before claiming its pool handle leaves the slot in place, which is
+    the safe direction — the second half of this test pins that too.
+    """
+    # Half 1: the close STARTS (barrier entered) and then times out.
+    node = _sqlite_node(tmp_path, "slow_close")
+    await node.async_run(query="SELECT 1", result_format="dict")
+    adapter = node._adapter
+    before = AsyncSQLDatabaseNode.pool_count()
+    assert before >= 1
+
+    async def _never_finishes():
+        await asyncio.sleep(3600)
+
+    # Hang the DRIVER close, not disconnect() itself, so the adapter still
+    # claims its handle and enters the disposal barrier.
+    enterprise = getattr(adapter, "_enterprise_pool", None)
+    assert enterprise is not None, "expected a Production* adapter here"
+    enterprise.close = _never_finishes  # type: ignore[method-assign]
+
+    await node.cleanup()  # bounded at 1.0s internally, then gives up
+
+    assert AsyncSQLDatabaseNode.pool_count() == before - 1, (
+        "slot was NOT freed on a close that started and then timed out — if "
+        "this flips, the entry-time release in _disposal_barrier changed and "
+        "the docstring trade-off needs rewriting, not the test"
+    )
+
+    # Half 2: the close never starts — the slot MUST stay (fail-safe direction).
+    other = _sqlite_node(tmp_path, "never_starts")
+    await other.async_run(query="SELECT 1", result_format="dict")
+    other_adapter = other._adapter
+    count = AsyncSQLDatabaseNode.pool_count()
+
+    async def _raises_immediately():
+        raise RuntimeError("driver refused before claiming the handle")
+
+    other_adapter.disconnect = _raises_immediately  # type: ignore[method-assign]
+    await other.cleanup()
+
+    assert AsyncSQLDatabaseNode.pool_count() == count, (
+        "a disconnect that never reached the disposal barrier freed the slot "
+        "anyway — that is the under-count direction with no release behind it"
+    )
+
+
+@pytest.mark.asyncio
+async def test_runtime_borrowed_adapter_is_flagged_by_get_adapter(
+    tmp_path, monkeypatch
+):
+    """``_pool_is_borrowed`` is SET by the runtime path, not just honoured.
+
+    The sibling test proves ``dispose_sync()`` respects the flag, but would
+    stay green if ``_get_adapter`` never set it — which is the whole defect.
+    This drives the runtime-pool branch and asserts the stamp.
+    """
+    node = _sqlite_node(tmp_path, "runtime_borrowed")
+
+    class _BorrowedAdapter:
+        _pool = object()
+        _enterprise_pool = None
+        _connection = None
+
+    borrowed = _BorrowedAdapter()
+
+    async def _fake_runtime_adapter(self):
+        return borrowed
+
+    monkeypatch.setattr(
+        AsyncSQLDatabaseNode, "_get_runtime_pool_adapter", _fake_runtime_adapter
+    )
+
+    adapter = await node._get_adapter()
+
+    assert adapter is borrowed
+    assert node._pool_is_borrowed is True, (
+        "the runtime-coordinated branch of _get_adapter did not flag the "
+        "adapter as borrowed; dispose_sync() would force-close the runtime's "
+        "shared pool out from under its other holders"
+    )
+    assert node.dispose_sync() is False
+
+
+@pytest.mark.asyncio
+async def test_get_pool_metrics_does_not_kill_another_loops_live_pool(tmp_path):
+    """POLE 2 at the module primitive: a read-only diagnostic stays read-only.
+
+    ``get_pool_metrics()`` is a public classmethod that takes
+    ``_get_pool_lock()``, whose cross-loop branch walks the CLASS-LEVEL
+    ``_shared_pools`` dict — which legitimately holds adapters from several
+    concurrently-live loops. The #2211 fix made that branch's previously-inert
+    ``adapter._pool.close()`` into a real synchronous terminate, which turned
+    a read-only diagnostic into a process-wide pool killer (caught in security
+    review). ``dispose_pool_sync`` now refuses a live-loop owner on its own,
+    so the guard cannot be forgotten by a future call site either.
+    """
+    node = _sqlite_node(tmp_path, "metrics_bystander")
+    await node.async_run(query="SELECT 1", result_format="dict")
+    adapter = node._adapter
+    assert adapter is not None
+    assert getattr(adapter, "_kailash_pool_loop", None) is asyncio.get_running_loop()
+    count = AsyncSQLDatabaseNode.pool_count()
+
+    # Force the cross-loop branch: make the cached lock claim a foreign loop id.
+    AsyncSQLDatabaseNode._pool_lock = asyncio.Lock()
+    AsyncSQLDatabaseNode._pool_lock_loop_id = -1
+
+    await AsyncSQLDatabaseNode.get_pool_metrics()
+
+    assert (
+        AsyncSQLDatabaseNode.pool_count() == count
+    ), "a read-only get_pool_metrics() call deregistered a live pool"
+    result = await node.async_run(query="SELECT 5 AS v", result_format="dict")
+    assert result["result"]["data"][0]["v"] == 5, (
+        "get_pool_metrics() terminated a pool that was still serving queries — "
+        "the kailash 2.65.0 regression, reached from a public diagnostic"
+    )
+
+    await node.cleanup()
+
+
+def test_dispose_sync_refuses_a_BORROWED_pool_even_on_a_dead_loop(tmp_path):
+    """POLE 2, the case a dead loop does not excuse: someone else's pool.
+
+    On the runtime-coordinated path ``_create_adapter_with_runtime_pool``
+    injects the runtime ConnectionPoolManager's pool as ``adapter._pool``.
+    That pool is shared with other nodes and the runtime owns its lifetime, so
+    a synchronous ``terminate()`` from this node — which ``__del__`` now
+    reaches on every backend, not just SQLite — would abort a pool its other
+    holders are still using. "Its loop is dead" is not a licence to close a
+    pool this node does not own.
+    """
+    node = _sqlite_node(tmp_path, "borrowed")
+
+    async def _attach():
+        await node.async_run(query="SELECT 1", result_format="dict")
+
+    asyncio.run(_attach())
+
+    adapter = node._adapter
+    assert adapter is not None
+    assert node._pool_loop.is_closed()  # dead loop: the release WOULD proceed
+
+    # Mark it borrowed, exactly as the runtime-pool branch of _get_adapter does.
+    node._pool_is_borrowed = True
+
+    assert node.dispose_sync() is False, "dispose_sync() force-closed a BORROWED pool"
+    assert node._adapter is adapter, "a borrowed adapter was detached"
+
+    # And it does release once the pool is this node's own again.
+    node._pool_is_borrowed = False
+    assert node.dispose_sync() is True
+    assert node._adapter is None
 
 
 def test_dispose_sync_releases_a_pool_whose_loop_is_closed(tmp_path):

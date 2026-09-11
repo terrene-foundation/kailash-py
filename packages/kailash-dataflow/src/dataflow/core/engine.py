@@ -11622,7 +11622,21 @@ class DataFlow(DataFlowEventMixin):
                 teardown = getattr(node, "cleanup", None)
                 if callable(teardown):
                     async_safe_run(teardown())
-                node.dispose_sync()
+                if not node.dispose_sync():
+                    # REFUSED, not done. On this SYNC path the graceful
+                    # teardown above ran on a transient loop and its failure is
+                    # swallowed, so a refusal here can mean an open pool. Say so
+                    # — dropping the node silently is the #2211 leak again, at
+                    # the one place that exists to prevent it.
+                    logger.warning(
+                        "engine.displaced_sql_node_not_released",
+                        extra={
+                            "node_id": getattr(node, "id", "unknown"),
+                            "reason": "pool is bound to an event loop that is "
+                            "still live at close(); use close_async() from that "
+                            "loop to release it gracefully",
+                        },
+                    )
             except Exception as e:
                 logger.debug(
                     "engine.error_closing_displaced_sql_node",
@@ -11857,7 +11871,17 @@ class DataFlow(DataFlowEventMixin):
                 teardown = getattr(node, "cleanup", None)
                 if callable(teardown):
                     await teardown()
-                node.dispose_sync()
+                if not node.dispose_sync():
+                    # REFUSED. The graceful cleanup() above ran on a live loop
+                    # and normally leaves nothing to release, so a refusal here
+                    # means the node's pool is bound to some OTHER loop that is
+                    # still live. Do not drop it — hand it back to the park so
+                    # a later close, on that loop, can finish the job.
+                    self._displaced_async_sql_nodes.append(node)
+                    logger.debug(
+                        "engine.displaced_sql_node_reparked",
+                        extra={"node_id": getattr(node, "id", "unknown")},
+                    )
             except Exception as e:
                 logger.debug(
                     "engine.error_closing_displaced_sql_node",
@@ -12258,6 +12282,14 @@ class DataFlow(DataFlowEventMixin):
             try:
                 node = entry[0]
             except (TypeError, IndexError):
+                # A malformed entry is dropped by the clear() below WITHOUT
+                # release, which is the leak class this whole path exists to
+                # close — so it gets a breadcrumb rather than a silent skip
+                # (zero-tolerance Rule 3, observability Rule 5).
+                logger.debug(
+                    "engine.malformed_sql_node_cache_entry_skipped",
+                    extra={"db_type": _db_type, "entry_type": type(entry).__name__},
+                )
                 continue
             self._release_displaced_async_sql_node(node)
         self._async_sql_node_cache.clear()
