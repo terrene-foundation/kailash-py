@@ -14,6 +14,8 @@ Covers:
 
 from __future__ import annotations
 
+import copy
+import pickle
 from datetime import UTC, datetime
 
 import pytest
@@ -334,3 +336,79 @@ class TestNoneClearanceEmptyCompartments:
         assert ctx.clearance is None
         assert ctx.compartments == frozenset()
         assert len(ctx.compartments) == 0
+
+
+# ---------------------------------------------------------------------------
+# Pickle / copy containment (RT-277-1 residual)
+# ---------------------------------------------------------------------------
+
+
+class TestNoPickleNoCopy:
+    """``__reduce__`` / ``__getstate__`` block forged-context injection.
+
+    That blocking already existed but nothing pinned it, so a refactor could
+    have removed it silently.
+
+    Measured, not assumed: ``__reduce__`` and ``__getstate__`` are each
+    INDEPENDENTLY sufficient here. Removing ``__reduce__`` alone leaves this
+    suite fully green, because ``object.__reduce_ex__`` then falls through to
+    ``__getstate__``, which raises the same TypeError. The suite goes red only
+    when BOTH are removed (verified: 9 failures). So these tests pin the
+    PROPERTY -- a context cannot be pickled or copied -- and deliberately not
+    the mechanism; do not read a green run as evidence that any one of the two
+    overrides is still present.
+
+    Scope, measured -- this is DEFENCE IN DEPTH, not a forgery boundary.
+    ``context.py`` describes the overrides as blocking "forged context
+    injection", which overstates them. A forger does not need pickle:
+    ``dataclasses.replace(ctx, role_address="D9-R9-ADMIN")`` and (3.13)
+    ``copy.replace`` both succeed, and are STRICTLY STRONGER than blind
+    construction because they inherit ``effective_envelope`` and ``clearance``
+    from a verified context while swapping the address. Direct construction is
+    unguarded too -- only ``from_dict`` warns. What these overrides do buy is
+    that a context cannot ride along inside a pickled or deep-copied payload,
+    which is worth keeping and worth pinning; they are not a reason to trust an
+    unverified context. ``GovernanceEngine.get_context()`` remains the only
+    authoritative construction path.
+    """
+
+    @staticmethod
+    def _ctx() -> GovernanceContext:
+        return GovernanceContext(
+            role_address="D1-R1",
+            posture=TrustPostureLevel.SUPERVISED,
+            effective_envelope=None,
+            clearance=None,
+            effective_clearance_level=None,
+            allowed_actions=frozenset(),
+            compartments=frozenset(),
+            org_id="org-1",
+            created_at=datetime.now(UTC),
+        )
+
+    @pytest.mark.parametrize("protocol", range(pickle.HIGHEST_PROTOCOL + 1))
+    def test_pickle_is_blocked_on_every_protocol(self, protocol: int) -> None:
+        with pytest.raises(TypeError, match="cannot be pickled"):
+            pickle.dumps(self._ctx(), protocol)
+
+    def test_deepcopy_is_blocked(self) -> None:
+        with pytest.raises(TypeError, match="cannot be pickled"):
+            copy.deepcopy(self._ctx())
+
+    def test_shallow_copy_is_blocked(self) -> None:
+        with pytest.raises(TypeError, match="cannot be pickled"):
+            copy.copy(self._ctx())
+
+    def test_nested_in_a_container_is_blocked(self) -> None:
+        """A context smuggled inside a dict must not ride along."""
+        payload = {"ctx": self._ctx()}
+        with pytest.raises(TypeError, match="cannot be pickled"):
+            pickle.dumps(payload)
+        with pytest.raises(TypeError, match="cannot be pickled"):
+            copy.deepcopy(payload)
+
+    def test_to_dict_is_still_the_supported_path(self) -> None:
+        """The allowed pole: blocking pickle must not break serialization."""
+        data = self._ctx().to_dict()
+        assert data["role_address"] == "D1-R1"
+        assert data["org_id"] == "org-1"

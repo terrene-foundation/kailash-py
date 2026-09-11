@@ -60,6 +60,7 @@ from kailash.trust.pact.config import (
     OperationalConstraintConfig,
     TemporalConstraintConfig,
 )
+from kailash.trust.readonly_proxy import ReadOnlyAttributeProxy
 from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents.audit.trail import AuditTrail
 from kaizen_agents.governance.accountability import AccountabilityTracker
@@ -117,22 +118,29 @@ class HoldRecord:
     modified_context: dict[str, Any] | None = None
 
 
-class _ReadOnlyView:
-    """Read-only proxy that exposes only query methods, not mutation methods."""
+class _ReadOnlyView(ReadOnlyAttributeProxy):
+    """Read-only proxy that exposes only query methods, not mutation methods.
+
+    Enforcement lives in
+    :class:`~kailash.trust.readonly_proxy.ReadOnlyAttributeProxy`, which gates
+    every access through ``__getattribute__``.
+
+    The previous implementation guarded with ``__getattr__``, which is a
+    FALLBACK consulted only when normal lookup fails. ``_target`` was a plain
+    instance attribute, so ``view._target`` resolved normally, never reached
+    the guard, and handed back the mutable subsystem the view exists to
+    contain -- as did ``view.__dict__["_target"]``. Same defect class as #2224.
+    """
+
+    __slots__ = ()
 
     def __init__(self, target: Any, allowed_methods: frozenset[str]) -> None:
-        object.__setattr__(self, "_target", target)
-        object.__setattr__(self, "_allowed", allowed_methods)
-
-    def __getattr__(self, name: str) -> Any:
-        if name.startswith("_") or name not in object.__getattribute__(
-            self, "_allowed"
-        ):
-            target = object.__getattribute__(self, "_target")
-            raise AttributeError(
-                f"'{type(target).__name__}' read-only view has no attribute '{name}'"
-            )
-        return getattr(object.__getattribute__(self, "_target"), name)
+        super().__init__(
+            target,
+            allowed_methods,
+            label=f"{type(target).__name__} read-only view",
+            message_template="'{label}' has no attribute '{name}'",
+        )
 
 
 # Allowed query methods for each Layer 3 governance subsystem

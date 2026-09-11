@@ -61,14 +61,24 @@ def test_tool_description_and_parameters_default_when_absent():
     assert decl["parameters"] == {}
 
 
-def test_tool_config_default_any_when_tools_set_no_choice():
+def test_tool_config_default_auto_when_tools_set_no_choice():
+    """#2121 — the unset default is AUTO, not ANY.
+
+    This test previously pinned ``ANY`` (named ``..._default_any_...``), which
+    forces a function call on EVERY turn so an agent loop can never terminate.
+    Its stated rationale was "legacy ``required`` semantics", but
+    ``legacy_tool_choice_default`` injects a default for openai and
+    azure/docker ONLY — google, like every other legacy provider, sent no
+    ``tool_choice`` at all, leaving Gemini's own server-side AUTO. So ``ANY``
+    was a regression this wire introduced, and this test had pinned it.
+    """
     req = CompletionRequest(
         model="test-model",
         messages=_base_messages(),
         tools=[{"type": "function", "function": {"name": "f"}}],
     )
     payload = gg.build_request_payload(req)
-    assert payload["toolConfig"] == {"functionCallingConfig": {"mode": "ANY"}}
+    assert payload["toolConfig"] == {"functionCallingConfig": {"mode": "AUTO"}}
 
 
 def test_tool_choice_string_modes_map_to_gemini():
@@ -228,8 +238,8 @@ def test_full_wave1b_request_shapes_all_surfaces_with_tools():
 
     # Gemini-shaped tools present.
     assert payload["tools"][0]["functionDeclarations"][0]["name"] == "f"
-    # Default ANY tool_config.
-    assert payload["toolConfig"]["functionCallingConfig"]["mode"] == "ANY"
+    # Default AUTO tool_config (#2121 — was ANY, which cannot terminate a loop).
+    assert payload["toolConfig"]["functionCallingConfig"]["mode"] == "AUTO"
     gen = payload["generationConfig"]
     assert gen["temperature"] == 0.3  # not clobbered
     # #1819: structured-output keys ABSENT when tools are present.

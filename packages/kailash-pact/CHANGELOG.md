@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### Security (BREAKING) — `PactEngine.governance` is genuinely read-only, and denies five members it used to proxy (#2224)
+
+`_ReadOnlyGovernanceView` guarded a 13-name blocklist in `__getattr__` — a FALLBACK consulted only when normal attribute lookup FAILS. The wrapped engine was a plain instance attribute, so `view._engine` resolved normally, never reached the guard, and handed back the `GovernanceEngine`. One attribute access bypassed all thirteen names.
+
+The blocklist had also gone stale in both directions: it named `compile_org`, which does not exist on `GovernanceEngine`, while `suspend_plan`, `resume_plan` and `update_resume_condition` — real mutation methods added after it was written — were absent from it and silently proxied through.
+
+Now an **allowlist** enforced in `__getattribute__` (via the new `kailash.trust.readonly_proxy.ReadOnlyAttributeProxy`), so an unrecognised name is denied by default. A test introspects the live `GovernanceEngine` and fails when a public member appears that nobody has classified.
+
+**BREAKING.** Denied where they were previously proxied: `audit_chain`, `audit_dispatcher` (live handles onto mutable subsystems), `suspend_plan`, `resume_plan`, `update_resume_condition`. **Migration:** use `PactEngine._admin_governance`, as the denial message says.
+
+`_ALLOWED` now also records that "read-only" means "does not change what governance decides", not "no side effects": `verify_action` consumes the role's rate-limit quota and `check_access` emits audit records. See #2226.
+
+**Requires `kailash>=2.65.0`** — `pact.engine` imports `kailash.trust.readonly_proxy` at module scope, and 2.64.0 does not carry it.
+
+
 ### Changed (Security, BREAKING)
 
 - **An empty `operational.allowed_actions` now DENIES at every enforcement surface (#2218).** The field defaults to `[]`, and the surfaces disagreed about what that meant: `GovernanceEngine.verify_action` denied every action, while `GradientEngine.evaluate`, `L3GovernedAgent.run()` and the bridge scope validator all permitted every action, because each spelled the check as `if op.allowed_actions and action not in op.allowed_actions` — the `and` short-circuits on an empty list and skips the check. Measured on `delete_production_database`: `allowed_actions=[]` gave `verify_action=deny` but `gradient/agent/bridge=PERMIT`; the `allowed_actions=['read']` control agreed on all four. The strictest-looking configuration produced the widest outcome, and the victim was the operator who tightened the allowlist to nothing.

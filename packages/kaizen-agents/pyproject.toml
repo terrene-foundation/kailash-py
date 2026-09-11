@@ -32,7 +32,17 @@ dependencies = [
     #   PACT semantics are reached via `kailash.trust.pact.*` (in
     #   `kailash` core), not the separate `kailash-pact` package.
     # ─────────────────────────────────────────────────────────────
-    "kailash>=2.14.0",
+    # FLOOR RAISED 2.14.0 -> 2.65.0 BY #2224 AND THE RAISE IS RELEASE-BLOCKING.
+    # `supervisor.py` and `governed_agent.py` import
+    # `kailash.trust.readonly_proxy` at MODULE scope. That module is NEW in
+    # this change; 2.64.0 (the last cut) does not carry it, so 2.65.0 (the next
+    # cut) is the first version guaranteed to. Anyone who upgrades
+    # `kaizen-agents` without also upgrading `kailash` would get an ImportError
+    # at `import kaizen_agents` — a hard break at import. The import is
+    # load-bearing for two containment boundaries (_ReadOnlyView,
+    # _ProtectedInnerProxy) and MUST NOT be made conditional: a fallback would
+    # silently restore the fail-OPEN proxies this change exists to remove.
+    "kailash>=2.65.0",
     # FLOOR IS 2.46.0, RAISED FROM 2.36.0, AND THE RAISE IS RELEASE-BLOCKING —
     # not housekeeping. `kaizen-agents` imports symbols at MODULE scope that do
     # not exist at 2.36.0, so every user who upgrades `kaizen-agents` without

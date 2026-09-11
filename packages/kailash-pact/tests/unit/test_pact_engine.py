@@ -27,7 +27,7 @@ from typing import Any
 import pytest
 
 from pact.costs import CostTracker
-from pact.engine import PactEngine
+from pact.engine import PactEngine, _ReadOnlyGovernanceView
 from pact.events import EventBus
 from pact.work import WorkResult, WorkSubmission
 
@@ -36,6 +36,51 @@ from pact.work import WorkResult, WorkSubmission
 # ---------------------------------------------------------------------------
 
 FIXTURES_DIR = Path(__file__).parent / "governance" / "fixtures"
+
+# ---------------------------------------------------------------------------
+# #2224 -- the OTHER half of the GovernanceEngine public surface.
+#
+# `_ReadOnlyGovernanceView._ALLOWED` (in pact/engine.py) is the half that is
+# ENFORCED at runtime. This is the reviewed census of everything deliberately
+# NOT exposed: state-changing methods, plus live handles onto mutable
+# subsystems. It lives in the test rather than in production code because
+# production must not carry a second list that nothing checks -- that shape is
+# precisely what produced the bug.
+#
+# TestReadOnlyGovernanceViewStaleness asserts _ALLOWED | this == the engine's
+# public surface, so a newly added public member fails the suite until someone
+# classifies it. The runtime default is deny either way.
+# ---------------------------------------------------------------------------
+_MUTATING_ENGINE_MEMBERS = frozenset(
+    {
+        # Envelope / clearance mutation
+        "set_role_envelope",
+        "set_task_envelope",
+        "grant_clearance",
+        "revoke_clearance",
+        "transition_clearance",
+        # Bridge lifecycle
+        "create_bridge",
+        "approve_bridge",
+        "consent_bridge",
+        "reject_bridge",
+        # Org / policy mutation
+        "register_compliance_role",
+        "create_ksp",
+        "designate_acting_occupant",
+        # Plan suspension lifecycle. These three post-date the blocklist the
+        # old view carried and were NEVER added to it -- they were silently
+        # proxied through. They are the concrete instance of the staleness
+        # failure mode, not a hypothetical one.
+        "suspend_plan",
+        "resume_plan",
+        "update_resume_condition",
+        # Not mutation methods, but live handles onto mutable subsystems:
+        # exposing either lets a caller append to the audit trail.
+        "audit_chain",
+        "audit_dispatcher",
+    }
+)
 
 
 @pytest.fixture
@@ -761,6 +806,271 @@ class TestReadOnlyGovernanceView:
         assert isinstance(admin, GovernanceEngine)
         # Should be able to call set_role_envelope (it exists on the real engine)
         assert hasattr(admin, "set_role_envelope")
+
+
+class TestReadOnlyGovernanceViewIsActuallyReadOnly:
+    """#2224: the view was not read-only. Five poles, all mandatory.
+
+    A deny-only suite cannot distinguish this fix from one that breaks the view
+    entirely, so the allowed pole is as load-bearing as the denied ones.
+    """
+
+    # --- Pole 1: an allowed read-only method still WORKS -------------------
+
+    def test_allowed_read_only_methods_still_work(
+        self, engine_from_yaml: PactEngine
+    ) -> None:
+        gov = engine_from_yaml.governance
+        admin = engine_from_yaml._admin_governance
+
+        # Non-trivial returns: the call must reach the engine and come back.
+        assert gov.org_name == "Minimal Test Org"
+        assert gov.get_org() is not None
+        assert gov.list_roles() == admin.list_roles()
+        assert gov.get_node("D1-R1") is not None
+        assert (
+            gov.verify_action(role_address="D1-R1", action="submit", context={})
+            is not None
+        )
+        ok, _ = gov.verify_audit_integrity()
+        assert ok is True
+
+        # These legitimately return None on the minimal org (no envelopes, no
+        # vacancy, no suspended plan). Comparing against the real engine keeps
+        # the assertion discriminating: a denial would raise before we got here,
+        # and a stubbed view would not agree with the engine.
+        assert gov.compute_envelope("D1-R1") == admin.compute_envelope("D1-R1")
+        assert gov.get_vacancy_designation("D1-R1") == admin.get_vacancy_designation(
+            "D1-R1"
+        )
+        assert gov.get_suspension("no-such-plan") == admin.get_suspension(
+            "no-such-plan"
+        )
+
+    # --- Pole 2: a mutation method is DENIED -------------------------------
+
+    @pytest.mark.parametrize(
+        "method_name",
+        sorted(_MUTATING_ENGINE_MEMBERS),
+    )
+    def test_mutation_methods_are_denied(
+        self, engine_from_yaml: PactEngine, method_name: str
+    ) -> None:
+        gov = engine_from_yaml.governance
+        with pytest.raises(AttributeError, match="does not expose"):
+            getattr(gov, method_name)
+
+    def test_mutation_denial_is_not_merely_a_missing_attribute(
+        self, engine_from_yaml: PactEngine
+    ) -> None:
+        """The denied names really DO exist on the engine being wrapped.
+
+        Without this, the deny-pole above would also pass against an engine
+        that simply has no such methods -- i.e. it would not discriminate.
+        """
+        admin = engine_from_yaml._admin_governance
+        for name in _MUTATING_ENGINE_MEMBERS:
+            assert hasattr(admin, name), f"{name} is not on GovernanceEngine"
+
+    # --- Pole 3: view._engine is DENIED ------------------------------------
+
+    @pytest.mark.parametrize("handle", ["_engine", "_target", "__dict__"])
+    def test_engine_handle_is_denied(
+        self, engine_from_yaml: PactEngine, handle: str
+    ) -> None:
+        """The sharp failure mode: one attribute access bypassed everything.
+
+        ``__getattr__`` is consulted only when normal lookup FAILS, so the
+        wrapped engine -- a real instance attribute -- never reached the guard.
+        """
+        gov = engine_from_yaml.governance
+        with pytest.raises(AttributeError):
+            getattr(gov, handle)
+
+    def test_no_route_from_the_view_back_to_the_engine(
+        self, engine_from_yaml: PactEngine
+    ) -> None:
+        """No allowlisted name may hand back the GovernanceEngine itself."""
+        from kailash.trust.pact.engine import GovernanceEngine
+
+        gov = engine_from_yaml.governance
+        admin = engine_from_yaml._admin_governance
+        for name in sorted(_ReadOnlyGovernanceView._ALLOWED):
+            value = getattr(gov, name)
+            # `not isinstance(value, GovernanceEngine)` ALONE is too weak: a
+            # bound method is not a GovernanceEngine, so that assertion stayed
+            # green while `gov.list_roles.__self__` WAS the engine. Check the
+            # object AND the two places it can hide behind one.
+            assert value is not admin, f"'{name}' IS the GovernanceEngine"
+            assert not isinstance(
+                value, GovernanceEngine
+            ), f"'{name}' leaks a GovernanceEngine"
+            assert (
+                getattr(value, "__self__", None) is not admin
+            ), f"'{name}' leaks the engine via __self__"
+            cells = [
+                c.cell_contents for c in (getattr(value, "__closure__", None) or ())
+            ]
+            assert admin not in cells, f"'{name}' closes over the engine"
+
+    # --- Pole 4: a name on NO list at all is DENIED (default-deny) ---------
+
+    @pytest.mark.parametrize(
+        "invented",
+        ["totally_invented_name", "compile_org", "compiled_org", "audit_chain"],
+    )
+    def test_names_on_no_list_are_denied(
+        self, engine_from_yaml: PactEngine, invented: str
+    ) -> None:
+        """Proves default-deny rather than a longer blocklist.
+
+        ``totally_invented_name`` exists nowhere. ``compile_org`` and
+        ``compiled_org`` were on the OLD blocklist/view but do not exist on
+        GovernanceEngine at all. ``audit_chain`` is a real public member that
+        is a live handle onto a mutable subsystem, deliberately not exposed.
+        """
+        gov = engine_from_yaml.governance
+        with pytest.raises(AttributeError, match="does not expose"):
+            getattr(gov, invented)
+
+    def test_attribute_injection_is_denied(self, engine_from_yaml: PactEngine) -> None:
+        gov = engine_from_yaml.governance
+        with pytest.raises(AttributeError):
+            gov.injected_attr = "malicious"
+
+    # --- Pole 3b: no allowlisted member hands the engine back -------------
+
+    def test_allowlisted_methods_are_not_bound_methods(
+        self, engine_from_yaml: PactEngine
+    ) -> None:
+        """``view.list_roles.__self__`` WAS the GovernanceEngine (#2224 redteam).
+
+        Two plain attribute reads, no denied name touched, full escalation:
+        ``view.list_roles.__self__.grant_clearance(...)``. Gating names is not
+        enough -- a bound method carries its receiver.
+        """
+        gov = engine_from_yaml.governance
+        admin = engine_from_yaml._admin_governance
+        for name in sorted(_ReadOnlyGovernanceView._ALLOWED):
+            member = getattr(gov, name)
+            assert (
+                getattr(member, "__self__", None) is not admin
+            ), f"'{name}' hands back the engine via __self__"
+            cells = [
+                c.cell_contents for c in (getattr(member, "__closure__", None) or ())
+            ]
+            assert admin not in cells, f"'{name}' closes over the engine"
+
+    def test_super_and_slot_descriptor_do_not_yield_the_engine(
+        self, engine_from_yaml: PactEngine
+    ) -> None:
+        """The slot is always reachable through the class; it must be sealed."""
+        from kailash.trust.readonly_proxy import (
+            ReadOnlyAttributeProxy,
+            ReadOnlyProxyError,
+        )
+
+        gov = engine_from_yaml.governance
+        admin = engine_from_yaml._admin_governance
+
+        sealed = super(_ReadOnlyGovernanceView, gov)._target
+        assert sealed is not admin
+        with pytest.raises(ReadOnlyProxyError):
+            sealed("not-the-token")
+
+        descriptor = ReadOnlyAttributeProxy.__dict__["_target"]
+        assert descriptor.__get__(gov) is not admin
+
+    def test_view_cannot_be_reinitialised(self, engine_from_yaml: PactEngine) -> None:
+        """Re-__init__ would widen a live view's allowlist in place."""
+        gov = engine_from_yaml.governance
+        admin = engine_from_yaml._admin_governance
+        with pytest.raises(AttributeError, match="already initialised"):
+            type(gov).__init__(gov, admin)
+        with pytest.raises(AttributeError, match="does not expose"):
+            gov.grant_clearance
+
+    # --- Pole 5: a NEWLY-ADDED mutation method is not silently exposed -----
+
+    def test_newly_added_mutation_method_is_not_exposed(
+        self, engine_from_yaml: PactEngine
+    ) -> None:
+        """The staleness property, tested behaviourally.
+
+        The old code's comment asserted "Every mutation method on
+        GovernanceEngine MUST be listed here" and nothing enforced it. Here a
+        mutation method is added to the engine AFTER the view's allowlist was
+        written -- exactly the situation the comment described -- and the view
+        must deny it without anyone editing a list.
+        """
+        admin = engine_from_yaml._admin_governance
+        assert not hasattr(admin, "obliterate_everything")
+        type(admin).obliterate_everything = lambda self: "MUTATED"  # type: ignore[attr-defined]
+        try:
+            assert hasattr(admin, "obliterate_everything")  # reached the engine
+            gov = engine_from_yaml.governance
+            with pytest.raises(AttributeError, match="does not expose"):
+                gov.obliterate_everything
+        finally:
+            del type(admin).obliterate_everything  # type: ignore[attr-defined]
+
+
+class TestReadOnlyGovernanceViewStaleness:
+    """Structural pin for the invariant the old comment only asserted (#2224).
+
+    A hand-maintained list that nothing checks is what produced the bug. These
+    tests fail when ``GovernanceEngine`` grows a public member that nobody has
+    classified, so the list cannot silently go stale again.
+    """
+
+    def test_every_public_engine_member_is_classified(self) -> None:
+        from kailash.trust.pact.engine import GovernanceEngine
+
+        public = {n for n in dir(GovernanceEngine) if not n.startswith("_")}
+        classified = _ReadOnlyGovernanceView._ALLOWED | _MUTATING_ENGINE_MEMBERS
+        unclassified = public - classified
+        assert not unclassified, (
+            f"GovernanceEngine grew unclassified public member(s): "
+            f"{sorted(unclassified)}. The read-only view denies them by default "
+            f"(fail-closed), which is correct but may be wrong for a genuine "
+            f"read-only addition. Classify each one: add read-only members to "
+            f"_ReadOnlyGovernanceView._ALLOWED in pact/engine.py, and "
+            f"mutating-or-internal members to _MUTATING_ENGINE_MEMBERS here."
+        )
+
+    def test_allowlist_contains_no_phantom_names(self) -> None:
+        """The archived fix listed 'compiled_org', which does not exist."""
+        from kailash.trust.pact.engine import GovernanceEngine
+
+        public = {n for n in dir(GovernanceEngine) if not n.startswith("_")}
+        phantoms = _ReadOnlyGovernanceView._ALLOWED - public
+        assert not phantoms, (
+            f"_ALLOWED names absent from GovernanceEngine: {sorted(phantoms)}. "
+            f"An allowlist entry that does not exist is dead weight that hides "
+            f"a rename."
+        )
+
+    def test_classifications_are_disjoint(self) -> None:
+        overlap = _ReadOnlyGovernanceView._ALLOWED & _MUTATING_ENGINE_MEMBERS
+        assert not overlap, f"classified both ways: {sorted(overlap)}"
+
+    def test_instance_surface_matches_class_surface(self) -> None:
+        """dir(cls) misses attributes assigned in __init__; pin that it does not.
+
+        If GovernanceEngine ever sets a public attribute in __init__, the
+        class-level census above would go blind to it.
+        """
+        from kailash.trust.pact.engine import GovernanceEngine
+
+        engine = PactEngine(
+            org=str(FIXTURES_DIR / "minimal-org.yaml")
+        )._admin_governance
+        class_public = {n for n in dir(GovernanceEngine) if not n.startswith("_")}
+        instance_public = {n for n in dir(engine) if not n.startswith("_")}
+        assert instance_public == class_public, (
+            f"instance-only public members are invisible to the class-level "
+            f"census: {sorted(instance_public - class_public)}"
+        )
 
 
 class TestDegenerateEnvelopeDetection:

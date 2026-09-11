@@ -36,7 +36,16 @@ dependencies = [
     #   (engine.py:1216 inside method). Move to [execution] extra.
     # - psycopg / psycopg_pool — ORPHANS, zero imports anywhere. DELETE.
     # ─────────────────────────────────────────────────────────────
-    "kailash>=2.41.0",
+    # FLOOR RAISED 2.41.0 -> 2.65.0 BY #2224 AND THE RAISE IS RELEASE-BLOCKING.
+    # `pact/engine.py` imports `kailash.trust.readonly_proxy` at MODULE scope.
+    # That module is NEW in this change; 2.64.0 (the last cut) does not carry
+    # it, so 2.65.0 (the next cut) is the first version guaranteed to. Anyone
+    # who upgrades `kailash-pact` without also upgrading `kailash` would get an
+    # ImportError at `import pact.engine` — a hard break at import, not a
+    # degraded path. The import is load-bearing for a trust boundary
+    # (_ReadOnlyGovernanceView) and MUST NOT be made conditional: a fallback
+    # would silently restore the fail-OPEN view this issue exists to remove.
+    "kailash>=2.65.0",
     "click>=8.0",
 ]
 
