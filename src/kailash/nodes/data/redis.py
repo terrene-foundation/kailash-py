@@ -17,6 +17,7 @@ except ImportError:
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.sdk_exceptions import NodeExecutionError
+from kailash.utils.finalizer import warn_unclosed
 
 logger = logging.getLogger(__name__)
 
@@ -379,10 +380,43 @@ class RedisNode(Node):
             # Don't close the connection - keep it for connection pooling
             pass
 
-    def __del__(self):
-        """Clean up Redis connection."""
-        if self._client:
-            try:
-                self._client.close()
-            except Exception:
-                pass
+    def close(self) -> None:
+        """Release the Redis client and its connection pool.
+
+        The deterministic cleanup path. ``__del__`` deliberately does NOT do
+        this (see below), so a caller that wants the pool's sockets returned at
+        a known point must call this method — or use the node as a context
+        manager.
+
+        Idempotent: safe to call more than once.
+        """
+        client = self._client
+        self._client = None
+        if client is not None:
+            client.close()
+
+    def __enter__(self) -> "RedisNode":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+        self.close()
+        return False
+
+    def __del__(self, _warn=warn_unclosed):
+        # Warn and RETURN. This finalizer performs no cleanup, deliberately.
+        #
+        # The previous body called ``self._client.close()``, which tears down
+        # the redis-py connection pool. That pool takes its own lock and
+        # disconnects sockets; doing it from a finalizer means doing it on
+        # whichever arbitrary thread GC happened to run on, potentially one
+        # already holding that same lock. The enclosing swallow-and-continue
+        # guard bought nothing against that — a deadlock is not an exception —
+        # while hiding real disconnect failures. See ``rules/patterns.md``
+        # § "Async Resource Cleanup" and issue #2107.
+        #
+        # Dropping the explicit close does NOT leak file descriptors: the
+        # pool's ``socket`` objects close their own fds from the C-level
+        # deallocator once unreachable. ``close()`` above exists so the caller
+        # still has a deterministic path, which is what the warning names.
+        if getattr(self, "_client", None) is not None:
+            _warn(self, "Call close() or use 'with RedisNode(...) as node:'.")
