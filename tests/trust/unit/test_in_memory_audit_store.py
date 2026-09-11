@@ -342,22 +342,48 @@ class TestInMemoryBounded:
         assert store.count == 5
 
     @pytest.mark.asyncio
-    async def test_bounded_chain_still_verifiable(self):
-        """After eviction, the remaining chain should still be internally consistent.
+    async def test_wrapped_bounded_chain_verifies_intact(self):
+        """A WRAPPED bounded chain (evicted its front) still verifies INTACT (#2221 F3).
 
-        Note: after deque eviction, the first event's prev_hash points to
-        an evicted event, so verify_chain returns False for the truncated
-        chain. This is expected behavior for bounded stores.
+        The store is a ``deque(maxlen)`` designed to evict. After it wraps, the
+        first surviving event's ``prev_hash`` points to an evicted event -- a
+        legitimate state for a long-running Level-0 deployment, NOT tampering.
+        Requiring the genesis anchor there would cry wolf. The prior test here
+        asserted "verify_chain returns False for the truncated chain ... expected
+        behavior", which was wrong: it made legitimate eviction indistinguishable
+        from real tampering.
         """
         store = InMemoryAuditStore(max_events=5)
         for i in range(10):
-            event = store.create_event(actor="a", action="step", resource=f"r-{i}")
-            await store.append(event)
-
-        # After eviction, internal hash integrity of each event is still valid
-        events = list(store._events)
-        for event in events:
+            await store.append(
+                store.create_event(actor="a", action="step", resource=f"r-{i}")
+            )
+        assert store.count == 5  # wrapped: 10 appended, 5 survive
+        assert store._total_appended == 10
+        # Each surviving event's own integrity holds ...
+        for event in list(store._events):
             assert event.verify_integrity() is True
+        # ... and the wrapped-but-intact chain verifies INTACT, not TAMPERED.
+        assert await store.verify_chain_status() is ChainStatus.INTACT
+        assert await store.verify_chain() is True
+
+    @pytest.mark.asyncio
+    async def test_wrapped_bounded_chain_with_broken_linkage_is_tampered(self):
+        """The other pole: a linkage break AMONG SURVIVING records after wrap is TAMPERED.
+
+        Eviction is forgiven; genuine tampering among the survivors is not.
+        """
+        store = InMemoryAuditStore(max_events=5)
+        for i in range(10):
+            await store.append(
+                store.create_event(actor="a", action="step", resource=f"r-{i}")
+            )
+        # Break the linkage of a middle surviving event by corrupting its
+        # stored prev_hash in place (bypassing append's guard). Its own
+        # integrity hash no longer matches -> detected.
+        object.__setattr__(store._events[2], "prev_hash", "e" * 64)
+        assert await store.verify_chain_status() is ChainStatus.TAMPERED
+        assert await store.verify_chain() is False
 
 
 # ---------------------------------------------------------------------------

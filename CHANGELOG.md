@@ -18,7 +18,7 @@ such as `>=2.0`.
 `AuditStoreProtocol.verify_chain()` (both `InMemoryAuditStore` and `SqliteAuditStore`) previously
 returned `True` for an **empty** chain. That made a wiped audit store indistinguishable from a
 never-written one at the return value — an attacker who deletes the audit store passed
-verification, and a wipe is the one case audit-chain verification exists to detect.
+verification.
 
 `verify_chain() -> bool` now returns `True` **only** when the chain is `INTACT` (>=1 event and
 every hash + linkage check passes). An empty store now returns `False` (fail-closed), as does a
@@ -32,10 +32,43 @@ if status is ChainStatus.EMPTY:
     ...  # a caller for whom "empty is fine" must now say so EXPLICITLY
 ```
 
-**Migration.** Callers that treated `verify_chain() is True` as "sound" need no change — an empty
-store is no longer reported sound. Callers that intentionally accept an empty audit trail must
-switch to `verify_chain_status()` and handle `ChainStatus.EMPTY` explicitly. `verify_chain()`
-keeps its `bool` signature; only the empty-chain verdict changed (`True` → `False`).
+**What this DOES and does NOT detect.** The chain is an **unkeyed** SHA-256 hash chain with no
+signed or anchored head. `verify_chain` therefore detects: a **full wipe** (→ `EMPTY`), a **naive
+in-place edit** of any event (its recomputed hash no longer matches → `TAMPERED`), and a **middle-
+or front-deletion** among the stored events (linkage break → `TAMPERED`). It does **NOT** detect
+**tail-truncation from genesis** (dropping the newest events leaves a shorter but internally
+consistent chain) nor **full re-hash substitution** (an attacker who rewrites every event and
+recomputes every hash produces a chain that verifies) — closing those requires a keyed HMAC or a
+signed/anchored head and is out of scope for this change. Do not read `verify_chain() is True` as
+full tamper-evidence; it is empty-detection plus naive-edit / interior-deletion detection.
+
+Note `InMemoryAuditStore` is a bounded `deque(maxlen)` that legitimately EVICTS its oldest events
+once full; a wrapped-but-intact chain now verifies `INTACT` (it does not require the genesis anchor
+once eviction has occurred), while a genuine linkage break among the surviving events still reports
+`TAMPERED`.
+
+**Migration.** Callers that treated `verify_chain() is True` as "chain sound" need no code change —
+an empty store is simply no longer reported sound. One in-tree caller changes OUTPUT (not API):
+`pact.compliance.evidence.EvidenceCollector` (`packages/kailash-pact`) feeds `verify_chain()` into
+the SOC 2 **CC7 `audit_chain_integrity`** criterion; against an **empty** store that criterion now
+emits `outcome="failure"` where it previously emitted `success`. This is the intended fail-closed
+direction (an empty audit trail is not evidence of a sound one), but it is a visible change in
+generated compliance evidence. Callers that intentionally accept an empty trail must switch to
+`verify_chain_status()` and handle `ChainStatus.EMPTY` explicitly. `verify_chain()` keeps its `bool`
+signature; only the empty-chain verdict changed (`True` → `False`).
+
+### Fixed — sibling audit verifiers no longer report an empty store as verified (#2221)
+
+Two more "an absence rendered as a success" sites in the same tree, same class as the canonical
+stores above:
+
+- `AppendOnlyAuditStore.verify_integrity()` (legacy) returned `IntegrityVerificationResult(valid=
+  True, total_records=0)` for an empty store; it now returns `valid=False` with a recorded reason.
+  (This store is a plain list — it never evicts — so empty unambiguously means no records.)
+- `ConsentLedger.verify_chain()` returned `True` for an empty ledger (the linkage loop never ran);
+  it now returns `False`. A wiped consent ledger no longer reports verified. (Consent records carry
+  per-record Ed25519 signatures, so this is less severe than the unkeyed audit chain — but
+  empty-passes is the same defect.)
 
 ### Fixed — suspension resume gate no longer fails open on an empty condition set (#2221)
 
@@ -48,10 +81,12 @@ through this gate without an explicit override.
 ### Fixed — MCPChannel health check uses a falsifiable workflow-registry assertion (#2221)
 
 `MCPChannel.health_check()` asserted `len(self._workflow_registry) >= 0`, which is `True` for every
-sized object (and raised `TypeError` on a `None` registry) — it reported healthy for an empty, full,
-and corrupt-but-nonempty registry alike. It now checks `self._workflow_registry is not None`
-(falsifiable, matching its sibling `is not None` checks) and the workflow-count metric is None-safe
-so a corrupt channel reports unhealthy instead of crashing the health report.
+sized object and raised `TypeError` on a `None` registry — an assertion that cannot fail is not a
+check. It now checks `self._workflow_registry is not None` (falsifiable, matching its sibling
+`is not None` checks: it detects an uninitialized/torn-down channel where the registry is `None`),
+and the workflow-count metric is `None`-safe so such a channel reports unhealthy instead of crashing
+the health report. Note this does **not** detect a "corrupt-but-nonempty" registry — it is a
+crash-fix plus a falsifiable init-state check, not a content-integrity check.
 
 ### Fixed — the first `PythonCodeNode` execution no longer imports the whole ML stack (#2000)
 

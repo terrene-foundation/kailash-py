@@ -533,6 +533,13 @@ class InMemoryAuditStore:
     def __init__(self, max_events: int = _DEFAULT_MAX_EVENTS) -> None:
         self._events: deque[AuditEvent] = deque(maxlen=max_events)
         self._max_events = max_events
+        # Total events ever appended (monotonic). The deque itself evicts the
+        # oldest entries silently once it reaches ``max_events``, so its length
+        # cannot tell a chain that legitimately WRAPPED (first surviving event
+        # no longer genesis-anchored) apart from one whose front was deleted.
+        # This counter lets ``verify_chain_status`` distinguish the two: the
+        # genesis anchor is only required while nothing has been evicted yet.
+        self._total_appended = 0
 
     @property
     def count(self) -> int:
@@ -638,6 +645,7 @@ class InMemoryAuditStore:
             )
 
         self._events.append(event)
+        self._total_appended += 1
 
     async def query(self, filter: AuditFilter) -> List[AuditEvent]:
         """Query events matching the filter criteria.
@@ -676,8 +684,16 @@ class InMemoryAuditStore:
 
         Checks:
         1. Each event's hash matches its content.
-        2. Each event's prev_hash matches the preceding event's hash.
-        3. The first event's prev_hash is the genesis sentinel.
+        2. Each event's prev_hash matches the preceding event's hash
+           (linkage among the SURVIVING events).
+        3. The first surviving event's prev_hash is the genesis sentinel --
+           but ONLY when nothing has been evicted yet. This store is a bounded
+           ``deque(maxlen=max_events)`` that evicts the oldest events once full
+           (a Level-0 design choice); after it wraps, the first surviving
+           event's ``prev_hash`` legitimately points to an evicted event, so
+           requiring the genesis anchor there would flag a healthy
+           long-running store as ``TAMPERED``. ``_total_appended`` tells us
+           whether eviction has occurred.
 
         Returns:
             :class:`ChainStatus.EMPTY` when the store holds no events (an
@@ -689,6 +705,11 @@ class InMemoryAuditStore:
         if not events:
             return ChainStatus.EMPTY
 
+        # The chain has WRAPPED (evicted at least one event) iff more events
+        # have been appended than the store can hold. Only then is the first
+        # surviving event expected NOT to be genesis-anchored.
+        has_evicted = self._total_appended > self._max_events
+
         for i, event in enumerate(events):
             # Check hash integrity
             if not event.verify_integrity():
@@ -696,7 +717,12 @@ class InMemoryAuditStore:
 
             # Check chain linkage
             if i == 0:
-                if not hmac_mod.compare_digest(event.prev_hash, _GENESIS_HASH):
+                # Require the genesis anchor only when no eviction has occurred;
+                # a wrapped store's first surviving event points at an evicted
+                # (unverifiable) predecessor, which is legitimate.
+                if not has_evicted and not hmac_mod.compare_digest(
+                    event.prev_hash, _GENESIS_HASH
+                ):
                     return ChainStatus.TAMPERED
             else:
                 if not hmac_mod.compare_digest(event.prev_hash, events[i - 1].hash):
@@ -1240,8 +1266,19 @@ class AppendOnlyAuditStore:
 
     async def verify_integrity(self) -> IntegrityVerificationResult:
         if not self._records:
+            # Fail CLOSED on an empty store (#2221): an absent audit trail is
+            # unverifiable, and a wiped store must not report ``valid``.
+            # Consistent with ``ChainStatus.EMPTY`` on the canonical stores.
+            # (This store is a plain list -- it never evicts -- so empty
+            # unambiguously means "no records", never "wrapped".)
             return IntegrityVerificationResult(
-                valid=True, total_records=0, verified_records=0
+                valid=False,
+                total_records=0,
+                verified_records=0,
+                errors=[
+                    "empty store: an absent audit trail is unverifiable "
+                    "(fail-closed) -- a wipe must not read as verified"
+                ],
             )
 
         errors: List[str] = []

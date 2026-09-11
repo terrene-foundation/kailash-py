@@ -195,6 +195,15 @@ class TestChainLinkage:
         assert a2.prev_hash == a1.hash
         assert ledger.head_hash == a2.hash
 
+    def test_empty_ledger_fails_closed(self, ledger):
+        """An empty consent ledger is NOT verified (#2221 F2).
+
+        The loop never ran, so verify_chain() used to return True vacuously --
+        a wiped consent ledger reported verified. It now fails closed.
+        """
+        assert ledger.count == 0
+        assert ledger.verify_chain() is False
+
     def test_verify_chain_holds(self, ledger):
         for i in range(5):
             ledger.record_consent(
@@ -205,6 +214,9 @@ class TestChainLinkage:
             )
         assert ledger.count == 5
         assert ledger.verify_chain() is True
+        # Wipe the populated ledger; the fix makes empty NOT verify (both poles).
+        ledger._records.clear()
+        assert ledger.verify_chain() is False
 
     def test_append_broken_link_rejected(self, ledger, keypair):
         priv, pub = keypair
