@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
+from ...utils.finalizer import warn_unclosed
 from ..models import TaskMetrics, TaskRun, TaskStatus, WorkflowRun
 from .base import StorageBackend
 
@@ -897,12 +898,23 @@ class SQLiteStorage(StorageBackend):
         self.close()
         return False
 
-    def __del__(self):
-        """Close database connection on deletion."""
-        try:
-            self.close()
-        except Exception:
-            pass
+    def __del__(self, _warn=warn_unclosed):
+        # Warn and RETURN. This finalizer performs no cleanup, deliberately.
+        #
+        # ``close()`` opens with ``with self._lock:`` — a non-reentrant
+        # ``threading.Lock``. A finalizer fires at an arbitrary bytecode
+        # boundary on whichever thread drops the last reference, which may be a
+        # thread already inside one of this class's own locked sections; taking
+        # the lock again there deadlocks the process permanently. The enclosing
+        # swallow-and-continue guard could not catch that (a deadlock is not an
+        # exception) and additionally hid real close failures. See
+        # ``rules/patterns.md`` § "Async Resource Cleanup" and issue #2107.
+        #
+        # The sqlite3 connection's own C-level deallocator closes the database
+        # handle once ``self.conn`` becomes unreachable, so no descriptor
+        # leaks; deterministic cleanup stays with close()/__exit__.
+        if getattr(self, "conn", None) is not None:
+            _warn(self, "Call close() or use 'with SQLiteStorage(...) as store:'.")
 
     @staticmethod
     def _reconstruct_metrics(data: dict) -> None:

@@ -16,6 +16,26 @@ Invariants
 3. ``to_workflow()`` proxies to inner agent (StreamingAgent overrides).
 4. ``isinstance(wrapper, BaseAgent)`` is True.
 5. Stacking validates no duplicate wrapper types.
+
+Containment: which accessor is a boundary
+-----------------------------------------
+``inner`` and ``innermost`` are the PUBLIC accessors and both honour a
+wrapper's containment boundary (see :meth:`WrapperBase._containment_boundary`).
+A wrapper that enforces a security boundary substitutes its protected proxy for
+everything beneath it, so no public attribute read hands back an object that
+executes ungoverned.
+
+``_inner`` is NOT a containment boundary and does not claim to be. It is the
+wrapper machinery's own link: every wrapper's ``run``/``run_async`` calls
+through it, ``_collect_wrapper_types`` walks it to validate stacking order,
+``StreamingAgent`` walks it to resolve the model config and system prompt from
+the base agent, and ``Delegate.core_agent`` walks it to expose the loop-agent
+bridge. Substituting a proxy there would have to be done in all five places at
+once and would change what those resolvers can read. A caller who reaches for
+``wrapper._inner`` is reaching into private machinery, which Python does not
+prevent and this module does not claim to -- the same honest scope statement
+:mod:`kailash.trust.readonly_proxy` makes about its own boundary. Tracked as
+the named residual of #2227 Route A.
 """
 
 from __future__ import annotations
@@ -155,15 +175,72 @@ class WrapperBase(BaseAgent):
         self._inner_called = True
         return await self._inner.run_async(**inputs)
 
+    def _containment_boundary(self) -> Any | None:
+        """The object this wrapper substitutes for everything beneath it.
+
+        Returns ``None`` for an ordinary wrapper, which adds a cross-cutting
+        concern but claims no authority over what it wraps. A wrapper that
+        enforces a security boundary -- ``L3GovernedAgent`` is the only one
+        today -- overrides this to return its protected proxy, which makes
+        :attr:`innermost` stop there instead of walking past it.
+
+        A hook rather than an ``isinstance`` check in :attr:`innermost`, so
+        ``wrapper_base`` does not have to import the governance module (which
+        imports it), and so any future enforcing wrapper is covered without
+        editing this file.
+        """
+        return None
+
     @property
     def inner(self) -> BaseAgent:
         """Access the wrapped inner agent."""
         return self._inner
 
     @property
-    def innermost(self) -> BaseAgent:
-        """Walk the wrapper stack to find the innermost (non-wrapper) agent."""
-        current = self._inner
+    def innermost(self) -> Any:
+        """The innermost agent, or the containment boundary that stands for it.
+
+        Walks the stack and returns the first non-wrapper agent -- UNLESS some
+        wrapper along the way declares a containment boundary
+        (:meth:`_containment_boundary`), in which case that boundary is
+        returned and the walk stops there.
+
+        Why the walk stops (#2227 Route A)
+        ----------------------------------
+        ``L3GovernedAgent`` overrides ``inner`` to return a
+        ``_ProtectedInnerProxy``, but this property is defined HERE and walked
+        the private ``_inner`` chain, so it reached straight past that proxy to
+        the raw agent::
+
+            governed.innermost.run(query="...")   # ungoverned execution
+
+        Overriding ``innermost`` on ``L3GovernedAgent`` alone would NOT have
+        fixed it: for a stacked ``StreamingAgent(MonitoredAgent(governed))``
+        the walk starts at the outermost wrapper and never consults any
+        intermediate wrapper's ``innermost``. The boundary has to be honoured
+        by the walk itself, which is what this does -- ``streaming.innermost``,
+        ``monitored.innermost`` and ``governed.innermost`` now all stop at the
+        same proxy.
+
+        The boundary object is returned rather than raising, because the
+        legitimate consumers of ``innermost`` want the inner agent's ``config``
+        and ``signature`` (streaming resolves its model from them) and the
+        proxy still serves those. What it refuses is ``run``/``run_async``.
+
+        Note: this is the PUBLIC accessor and is the containment boundary.
+        ``_inner`` is private wrapper machinery -- every wrapper's execution
+        path, the stack-order validator, the streaming config resolver and the
+        delegate facade all traverse it -- and is NOT a containment boundary.
+        See the module docstring.
+
+        Returns:
+            The innermost non-wrapper ``BaseAgent``, or the containment
+            boundary object of the innermost enforcing wrapper.
+        """
+        current: Any = self
         while isinstance(current, WrapperBase):
+            boundary = current._containment_boundary()
+            if boundary is not None:
+                return boundary
             current = current._inner
         return current

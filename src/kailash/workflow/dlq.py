@@ -17,6 +17,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
+from kailash.utils.finalizer import warn_unclosed
+
 logger = logging.getLogger(__name__)
 
 # Absolute capacity limit -- oldest items are evicted when reached.
@@ -394,8 +396,21 @@ class PersistentDLQ:
         self.close()
         return False
 
-    def __del__(self) -> None:
-        try:
-            self.close()
-        except Exception:
-            pass
+    def __del__(self, _warn=warn_unclosed) -> None:
+        # Warn and RETURN. This finalizer performs no cleanup, deliberately.
+        #
+        # ``close()`` opens with ``with self._lock:`` — a non-reentrant
+        # ``threading.Lock``. A finalizer fires at an arbitrary bytecode
+        # boundary on whichever thread drops the last reference, which may be a
+        # thread already holding that lock; re-acquiring it there deadlocks the
+        # process permanently. The enclosing swallow-and-continue guard was
+        # inert against that (a deadlock is not an exception) while silently
+        # discarding genuine close failures. See ``rules/patterns.md``
+        # § "Async Resource Cleanup" and issue #2107.
+        #
+        # sqlite3 closes the underlying database handle from its own C-level
+        # deallocator once ``self._conn`` is unreachable, so dropping the
+        # explicit close leaks nothing; close()/__exit__ remain the
+        # deterministic path.
+        if getattr(self, "_conn", None) is not None:
+            _warn(self, "Call close() or use 'with PersistentDLQ(...) as dlq:'.")

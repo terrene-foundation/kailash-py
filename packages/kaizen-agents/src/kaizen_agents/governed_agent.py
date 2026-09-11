@@ -78,13 +78,36 @@ class _ProtectedInnerProxy(ReadOnlyAttributeProxy):
 
     __slots__ = ()
 
+    # Safe read-only INTROSPECTION only. Every entry here is handed back through
+    # ReadOnlyAttributeProxy's forwarder, but gating the NAME and stripping the
+    # bound method's __self__ is not sufficient on its own: a member that
+    # RETURNS a live handle to the raw agent (or an executable form of it) is an
+    # escape hatch no matter how the name is gated. This is the #2226 class at
+    # the agent boundary. Two members were removed for exactly that (HIGH-1 of
+    # the #2227 review):
+    #   * ``to_workflow_node`` is ``def to_workflow_node(self): return self`` --
+    #     it structurally cannot return anything but the raw inner agent, so
+    #     ``governed.inner.to_workflow_node().run(**inputs)`` (and, through the
+    #     innermost boundary, ``streaming.innermost.to_workflow_node().run(...)``)
+    #     executed completely ungoverned.
+    #   * ``to_workflow`` builds a WorkflowBuilder whose ``LLMAgentNode`` carries
+    #     ``ungoverned=self.config.ungoverned`` and NO envelope check -- the L3
+    #     evaluation lives in run()/run_async(), not in the emitted workflow --
+    #     so a proxy holder could build+run the agent's LLM work outside the
+    #     envelope. Neither can be made safe here (both live in BaseAgent, which
+    #     is out of scope and shared by every caller), and neither has any
+    #     legitimate consumer THROUGH the proxy: wrappers proxy
+    #     ``self._inner.to_workflow()`` on the raw inner directly, never through
+    #     ``.inner``. So the fix is to deny them, not to reshape them.
+    # The staleness pin is ``test_no_allowlisted_member_returns_a_live_agent_handle``,
+    # which CALLS every allowlisted member and asserts the return is neither the
+    # raw agent nor runnable -- so a NEW leaky entry fails, the way inspecting
+    # only __self__ did not.
     _ALLOWED_ATTRS = frozenset(
         {
             "config",
             "signature",
             "get_parameters",
-            "to_workflow",
-            "to_workflow_node",
         }
     )
 
@@ -154,6 +177,20 @@ class L3GovernedAgent(WrapperBase):
         """The active agent posture (clamped to envelope ceiling)."""
         return self._posture
 
+    def _containment_boundary(self) -> _ProtectedInnerProxy:
+        """This wrapper's protected proxy stands in for everything beneath it.
+
+        Declares the governance boundary to ``WrapperBase.innermost``, which
+        otherwise walks the private ``_inner`` chain straight past ``inner``
+        and hands back the raw agent -- ``governed.innermost.run(...)`` ran
+        completely ungoverned (#2227 Route A). Declaring the boundary here
+        rather than overriding ``innermost`` covers the STACKED case too:
+        ``StreamingAgent(MonitoredAgent(governed)).innermost`` starts its walk
+        at the outermost wrapper and would never have consulted an override on
+        this class.
+        """
+        return self._inner_proxy
+
     @property
     def inner(self) -> _ProtectedInnerProxy:  # type: ignore[override]
         """Returns a protected proxy instead of the raw inner agent."""
@@ -163,6 +200,53 @@ class L3GovernedAgent(WrapperBase):
     def rejection_count(self) -> int:
         """Number of requests rejected by governance since creation."""
         return self._rejection_count
+
+    def to_workflow(self) -> Any:
+        """Refuse conversion to a static workflow -- fail closed (#2227).
+
+        ``WrapperBase.to_workflow`` proxies to ``self._inner.to_workflow()``,
+        which emits an ``LLMAgentNode`` carrying ``ungoverned=config.ungoverned``
+        and NO envelope evaluation -- the L3 budget/operational/posture checks
+        live only in ``run``/``run_async``. So an inherited ``to_workflow`` let a
+        holder of the wrapper do::
+
+            wf = governed.to_workflow()
+            LocalRuntime().execute(wf.build())   # inner LLM work, envelope SKIPPED
+
+        from a plain public method, no private access. This is the same class
+        as the ``innermost``/``to_workflow_node`` routes already contained, and
+        the same danger documented for the proxy ``to_workflow`` entry that was
+        removed from ``_ProtectedInnerProxy._ALLOWED_ATTRS`` -- closing the proxy
+        path while leaving the wrapper's own public method open would be half a
+        fix. It is also reachable as ``MonitoredAgent(governed).to_workflow()``,
+        which inherits this via the ``_inner`` chain.
+
+        Emitting a *governed* workflow is a larger design change (the envelope
+        evaluation would have to become a node); refusing is the correct
+        fail-closed move and matches ``StreamingAgent.to_workflow``, which
+        already raises for its own reason. Governed execution goes through
+        ``run``/``run_async``, where the envelope is enforced.
+
+        Raised as :class:`GovernanceRejectedError` rather than the
+        not-implemented error ``StreamingAgent`` uses: this is a deliberate
+        governance refusal, not an unimplemented method, and the bare
+        not-implemented form trips the repo's zero-tolerance stub gate. The
+        dimension names the refused operation so the audit trail is precise.
+
+        Raises:
+            GovernanceRejectedError: always. A governed agent has no ungoverned
+                static-workflow form; use ``run``/``run_async``.
+        """
+        raise GovernanceRejectedError(
+            dimension="workflow_conversion",
+            detail=(
+                "L3GovernedAgent cannot be converted to a static workflow -- the "
+                "emitted LLMAgentNode would run the inner agent with the "
+                "governance envelope SKIPPED (budget/operational/posture are "
+                "enforced only in run()/run_async()). Use the governed agent's "
+                "run()/run_async(), which evaluate the envelope before execution"
+            ),
+        )
 
     def _evaluate_financial(self, inputs: dict[str, Any]) -> None:
         """Check financial constraints.

@@ -1,11 +1,22 @@
-# Session Notes — cont-29 (2 packages PUBLISHED, promotion merged, census fully drained)
+# Session Notes — cont-30 (core 2.65.0 + dataflow 2.20.1 PUBLISHED; D1 and D2 discharged)
 
 ## Where we are
 
-**`kailash-mcp 0.6.0` and `kailash-kaizen 2.46.1` are on PyPI.** PR #2223 promoted `dev` →
-`main` at `e9f7a8c1b`. Both verified from a clean venv AFTER upload, at BOTH poles.
+**`kailash 2.65.0` and `kailash-dataflow 2.20.1` are on PyPI.** PR #2228 promoted `dev` → `main`
+at `4a98750d8`; both tags pushed, both publish runs succeeded, both verified live against the
+version-pinned PyPI endpoint with a 404 control. **cont-29's D1 and D2 are DONE.**
 
-**Core `kailash` is 2.65.0 on `dev` and UNRELEASED — it must ship (D1).**
+Before tagging, the 2.65.0 changelog was cut from `[Unreleased]` and **three shipped fixes had no
+entry at all** — found by enumerating `git log --no-merges v2.64.0..origin/dev -- src/` against the
+section rather than reading the section. The worst was #2128, a brief-scrubber ReDoS reachable from
+user-supplied text, hiding inside a commit subjected `fix(tests)`.
+
+**Two traps this session, both in `.launch-ledger.md`:** a `dev → main` promotion DELETES the trunk
+(`delete_branch_on_merge` is true and the PR head IS `dev`) — cut a `promote/<date>` branch next
+time; and `pip install` cannot distinguish "unpublished" from "index cache lag" (the control
+returns the same string) — use the version-pinned JSON endpoint.
+
+**cont-29's earlier framing is superseded:** core is no longer unreleased.
 
 Census clean: 2 local branches, 2 remote, **1 worktree**, 0 orphans, 0 open PRs.
 Everything landed into `dev` and drained the same session.

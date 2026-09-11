@@ -157,12 +157,38 @@ class TestResolveAgentProvider:
 
         assert resolve_agent_provider(model) == expected
 
-    def test_unregistered_model_falls_back_to_environment(self, keyless):
-        """Preserves today's behaviour for models outside the prefix registry."""
+    def test_unregistered_model_no_longer_falls_back_to_environment(self, keyless):
+        """#2220 REVERSED this assertion deliberately; it pinned the defect.
+
+        This test used to read ``== "openai"`` and was titled "preserves
+        today's behaviour for models outside the prefix registry". That
+        behaviour was the #2220 vulnerability: the env fallback answered
+        "which vendor serves this model" using a fact that only says "which
+        vendor do I hold a credential for". With ``OPENAI_API_KEY`` exported,
+        ``model="llama-3.1"`` dispatched a local model's prompt to OpenAI.
+
+        ``chatgpt-4o-latest`` is kept as the model precisely because it is the
+        SYMPATHETIC case — it really is OpenAI-served, so the old guess
+        happened to be right here, and this is the population the fix breaks.
+        They now pass ``llm_provider="openai"`` explicitly. That cost is
+        accepted: the resolver cannot distinguish this model from
+        ``llama-3.1``, and being right by luck for one is what made it wrong
+        for the other.
+        """
         from kaizen.core import resolve_agent_provider
 
         keyless.setenv("OPENAI_API_KEY", "sk-test-not-used")
-        assert resolve_agent_provider("chatgpt-4o-latest") == "openai"
+        with pytest.raises(ConfigurationError) as caught:
+            resolve_agent_provider("chatgpt-4o-latest")
+
+        # The migration must be named, or the caller's obvious next move is to
+        # export another key — which is what caused the silent dispatch.
+        assert "llm_provider=" in str(caught.value)
+
+        # The documented migration must actually work.
+        assert (
+            resolve_agent_provider("gpt-4o-mini") == "openai"
+        ), "registered prefixes must keep resolving — this fix is not 'always raise'"
 
     def test_unresolvable_raises_actionable_configuration_error(self, keyless):
         """Fail LOUD and name the fix — never return None into the node gate."""

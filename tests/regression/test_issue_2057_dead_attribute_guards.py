@@ -168,9 +168,23 @@ def test_create_permission_rule_audits_only_after_registration():
     )
 
     assert len(audit.calls) == 1
-    assert audit.calls[0]["event_type"] == "permission_rule_created"
-    # The audit record must reference the rule that actually exists.
-    assert audit.calls[0]["rule_id"] == mgr.access_manager.rules[0].id
+
+    # The #2057 guarantee is unchanged: exactly one audit event, emitted only
+    # after registration, naming the rule that actually exists.
+    #
+    # The SHAPE of the assertion changed with issue #2222. This test used to
+    # read `calls[0]["event_type"]` and `calls[0]["rule_id"]` -- top-level
+    # kwargs that `AuditLogNode` does not declare and `Node.execute` therefore
+    # strips, on a call that then died on the missing required `operation`. It
+    # passed only because `_RecordingAudit` accepts arbitrary kwargs, so it
+    # pinned a call shape the real node rejects. `permission_rule_created` was
+    # not an `AuditEventType` member either; it survives here as the `action`,
+    # which is free text.
+    call = audit.calls[0]
+    assert set(call) == {"operation", "event_data"}
+    assert call["operation"] == "log_event"
+    assert call["event_data"]["action"] == "permission_rule_created"
+    assert call["event_data"]["metadata"]["rule_id"] == mgr.access_manager.rules[0].id
 
 
 def test_unregisterable_rule_raises_and_writes_no_audit_event():

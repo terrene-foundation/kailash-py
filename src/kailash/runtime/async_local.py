@@ -21,12 +21,10 @@ import logging
 import os
 import sys
 import time
-import warnings
 import weakref
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from types import ModuleType
 from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, Union
 
 from kailash.nodes.base import Node
@@ -60,6 +58,7 @@ from kailash.sdk_exceptions import (
     WorkflowExecutionError,
 )
 from kailash.tracking import TaskManager, TaskStatus
+from kailash.utils.finalizer import warn_unclosed
 
 logger = logging.getLogger(__name__)
 
@@ -2122,22 +2121,38 @@ class AsyncLocalRuntime(LocalRuntime):
         self._workflow_signals.clear()
         self._cleanup_event_loop()
 
-    def __del__(self, _warnings: ModuleType = warnings) -> None:
-        """Emit ResourceWarning if runtime was not properly closed."""
-        if getattr(self, "_ref_count", 0) > 0:
-            _warnings.warn(
-                f"Unclosed {self.__class__.__name__} (ref_count={self._ref_count}). "
-                f"Use 'async with {self.__class__.__name__}() as runtime:' or call runtime.close().",
-                ResourceWarning,
-                source=self,
+    def __del__(self, _warn=warn_unclosed) -> None:
+        """Emit ResourceWarning if the runtime was not properly closed.
+
+        Warns and RETURNS. This finalizer performs no cleanup, deliberately —
+        see :meth:`LocalRuntime.__del__` for the full deadlock rationale
+        (``close()`` logs, takes ``self._loop_lock``, then runs
+        ``_cleanup_event_loop()``; a finalizer can fire on a thread already
+        holding either lock, and neither is reentrant).
+
+        Deliberately does NOT call ``super().__del__()``. Python does not
+        chain ``__del__`` implicitly, so the parent finalizer runs only if
+        invoked explicitly — and now that both are warn-only with the SAME
+        ``_ref_count > 0`` predicate, chaining would emit two
+        ``ResourceWarning``s for one leaked object. The previous code chained
+        safely only by accident: it forced ``close()`` first, which drove
+        ``_ref_count`` to 0, so the parent's guard never fired. With the
+        cleanup gone that accident disappears, so the chain is removed and the
+        override subsumes the parent entirely, differing only in naming
+        ``async with`` as the remedy. Pinned by
+        ``tests/regression/test_issue_2107_del_finalizers_no_close.py::
+        test_async_local_runtime_warns_exactly_once``.
+
+        See ``rules/patterns.md`` § "Async Resource Cleanup" and issue #2107.
+        """
+        ref_count = getattr(self, "_ref_count", 0)
+        if ref_count > 0:
+            _warn(
+                self,
+                f"Use 'async with {type(self).__name__}() as runtime:' "
+                "or call runtime.close().",
+                detail=f"ref_count={ref_count}",
             )
-            # Force cleanup regardless
-            self._ref_count = 1  # Ensure close() actually cleans up
-            try:
-                self.close()
-            except Exception:
-                pass
-        super().__del__(_warnings=_warnings)
 
     async def __aenter__(self) -> "AsyncLocalRuntime":
         """Async context manager entry.
