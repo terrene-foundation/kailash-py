@@ -22,6 +22,7 @@ from kailash.trust.audit_store import (
     AuditEvent,
     AuditFilter,
     ChainIntegrityError,
+    ChainStatus,
     InMemoryAuditStore,
     _compute_event_hash,
 )
@@ -230,9 +231,52 @@ class TestInMemoryVerifyChain:
     """InMemoryAuditStore.verify_chain must detect integrity issues."""
 
     @pytest.mark.asyncio
-    async def test_empty_store_is_valid(self):
+    async def test_empty_store_fails_closed(self):
+        """An empty store is NOT intact (#2221).
+
+        An absent audit trail is unverifiable -- a wipe and a never-written
+        store are the same at this call, and the wipe is the one case audit
+        verification exists to detect. verify_chain() therefore returns False
+        (fail-closed) and the three-state status is EMPTY, not INTACT.
+        """
         store = InMemoryAuditStore()
+        assert await store.verify_chain() is False
+        assert await store.verify_chain_status() is ChainStatus.EMPTY
+
+    @pytest.mark.asyncio
+    async def test_wipe_of_populated_store_is_not_intact(self):
+        """Both poles (#2221): a populated intact chain verifies; wiping it does not.
+
+        A single-pole test cannot distinguish this fix from "now always
+        False" -- so both directions are asserted on the SAME store.
+        """
+        store = InMemoryAuditStore()
+        for i in range(3):
+            await store.append(
+                store.create_event(actor=f"a{i}", action="do", resource=f"r{i}")
+            )
+        # Pole 1: populated + intact verifies as INTACT / True.
+        assert await store.verify_chain_status() is ChainStatus.INTACT
         assert await store.verify_chain() is True
+
+        # Wipe the store (simulate an attacker deleting the audit trail).
+        store._events.clear()
+
+        # Pole 2: the emptied store is NOT intact.
+        assert await store.verify_chain() is False
+        assert await store.verify_chain_status() is ChainStatus.EMPTY
+
+    @pytest.mark.asyncio
+    async def test_tampered_chain_status_is_tampered(self):
+        """A tampered populated chain is TAMPERED, distinct from EMPTY."""
+        store = InMemoryAuditStore()
+        await store.append(store.create_event(actor="a", action="do"))
+        await store.append(store.create_event(actor="b", action="do"))
+        # Corrupt the second event's stored hash in place.
+        bad = store._events[1]
+        object.__setattr__(bad, "hash", "f" * 64)
+        assert await store.verify_chain_status() is ChainStatus.TAMPERED
+        assert await store.verify_chain() is False
 
     @pytest.mark.asyncio
     async def test_single_event_is_valid(self):
@@ -298,22 +342,48 @@ class TestInMemoryBounded:
         assert store.count == 5
 
     @pytest.mark.asyncio
-    async def test_bounded_chain_still_verifiable(self):
-        """After eviction, the remaining chain should still be internally consistent.
+    async def test_wrapped_bounded_chain_verifies_intact(self):
+        """A WRAPPED bounded chain (evicted its front) still verifies INTACT (#2221 F3).
 
-        Note: after deque eviction, the first event's prev_hash points to
-        an evicted event, so verify_chain returns False for the truncated
-        chain. This is expected behavior for bounded stores.
+        The store is a ``deque(maxlen)`` designed to evict. After it wraps, the
+        first surviving event's ``prev_hash`` points to an evicted event -- a
+        legitimate state for a long-running Level-0 deployment, NOT tampering.
+        Requiring the genesis anchor there would cry wolf. The prior test here
+        asserted "verify_chain returns False for the truncated chain ... expected
+        behavior", which was wrong: it made legitimate eviction indistinguishable
+        from real tampering.
         """
         store = InMemoryAuditStore(max_events=5)
         for i in range(10):
-            event = store.create_event(actor="a", action="step", resource=f"r-{i}")
-            await store.append(event)
-
-        # After eviction, internal hash integrity of each event is still valid
-        events = list(store._events)
-        for event in events:
+            await store.append(
+                store.create_event(actor="a", action="step", resource=f"r-{i}")
+            )
+        assert store.count == 5  # wrapped: 10 appended, 5 survive
+        assert store._total_appended == 10
+        # Each surviving event's own integrity holds ...
+        for event in list(store._events):
             assert event.verify_integrity() is True
+        # ... and the wrapped-but-intact chain verifies INTACT, not TAMPERED.
+        assert await store.verify_chain_status() is ChainStatus.INTACT
+        assert await store.verify_chain() is True
+
+    @pytest.mark.asyncio
+    async def test_wrapped_bounded_chain_with_broken_linkage_is_tampered(self):
+        """The other pole: a linkage break AMONG SURVIVING records after wrap is TAMPERED.
+
+        Eviction is forgiven; genuine tampering among the survivors is not.
+        """
+        store = InMemoryAuditStore(max_events=5)
+        for i in range(10):
+            await store.append(
+                store.create_event(actor="a", action="step", resource=f"r-{i}")
+            )
+        # Break the linkage of a middle surviving event by corrupting its
+        # stored prev_hash in place (bypassing append's guard). Its own
+        # integrity hash no longer matches -> detected.
+        object.__setattr__(store._events[2], "prev_hash", "e" * 64)
+        assert await store.verify_chain_status() is ChainStatus.TAMPERED
+        assert await store.verify_chain() is False
 
 
 # ---------------------------------------------------------------------------

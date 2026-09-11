@@ -41,6 +41,7 @@ from kailash.trust.audit_store import (  # noqa: E402
     AuditEvent,
     AuditFilter,
     ChainIntegrityError,
+    ChainStatus,
     SqliteAuditStore,
     _compute_event_hash,
 )
@@ -305,8 +306,48 @@ class TestSqliteVerifyChain:
     """SqliteAuditStore.verify_chain must detect integrity issues."""
 
     @pytest.mark.asyncio
-    async def test_empty_store_valid(self, store: SqliteAuditStore):
+    async def test_empty_store_fails_closed(self, store: SqliteAuditStore):
+        """An empty persisted store is NOT intact (#2221).
+
+        The persisted store holds the real audit data, so its wipe is the one
+        that matters. An empty table is unverifiable -- verify_chain() returns
+        False (fail-closed) and the status is EMPTY, not INTACT.
+        """
+        assert await store.verify_chain() is False
+        assert await store.verify_chain_status() is ChainStatus.EMPTY
+
+    @pytest.mark.asyncio
+    async def test_wipe_of_populated_store_is_not_intact(self, store: SqliteAuditStore):
+        """Both poles (#2221): a populated persisted chain verifies; wiping it does not."""
+        for i in range(3):
+            await store.create_and_append(actor=f"a{i}", action="do", resource=f"r{i}")
+        # Pole 1: populated + intact.
+        assert await store.verify_chain_status() is ChainStatus.INTACT
         assert await store.verify_chain() is True
+
+        # Wipe every row (simulate an attacker deleting the audit table's data).
+        async with store._pool.acquire_write() as conn:
+            await conn.execute(f"DELETE FROM {store._table_name}")
+            await conn.commit()
+
+        # Pole 2: the emptied store is NOT intact.
+        assert await store.verify_chain() is False
+        assert await store.verify_chain_status() is ChainStatus.EMPTY
+
+    @pytest.mark.asyncio
+    async def test_tampered_row_status_is_tampered(self, store: SqliteAuditStore):
+        """A tampered persisted row is TAMPERED, distinct from EMPTY."""
+        await store.create_and_append(actor="a", action="do")
+        await store.create_and_append(actor="b", action="do")
+        # Corrupt the stored hash of a row directly, bypassing append's guard.
+        async with store._pool.acquire_write() as conn:
+            await conn.execute(
+                f"UPDATE {store._table_name} SET hash = ? WHERE actor = ?",
+                ("f" * 64, "b"),
+            )
+            await conn.commit()
+        assert await store.verify_chain_status() is ChainStatus.TAMPERED
+        assert await store.verify_chain() is False
 
     @pytest.mark.asyncio
     async def test_single_event_valid(self, store: SqliteAuditStore):

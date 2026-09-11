@@ -958,7 +958,13 @@ class MCPChannel(Channel):
         mcp_checks = {
             "mcp_server_running": self.mcp_server is not None,
             "tools_registered": len(self._tool_registry) > 0,
-            "workflows_available": len(self._workflow_registry) >= 0,
+            # `len(...) >= 0` is true for EVERY sized object -- it reports
+            # healthy for an empty, full, or missing registry alike, and raises
+            # on a None registry (#2221). The intended property is that the
+            # workflow registry is initialized and queryable; `is not None` is
+            # falsifiable (a None registry -> False -> unhealthy) and matches
+            # the `is not None` shape of its sibling checks.
+            "workflows_available": self._workflow_registry is not None,
             "runtime_ready": self.runtime is not None,
         }
 
@@ -969,6 +975,13 @@ class MCPChannel(Channel):
             "healthy": all_healthy,
             "checks": {**base_health["checks"], **mcp_checks},
             "tools": len(self._tool_registry),
-            "workflows": len(self._workflow_registry),
+            # None-safe: a corrupt/torn-down channel (registry is None) must
+            # report unhealthy via the check above, not crash the whole
+            # health report on ``len(None)`` (#2221).
+            "workflows": (
+                len(self._workflow_registry)
+                if self._workflow_registry is not None
+                else 0
+            ),
             "clients": len(self._clients),
         }

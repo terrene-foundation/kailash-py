@@ -175,11 +175,21 @@ class PlanSuspension:
     def all_conditions_met(self) -> bool:
         """Check whether all resume conditions are currently satisfied.
 
+        This gates whether a suspended plan may RESUME, so it fails CLOSED: a
+        record constructed with an empty ``resume_conditions`` tuple returns
+        ``False``, NOT ``True``. A suspension with no stated resume conditions
+        is un-resumable through this gate without an explicit override -- the
+        vacuous-truth of ``all([])`` is a fail-OPEN resume gate, the opposite
+        of defensive (#2221).
+
         Returns:
-            True if every ResumeCondition has satisfied=True.
-            Returns True vacuously if there are no conditions (defensive).
+            ``True`` iff there is at least one resume condition AND every
+            :class:`ResumeCondition` has ``satisfied=True``. ``False`` when
+            ``resume_conditions`` is empty or any condition is unmet.
         """
-        return all(c.satisfied for c in self.resume_conditions)
+        return bool(self.resume_conditions) and all(
+            c.satisfied for c in self.resume_conditions
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a plain dict suitable for JSON encoding.
