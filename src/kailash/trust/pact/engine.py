@@ -27,7 +27,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
-from kailash.trust.action_policy import evaluate_action, evaluate_scope
+from kailash.trust.action_policy import (
+    delegated_capabilities,
+    evaluate_action,
+    evaluate_scope,
+)
 from kailash.trust.pact.access import (
     AccessDecision,
     KnowledgeSharePolicy,
@@ -3213,8 +3217,12 @@ class GovernanceEngine:
                     delegator_id=envelope.defining_role_address,
                     delegatee_id=envelope.target_role_address,
                     task_id="",
-                    capabilities_delegated=list(
-                        envelope.envelope.operational.allowed_actions
+                    # GH #2225: advertise only what enforcement would GRANT --
+                    # the permitted set (allowed - blocked) from the SAME shared
+                    # predicate verify_action consumes -- never the raw allowlist,
+                    # which over-states every blocked action as delegated.
+                    capabilities_delegated=delegated_capabilities(
+                        envelope.envelope.operational
                     ),
                     constraint_subset=[],
                     delegated_at=datetime.now(UTC),
@@ -3302,8 +3310,12 @@ class GovernanceEngine:
                     delegator_id=envelope.parent_envelope_id,
                     delegatee_id=envelope.task_id,
                     task_id=envelope.task_id,
-                    capabilities_delegated=list(
-                        envelope.envelope.operational.allowed_actions
+                    # GH #2225: same shared derivation as the role-envelope site
+                    # above -- the permitted set (allowed - blocked), never the
+                    # raw allowlist. Fixing one site and not this one would leave
+                    # the task-delegation record diverging on its own.
+                    capabilities_delegated=delegated_capabilities(
+                        envelope.envelope.operational
                     ),
                     constraint_subset=[],
                     delegated_at=datetime.now(UTC),
