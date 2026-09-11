@@ -583,6 +583,13 @@ class DataFlow(DataFlowEventMixin):
         # See: ROOT_CAUSE_ANALYSIS.md in reports/issues/database-url-inheritance/
         # Format: {database_type: (node, event_loop_id)} for event loop tracking (v0.10.6+)
         self._async_sql_node_cache = {}  # Keyed by database_type
+        # Issue #2211: nodes evicted from the cache by an event-loop change
+        # whose pool is bound to a loop that is STILL ALIVE, so releasing it
+        # here would abort connections underneath a concurrent caller. Drained
+        # by close()/close_async(). The far more common dead-loop case is
+        # released immediately and never reaches this list — see
+        # _release_displaced_async_sql_node.
+        self._displaced_async_sql_nodes: list = []
 
         # Store migration control parameters
         # auto_migrate enum (issue #696):
@@ -1134,6 +1141,8 @@ class DataFlow(DataFlowEventMixin):
         "_loop_runtime_cache",
         "_sync_runtime_singleton",
         "_async_sql_node_cache",
+        # Issue #2211: holds live nodes bound to loops in THIS process.
+        "_displaced_async_sql_nodes",
         # ErrorEnhancer holds a functools.lru_cache wrapper.
         "error_enhancer",
         # Subsystems that hold thread.Lock or RLock instances. These
@@ -1222,6 +1231,7 @@ class DataFlow(DataFlowEventMixin):
         self._loop_runtime_cache = {}
         self._sync_runtime_singleton = None
         self._async_sql_node_cache = {}
+        self._displaced_async_sql_nodes = []
         # Lazily recreate ErrorEnhancer if available.
         self.error_enhancer = (
             CoreErrorEnhancer() if CoreErrorEnhancer is not None else None
@@ -8969,6 +8979,81 @@ class DataFlow(DataFlowEventMixin):
 
         return ConnectionParser.detect_database_type(url)
 
+    def _release_displaced_async_sql_node(self, node) -> None:
+        """Release a cached node that is about to be dropped from the cache.
+
+        Issue #2211. Two cases, and telling them apart is the whole point:
+
+        * The displaced node's pool is bound to a CLOSED event loop — the
+          common case, because a loop change is normally observed after the
+          previous ``asyncio.run()`` has already returned. Nothing can ever
+          await on that pool again, so the only release available is the
+          synchronous driver terminate in
+          ``AsyncSQLDatabaseNode.dispose_sync()``. Done here, eagerly, rather
+          than left to garbage collection: GC timing is not a resource
+          contract, and a node still referenced by a traceback or a test
+          fixture is never collected at all.
+
+        * The displaced node's pool is bound to a loop that is STILL ALIVE —
+          two loops in different threads sharing one DataFlow instance. Here a
+          force-close would abort connections underneath whoever is running on
+          that loop, which is precisely the "reaped a pool that was actively
+          serving queries" regression fixed in kailash 2.65.0. So the node is
+          NOT touched; it is parked on ``_displaced_async_sql_nodes`` and
+          drained by ``close()`` / ``close_async()``, which run when the owner
+          has finished with every loop.
+
+        Never raises: this runs on the CRUD hot path, and a teardown failure
+        must not fail the operation the caller actually asked for.
+        """
+        # Sweep the park first, so it cannot grow without bound. A parked
+        # node's loop was alive when it was parked; once that loop closes the
+        # node becomes releasable, and a long-lived process that creates a
+        # loop per request would otherwise accumulate one entry per request
+        # until close(). O(len(park)), and the park is empty in the common
+        # (dead-loop) case.
+        still_parked = []
+        for parked in getattr(self, "_displaced_async_sql_nodes", []):
+            try:
+                if not parked.dispose_sync():
+                    still_parked.append(parked)
+            except Exception as e:
+                logger.debug(
+                    "engine.parked_sql_node_sweep_failed",
+                    extra={"error_type": type(e).__name__},
+                )
+                still_parked.append(parked)
+        self._displaced_async_sql_nodes = still_parked
+
+        if node is None:
+            return
+        try:
+            if node.dispose_sync():
+                return
+            # False means REFUSED, not "nothing to do": the pool's loop is
+            # still usable (or the pool was injected by the caller, who owns
+            # its lifetime). Park it for close() rather than force it here.
+            self._displaced_async_sql_nodes.append(node)
+        except Exception as e:
+            logger.debug(
+                "engine.displaced_sql_node_release_failed",
+                extra={"error_type": type(e).__name__},
+            )
+            self._displaced_async_sql_nodes.append(node)
+
+    def _take_displaced_async_sql_nodes(self) -> list:
+        """Pop every node parked by :meth:`_release_displaced_async_sql_node`.
+
+        Returns the nodes and empties the park in one step, so the sync
+        ``close()`` and async ``close_async()`` paths share the bookkeeping and
+        differ only in how each drives the node's ``cleanup()`` coroutine.
+        ``getattr`` default covers a DataFlow restored from a pickle written
+        before this attribute existed.
+        """
+        nodes = list(getattr(self, "_displaced_async_sql_nodes", []))
+        self._displaced_async_sql_nodes = []
+        return nodes
+
     def _get_or_create_async_sql_node(self, database_type: str):
         """Get or create cached AsyncSQLDatabaseNode for connection pooling.
 
@@ -9033,6 +9118,14 @@ class DataFlow(DataFlowEventMixin):
                     f"Event loop changed for {database_type} node "
                     f"(old: {cached_loop_id}, new: {current_loop_id}). Recreating node."
                 )
+                # Issue #2211: the displaced node still owns a live connection
+                # pool. Overwriting the cache entry without releasing it left
+                # the pool, its sockets and its slot in the process-wide pool
+                # registry alive until interpreter exit — measured at twelve
+                # pools against a configured cap of five after twelve
+                # ``asyncio.run()`` calls on ONE DataFlow instance. The node is
+                # gone from the cache, so ``close()`` can never reach it either.
+                self._release_displaced_async_sql_node(node)
 
         from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
@@ -11518,6 +11611,38 @@ class DataFlow(DataFlowEventMixin):
                     )
             self._async_sql_node_cache.clear()
 
+        # Issue #2211: nodes displaced from the cache while their pool's loop
+        # was still alive were parked rather than force-closed (closing one
+        # under a concurrent caller is the kailash 2.65.0 regression). The
+        # owner is closing now, so drain them through the same graceful
+        # teardown, then sync-dispose whatever the graceful path could not
+        # reach because its loop has since closed.
+        for node in self._take_displaced_async_sql_nodes():
+            try:
+                teardown = getattr(node, "cleanup", None)
+                if callable(teardown):
+                    async_safe_run(teardown())
+                if not node.dispose_sync():
+                    # REFUSED, not done. On this SYNC path the graceful
+                    # teardown above ran on a transient loop and its failure is
+                    # swallowed, so a refusal here can mean an open pool. Say so
+                    # — dropping the node silently is the #2211 leak again, at
+                    # the one place that exists to prevent it.
+                    logger.warning(
+                        "engine.displaced_sql_node_not_released",
+                        extra={
+                            "node_id": getattr(node, "id", "unknown"),
+                            "reason": "pool is bound to an event loop that is "
+                            "still live at close(); use close_async() from that "
+                            "loop to release it gracefully",
+                        },
+                    )
+            except Exception as e:
+                logger.debug(
+                    "engine.error_closing_displaced_sql_node",
+                    extra={"error_type": type(e).__name__},
+                )
+
         # Close the query-cache adapter's executor thread pool. When the cache
         # backend auto-detected to AsyncRedisCacheAdapter (Redis reachable), it
         # owns a ThreadPoolExecutor whose worker threads leak (ResourceWarning
@@ -11736,6 +11861,32 @@ class DataFlow(DataFlowEventMixin):
                         extra={"db_type": db_type, "error": str(e)},
                     )
             self._async_sql_node_cache.clear()
+
+        # Issue #2211: drain the nodes displaced while their pool's loop was
+        # still alive. Graceful cleanup() first (this path HAS a live loop);
+        # dispose_sync() then covers any node whose own loop has since closed,
+        # which cleanup() silently cannot release.
+        for node in self._take_displaced_async_sql_nodes():
+            try:
+                teardown = getattr(node, "cleanup", None)
+                if callable(teardown):
+                    await teardown()
+                if not node.dispose_sync():
+                    # REFUSED. The graceful cleanup() above ran on a live loop
+                    # and normally leaves nothing to release, so a refusal here
+                    # means the node's pool is bound to some OTHER loop that is
+                    # still live. Do not drop it — hand it back to the park so
+                    # a later close, on that loop, can finish the job.
+                    self._displaced_async_sql_nodes.append(node)
+                    logger.debug(
+                        "engine.displaced_sql_node_reparked",
+                        extra={"node_id": getattr(node, "id", "unknown")},
+                    )
+            except Exception as e:
+                logger.debug(
+                    "engine.error_closing_displaced_sql_node",
+                    extra={"error_type": type(e).__name__},
+                )
 
         # Close the query-cache adapter's executor thread pool. When the cache
         # backend auto-detected to AsyncRedisCacheAdapter (Redis reachable), it
@@ -12116,9 +12267,31 @@ class DataFlow(DataFlowEventMixin):
             >>> db.clear_async_sql_node_cache()
             >>> # Next CRUD operation will create a new AsyncSQLDatabaseNode
 
+        Issue #2211: each evicted node is released on the way out. A bare
+        ``.clear()`` dropped the last reference to a node that still owned a
+        live connection pool, which is the same never-closed-on-eviction bug
+        the loop-change branch of ``_get_or_create_async_sql_node`` had — a
+        node whose pool's loop is dead is force-released here, and one whose
+        loop is still alive is parked for ``close()``.
+
         See Also:
             - _get_or_create_async_sql_node() for event loop tracking details
+            - _release_displaced_async_sql_node() for the dead/live loop split
         """
+        for _db_type, entry in list(self._async_sql_node_cache.items()):
+            try:
+                node = entry[0]
+            except (TypeError, IndexError):
+                # A malformed entry is dropped by the clear() below WITHOUT
+                # release, which is the leak class this whole path exists to
+                # close — so it gets a breadcrumb rather than a silent skip
+                # (zero-tolerance Rule 3, observability Rule 5).
+                logger.debug(
+                    "engine.malformed_sql_node_cache_entry_skipped",
+                    extra={"db_type": _db_type, "entry_type": type(entry).__name__},
+                )
+                continue
+            self._release_displaced_async_sql_node(node)
         self._async_sql_node_cache.clear()
         logger.debug("AsyncSQLDatabaseNode cache cleared")
 

@@ -156,35 +156,29 @@ async def test_failed_ddl_does_not_leak_pools_under_saturation(pg_dsn):
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "#2075: real pool leak on the auto_migrate='warn' DDL-failure path. "
-        "Observed pool_count()=9 against a cap of 5, deterministically, in 3 of "
-        "3 consecutive runs against a real Postgres on macOS via './test-env "
-        "up'. The assertion is DELIBERATELY UNCHANGED: the bound is correct "
-        "and the code is what is wrong.\n\n"
-        "strict=True -> strict=False (#2079). The leak is ENVIRONMENT-"
-        "DEPENDENT, and strict=True therefore turned the environments where it "
-        "does NOT fire into hard CI failures. Measured on Linux against a "
-        "postgres:16 service container: pool_count()=1 with a pre-existing "
-        "table and 0 against a clean database, both against a cap of 5 — i.e. "
-        "the test PASSES there, and strict=True reported that pass as FAILED. "
-        "That is the '#2079 xfail-reported-as-FAILED' discrepancy; it was "
-        "never a fixture-phase error.\n\n"
-        "This trades the loud self-clearing signal for a correct one. The "
-        "signal was not actually working: it can only self-clear in the one "
-        "environment where the premise holds, and it made every other "
-        "environment red. #2075 remains open and is the tracking issue for "
-        "the leak itself."
-    ),
-)
 async def test_failed_ddl_with_warn_mode_still_bounded(pg_dsn):
     """Pool count stays bounded in legacy auto_migrate='warn' mode too.
 
     Warn mode (auto_migrate='warn') logs and continues rather than raising.
     The pool registry cap still applies — warn mode MUST NOT cause unbounded
     pool growth under DDL failure saturation.
+
+    Issue #2075: the ``xfail`` this carried is REMOVED. The leak was that
+    ``_PROCESS_POOL_REGISTRY`` is a ``WeakValueDictionary``, so a slot was
+    freed only when the adapter OBJECT was garbage-collected — never when the
+    pool closed. This test retains all ten instances in ``instances``, so ten
+    already-closed adapters stayed reachable and kept counting against the
+    cap. Slot release is now driven explicitly at ``_disposal_barrier``, which
+    every adapter ``disconnect()`` enters.
+
+    Honest limits of the verification behind that removal: the reported
+    ``pool_count()==9`` did NOT reproduce on the machine that fixed it
+    (measured 1, matching the Linux figures in the #2079 marker), so this is
+    not a before/after of that number. What was measured before and after, on
+    a real Postgres with all ten instances retained: 1 -> 0 in
+    ``auto_migrate`` warn, True and False alike. The marker was also a DEAD
+    gate — ``strict=False`` reports neither XPASS nor XFAIL — so leaving it
+    would have kept the bound unmeasured in every environment.
     """
     from dataflow import DataFlow
 
@@ -216,9 +210,9 @@ async def test_failed_ddl_with_warn_mode_still_bounded(pg_dsn):
     await asyncio.gather(*[_attempt_access_warn(i) for i in range(10)])
 
     # Pool count MUST remain bounded regardless of auto_migrate mode.
-    # NOTE: currently xfail(strict=True) per #2075 — see the marker on this
-    # function. The assertion below is DELIBERATELY UNCHANGED; the bound is
-    # correct and the code is what is wrong.
+    # The assertion is UNCHANGED from when this was xfail'd per #2075; only
+    # the marker went. The bound was always correct — it was the registry's
+    # object-lifetime slot accounting that was wrong.
     assert AsyncSQLDatabaseNode.pool_count() <= 5, (
         f"Pool leaked in warn mode: pool_count()={AsyncSQLDatabaseNode.pool_count()} > 5 "
         "after 10 DDL-failing DataFlow instances with auto_migrate='warn'"
