@@ -22,6 +22,7 @@ from kailash.trust.envelope import (
     ConstraintEnvelope,
     OperationalConstraint,
 )
+from kailash.trust.readonly_proxy import ReadOnlyProxyError
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
 from kaizen_agents.events import StreamBufferOverflow
@@ -298,7 +299,18 @@ class TestStackingAttack:
             L3GovernedAgent(monitored, envelope, mcp_servers=[])
 
     def test_valid_stack_order_accepted(self) -> None:
-        """Canonical stack order is accepted."""
+        """Canonical stack order is accepted.
+
+        This test previously closed with ``assert streaming.innermost is agent``
+        -- using identity with the raw agent as a cheap proxy for "all three
+        wrappers constructed without error". That assertion was ALSO, silently,
+        the only thing in the suite pinning ``innermost``'s containment
+        behaviour, and what it pinned was the bypass: reaching the raw agent
+        past a governance wrapper (#2227 Route A). It now asserts what it was
+        actually written to check -- that the stack builds -- and the
+        containment contract is asserted explicitly in
+        ``TestInnermostContainment`` below.
+        """
         agent = _make_agent()
         envelope = _make_envelope()
 
@@ -306,8 +318,94 @@ class TestStackingAttack:
         monitored = MonitoredAgent(governed, mcp_servers=[])
         streaming = StreamingAgent(monitored, mcp_servers=[])
 
-        # All wrappers constructed without error
+        # All wrappers constructed without error, in the canonical order.
+        assert streaming.inner is monitored
+        assert monitored.inner is governed
+        assert governed.envelope is envelope
+
+
+class TestInnermostContainment:
+    """#2227 Route A: ``innermost`` must not walk past a governance wrapper.
+
+    ``L3GovernedAgent`` overrides ``inner`` to return a ``_ProtectedInnerProxy``
+    but ``innermost`` is defined on ``WrapperBase`` and walked the private
+    ``_inner`` chain, so it returned the raw agent and
+    ``governed.innermost.run(...)`` executed with no governance evaluation at
+    all -- going AROUND the proxy rather than through it, which is why the
+    #2224 proxy work could not close it.
+
+    Both poles are asserted throughout: the attack must fail AND the legitimate
+    use of ``innermost`` (resolving the base agent's config, which is what
+    StreamingAgent needs it for) must keep working.
+    """
+
+    def test_innermost_returns_proxy_not_raw_agent(self) -> None:
+        """Direct case: governed.innermost is the proxy, not the raw agent."""
+        agent = _make_agent()
+        governed = L3GovernedAgent(agent, _make_envelope(), mcp_servers=[])
+
+        assert governed.innermost is not agent
+        assert isinstance(governed.innermost, _ProtectedInnerProxy)
+
+    def test_innermost_through_full_stack_stops_at_governance(self) -> None:
+        """Stacked case: the walk starts outermost and must still stop.
+
+        This is the case an override on ``L3GovernedAgent.innermost`` would
+        NOT have fixed -- the walk begins at StreamingAgent and never consults
+        an intermediate wrapper's own ``innermost``.
+        """
+        agent = _make_agent()
+        governed = L3GovernedAgent(agent, _make_envelope(), mcp_servers=[])
+        monitored = MonitoredAgent(governed, mcp_servers=[])
+        streaming = StreamingAgent(monitored, mcp_servers=[])
+
+        for wrapper in (streaming, monitored, governed):
+            assert wrapper.innermost is not agent
+            assert isinstance(wrapper.innermost, _ProtectedInnerProxy)
+
+    def test_innermost_cannot_run_ungoverned(self) -> None:
+        """The concrete bypass: innermost.run() must be denied."""
+        agent = _make_agent()
+        streaming = StreamingAgent(
+            MonitoredAgent(
+                L3GovernedAgent(agent, _make_envelope(), mcp_servers=[]),
+                mcp_servers=[],
+            ),
+            mcp_servers=[],
+        )
+
+        with pytest.raises(ReadOnlyProxyError):
+            streaming.innermost.run(query="bypass")
+        with pytest.raises(ReadOnlyProxyError):
+            streaming.innermost.run_async(query="bypass")
+
+    def test_innermost_still_serves_legitimate_config_reads(self) -> None:
+        """Opposite pole: the reason innermost exists must keep working.
+
+        StreamingAgent resolves the model/sampling config from the innermost
+        agent. Returning the proxy (rather than raising) is what keeps that
+        working while denying execution.
+        """
+        agent = _make_agent()
+        governed = L3GovernedAgent(agent, _make_envelope(), mcp_servers=[])
+
+        assert governed.innermost.config is agent.config
+        assert governed.innermost.signature is agent.signature
+        assert governed.innermost.get_parameters() == agent.get_parameters()
+
+    def test_ungoverned_stack_innermost_unchanged(self) -> None:
+        """Opposite pole: with no governance wrapper, nothing changes.
+
+        Without this, the fix would be indistinguishable from "innermost is
+        broken for everyone".
+        """
+        agent = _make_agent()
+        monitored = MonitoredAgent(agent, mcp_servers=[])
+        streaming = StreamingAgent(monitored, mcp_servers=[])
+
+        assert monitored.innermost is agent
         assert streaming.innermost is agent
+        assert streaming.innermost.run(query="ok") is not None
 
 
 # ---------------------------------------------------------------------------

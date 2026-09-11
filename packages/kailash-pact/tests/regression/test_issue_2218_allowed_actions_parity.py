@@ -322,7 +322,9 @@ class TestEmptyIsNotAbsent:
 
     def test_default_pact_envelope_permits_nothing(self) -> None:
         # The field default IS the empty allowlist -- the issue's central point.
-        assert ConstraintEnvelopeConfig(id="e").operational.allowed_actions == []
+        # Spelled as a tuple since #2226 made the envelope dimensions
+        # immutable value objects; EMPTY is still the assertion being made.
+        assert ConstraintEnvelopeConfig(id="e").operational.allowed_actions == ()
         assert (
             permitted_action_set(ConstraintEnvelopeConfig(id="e").operational)
             == frozenset()

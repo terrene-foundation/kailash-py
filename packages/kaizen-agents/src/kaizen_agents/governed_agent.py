@@ -154,6 +154,20 @@ class L3GovernedAgent(WrapperBase):
         """The active agent posture (clamped to envelope ceiling)."""
         return self._posture
 
+    def _containment_boundary(self) -> _ProtectedInnerProxy:
+        """This wrapper's protected proxy stands in for everything beneath it.
+
+        Declares the governance boundary to ``WrapperBase.innermost``, which
+        otherwise walks the private ``_inner`` chain straight past ``inner``
+        and hands back the raw agent -- ``governed.innermost.run(...)`` ran
+        completely ungoverned (#2227 Route A). Declaring the boundary here
+        rather than overriding ``innermost`` covers the STACKED case too:
+        ``StreamingAgent(MonitoredAgent(governed)).innermost`` starts its walk
+        at the outermost wrapper and would never have consulted an override on
+        this class.
+        """
+        return self._inner_proxy
+
     @property
     def inner(self) -> _ProtectedInnerProxy:  # type: ignore[override]
         """Returns a protected proxy instead of the raw inner agent."""
