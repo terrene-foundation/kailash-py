@@ -58,6 +58,7 @@ from kailash.trust.audit_store import (
     AuditFilter,
     AuditOutcome,
     AuditStoreProtocol,
+    ChainStatus,
     InMemoryAuditStore,
     SqliteAuditStore,
 )
@@ -479,6 +480,7 @@ __all__ = [
     "AuditEvent",
     "AuditEventType",
     "AuditOutcome",
+    "ChainStatus",
     "AuditFilter",
     "AuditStoreProtocol",
     "InMemoryAuditStore",

@@ -185,6 +185,32 @@ class AuditOutcome(str, Enum):
     ERROR = "error"
 
 
+class ChainStatus(str, Enum):
+    """Three-state verdict of an audit-chain verification.
+
+    ``verify_chain()`` historically returned a single ``bool`` that could not
+    distinguish an INTACT chain from an EMPTY one -- so a wiped store (the one
+    case audit verification exists to detect) was indistinguishable from a
+    never-written store, both reporting ``True`` (#2221). This enum separates
+    the two facts a caller actually needs:
+
+    - ``INTACT``: the chain has >=1 event and every hash + linkage check passed.
+    - ``EMPTY``: the store holds no events. This is NOT ``INTACT``: an absent
+      audit trail is unverifiable, so it fails CLOSED. A caller for whom "empty
+      is fine" must check for this member EXPLICITLY.
+    - ``TAMPERED``: an event failed its integrity check or the hash linkage
+      broke.
+
+    ``verify_chain() -> bool`` is retained for backward compatibility and now
+    returns ``True`` IFF the status is ``INTACT`` (see its docstring for the
+    behaviour change).
+    """
+
+    INTACT = "intact"
+    EMPTY = "empty"
+    TAMPERED = "tampered"
+
+
 def _compute_event_hash(
     event_id: str,
     timestamp: str,
@@ -456,11 +482,26 @@ class AuditStoreProtocol(Protocol):
         """Query audit events matching the filter criteria."""
         ...
 
+    async def verify_chain_status(self) -> "ChainStatus":
+        """Verify the chain and return a three-state verdict.
+
+        Returns:
+            :class:`ChainStatus` -- ``INTACT`` (>=1 event, all checks pass),
+            ``EMPTY`` (no events; fails CLOSED -- an absent trail is
+            unverifiable), or ``TAMPERED`` (integrity or linkage broke).
+        """
+        ...
+
     async def verify_chain(self) -> bool:
         """Verify the integrity of the entire Merkle hash chain.
 
         Returns:
-            True if the chain is intact, False if tampering detected.
+            ``True`` IFF the chain is ``INTACT`` (>=1 event and every check
+            passed). Returns ``False`` for an EMPTY store (fail-closed: an
+            absent audit trail is unverifiable, and a wipe must not read as
+            success) and for a TAMPERED chain. Callers who must distinguish
+            EMPTY from TAMPERED -- or for whom "empty is fine" is a valid
+            state -- MUST use :meth:`verify_chain_status`.
         """
         ...
 
@@ -630,8 +671,8 @@ class InMemoryAuditStore:
                 break
         return results
 
-    async def verify_chain(self) -> bool:
-        """Verify the integrity of the entire Merkle hash chain.
+    async def verify_chain_status(self) -> ChainStatus:
+        """Verify the chain and return a three-state verdict.
 
         Checks:
         1. Each event's hash matches its content.
@@ -639,26 +680,40 @@ class InMemoryAuditStore:
         3. The first event's prev_hash is the genesis sentinel.
 
         Returns:
-            True if the chain is intact.
+            :class:`ChainStatus.EMPTY` when the store holds no events (an
+            absent trail is unverifiable -- fail closed, never ``INTACT``),
+            :class:`ChainStatus.TAMPERED` on the first integrity or linkage
+            failure, else :class:`ChainStatus.INTACT`.
         """
         events = list(self._events)
         if not events:
-            return True
+            return ChainStatus.EMPTY
 
         for i, event in enumerate(events):
             # Check hash integrity
             if not event.verify_integrity():
-                return False
+                return ChainStatus.TAMPERED
 
             # Check chain linkage
             if i == 0:
                 if not hmac_mod.compare_digest(event.prev_hash, _GENESIS_HASH):
-                    return False
+                    return ChainStatus.TAMPERED
             else:
                 if not hmac_mod.compare_digest(event.prev_hash, events[i - 1].hash):
-                    return False
+                    return ChainStatus.TAMPERED
 
-        return True
+        return ChainStatus.INTACT
+
+    async def verify_chain(self) -> bool:
+        """Verify the integrity of the entire Merkle hash chain.
+
+        Returns:
+            ``True`` IFF the chain is ``INTACT`` (>=1 event, all checks pass).
+            An EMPTY store returns ``False`` (fail-closed: a wiped audit trail
+            must not read as verified) as does a TAMPERED chain. Use
+            :meth:`verify_chain_status` to distinguish EMPTY from TAMPERED.
+        """
+        return (await self.verify_chain_status()) is ChainStatus.INTACT
 
     async def close(self) -> None:
         """No-op for in-memory store."""
@@ -898,13 +953,17 @@ class SqliteAuditStore:
             )
         return events
 
-    async def verify_chain(self) -> bool:
-        """Verify the integrity of the entire persisted Merkle chain.
+    async def verify_chain_status(self) -> ChainStatus:
+        """Verify the persisted chain and return a three-state verdict.
 
         Reads all events in insertion order and checks hash linkage.
 
         Returns:
-            True if the chain is intact.
+            :class:`ChainStatus.EMPTY` when the table holds no rows (an absent
+            trail is unverifiable -- fail closed, never ``INTACT``; this is the
+            state a wiped store presents), :class:`ChainStatus.TAMPERED` on the
+            first integrity or linkage failure, else
+            :class:`ChainStatus.INTACT`.
         """
         async with self._pool.acquire_read() as conn:
             cursor = await conn.execute(
@@ -915,7 +974,7 @@ class SqliteAuditStore:
             rows = await cursor.fetchall()
 
         if not rows:
-            return True
+            return ChainStatus.EMPTY
 
         prev_hash = _GENESIS_HASH
         for row in rows:
@@ -936,15 +995,26 @@ class SqliteAuditStore:
 
             # Check hash integrity
             if not event.verify_integrity():
-                return False
+                return ChainStatus.TAMPERED
 
             # Check chain linkage
             if not hmac_mod.compare_digest(event.prev_hash, prev_hash):
-                return False
+                return ChainStatus.TAMPERED
 
             prev_hash = event.hash
 
-        return True
+        return ChainStatus.INTACT
+
+    async def verify_chain(self) -> bool:
+        """Verify the integrity of the entire persisted Merkle chain.
+
+        Returns:
+            ``True`` IFF the chain is ``INTACT`` (>=1 event, all checks pass).
+            An EMPTY table returns ``False`` (fail-closed: a wiped audit trail
+            must not read as verified) as does a TAMPERED chain. Use
+            :meth:`verify_chain_status` to distinguish EMPTY from TAMPERED.
+        """
+        return (await self.verify_chain_status()) is ChainStatus.INTACT
 
     async def close(self) -> None:
         """Close the underlying pool (caller is responsible for pool lifecycle)."""
@@ -1323,6 +1393,7 @@ __all__ = [
     "AuditEvent",
     "AuditEventType",
     "AuditOutcome",
+    "ChainStatus",
     "AuditFilter",
     "AuditStoreProtocol",
     "InMemoryAuditStore",

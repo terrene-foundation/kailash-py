@@ -13,6 +13,46 @@ such as `>=2.0`.
 
 ## [Unreleased]
 
+### Changed (BREAKING) — audit-store `verify_chain()` fails closed on an empty chain (#2221)
+
+`AuditStoreProtocol.verify_chain()` (both `InMemoryAuditStore` and `SqliteAuditStore`) previously
+returned `True` for an **empty** chain. That made a wiped audit store indistinguishable from a
+never-written one at the return value — an attacker who deletes the audit store passed
+verification, and a wipe is the one case audit-chain verification exists to detect.
+
+`verify_chain() -> bool` now returns `True` **only** when the chain is `INTACT` (>=1 event and
+every hash + linkage check passes). An empty store now returns `False` (fail-closed), as does a
+tampered chain. A new three-state API distinguishes the cases:
+
+```python
+from kailash.trust import ChainStatus  # or kailash.trust.audit_store
+
+status = await store.verify_chain_status()   # ChainStatus.INTACT | EMPTY | TAMPERED
+if status is ChainStatus.EMPTY:
+    ...  # a caller for whom "empty is fine" must now say so EXPLICITLY
+```
+
+**Migration.** Callers that treated `verify_chain() is True` as "sound" need no change — an empty
+store is no longer reported sound. Callers that intentionally accept an empty audit trail must
+switch to `verify_chain_status()` and handle `ChainStatus.EMPTY` explicitly. `verify_chain()`
+keeps its `bool` signature; only the empty-chain verdict changed (`True` → `False`).
+
+### Fixed — suspension resume gate no longer fails open on an empty condition set (#2221)
+
+`PlanSuspension.all_conditions_met()` returned `True` vacuously (`all([]) is True`) when
+`resume_conditions` was empty, so a suspended plan with no stated resume conditions resumed
+immediately and unconditionally — a fail-OPEN resume gate the docstring wrongly called
+"defensive". It now returns `False` for an empty condition set: such a suspension is un-resumable
+through this gate without an explicit override.
+
+### Fixed — MCPChannel health check uses a falsifiable workflow-registry assertion (#2221)
+
+`MCPChannel.health_check()` asserted `len(self._workflow_registry) >= 0`, which is `True` for every
+sized object (and raised `TypeError` on a `None` registry) — it reported healthy for an empty, full,
+and corrupt-but-nonempty registry alike. It now checks `self._workflow_registry is not None`
+(falsifiable, matching its sibling `is not None` checks) and the workflow-count metric is None-safe
+so a corrupt channel reports unhealthy instead of crashing the health report.
+
 ### Fixed — the first `PythonCodeNode` execution no longer imports the whole ML stack (#2000)
 
 On a machine with torch and sklearn installed, the **first** `PythonCodeNode` execution in a

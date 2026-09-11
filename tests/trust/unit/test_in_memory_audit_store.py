@@ -22,6 +22,7 @@ from kailash.trust.audit_store import (
     AuditEvent,
     AuditFilter,
     ChainIntegrityError,
+    ChainStatus,
     InMemoryAuditStore,
     _compute_event_hash,
 )
@@ -230,9 +231,52 @@ class TestInMemoryVerifyChain:
     """InMemoryAuditStore.verify_chain must detect integrity issues."""
 
     @pytest.mark.asyncio
-    async def test_empty_store_is_valid(self):
+    async def test_empty_store_fails_closed(self):
+        """An empty store is NOT intact (#2221).
+
+        An absent audit trail is unverifiable -- a wipe and a never-written
+        store are the same at this call, and the wipe is the one case audit
+        verification exists to detect. verify_chain() therefore returns False
+        (fail-closed) and the three-state status is EMPTY, not INTACT.
+        """
         store = InMemoryAuditStore()
+        assert await store.verify_chain() is False
+        assert await store.verify_chain_status() is ChainStatus.EMPTY
+
+    @pytest.mark.asyncio
+    async def test_wipe_of_populated_store_is_not_intact(self):
+        """Both poles (#2221): a populated intact chain verifies; wiping it does not.
+
+        A single-pole test cannot distinguish this fix from "now always
+        False" -- so both directions are asserted on the SAME store.
+        """
+        store = InMemoryAuditStore()
+        for i in range(3):
+            await store.append(
+                store.create_event(actor=f"a{i}", action="do", resource=f"r{i}")
+            )
+        # Pole 1: populated + intact verifies as INTACT / True.
+        assert await store.verify_chain_status() is ChainStatus.INTACT
         assert await store.verify_chain() is True
+
+        # Wipe the store (simulate an attacker deleting the audit trail).
+        store._events.clear()
+
+        # Pole 2: the emptied store is NOT intact.
+        assert await store.verify_chain() is False
+        assert await store.verify_chain_status() is ChainStatus.EMPTY
+
+    @pytest.mark.asyncio
+    async def test_tampered_chain_status_is_tampered(self):
+        """A tampered populated chain is TAMPERED, distinct from EMPTY."""
+        store = InMemoryAuditStore()
+        await store.append(store.create_event(actor="a", action="do"))
+        await store.append(store.create_event(actor="b", action="do"))
+        # Corrupt the second event's stored hash in place.
+        bad = store._events[1]
+        object.__setattr__(bad, "hash", "f" * 64)
+        assert await store.verify_chain_status() is ChainStatus.TAMPERED
+        assert await store.verify_chain() is False
 
     @pytest.mark.asyncio
     async def test_single_event_is_valid(self):
