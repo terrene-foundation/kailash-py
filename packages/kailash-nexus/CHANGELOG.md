@@ -30,6 +30,13 @@
   rotation changes log tags only; it cannot reset anyone's token bucket, and an
   attacker cannot wash away an in-progress throttle by provoking one. Log queries
   spanning a rotation must be scoped to one key epoch.
+- **Scope:** this fixes the Nexus call site only. #2171 also asks for a sweep of the
+  other enumerable `fingerprint_secret` call sites (`command_safety.py`,
+  `kaizen/llm/presets.py`, `from_env.py`, `url_safety.py`, `auth/gcp.py`,
+  `dataflow/core/nodes.py`), all of which live outside `packages/kailash-nexus/` and
+  are NOT addressed here. The keyed construction is deliberately nexus-local for now;
+  if that sweep proceeds it likely belongs in `kailash.utils.url_credentials` beside
+  `process_local_config_key` so every call site shares one implementation.
 
 ### Fixed (BREAKING) — MCP resource URIs are templates, not wildcards (#2056)
 
