@@ -13,6 +13,8 @@ such as `>=2.0`.
 
 ## [Unreleased]
 
+## [2.65.0] — 2026-09-11 — `PactEngine.governance` is genuinely read-only and an empty `allowed_actions` denies at every enforcement surface; the idle-pool reaper stops closing busy pools; a denial-of-service in the brief scrubber is closed (#2224, #2218, #697, #2128, #2162, #2163, #2057, #2175, #2118)
+
 ### Fixed — the idle-pool reaper no longer closes a pool that is actively serving queries (#697)
 
 A long-lived process that keeps querying the same PostgreSQL/MySQL DSN could see its
@@ -28,7 +30,7 @@ The DPI-B3 reaper decides whether a pool is idle from
 place — `EnterpriseConnectionPool.get_connection()` — and **nothing on the node's query path
 calls it**: `async_run()` reaches the driver through `adapter.begin_transaction()`, and the
 non-transaction path through `adapter.execute()`, both of which acquire from the driver pool
-directly. So the clock only ever held the pool's *creation* time, and a pool serving a query
+directly. So the clock only ever held the pool's _creation_ time, and a pool serving a query
 every 0.5s still aged past `idle_timeout` and became reapable. Measured before the fix, with a
 successful query on every iteration and `idle_timeout=2`:
 
@@ -47,7 +49,7 @@ Every acquisition in every adapter ends at one raw driver pool, so the fix wraps
 (`_ActivityTrackingPool`) rather than re-spelling a touch at each of the nine `acquire()` call
 sites. Delegation is total: only `acquire` is intercepted.
 
-The exposure was proportional to how *idle-tuned* a deployment was: the shorter the configured
+The exposure was proportional to how _idle-tuned_ a deployment was: the shorter the configured
 `idle_timeout`, the wider the window. Defaults made it rare, which is why it surfaced as an
 intermittent CI failure rather than a reported outage.
 
@@ -56,6 +58,7 @@ behaviourally but could only catch it when the reaper's tick happened to land on
 queries — so it passed for weeks against a pool whose clock was never refreshed at all. A new
 `test_query_path_refreshes_the_idle_clock` pins the invariant directly, so a regression fails
 deterministically instead of as a flake.
+
 ### Security (BREAKING) — `PactEngine.governance` is now genuinely read-only, and stops proxying five public members (#2224)
 
 `_ReadOnlyGovernanceView` guarded a 13-name blocklist in `__getattr__`. `__getattr__` is consulted ONLY when normal attribute lookup FAILS, and the wrapped engine was a plain instance attribute — so `view._engine` resolved normally, never reached the guard, and returned the `GovernanceEngine` itself. One attribute access bypassed all thirteen names.
@@ -83,7 +86,6 @@ Not fixed here, filed with measured reproductions: **#2226** (the engine still h
 
 `PRUNE_PARTS` was matched against the **absolute** path, and the scan root is resolved — so every ancestor directory of the checkout was tested too. A checkout living under a directory named `build`, `dist` or `node_modules` pruned every manifest and the gate reported success having scanned **0** of them. It now prunes on the path relative to the scan root. Measured on one such checkout: `Scanned 0 manifests` before, `Scanned 9 manifests` after.
 
-
 ### Security (BREAKING) — an empty `allowed_actions` now denies at EVERY enforcement surface (#2218)
 
 `operational.allowed_actions` defaults to `[]`, and the enforcement surfaces disagreed about what that meant. Measured, on one envelope, one action:
@@ -106,6 +108,75 @@ The allow/block decision now lives in exactly one place — `kailash.trust.actio
 **Migration.** Any envelope whose `operational` dimension exists must now name the actions it permits: `OperationalConstraintConfig(allowed_actions=["read", "write", ...])`. A deployment that intends "this dimension does not constrain actions" must say so by not configuring the dimension, not by leaving the list empty. Note that PACT's `ConstraintEnvelopeConfig.operational` is NOT optional — it carries a `default_factory` — so a PACT envelope always has the dimension and always needs an explicit allowlist. The trust-layer `ConstraintEnvelope` (the type `L3GovernedAgent` consumes) does accept `operational=None`.
 
 The monotonic-tightening validators are reconciled onto the same reading in the same change, so a configuration that registers cannot then be evaluated more widely than the one that defined it. A parent that permits nothing can no longer have a child that permits something — previously several validators read an empty parent allowlist as "widest" and waved the child through. Tightening compares **allowlists**; the blocklist keeps its own separate monotonicity rule and the eval-time envelope intersection continues to union blocklists and re-subtract them, so a child restating an action its ancestor blocks is unaffected.
+
+### Security — a brief containing no URL at all could hang `from_brief()` for ~14 seconds (#2128)
+
+`scrub_brief` redacts credentials out of brief text before it is used. Two of its patterns opened
+with an **unbounded** URI-scheme quantifier (`[A-Za-z][A-Za-z0-9+.\-]*://`). On input containing no
+`://`, that is quadratic: at each of n start positions the character class greedily consumes to
+end-of-string, then backtracks looking for `://` and fails — O(n) work per position, O(n²) overall.
+
+Measured on a 63,000-character credential-free brief, comfortably under `MAX_BRIEF_LENGTH`:
+
+```
+_URL_CANDIDATE    ~14s    -> ~5ms
+_URL_WITH_CREDS   ~12.7s  -> ~4.6ms
+```
+
+That is a denial of service reachable from user-supplied text on **every** `from_brief()` surface,
+which is why this is a security fix and not only a speed one. Both quantifiers are now bounded to
+`{0,63}`. The ceiling sits far above every IANA-registered URI scheme (the longest is ~36
+characters), and a longer "scheme" still matches from a later offset, so nothing stops being
+redacted.
+
+### Security — four attribute guards protected branches that could never run; the TLS floor is now pinned (#2057, #2175, #2118)
+
+Four guards probed attribute names defined nowhere in the tree, so each protected a structurally
+unreachable branch. The worst was in `middleware/auth/access_control.py`: `add_permission_rule`
+probed for an `add_permission_rule` API that has zero definitions repo-wide, so registration never
+happened — yet a `permission_rule_created` audit event was written and `{"success": True}` returned
+from **outside** the guard, with a `rule_id` synthesised from `hash(str(rule))`. An auditor asking
+"does this rule exist?" was told yes about a rule that was never registered.
+
+The real API is `add_rule`, which both shipped managers implement, so this is a wire rather than a
+delete. Two further defects were hiding behind the dead guard and are fixed with it, because the
+method could not succeed at all until they were: `PermissionRule` has no `resource_pattern` field
+and requires `id`/`resource_type`/`resource_id`, so the constructor raised `TypeError` before
+control ever reached the guard, and `get_user_effective_permissions` read the same non-existent
+field.
+
+**Behaviour change.** `add_permission_rule` previously returned a falsified success. A missing
+`add_rule` now raises `KailashConfigError`, rule data that could match nothing raises `ValueError`,
+and the audit event fires only after registration actually returns. Callers who were reading that
+success value were reading a fiction; they will now see the failure that was always happening.
+
+Also in this change: the TLS floor is pinned rather than inherited from the platform default, and
+the rationale for the KDF salt construction is recorded at the call site so the next reader does not
+have to re-derive whether it is sound.
+
+### Fixed — two conformance MUSTs could not return False, and the anchor-chain tip came from a capped listing (#2162, #2163)
+
+**#2162.** Two registered conformance checks were structurally incapable of failing, so every
+conformance report citing them cited nothing. `_verify_locked` has exactly one `return` and it is an
+unconditional dict literal, so `"verification_level" in report` and `report.get("chain_valid") is
+not None` were true for every input — and `is not None` is true _when `chain_valid` is `False`_. So
+`verification_standard`, a MUST at CONFORMANT level, passed a project whose chain the same report
+marked broken. Measured before the fix: a project with a tampered `parent_anchor_id` reported
+`chain_valid: False` and the MUST still returned `True`.
+
+`verification_standard` now fails closed on the chain and validates what its registered description
+claims — the constraint envelope is present, and the capability gate still refuses every blocked
+action and admits the allowed ones. `verification_quick` asserts report _values_ (level within the
+gradient, project binding, parseable timestamp) rather than key presence. Both registered
+descriptions were rewritten to match their bodies, since a description that overstates a check is
+how the mismatch went unnoticed.
+
+**#2163.** `TrustProject.load` took the chain tip from `list_anchors()[-1]`, a listing whose default
+`limit` is 1000. Past 1000 anchors it selected the 1000th-oldest as the tip, and the next anchor
+minted chained to a mid-chain parent — corrupting the tamper-evidence record anchors exist to
+provide. Measured before the fix: at 1005 anchors the tip resolved to index 999. Raising the cap
+would only move the bug to a larger N, so the store now derives the tip directly instead of reading
+it off a capped page.
 
 ## [2.64.0] — 2026-09-10 — A2A protected methods verify and authorize their callers; eight un-gated HTTP servers closed; no component invents its own signing or encryption key (#2203, #2072, #2112, #2083, #2092)
 
