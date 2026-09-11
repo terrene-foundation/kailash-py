@@ -57,6 +57,7 @@ import os
 import sys
 import tokenize
 import traceback
+import types
 from collections.abc import Callable
 from datetime import date, datetime
 from decimal import Decimal
@@ -83,6 +84,7 @@ logger = logging.getLogger(__name__)
 
 # Import shared constants and utilities
 from kailash.nodes.code.common import (  # noqa: E402
+    ALLOWED_ASYNC_MODULES,
     ALLOWED_BUILTINS,
     ALLOWED_MODULES,
     COMPLETELY_BLOCKED_MODULES,
@@ -196,7 +198,18 @@ class SafeCodeChecker(ast.NodeVisitor):
         self.generic_visit(node)
 
 
-class _LazyModule:
+# The complete set of module names a lazy proxy is ever permitted to import.
+# This is the SAME allow-list the eager binding path enforced, minus the modules
+# that are blocked outright. It is consulted at RESOLVE time, not only at
+# construction, because the proxy CLASS is reachable from sandboxed code -- see
+# _LazyModule.__doc__ -- and code that reached it could otherwise name any
+# importable module, including one COMPLETELY_BLOCKED_MODULES forbids.
+_LAZY_BINDABLE_MODULES: frozenset[str] = frozenset(
+    (ALLOWED_MODULES | ALLOWED_ASYNC_MODULES) - COMPLETELY_BLOCKED_MODULES
+)
+
+
+class _LazyModule(types.ModuleType):
     """Deferred binding for a sandbox-allowed module (#2000).
 
     ``CodeExecutor`` makes every module in its allow-list available to user code
@@ -207,34 +220,68 @@ class _LazyModule:
     failure on a broken or partial ML install.
 
     Modules the code actually mentions are imported for real. Every other
-    allowed module is bound to one of these proxies instead, so a purely dynamic
-    reference (``globals()["pandas"]``) still resolves, while code that never
-    touches the name pays nothing. The underlying module is imported on first
-    attribute access and memoised on the proxy.
+    allow-listed module is bound to one of these proxies instead, so a dynamic
+    reference still resolves, while code that never touches the name pays
+    nothing. The underlying module is imported on first attribute access and
+    memoised on the proxy.
 
-    A module that is not installed is never bound at all (neither really nor
-    lazily), so referencing it still raises ``NameError`` exactly as before.
+    SECURITY -- why the allow-list is re-checked here
+    -------------------------------------------------
+    Sandboxed code CAN reach this class. ``type`` is an allow-listed builtin and
+    a user-defined function's ``__globals__`` exposes the execution namespace, so
+    ``type(some_proxy)`` hands the sandbox this constructor. Before lazy binding,
+    that namespace slot held a real module, so ``type(x)`` was
+    ``types.ModuleType`` and ``ModuleType("subprocess")`` built an EMPTY module
+    that imported nothing. An unguarded proxy constructor would instead import
+    whatever it was named -- with the module name appearing only inside a string
+    literal, where the AST checker cannot see it. Both ``__init__`` and
+    ``_kailash_resolve`` therefore validate against ``_LAZY_BINDABLE_MODULES``,
+    so neither a fresh construction nor mutation of an existing proxy's recorded
+    name can import a module the eager path would have refused.
+
+    Subclassing ``types.ModuleType`` is also load-bearing: the execution-namespace
+    egress filter strips modules from node outputs by ``isinstance``, and a plain
+    object would sail past it and then fail JSON-serialisation validation,
+    breaking a node that previously succeeded.
+
+    Binding, precisely: a module absent from the environment is not bound at all,
+    so referencing it raises ``NameError`` as before. A module that is present
+    but fails to import is bound lazily when the code does not name it -- there
+    the ``ImportError`` surfaces at first attribute access rather than at bind
+    time.
     """
 
-    __slots__ = ("_kailash_module_name", "_kailash_module")
-
     def __init__(self, module_name: str) -> None:
-        object.__setattr__(self, "_kailash_module_name", module_name)
-        object.__setattr__(self, "_kailash_module", None)
+        if module_name not in _LAZY_BINDABLE_MODULES:
+            raise SafetyViolationError(
+                f"Module '{module_name}' is not in the PythonCodeNode allow-list "
+                "and cannot be bound for sandboxed execution."
+            )
+        super().__init__(module_name)
+        self._kailash_module = None
 
     def _kailash_resolve(self):
-        """Import and memoise the real module. Import errors propagate."""
-        module = object.__getattribute__(self, "_kailash_module")
+        """Import and memoise the real module. Import errors propagate.
+
+        Re-validates the module name against the allow-list first; see the class
+        docstring. The check is deliberately here and not only in ``__init__`` so
+        that mutating an already-constructed proxy cannot widen what it imports.
+        """
+        module = self.__dict__.get("_kailash_module")
         if module is None:
-            module = importlib.import_module(
-                object.__getattribute__(self, "_kailash_module_name")
-            )
-            object.__setattr__(self, "_kailash_module", module)
+            module_name = self.__dict__.get("__name__")
+            if module_name not in _LAZY_BINDABLE_MODULES:
+                raise SafetyViolationError(
+                    f"Module '{module_name}' is not in the PythonCodeNode "
+                    "allow-list and cannot be imported for sandboxed execution."
+                )
+            module = importlib.import_module(module_name)
+            self._kailash_module = module
         return module
 
     def __getattr__(self, name: str):
-        # Guard the proxy's own slots so an unset slot cannot recurse.
-        if name.startswith("_kailash_"):
+        # Guard the proxy's own bookkeeping so a missing entry cannot recurse.
+        if name.startswith("_kailash_") or name in ("__name__", "__dict__"):
             raise AttributeError(name)
         return getattr(self._kailash_resolve(), name)
 
@@ -242,8 +289,8 @@ class _LazyModule:
         return dir(self._kailash_resolve())
 
     def __repr__(self) -> str:
-        name = object.__getattribute__(self, "_kailash_module_name")
-        loaded = object.__getattribute__(self, "_kailash_module") is not None
+        name = self.__dict__.get("__name__")
+        loaded = self.__dict__.get("_kailash_module") is not None
         return (
             f"<lazily-bound module {name!r} ({'loaded' if loaded else 'not loaded'})>"
         )
@@ -608,12 +655,18 @@ class CodeExecutor:
             # Return all non-private variables from LOCAL namespace only
             # Variables from previous executions cannot leak through
             # NEW: Also filter out imported modules to prevent serialization errors
-            import types
-
+            #
+            # #2000: _LazyModule subclasses types.ModuleType, so the isinstance
+            # check below already strips it. It is named explicitly as well, so
+            # the proxy keeps being stripped even if that subclassing is ever
+            # changed -- an escaping proxy does not merely leak a live module
+            # into node outputs, it fails the downstream JSON-serialisability
+            # validator and so breaks a node that previously succeeded.
             return {
                 k: v
                 for k, v in local_namespace.items()
-                if not k.startswith("_") and not isinstance(v, types.ModuleType)
+                if not k.startswith("_")
+                and not isinstance(v, (types.ModuleType, _LazyModule))
             }
         except ExecutionTimeoutError:
             raise
