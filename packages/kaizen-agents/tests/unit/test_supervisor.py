@@ -133,7 +133,7 @@ class TestGovernedSupervisorLayer2:
         )
         assert supervisor.envelope.financial is not None
         assert supervisor.envelope.financial.max_spend_usd == 50.0
-        assert supervisor.envelope.operational.allowed_actions == ["read", "write"]
+        assert supervisor.envelope.operational.allowed_actions == ("read", "write")
 
     @pytest.mark.asyncio
     async def test_budget_warning_event(self) -> None:

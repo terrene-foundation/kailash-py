@@ -84,7 +84,27 @@ class GovernanceCallback(Protocol):
 
 
 class _DefaultGovernanceCallback:
-    """Default per-node governance callback calling verify_action() per node."""
+    """Default per-node governance callback calling verify_action() per node.
+
+    Holds whatever governance handle it is constructed with and stores it as an
+    ordinary attribute. That is deliberate and safe ONLY because
+    :attr:`PactEngine.governance_callback` -- a PUBLIC property -- constructs it
+    with the READ-ONLY view rather than the raw ``GovernanceEngine`` (#2227
+    Route B).
+
+    It previously received ``self._governance`` (the raw engine), so
+    ``engine.governance_callback._governance.grant_clearance(...)`` reached the
+    full mutation surface by plain attribute access -- going AROUND the
+    read-only view instead of through it, which is why the #2224 proxy work
+    could not close it. Hiding the attribute would have been a rename, not a
+    fix: the root cause is that this object never needed more authority than
+    ``verify_action``, which the read-only view already proxies.
+
+    Args:
+        governance: A governance handle exposing ``verify_action``. Callers
+            inside PactEngine MUST pass the read-only view.
+        on_held: Optional handler for HELD verdicts.
+    """
 
     def __init__(
         self, governance: Any, on_held: HeldActionCallback | None = None
@@ -504,9 +524,19 @@ class PactEngine:
 
     @property
     def governance_callback(self) -> GovernanceCallback:
-        """The per-node governance callback."""
+        """The per-node governance callback.
+
+        Constructed with the READ-ONLY governance view, never the raw engine
+        (#2227 Route B). This property is public, and the callback stores its
+        governance handle as an ordinary attribute, so passing the raw engine
+        made ``engine.governance_callback._governance.grant_clearance(...)``
+        reachable by plain attribute access from any holder of the facade --
+        the exact mutation surface ``engine.governance`` exists to deny. The
+        callback only ever calls ``verify_action``, which the view proxies, so
+        it never needed the raw engine.
+        """
         return _DefaultGovernanceCallback(
-            governance=self._governance, on_held=self._on_held
+            governance=self.governance, on_held=self._on_held
         )
 
     @property
@@ -1348,16 +1378,43 @@ class _ReadOnlyGovernanceView(ReadOnlyAttributeProxy):
     #: them, and exposing them is the deliberate purpose of this view:
     #:   * ``verify_action`` is the primary decision method. Deciding consumes
     #:     the role's rate-limit quota, may trip the circuit breaker, starts
-    #:     vacancy clocks, writes the envelope cache, and appends an audit
-    #:     record. A holder of this view can therefore exhaust a role's daily
-    #:     quota -- tracked in #2226, not silently accepted.
-    #:   * ``check_access`` emits an audit record on every path.
+    #:     vacancy clocks, writes the envelope cache, and appends to the audit
+    #:     chain / dispatcher / SQLite on every call.
+    #:   * ``check_access`` emits an audit record on all three of its paths.
+    #:   * ``verify_audit_integrity`` lazily creates the SQLite DB/WAL/tables.
     #: Neither can grant a permission or alter an envelope, which is the line
     #: this allowlist draws.
     #:
+    #: DECISION on the quota-exhaustion exposure (#2226, explicitly ACCEPTED
+    #: rather than implied): a holder of this view can call ``verify_action``
+    #: in a loop, exhaust the role's ``max_actions_per_day`` and trip the
+    #: circuit breaker, denying governance to the real occupant of that role.
+    #: This is accepted, not mitigated here, because the alternatives are all
+    #: worse at this layer:
+    #:   * Removing ``verify_action`` from the allowlist would empty the view
+    #:     of its purpose -- asking for a decision IS what Layer 3 is for.
+    #:   * Answering from a cache without consuming quota would make the view
+    #:     a rate-limit BYPASS: a caller could pre-compute verdicts for free
+    #:     and the limit would no longer bound real decisions.
+    #:   * A separate quota for view callers cannot be enforced here, because
+    #:     this class has no caller identity to bill -- whoever holds the view
+    #:     IS the role, as far as the engine can tell.
+    #: The correct mitigation is admission control ABOVE this boundary (do not
+    #: hand the view to a principal you would not let spend the role's quota),
+    #: which is a deployment decision, not a property this class can enforce.
+    #: The exposure is bounded: it is a denial of governance for one role, it
+    #: cannot grant any permission, and every consuming call is in the audit
+    #: chain, so exhaustion is attributable after the fact.
+    #:
     #: Separately: this allowlist governs which NAMES are reachable. It cannot
-    #: make the RETURN VALUES safe -- several of these still hand back live
-    #: mutable engine internals. That is #2226.
+    #: make the RETURN VALUES safe. Since #2226 the values it hands back are
+    #: immutable at the source -- the envelope dimensions, TeamConfig,
+    #: DepartmentConfig and the suspension snapshot are frozen models holding
+    #: immutable collections -- so no allowlisted member yields a live handle
+    #: on governance state any more. That property is pinned by
+    #: ``tests/regression/test_issue_2226_live_mutable_internals.py``, which
+    #: walks every member of this allowlist rather than a hand-picked list, so
+    #: a NEW allowlist entry returning a mutable internal fails the test.
     _ALLOWED = frozenset(
         {
             "org_name",
