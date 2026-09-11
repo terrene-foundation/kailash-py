@@ -315,6 +315,191 @@ class TestSandboxNamespaceStillComplete:
 
 
 @pytest.mark.unit
+class TestLazyProxyDoesNotWidenTheSandbox:
+    """Adversarial review findings F1/F2 on the lazy-binding change.
+
+    F1: the proxy CLASS is reachable from sandboxed code. `type` is an
+    allow-listed builtin and a user-defined function's `__globals__` exposes the
+    execution namespace, so code can take a proxy's class WITHOUT naming its
+    module (naming it would make it a real module) and call that constructor
+    with any string. The blocked module name then appears only inside a string
+    literal, where the AST checker cannot see it.
+
+    F2: the egress filter strips modules from node outputs by isinstance against
+    types.ModuleType. A proxy that is not a ModuleType escapes it and then fails
+    the JSON-serialisability validator, breaking a node that used to succeed.
+    """
+
+    # Reaches a lazily-bound proxy without naming any module.
+    PRELUDE = (
+        "def _f():\n"
+        "    pass\n"
+        "_g = _f.__globals__\n"
+        "_p = None\n"
+        "for _k in list(_g):\n"
+        "    _v = _g[_k]\n"
+        "    if type(_v).__name__ == '_LazyModule':\n"
+        "        _p = _v\n"
+        "        break\n"
+    )
+
+    def test_the_proxy_is_reachable_at_all(self):
+        """Pins the PREMISE of F1. If this ever fails the payloads below are
+        vacuous -- they would be 'blocked' only because they found no proxy."""
+        from kailash.nodes.code import PythonCodeNode
+
+        node = PythonCodeNode(
+            name="t", code=self.PRELUDE + "result = {'cls': type(_p).__name__}\n"
+        )
+        assert node.execute()["result"] == {"cls": "_LazyModule"}
+
+    @pytest.mark.parametrize(
+        "attack,body",
+        [
+            (
+                "constructor",
+                "_m = type(_p)('subprocess')\nresult = {'got': _m.check_output.__name__}\n",
+            ),
+            (
+                "new-without-init",
+                "_c = type(_p)\n_m = _c.__new__(_c)\nresult = {'got': _m.check_output.__name__}\n",
+            ),
+            (
+                "dict-mutation",
+                "_p.__dict__['__name__'] = 'subprocess'\n"
+                "_p.__dict__['_kailash_module'] = None\n"
+                "result = {'got': _p.check_output.__name__}\n",
+            ),
+            (
+                "second-blocked-module",
+                "_m = type(_p)('multiprocessing')\nresult = {'got': str(_m)}\n",
+            ),
+        ],
+    )
+    def test_blocked_module_is_unreachable_through_the_proxy(self, attack, body):
+        """No route through the proxy may import a COMPLETELY_BLOCKED_MODULE."""
+        from kailash.nodes.code import PythonCodeNode
+        from kailash.sdk_exceptions import NodeExecutionError
+
+        node = PythonCodeNode(name="t", code=self.PRELUDE + body)
+        with pytest.raises(NodeExecutionError) as excinfo:
+            node.execute()
+        # And specifically NOT because the payload silently produced nothing.
+        assert "check_output" not in str(excinfo.value) or "allow-list" in str(
+            excinfo.value
+        ), f"{attack}: unexpected failure mode: {excinfo.value}"
+
+    def test_allow_listed_module_still_constructible_through_the_proxy(self):
+        """The guard blocks what was blocked before -- and nothing more.
+
+        `os` is allow-listed and was already bound as a real module, so reaching
+        it this way grants no capability the sandbox did not already have. If
+        this goes red the guard has over-tightened.
+        """
+        from kailash.nodes.code import PythonCodeNode
+
+        node = PythonCodeNode(
+            name="t",
+            code=self.PRELUDE + "_m = type(_p)('os')\nresult = {'sep': _m.path.sep}\n",
+        )
+        assert node.execute()["result"] == {"sep": "/"}
+
+    def test_proxy_is_a_module_type(self):
+        """Structural pin: the egress filter's isinstance check depends on this."""
+        import types as pytypes
+
+        from kailash.nodes.code.python import _LazyModule
+
+        assert issubclass(_LazyModule, pytypes.ModuleType)
+
+    def test_proxy_does_not_escape_into_node_outputs(self):
+        """F2. With no `result` variable every non-private local is returned, so
+        this is the path where the egress filter actually decides."""
+        from kailash.nodes.code import PythonCodeNode
+
+        code = self.PRELUDE.replace("_p = None", "leaked = None").replace(
+            "_p = _v", "leaked = _v"
+        )
+        outputs = PythonCodeNode(name="t", code=code).execute()
+        assert "leaked" not in outputs, (
+            "A lazily-bound module proxy escaped into node outputs: "
+            f"{type(outputs.get('leaked')).__name__}. It must be stripped exactly "
+            "as a real module is."
+        )
+
+    def test_real_module_is_still_stripped(self):
+        """Control for the test above: proves the filter was doing this before."""
+        from kailash.nodes.code import PythonCodeNode
+
+        outputs = PythonCodeNode(name="t", code="leaked = math").execute()
+        assert "leaked" not in outputs
+
+
+@pytest.mark.unit
+class TestVerdictsPreservedOrDocumented:
+    """Review findings F4/F6."""
+
+    def test_name_based_dataframe_allow_does_not_require_pandas_loaded(self):
+        """F4. A non-pandas frame whose class is named DataFrame (polars, spark)
+        was accepted before, because the name-based branch ran whenever pandas
+        was INSTALLED. Gating that branch on pandas being LOADED would reject it.
+        """
+        import kailash.security as security
+
+        class DataFrame:  # stands in for polars.DataFrame
+            pass
+
+        if not security._module_is_installed("pandas"):
+            pytest.skip("pandas not installed; the historic branch would not run")
+
+        value = DataFrame()
+        assert security.sanitize_input(value) is value
+
+    def test_partial_resolution_failure_is_not_cached_permanently(self):
+        """F6. A framework caught mid-initialisation must not be rejected for the
+        rest of the process."""
+        import kailash.security as security
+
+        class _FakeType:
+            pass
+
+        fake_module = type(sys)("kailash_test_issue_2000_flaky_fw")
+        probe = fake_module.__name__
+        calls = {"n": 0}
+
+        def _flaky_resolver():
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise AttributeError("still initialising")
+            return [_FakeType]
+
+        original_groups = security._OPTIONAL_TYPE_GROUPS
+        original_probes = security._OPTIONAL_PROBE_NAMES
+        original_cache = security._ALLOWED_TYPES_CACHE
+        try:
+            security._OPTIONAL_TYPE_GROUPS = original_groups + (
+                ((probe,), _flaky_resolver),
+            )
+            security._OPTIONAL_PROBE_NAMES = original_probes + (probe,)
+            security._ALLOWED_TYPES_CACHE = None
+            sys.modules[probe] = fake_module
+
+            first = security._get_cached_allowed_types()
+            assert _FakeType not in first  # failed, fails closed
+
+            second = security._get_cached_allowed_types()
+            assert _FakeType in second, (
+                "A transient resolution failure was cached for the process "
+                "lifetime; the framework can never become usable again."
+            )
+        finally:
+            sys.modules.pop(probe, None)
+            security._OPTIONAL_TYPE_GROUPS = original_groups
+            security._OPTIONAL_PROBE_NAMES = original_probes
+            security._ALLOWED_TYPES_CACHE = original_cache
+
+
+@pytest.mark.unit
 def test_optional_type_groups_probe_the_module_that_defines_their_types():
     """Structural guard on the presence-keyed design.
 

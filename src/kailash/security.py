@@ -111,6 +111,7 @@ See Also:
     - :doc:`/guides/security` for comprehensive security best practices
 """
 
+import importlib.util
 import logging
 import os
 import re
@@ -459,13 +460,29 @@ def validate_command_string(command: str, config: SecurityConfig | None = None) 
 # process (kailash-py#2000), and it made node execution fail outright on a broken
 # or partially-installed ML stack.
 #
-# SECURITY DIRECTION
-# ------------------
-# A framework that is not loaded contributes NO types, so the resolved allow-list
-# is only ever NARROWER than the eager version, never wider. Narrower means
-# sanitize_input() raises SecurityError -- it never silently admits a value it
-# previously rejected. Resolution failures are logged at WARNING and also fail
-# closed (the group's types are simply absent, so such values are rejected).
+# SECURITY DIRECTION -- and the TWO places the verdict genuinely changed
+# ----------------------------------------------------------------------
+# For the optional-framework groups below the substitution is verdict-preserving:
+# a value can only be an instance of a framework's type if that framework is
+# loaded, so keying on sys.modules admits exactly what importing admitted.
+# Resolution failures are logged at WARNING and fail closed -- the group's types
+# are absent, so such values are rejected rather than silently admitted.
+#
+# Two verdicts DID change, and the blanket claim "this can only ever be narrower"
+# that an earlier revision of this comment made was FALSE. Recorded explicitly so
+# the next reader does not have to rediscover them:
+#
+#   1. sklearn under coverage (WIDER than before). The old sklearn branch was
+#      wrapped in `if "coverage" not in sys.modules`, so a process running under
+#      coverage REJECTED BaseEstimator/TransformerMixin values that every normal
+#      process accepted. That guard existed to dodge the import cost/instrument-
+#      ation conflict, not to express a security policy, and nothing imports
+#      sklearn here any more -- so it is gone and coverage runs now agree with
+#      production. This is a deliberate widening, limited to processes running
+#      under coverage, and it makes the security surface stop depending on
+#      whether the code is being measured.
+#   2. The pandas name-based branch in sanitize_input() -- see the comment at
+#      that block, which preserves its old verdict exactly via find_spec.
 _BASE_ALLOWED_TYPES: tuple[type, ...] = (
     str,
     int,
@@ -695,6 +712,32 @@ _ALLOWED_TYPES_CACHE: tuple[tuple[str, ...], tuple[type, ...]] | None = None
 _CACHED_ALLOWED_TYPES: tuple[type, ...] | None = None
 
 
+_MODULE_INSTALLED_CACHE: dict[str, bool] = {}
+
+
+def _module_is_installed(module_name: str) -> bool:
+    """Is ``module_name`` importable here, without importing it?
+
+    ``find_spec`` locates a module without executing it, so this answers
+    "installed?" at no import cost. Memoised because the answer cannot change
+    within a process without a path-hook change, and the callers sit on the
+    node-execution hot path. The cache is keyed by name and bounded by the small
+    fixed set of names the SDK ever asks about.
+    """
+    cached = _MODULE_INSTALLED_CACHE.get(module_name)
+    if cached is not None:
+        return cached
+    if module_name in sys.modules:
+        installed = True
+    else:
+        try:
+            installed = importlib.util.find_spec(module_name) is not None
+        except (ImportError, AttributeError, ValueError):
+            installed = False
+    _MODULE_INSTALLED_CACHE[module_name] = installed
+    return installed
+
+
 def _loaded_optional_signature() -> tuple[str, ...]:
     """Return the probe modules currently present in sys.modules.
 
@@ -726,12 +769,14 @@ def _get_cached_allowed_types() -> list[type]:
 
     allowed_types: list[type] = list(_BASE_ALLOWED_TYPES)
     loaded = frozenset(signature)
+    resolution_failed = False
     for probes, resolve in _OPTIONAL_TYPE_GROUPS:
         if loaded.isdisjoint(probes):
             continue
         try:
             allowed_types.extend(resolve())
         except (ImportError, AttributeError, OSError) as exc:
+            resolution_failed = True
             # Fail closed and loudly: the framework is loaded but its types could
             # not be resolved, so values of those types will now be REJECTED by
             # sanitize_input(). Never silently pretend the group was resolved.
@@ -745,8 +790,16 @@ def _get_cached_allowed_types() -> list[type]:
             )
 
     frozen = tuple(allowed_types)
-    _ALLOWED_TYPES_CACHE = (signature, frozen)
     _CACHED_ALLOWED_TYPES = frozen
+    if not resolution_failed:
+        _ALLOWED_TYPES_CACHE = (signature, frozen)
+    else:
+        # Do NOT cache a partial result. A framework can be mid-initialisation
+        # (its parent package in sys.modules before its submodules finish), and
+        # caching that transient failure would reject its values for the whole
+        # process life with no way back. Retrying costs an attribute access --
+        # the framework is already imported, so no import is repeated.
+        _ALLOWED_TYPES_CACHE = None
     return list(frozen)
 
 
@@ -1109,24 +1162,35 @@ def sanitize_input(
 
     # Force allow pandas DataFrame - it should always be allowed regardless of mocking
     # This handles test interference where pandas might be mocked.
-    # #2000: gated on sys.modules. A value cannot BE a pandas DataFrame (nor a
-    # mock standing in for one, which is installed into sys.modules by the mock)
-    # unless pandas is already loaded, so this is verdict-preserving and no
-    # longer imports pandas on the node-execution path.
-    if not type_allowed and "pandas" in sys.modules:
-        try:
-            import pandas as pd
+    #
+    # #2000: this block no longer IMPORTS pandas, but its verdict is preserved
+    # EXACTLY, which takes two different gates:
+    #   * the name-based branch never needed pandas loaded -- it only reads the
+    #     value's own class. It historically ran whenever pandas was INSTALLED
+    #     (the `import pandas` above it succeeded), so it is gated on
+    #     installed-ness, checked via find_spec, which locates without executing.
+    #     Gating it on loaded-ness instead would REJECT a polars/spark frame that
+    #     was previously accepted; gating it on nothing would ACCEPT one on a
+    #     machine with no pandas at all, where it was previously rejected.
+    #   * the isinstance branch needs the real class, and a value can only BE a
+    #     pandas DataFrame if pandas is already loaded, so loaded-ness is the
+    #     exact gate there and costs no import.
+    if not type_allowed and _module_is_installed("pandas"):
+        if hasattr(value, "__class__") and "DataFrame" in str(value.__class__):
+            # Covers a real DataFrame and a mock standing in for one alike.
+            type_allowed = True
+        elif "pandas" in sys.modules:
+            try:
+                import pandas as pd
 
-            if isinstance(value, pd.DataFrame):
-                type_allowed = True
-            # Also handle the case where DataFrame is mocked but still has the right type name
-            elif hasattr(value, "__class__") and "DataFrame" in str(value.__class__):
-                type_allowed = True
-        except ImportError:
-            pass
+                if isinstance(value, pd.DataFrame):
+                    type_allowed = True
+            except ImportError:
+                pass
 
     # Additional check for numpy scalar types
-    # #2000: gated on sys.modules for the same reason as pandas above.
+    # #2000: gated on sys.modules. A value can only BE a numpy scalar if numpy is
+    # already loaded, so this gate is exact and imports nothing.
     if not type_allowed and "numpy" in sys.modules:
         try:
             import numpy as np
