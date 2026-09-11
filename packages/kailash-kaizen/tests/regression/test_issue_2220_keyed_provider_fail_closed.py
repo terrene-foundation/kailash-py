@@ -94,7 +94,11 @@ def test_unregistered_model_with_credential_does_not_silently_dispatch(
 
     try:
         config = AgentConfig(model=model)
-    except ConfigurationError:
+    except ConfigurationError as raised:
+        # Assert WHICH failure this was. A bare `except` here would also pass
+        # if AgentConfig raised ConfigurationError for an unrelated reason,
+        # making the test green for the wrong cause.
+        assert model in str(raised)
         return  # failing closed is the required behaviour
     pytest.fail(
         f"{model!r} with {key} set silently resolved to "
@@ -228,3 +232,25 @@ def test_harness_optin_outranks_a_stray_credential(scrubbed_env):
     scrubbed_env.setenv("OPENAI_API_KEY", "sk-fake-not-a-real-credential")
 
     assert resolve_agent_provider(UNREGISTERED_LOCAL_MODEL) == "mock"
+
+
+def test_an_explicit_real_llm_run_vetoes_the_mock_optin(scrubbed_env):
+    """A real-LLM suite must not silently assert against fabricated content.
+
+    ``tests/conftest.py`` sets ``KAIZEN_ALLOW_KEYLESS_MOCK`` whenever
+    ``USE_REAL_PROVIDERS`` is unset, but ``KAIZEN_ALLOW_REAL_LLM`` is a
+    SEPARATE gate, so both can be on at once. Without the veto an unregistered
+    model would resolve to ``"mock"`` in the one suite whose purpose is to
+    exercise the real wire — the `requires_real_llm` tests would pass green
+    having called nothing. Failing loud sends the test author to
+    ``llm_provider=``, which is the same migration every other caller gets.
+    """
+    scrubbed_env.setenv("KAIZEN_ALLOW_KEYLESS_MOCK", "1")
+    scrubbed_env.setenv("KAIZEN_ALLOW_REAL_LLM", "1")
+
+    with pytest.raises(ConfigurationError):
+        resolve_agent_provider(UNREGISTERED_LOCAL_MODEL)
+
+    # Paired pole: a registered model is unaffected by the veto, so this is
+    # not "real-LLM runs now raise for everything".
+    assert resolve_agent_provider("gpt-4") == "openai"

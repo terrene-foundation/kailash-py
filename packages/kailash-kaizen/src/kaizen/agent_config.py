@@ -376,9 +376,16 @@ class AgentConfig:
         # `else: return "openai"`, so a model it did not recognise was
         # dispatched to OpenAI under whatever credential was configured, with
         # the caller never told. `resolve_agent_provider` adds no mapping of
-        # its own: it composes the registry-DERIVED prefix table (which cannot
-        # drift from the provider registry) with the env fallback, and raises
-        # ConfigurationError naming the model when neither resolves.
+        # its own: it delegates to the registry-DERIVED prefix table (which
+        # cannot drift from the provider registry) and raises
+        # ConfigurationError naming the model when that cannot answer.
+        #
+        # #2220 removed the env fallback that used to sit behind that table.
+        # It answered "which credential exists" in place of "which vendor
+        # serves this model", so an unregistered model resolved to whichever
+        # vendor's key happened to be exported — sending local-model prompts
+        # to a third party. An unrecognised model now RAISES here, at config
+        # construction, before any network call.
         auto_detected = self.llm_provider is None
         if auto_detected:
             from kaizen.core import _provider_env

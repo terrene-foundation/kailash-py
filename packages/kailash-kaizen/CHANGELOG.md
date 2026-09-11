@@ -31,7 +31,15 @@ range such as `>=2.0`.
   AgentConfig(model="llama-3.1", llm_provider="ollama")
   ```
 
-  This affects you **only** if you relied on the guess. Recognised model names (anything starting `gpt-`, `o1-`, `o3-`, `o4-`, `claude-`, `gemini-`, `deepseek-`) are unchanged, with or without a key set, and anyone already passing `llm_provider=` is unaffected. If your model *is* served by OpenAI but its name carries no recognised prefix — `chatgpt-4o-latest`, or a fine-tuned `ft:...` name — you now pass `llm_provider="openai"` explicitly. That case previously worked, and losing it is the deliberate cost of the fix: the framework cannot tell such a name apart from `llama-3.1`, and being right by luck for one is exactly what made it wrong for the other.
+  This affects you **only** if you relied on the guess. Recognised model names (anything starting `gpt-`, `o1-`, `o3-`, `o4-`, `claude-`, `gemini-`, `deepseek-`) are unchanged, with or without a key set, and anyone already passing `llm_provider=` is unaffected.
+
+  **Who else sees this error.** Besides `AgentConfig`, the same check now runs inside `DataFlow.from_brief()` and `kailash_ml.from_brief()`, which resolve a provider the same way when you do not pass one. If you set `DEFAULT_LLM_MODEL` to a name outside the recognised list, those two calls now raise instead of guessing. Same one-argument fix: pass `llm_provider=`.
+
+  **Model names that are affected even though the vendor is a normal hosted one:** an **Azure** deployment name (these are names you choose yourself, e.g. `prod-chat`, so they almost never match a recognised prefix — pass `llm_provider="azure"`); an OpenAI model whose name carries no recognised prefix, such as `chatgpt-4o-latest` or a fine-tuned `ft:...` name (pass `llm_provider="openai"`). Those cases previously worked, and losing them is the deliberate cost of the fix: the framework cannot tell such a name apart from `llama-3.1`, and being right by luck for one is exactly what made it wrong for the other.
+
+  **One related change if you run your own test suite against Kaizen.** The internal `KAIZEN_ALLOW_KEYLESS_MOCK` opt-in now takes precedence over a provider credential for unrecognised models, so a suite that sets it while a stray key is exported resolves to `mock` where it previously resolved to that key's vendor. This keeps the rule above exact — for an unrecognised model, the answer never depends on which credentials happen to exist. Setting `KAIZEN_ALLOW_REAL_LLM=1` overrides the opt-in, so tests that genuinely call a real provider still fail loudly rather than quietly running against mock output.
+
+  **Not yet covered.** This closes the `AgentConfig` path. Other entry points — `Kaizen.create_agent()` with a plain dict config, `BaseAgent.to_workflow()`, the Nexus deployment surface, and the RAG nodes — still pick a provider from your environment the same way, and are tracked on #2220. A separate hazard remains for local models whose names *do* match a recognised prefix (Ollama serves `deepseek-r1:7b` and `gpt-oss:20b`); those still route to the remote vendor. Pass `llm_provider="ollama"` for local models.
 
 ### Fixed
 

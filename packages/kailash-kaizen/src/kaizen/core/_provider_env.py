@@ -34,9 +34,34 @@ exist", and #2069 left that answer standing in for "which vendor serves this
 model" whenever a key was present, so an unregistered model still resolved
 silently to `openai`. The two questions are unrelated; only `llm_provider=`
 or the registry prefix table may answer the second. This helper keeps its own
-contract unchanged and is still correct for the call sites that genuinely ask
-the credential question (RAG nodes, the Nexus deployment surface) — it is the
-COMPOSITION that was wrong, not the helper.
+contract unchanged — it is the COMPOSITION that was wrong, not the helper.
+
+SCOPE OF THAT FIX, STATED HONESTLY: it covers `resolve_agent_provider`, whose
+only production consumer is `AgentConfig`. Other sites call this helper
+DIRECTLY and pair its answer with a model in the same node config, which is
+the same wrong-vendor composition through a different door — measured live on
+`kaizen.core.agents.Agent(config={"model": "llama-3.1"})`, which still returns
+"openai" under an exported OPENAI_API_KEY. Known doors: `core/agents.py`
+(`_get_provider_for_config`), `core/base_agent.py`, `core/workflow_generator.py`,
+`signatures/core.py`, `integrations/nexus/{base,deployment_cache}.py`, and the
+`nodes/rag/*` family. Those are NOT fixed here (they exceed this change's
+budget and blast radius) and are tracked on #2220. Do not read this module's
+fail-closed contract as a package-wide guarantee; it is not one yet.
+
+A prefix HIT is also not proof of a remote vendor: Ollama serves
+`deepseek-r1:7b` and `gpt-oss:20b`, which match the `deepseek-` and `gpt-`
+rows and so route REMOTE without ever reaching the guard below. Closing that
+needs a positive signal for local serving, not another name heuristic.
+
+Precisely on the "no Ollama row" point, which is easy to overstate: a PARTIAL
+row IS possible and one already exists as a substring table in
+`kaizen/nodes/_env_model.py` (`llama`/`mistral`/`mixtral`/`bakllava` ->
+ollama). What is impossible is a COMPLETE or SOUND one. Ollama serves
+arbitrary names, so the table misses everything outside its list, and it is
+wrong in the other direction too — its `"gpt" in lowered` arm claims
+`gpt-oss:20b`, an Ollama model, for OpenAI. A name is not a location, so no
+name table can decide this; that is why the fix below refuses rather than
+guessing, and why no new heuristic is introduced here.
 
 The kaizen test harness runs deliberately keyless (the root `conftest.py`
 cost-guard actively scrubs provider secrets) with the mock provider registered
@@ -49,6 +74,22 @@ user never sets it, so real keyless callers fail loud.
 
 import os
 from typing import Optional
+
+
+def _real_llm_run() -> bool:
+    """True when the harness has EXPLICITLY enabled real, billed LLM calls.
+
+    Read as a VETO on the mock opt-in below. ``tests/conftest.py`` sets
+    ``KAIZEN_ALLOW_KEYLESS_MOCK`` whenever ``USE_REAL_PROVIDERS`` is unset, but
+    ``KAIZEN_ALLOW_REAL_LLM`` is a SEPARATE gate (``pytest.ini``'s
+    ``requires_real_llm`` marker), so the two can both be on. Without this
+    veto, a real-LLM test naming an unregistered model would silently resolve
+    to ``"mock"`` and assert green against fabricated content — in the one
+    suite whose entire purpose is to exercise the real wire. Flag-vs-flag, not
+    credential-keyed, so it preserves the #2220 invariant that an unregistered
+    model's outcome never depends on WHICH credentials exist.
+    """
+    return os.environ.get("KAIZEN_ALLOW_REAL_LLM") == "1"
 
 
 def _keyless_mock_allowed() -> bool:
@@ -110,9 +151,11 @@ def resolve_agent_provider(model: Optional[str], *, component: str = "") -> str:
     * "Given a full config, which provider plus credentials and endpoint?" ->
       canonical: ``kaizen.config.auto_detect_provider``.
 
-    This function ADDS NO MAPPING OF ITS OWN. It composes the first two in a
-    defined order, which is the whole reason it exists: publishing a fourth
-    model->provider table would recreate exactly the drift #1952 ended. In
+    This function ADDS NO MAPPING OF ITS OWN, and since #2220 it no longer
+    composes the second: it delegates to the model-keyed resolver ALONE and
+    raises when that cannot answer. (It previously composed the two in a
+    defined order; that composition WAS the #2220 defect.) Publishing a fourth
+    model->provider table would recreate exactly the drift #1952 ended, so in
     particular it deliberately does NOT publish
     ``kaizen.nodes._env_model.detect_provider``, whose hand-maintained
     substring table is a weaker duplicate of the registry-derived one and is
@@ -191,7 +234,15 @@ def resolve_agent_provider(model: Optional[str], *, component: str = "") -> str:
             # WHICH credentials exist — so the flag's answer cannot depend on
             # them either. Real callers never set it and reach the raise
             # below whatever their environment holds.
-            if _keyless_mock_allowed():
+            #
+            # Vetoed by an explicit real-LLM run, so a `requires_real_llm`
+            # test naming an unregistered model fails loud (and names the
+            # kwarg) instead of quietly asserting against mock content. The
+            # veto is flag-vs-flag, so the credential-independence invariant
+            # above still holds. `detect_provider_from_env` is deliberately
+            # NOT given this veto: its keyless->mock branch is #1952's
+            # contract for ~50 other call sites and is not this fix's to move.
+            if _keyless_mock_allowed() and not _real_llm_run():
                 return "mock"
         raise ConfigurationError(
             f"Could not resolve an LLM provider for model {model!r}{where}. "
