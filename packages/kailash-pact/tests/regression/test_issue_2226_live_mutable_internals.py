@@ -50,6 +50,8 @@ from typing import Any
 
 import pytest
 
+from kailash.trust import ConfidentialityLevel, TrustPosture
+from kailash.trust.pact.clearance import RoleClearance
 from kailash.trust.pact.config import (
     ConstraintEnvelopeConfig,
     DepartmentConfig,
@@ -58,6 +60,7 @@ from kailash.trust.pact.config import (
 )
 from kailash.trust.pact.envelopes import RoleEnvelope
 from kailash.trust.pact.immutable import FrozenMapping
+from kailash.trust.pact.knowledge import KnowledgeItem
 from kailash.trust.pact.suspension import PlanSuspension, SuspensionTrigger
 from pact.engine import PactEngine, _ReadOnlyGovernanceView
 
@@ -412,8 +415,27 @@ class TestNoAllowlistedMemberYieldsALiveHandle:
     """
 
     #: Members whose return value is rebuilt per call, so mutating it is inert.
-    #: Measured, not assumed: mutating each and re-reading shows no change.
+    #: Measured, not assumed: ``test_the_excluded_members_really_do_rebuild``
+    #: mutates the return of EACH of these and re-reads, showing no change.
     _RETURNS_FRESH_OBJECTS = {"list_roles", "verify_action", "check_access"}
+
+    @staticmethod
+    def _grant_clearance(engine: PactEngine) -> None:
+        """Grant a POPULATED clearance so get_context().clearance is not None.
+
+        Without this the fixture grants no clearance, get_context().clearance
+        is None, and the walker never descends into a RoleClearance -- so its
+        fields (compartments frozenset, etc.) go unchecked (#2227 LOW-4).
+        """
+        engine._admin_governance.grant_clearance(
+            ADDR,
+            RoleClearance(
+                role_address=ADDR,
+                max_clearance=ConfidentialityLevel.CONFIDENTIAL,
+                compartments=frozenset({"alpha", "beta"}),
+                granted_by_role_address=SUPERVISOR,
+            ),
+        )
 
     def test_every_other_allowlisted_member_returns_only_immutables(
         self, engine: PactEngine
@@ -424,6 +446,7 @@ class TestNoAllowlistedMemberYieldsALiveHandle:
             trigger=SuspensionTrigger.BUDGET,
             snapshot={"step": 3},
         )
+        self._grant_clearance(engine)
         view = engine.governance
         calls = {
             "org_name": lambda: view.org_name,
@@ -435,6 +458,13 @@ class TestNoAllowlistedMemberYieldsALiveHandle:
             "get_vacancy_designation": lambda: view.get_vacancy_designation(ADDR),
             "verify_audit_integrity": lambda: view.verify_audit_integrity(),
         }
+
+        # Guard the fixture itself: if a future change stops populating the
+        # clearance, this test silently stops covering RoleClearance. Assert the
+        # walker actually has a populated clearance to descend into.
+        ctx = view.get_context(ADDR)
+        assert ctx.clearance is not None, "clearance fixture regressed -- see LOW-4"
+        assert ctx.clearance.compartments == frozenset({"alpha", "beta"})
 
         unclassified = (
             _ReadOnlyGovernanceView._ALLOWED - set(calls) - self._RETURNS_FRESH_OBJECTS
@@ -460,20 +490,54 @@ class TestNoAllowlistedMemberYieldsALiveHandle:
         )
 
     def test_the_excluded_members_really_do_rebuild(self, engine: PactEngine) -> None:
-        """The exclusion above must be measured, not asserted.
+        """Every member in _RETURNS_FRESH_OBJECTS must be MEASURED, not assumed.
 
-        If ``list_roles`` ever starts returning the engine's own list, this
-        fails and the exclusion has to be revisited.
+        Previously this measured only list_roles and verify_action; check_access
+        was excluded by name with no evidence (#2227 LOW-4). All three are now
+        exercised: mutate the return, re-read via a fresh call, assert the
+        mutation did not survive.
         """
         view = engine.governance
 
+        # list_roles -> fresh list per call
         roles = view.list_roles()
         roles.append("smuggled")
         assert "smuggled" not in view.list_roles()
 
+        # verify_action -> fresh verdict/audit dict per call
         verdict = view.verify_action(ADDR, "read_docs", {})
         verdict.audit_details["smuggled"] = True
         assert "smuggled" not in view.verify_action(ADDR, "read_docs", {}).audit_details
+
+        # check_access -> fresh AccessDecision per call. Measured here rather
+        # than assumed: build a real KnowledgeItem, mutate the returned
+        # decision's dict fields, and confirm a second call is unaffected.
+        item = KnowledgeItem(
+            item_id="k-1",
+            classification=ConfidentialityLevel.PUBLIC,
+            owning_unit_address="D1-R1-T1",
+        )
+        decision = view.check_access(ADDR, item, TrustPosture.SUPERVISED)
+        mutated_any = False
+        for field_name in vars(decision):
+            value = getattr(decision, field_name)
+            if isinstance(value, dict):
+                value["smuggled"] = True
+                mutated_any = True
+            elif isinstance(value, list):
+                value.append("smuggled")
+                mutated_any = True
+        assert mutated_any, (
+            "check_access returned an AccessDecision with no dict/list field to "
+            "probe -- if its shape changed, re-measure this exclusion"
+        )
+        decision2 = view.check_access(ADDR, item, TrustPosture.SUPERVISED)
+        for field_name in vars(decision2):
+            value = getattr(decision2, field_name)
+            if isinstance(value, dict):
+                assert "smuggled" not in value
+            elif isinstance(value, list):
+                assert "smuggled" not in value
 
 
 class TestFrozenMappingResidual:
@@ -516,3 +580,60 @@ class TestFrozenMappingResidual:
         assert isinstance(actions, tuple)
         assert not hasattr(actions, "__setitem__")
         assert not hasattr(actions, "append")
+
+
+class TestIntersectedEnvelopeStaysImmutable:
+    """#2226 reachability: the intersection path must return tuple-typed configs.
+
+    The sequence-dimension fix rests on the fields being ``tuple``. The
+    effective envelope a verdict reads is not the stored envelope but the
+    INTERSECTION of the role's chain (compute_effective_envelope, via the
+    engine). If any intersection constructor built a new config through a path
+    that bypasses the tuple validator (``model_construct`` with a list, say),
+    the intersected envelope's sequence fields would be lists again and the
+    #2226 attack would reopen on exactly the object verdicts consume.
+
+    Confirmed by reading the path: every intersection dimension uses the normal
+    constructor (``OperationalConstraintConfig(allowed_actions=sorted(...))``),
+    which runs the field validator and coerces list -> tuple; there is no
+    ``model_construct`` in envelopes.py / envelope_adapter.py. This pins that.
+    """
+
+    def _intersect(self):
+        from kailash.trust.pact.envelopes import intersect_envelopes
+
+        a = ConstraintEnvelopeConfig(
+            id="a",
+            operational=OperationalConstraintConfig(
+                allowed_actions=["read", "write", "extra"],
+                blocked_actions=["danger"],
+            ),
+        )
+        b = ConstraintEnvelopeConfig(
+            id="b",
+            operational=OperationalConstraintConfig(
+                allowed_actions=["read", "write"],
+                blocked_actions=["other"],
+            ),
+        )
+        return intersect_envelopes(a, b)
+
+    def test_intersected_sequence_fields_are_tuples(self) -> None:
+        result = self._intersect()
+        assert isinstance(result.operational.allowed_actions, tuple)
+        assert isinstance(result.operational.blocked_actions, tuple)
+        assert isinstance(result.data_access.read_paths, tuple)
+        assert isinstance(result.communication.allowed_channels, tuple)
+        assert isinstance(result.temporal.blackout_periods, tuple)
+
+    def test_attack_is_closed_on_the_intersected_envelope(self) -> None:
+        """The #2226 append must raise on the intersected result too."""
+        result = self._intersect()
+        with pytest.raises(AttributeError):
+            result.operational.allowed_actions.append("wire_transfer")
+
+    def test_intersection_still_computes_the_right_values(self) -> None:
+        """Opposite pole: immutability must not have broken the set math."""
+        result = self._intersect()
+        assert set(result.operational.allowed_actions) == {"read", "write"}
+        assert set(result.operational.blocked_actions) == {"danger", "other"}

@@ -408,6 +408,82 @@ class TestInnermostContainment:
         assert streaming.innermost.run(query="ok") is not None
 
 
+class TestProxyMemberReturnValueContainment:
+    """#2227 HIGH-1: an allowlisted member must not RETURN a runnable handle.
+
+    Gating the NAME and stripping the bound method's ``__self__`` is not enough:
+    ``to_workflow_node`` was ``def to_workflow_node(self): return self``, so
+    ``governed.inner.to_workflow_node()`` handed back the raw agent and
+    ``.run()`` on it executed ungoverned -- and, through the innermost boundary
+    the #2227 fix added, ``streaming.innermost.to_workflow_node().run(...)`` did
+    too. Same class as #2226: an allowlisted member returns a live handle to the
+    target. The prior ``__self__`` test never CALLED the member, so it missed
+    this. These tests CALL every allowlisted member and assert the result is
+    neither the raw agent nor runnable.
+    """
+
+    def test_to_workflow_node_is_not_reachable_through_the_proxy(self) -> None:
+        """The removed member must now be DENIED, not merely stripped."""
+        agent = _make_agent()
+        governed = L3GovernedAgent(agent, _make_envelope(), mcp_servers=[])
+
+        with pytest.raises(AttributeError):
+            governed.inner.to_workflow_node()
+
+    def test_to_workflow_is_not_reachable_through_the_proxy(self) -> None:
+        """to_workflow builds an LLM-executing workflow with ungoverned threaded."""
+        agent = _make_agent()
+        governed = L3GovernedAgent(agent, _make_envelope(), mcp_servers=[])
+
+        with pytest.raises(AttributeError):
+            governed.inner.to_workflow()
+
+    def test_to_workflow_node_bypass_via_innermost_is_closed(self) -> None:
+        """The stacked route the #2227 innermost fix opened must also be closed."""
+        agent = _make_agent()
+        streaming = StreamingAgent(
+            MonitoredAgent(
+                L3GovernedAgent(agent, _make_envelope(), mcp_servers=[]),
+                mcp_servers=[],
+            ),
+            mcp_servers=[],
+        )
+
+        with pytest.raises(AttributeError):
+            streaming.innermost.to_workflow_node()
+
+    def test_no_allowlisted_member_returns_a_live_agent_handle(self) -> None:
+        """Anti-staleness: CALL every allowlisted member; none may return the
+        raw agent or anything runnable.
+
+        Walks ``_ProtectedInnerProxy._ALLOWED_ATTRS`` itself, so a NEW entry
+        that returns a live handle fails here -- the gap the __self__-only test
+        left open. ``config``/``signature`` are data; ``get_parameters`` returns
+        a params dict; a member returning the raw agent, or an object exposing
+        ``run``/``run_async``, is the escape hatch.
+        """
+        agent = _make_agent()
+        governed = L3GovernedAgent(agent, _make_envelope(), mcp_servers=[])
+        proxy = governed.inner
+
+        leaks: list[str] = []
+        for name in sorted(_ProtectedInnerProxy._ALLOWED_ATTRS):
+            member = getattr(proxy, name)
+            result = member() if callable(member) else member
+            if result is agent:
+                leaks.append(f"{name} -> returned the raw agent")
+                continue
+            # An LLM-executing / runnable artifact reachable from a read-only
+            # proxy is the HIGH-1 class even when it is not the agent object.
+            if hasattr(result, "run") and hasattr(result, "run_async"):
+                leaks.append(f"{name} -> returned a runnable ({type(result).__name__})")
+
+        assert leaks == [], (
+            f"_ProtectedInnerProxy allowlisted members returning a live/runnable "
+            f"handle to the ungoverned agent (#2227 HIGH-1): {leaks}"
+        )
+
+
 # ---------------------------------------------------------------------------
 # 11.5: Stream backpressure
 # ---------------------------------------------------------------------------

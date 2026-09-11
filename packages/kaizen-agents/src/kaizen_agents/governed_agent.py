@@ -78,13 +78,36 @@ class _ProtectedInnerProxy(ReadOnlyAttributeProxy):
 
     __slots__ = ()
 
+    # Safe read-only INTROSPECTION only. Every entry here is handed back through
+    # ReadOnlyAttributeProxy's forwarder, but gating the NAME and stripping the
+    # bound method's __self__ is not sufficient on its own: a member that
+    # RETURNS a live handle to the raw agent (or an executable form of it) is an
+    # escape hatch no matter how the name is gated. This is the #2226 class at
+    # the agent boundary. Two members were removed for exactly that (HIGH-1 of
+    # the #2227 review):
+    #   * ``to_workflow_node`` is ``def to_workflow_node(self): return self`` --
+    #     it structurally cannot return anything but the raw inner agent, so
+    #     ``governed.inner.to_workflow_node().run(**inputs)`` (and, through the
+    #     innermost boundary, ``streaming.innermost.to_workflow_node().run(...)``)
+    #     executed completely ungoverned.
+    #   * ``to_workflow`` builds a WorkflowBuilder whose ``LLMAgentNode`` carries
+    #     ``ungoverned=self.config.ungoverned`` and NO envelope check -- the L3
+    #     evaluation lives in run()/run_async(), not in the emitted workflow --
+    #     so a proxy holder could build+run the agent's LLM work outside the
+    #     envelope. Neither can be made safe here (both live in BaseAgent, which
+    #     is out of scope and shared by every caller), and neither has any
+    #     legitimate consumer THROUGH the proxy: wrappers proxy
+    #     ``self._inner.to_workflow()`` on the raw inner directly, never through
+    #     ``.inner``. So the fix is to deny them, not to reshape them.
+    # The staleness pin is ``test_no_allowlisted_member_returns_a_live_agent_handle``,
+    # which CALLS every allowlisted member and asserts the return is neither the
+    # raw agent nor runnable -- so a NEW leaky entry fails, the way inspecting
+    # only __self__ did not.
     _ALLOWED_ATTRS = frozenset(
         {
             "config",
             "signature",
             "get_parameters",
-            "to_workflow",
-            "to_workflow_node",
         }
     )
 

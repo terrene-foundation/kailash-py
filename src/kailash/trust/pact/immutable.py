@@ -64,7 +64,25 @@ each measured rather than assumed:
    the SEQUENCE dimensions, where the #2226 escalation actually lived, are
    closed completely. The residual applies only to the three mapping fields
    (``TeamConfig.metadata``, ``ConfidenceThresholdConfig.per_action``,
-   ``PlanSuspension.snapshot``), none of which is read by a verdict path.
+   ``PlanSuspension.snapshot``).
+
+   The bound that makes the unbound-call residual non-exploitable is
+   REACHABILITY, NOT verdict-path-freedom -- an earlier version of this
+   docstring claimed the latter and it was false. ``per_action`` IS read by a
+   verdict path: the confidence gate calls
+   ``ConfidenceThresholdConfig.threshold_for`` (``config.py``), which reads
+   ``per_action`` (``engine.py`` ``_apply_confidence_gate``). It is safe only
+   because that config lives at ``GovernanceEngine._confidence_config`` and is
+   NOT on ``_ReadOnlyGovernanceView._ALLOWED`` -- a read-only view holder cannot
+   reach it, so the unbound-call escape has no delivery path from the view.
+   ``TeamConfig.metadata`` and ``PlanSuspension.snapshot`` ARE reachable through
+   the view (``get_node`` / ``get_suspension``) but neither is read by any
+   verdict path. If a future change adds a confidentiality/threshold mapping to
+   ``ConstraintEnvelopeConfig`` (which get_context/compute_envelope DO return),
+   the residual would become both reachable AND verdict-bearing, and this
+   mapping's immutability could no longer rest on the unbound-call boundary --
+   it would need a genuinely immutable type. Stated so that maintainer is not
+   falsely reassured.
 
 2. **No deep freeze.** A ``FrozenMapping`` whose value is a plain ``list``
    still hands out a mutable list. Governance value objects hold scalars and
