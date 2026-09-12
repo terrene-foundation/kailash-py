@@ -18,12 +18,35 @@ short-circuited at the schema-cache fast path and never re-verified, so a single
 transient blip blinded that DataFlow instance to a missing table for the rest of
 its lifetime.
 
-Observed as a ~1/137 non-deterministic failure of
-``test_issue_1249_tenant_isolation_leak_postgres.py``: ``express.create`` and
-``express.list`` both succeeded with correctly-isolated data on the POOLED
-connection, then a raw SECOND connection raised ``UndefinedTableError``.
-Read-your-writes on the pool, no durability — the #1548 signature, from a path
-#1548's own fix did not cover.
+SCOPE — CORRECTED BY MEASUREMENT (2026-09-12). An earlier revision of this
+docstring claimed this window explained the reported ~1/137 non-deterministic
+failure of ``test_issue_1249_tenant_isolation_leak_postgres.py``. That claim is
+FALSE and is withdrawn. What was measured:
+
+* Running that very test under a path probe: ``_verify_table_physically_exists``
+  executed **0 times**. The table was marked ensured from
+  ``engine.py::_create_tables_batch`` (the EAGER SYNC path, which performs no
+  physical verification) and the 13 later ``ensure_table_exists`` calls all
+  short-circuited at the schema-cache fast path.
+* A 250-iteration rate harness in the reported shape, run on this code AND on
+  its parent commit: **0 verify invocations in either arm** (500 iterations
+  total). The fix below is therefore not executed on the reported path and
+  cannot have changed its rate.
+* The reported signature DID reproduce — ``UndefinedTableError: relation
+  "feat2206…" does not exist`` after ``express.create``/``list`` both succeeded
+  — at 2/250 (0.80%), comparable to the reporter's ~1/137 (0.73%), WITH this
+  fix applied. The absent tables existed in no schema at all, so the write was
+  live only inside an uncommitted transaction on the pooled connection.
+
+So #2206's reported symptom is a REACHABILITY gap, not this logic gap: #1548's
+guard never runs on DataFlow's DEFAULT path because eager sync creation marks
+the table ensured first. Closing THAT gap is a separate, unshipped decision
+(a fresh connect per model at startup, against ADR-001 performance).
+
+What this file DOES pin is a real and independent fail-open that #1548 left
+behind on the async-lazy path, where the verify IS reached: an INCONCLUSIVE
+verdict was treated as a CONFIRMED one and then cached. It is defense in depth,
+not the #2206 repro. Do not close #2206 on it.
 
 The fix separates the two KINDS of inconclusive, which are not
 interchangeable:
@@ -49,6 +72,7 @@ migration result and the verify CONNECT — which ARE the faults being simulated
 itself is never mocked, and no retry masks the failure under test.
 """
 
+import os
 import uuid
 from pathlib import Path
 
@@ -354,3 +378,123 @@ async def test_structural_inconclusive_is_reported_as_unverifiable_backend(
         result = db.close()
         if result is not None and hasattr(result, "__await__"):
             await result
+
+
+# ---------------------------------------------------------------------------
+# Issue #2206 AC#4 — the RATE harness.
+#
+# The four tests above use fault injection, so they answer "does the code do
+# what it says" (they red on the parent commit and green here). They do NOT
+# measure the REPORTED window, which is a load-sensitive race that no injection
+# can summon. This harness measures it directly: it reproduces the reporter's
+# shape at scale and reports the OBSERVED non-durable-write rate, so "fixed" can
+# be a measured claim rather than the absence of a red run.
+#
+# Opt-in ONLY — it is a multi-minute, load-sensitive rate measurement and would
+# be flaky as a CI gate at any pass/fail threshold. Run it explicitly:
+#
+#   DATAFLOW_2206_RATE_ITERATIONS=250 pytest -o addopts= \
+#     tests/regression/test_issue_2206_inconclusive_verification_durability.py \
+#     -k rate_harness -s --timeout=5400
+#
+# Measured 2026-09-12 on PostgreSQL 15.18 (port 5434), 250 iterations per arm:
+#   engine.py @ 620f6b9c5    -> 2/250 = 0.80% non-durable, 0 verify invocations
+#   engine.py @ 620f6b9c5^   -> 0/250 = 0.00% non-durable, 0 verify invocations
+# Both arms executed the verify ZERO times, so the difference is load noise, not
+# a fix effect. The reporter independently observed ~1/137 = 0.73%.
+# ---------------------------------------------------------------------------
+
+_RATE_ENV = "DATAFLOW_2206_RATE_ITERATIONS"
+
+
+@pytest.mark.regression
+@pytest.mark.integration
+@pytest.mark.requires_postgres
+@pytest.mark.postgresql
+@pytest.mark.slow
+@pytest.mark.skipif(
+    not os.environ.get(_RATE_ENV),
+    reason=f"opt-in rate measurement; set {_RATE_ENV}=<N> to run",
+)
+async def test_2206_durability_rate_harness(test_suite):
+    """Report the observed non-durable-write rate, and how often the verify ran.
+
+    Asserts only the CONTRACT the issue states (AC#2): every iteration either
+    lets a SECOND connection see what ``express.create`` reported written, or
+    raises. A silent success-then-absent is the defect, and is counted and
+    reported with its table name rather than merely failing, so a run yields a
+    RATE. ``verify_invocations`` is reported alongside: a rate that moves while
+    that count is zero did NOT move because of this file's fix.
+    """
+    iterations = int(os.environ[_RATE_ENV])
+    db_url = test_suite.config.url
+
+    verify_invocations = 0
+    orig_verify = DataFlow._verify_table_physically_exists_detailed
+
+    async def counting_verify(self, model, url):
+        nonlocal verify_invocations
+        verify_invocations += 1
+        return await orig_verify(self, model, url)
+
+    DataFlow._verify_table_physically_exists_detailed = counting_verify
+
+    non_durable, tables, instances = [], [], []
+    try:
+        for i in range(iterations):
+            suffix = uuid.uuid4().hex[:8]
+            model_name = f"Rate2206{suffix}"
+            db = DataFlow(db_url, auto_migrate=True, multi_tenant=True)
+            # Instances are deliberately NOT closed: accumulating process and
+            # pool state in ONE process is the condition #1548 was filed under
+            # and the condition the reporter's failure appeared under.
+            instances.append(db)
+            Model = type(
+                model_name, (), {"__annotations__": {"entity_id": str, "score": int}}
+            )
+            db.model(Model)
+            table = db._models[model_name]["table_name"]
+            tables.append(table)
+
+            await db.initialize()
+            db.tenant_context.register_tenant("acme", "A")
+            try:
+                with db.tenant_context.switch("acme"):
+                    await db.express.create(
+                        model_name, {"entity_id": "e1", "score": 10}
+                    )
+            except Exception:
+                # A LOUD failure satisfies the contract — the write did not
+                # silently vanish. Not counted as a defect.
+                continue
+
+            async with test_suite.get_connection() as conn:
+                if await conn.fetchval("SELECT to_regclass($1)", table) is None:
+                    non_durable.append((i, table))
+
+        rate = len(non_durable) / iterations
+        print(
+            f"\n===== issue #2206 durability rate =====\n"
+            f"iterations         : {iterations}\n"
+            f"non-durable writes : {len(non_durable)}  rate = {rate:.4%}\n"
+            f"verify invocations : {verify_invocations}\n"
+            f"hits               : {non_durable[:10]}"
+        )
+
+        assert not non_durable, (
+            f"{len(non_durable)}/{iterations} ({rate:.4%}) writes were reported "
+            f"successful by express.create but the table was absent on a second "
+            f"connection: {non_durable[:10]}. The verify ran "
+            f"{verify_invocations} times — if that is 0, the ensure-path "
+            f"verification never executed and the eager sync creation path "
+            f"marked the table ensured with no physical check (#2206)."
+        )
+    finally:
+        DataFlow._verify_table_physically_exists_detailed = orig_verify
+        async with test_suite.get_connection() as conn:
+            for t in tables:
+                await conn.execute(f'DROP TABLE IF EXISTS "{t}" CASCADE')
+        for db in instances:
+            result = db.close()
+            if result is not None and hasattr(result, "__await__"):
+                await result

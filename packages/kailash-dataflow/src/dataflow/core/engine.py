@@ -184,6 +184,24 @@ class _TableVerificationInconclusive(RuntimeError):
     every later access short-circuited at the schema-cache fast path and never
     re-verified.
 
+    SCOPE, MEASURED (issue #2206 re-derivation, 2026-09-12). This closes a real
+    fail-open, but it is NOT the window that produced #2206's reported symptom,
+    and it must not be cited as such. On DataFlow's DEFAULT path the EAGER SYNC
+    creation path (``_create_tables_batch`` / ``_create_table_sync``) marks the
+    table ensured with NO physical verification, and every later
+    ``ensure_table_exists`` then short-circuits at the schema-cache fast path.
+    So the #1548 verify — and therefore this #2206 handling — NEVER EXECUTES
+    there. Measured: 0 verify invocations across 500 harness iterations (250 on
+    this code, 250 on its parent) AND across
+    ``test_issue_1249_tenant_isolation_leak_postgres.py`` itself, which marked
+    ensured from ``_create_tables_batch`` and then took 13 consecutive cache
+    hits. The reported ~1/137 non-durable-write signature reproduced at 2/250
+    (0.80%) WITH this code applied. #1548's guard is unreachable on the default
+    path — a REACHABILITY gap, not a logic gap — which is why #1548's fix is in
+    the tree while its symptom still reproduces. Closing that gap (verifying on
+    the sync path too) is a separate, unshipped decision: it would add a fresh
+    connect per model at startup, which ADR-001 performance constrains.
+
     Raised ONLY for the ERROR-class inconclusive (transient, retryable). The
     STRUCTURAL-class inconclusive — an unknown backend with no SQL table
     concept, or bare in-memory SQLite with no shared URI — is NOT raised for:
