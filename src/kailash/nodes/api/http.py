@@ -6,6 +6,7 @@ the best features from both the original HTTPRequestNode and HTTPClientNode.
 
 import asyncio
 import base64
+import http.cookiejar
 import json
 import time
 from enum import Enum
@@ -27,6 +28,7 @@ except ImportError as exc:  # pragma: no cover — covered by structural invaria
 
 import requests
 from pydantic import BaseModel
+from requests.cookies import RequestsCookieJar
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
@@ -109,21 +111,157 @@ class HTTPResponse(BaseModel):
     url: str
 
 
+# ---------------------------------------------------------------------------
+# COOKIE SUPPRESSION ON THE POOLED SESSIONS
+#
+# The two pools below are PROCESS-GLOBAL, and `ResourcePool.acquire` hands out a
+# pooled object and appends the SAME object back on release. So whatever state a
+# session accumulates -- a cookie jar above all -- outlives the call that created
+# it and is handed to the next caller, which is a DIFFERENT workflow run by a
+# DIFFERENT principal against the same host.
+#
+# An HTTP node in a workflow engine has NO SESSION IDENTITY TO CARRY. There is no
+# browser, no logged-in user, nothing the jar could legitimately represent. So an
+# ambient jar here is never a feature and is two live defects at once:
+#
+#   1. CROSS-CALLER CONTAMINATION. One workflow's `Set-Cookie` attaches to an
+#      unrelated workflow's later request to the same host.
+#   2. IT SILENTLY RE-AUTHENTICATES REQUESTS WHOSE CREDENTIALS A CALLER
+#      DELIBERATELY STRIPPED. `RESTClientNode`'s pagination origin guard
+#      (`rest.py::_strip_credential_headers`) removes the `Cookie` HEADER before a
+#      cross-origin hop. The jar re-attaches the origin's session cookie BELOW
+#      that strip, inside the transport, where no guard can see it. An
+#      allow-listed partner that returns a link pointing back at the ORIGINAL
+#      origin then receives an authenticated, attacker-directed request -- the
+#      exact laundering the guard's sticky rule exists to prevent.
+#
+# CALLERS THAT GENUINELY NEED A COOKIE PASS IT EXPLICITLY VIA `headers`
+# (`headers={"Cookie": "..."}`). That path is untouched and is verified by
+# `tests/unit/nodes/test_http_cookie_and_header_redaction.py`; suppressing the
+# AMBIENT jar must never suppress a cookie the caller asked for.
+
+
+class _BlockAllCookiePolicy(http.cookiejar.DefaultCookiePolicy):
+    """Refuse every cookie in both directions."""
+
+    def set_ok(self, cookie, request) -> bool:  # noqa: D102 — stdlib protocol
+        return False
+
+    def return_ok(self, cookie, request) -> bool:  # noqa: D102 — stdlib protocol
+        return False
+
+
+class _BlockAllCookieJar(RequestsCookieJar):
+    """A real ``RequestsCookieJar`` that can never hold a cookie.
+
+    WHY THE JAR AND NOT JUST A POLICY. A policy alone (either
+    ``DefaultCookiePolicy(allowed_domains=[])`` or the ``set_ok``/``return_ok``
+    subclass above, installed via ``session.cookies.set_policy``) suppresses the
+    STORE direction only. It does NOT govern the SEND direction, because
+    ``requests.Session.prepare_request`` copies the session jar into a FRESH
+    ``RequestsCookieJar()`` carrying the DEFAULT policy::
+
+        merged_cookies = merge_cookies(
+            merge_cookies(RequestsCookieJar(), self.cookies), cookies
+        )
+
+    so this jar's ``return_ok`` is never consulted for an outgoing request.
+    MEASURED against both candidate policies: a jar seeded by any route other
+    than a response -- ``session.cookies.set(...)``, a restored jar, a future
+    caller -- still put ``Cookie: sid=...`` on the wire.
+
+    Overriding ``set_cookie`` closes that, because it is the single choke point
+    every storage route funnels through (``CookieJar.extract_cookies`` on the
+    response path, ``RequestsCookieJar.set`` on the direct path,
+    ``merge_cookies`` on the redirect path). An empty jar cannot be copied into a
+    default-policy jar and cannot send anything. The policy is kept alongside it
+    so the refusal is also declared where ``http.cookiejar`` looks for it.
+
+    Subclassing the REAL jar rather than stubbing one is load-bearing:
+    ``Session.send`` calls ``extract_cookies_to_jar`` and redirect resolution
+    calls ``merge_cookies``, both of which require a genuine
+    ``http.cookiejar``-compatible object.
+    """
+
+    def __init__(self):
+        super().__init__(policy=_BlockAllCookiePolicy())
+
+    def set_cookie(self, cookie, *args, **kwargs) -> None:  # noqa: D102
+        return None
+
+
+def _build_requests_session() -> requests.Session:
+    """Build a pooled ``requests.Session`` that carries no ambient cookies."""
+    session = requests.Session()
+    session.cookies = _BlockAllCookieJar()
+    return session
+
+
 # Global connection pool for HTTP sessions
 _http_session_pool = ResourcePool(
-    factory=lambda: requests.Session(),
+    factory=_build_requests_session,
     max_size=20,
     timeout=30.0,
     cleanup=lambda session: session.close(),
 )
 
-# Global async connection pool for aiohttp sessions
+# Global async connection pool for aiohttp sessions.
+#
+# `DummyCookieJar` is aiohttp's own no-op jar: it ACCEPTS `update_cookies` calls
+# and discards them, and always yields nothing on the request path. Same
+# reasoning as the sync sibling above -- see the block comment there.
 _async_http_session_pool = AsyncResourcePool(
-    factory=lambda: aiohttp.ClientSession(),
+    factory=lambda: aiohttp.ClientSession(cookie_jar=aiohttp.DummyCookieJar()),
     max_size=20,
     timeout=30.0,
     cleanup=lambda session: asyncio.create_task(session.close()),
 )
+
+
+#: Response headers whose VALUE is a structural navigation token the SDK itself
+#: parses -- ``rest.py::_parse_link_header`` reads ``Link``, and the redirect
+#: guard reads ``Location``. They are redacted by KEY like every other header,
+#: but their values are NOT put through the value-level URL masker.
+#:
+#: WHY the exemption, measured rather than assumed. ``redact_mapping`` runs each
+#: string leaf through ``mask_error_text``, and when a credential query parameter
+#: is the LAST one before the closing ``>`` the masker consumes the ``>;``
+#: delimiter along with the secret::
+#:
+#:   '<https://h/items?page=2&access_token=abc123>; rel="next"'
+#:     -> '<https://h/items?page=2&access_token=*** rel="next"'
+#:   _parse_link_header(...) -> {}          # the `next` link VANISHES
+#:
+#: A vanished `next` does not fail loudly -- pagination simply stops and page 1
+#: is returned as the complete result set with nothing in the log to say so,
+#: which is precisely the silent-degradation class `zero-tolerance.md` Rule 3
+#: forbids and that this module's pagination work exists to remove. A mangled
+#: `Location` likewise breaks the redirect guard that consumes it.
+#:
+#: What is NOT given up: `Set-Cookie` -- the credential the returned-header
+#: finding actually named -- is withheld by KEY and is unaffected by this
+#: exemption. A credential inside a pagination URL is the UPSTREAM's own
+#: placement in a URL it is handing back to us, and the origin guard in
+#: `rest.py` already stops those credentials from reaching a third party.
+_STRUCTURAL_NAV_HEADERS = frozenset({"link", "location", "content-location"})
+
+
+def _redact_response_headers(headers: dict) -> dict:
+    """Redact response headers for the caller-visible surface.
+
+    Key-based redaction for everything (so ``Set-Cookie`` is withheld), with the
+    structural navigation headers restored byte-intact -- see
+    ``_STRUCTURAL_NAV_HEADERS`` for why masking their values silently breaks
+    pagination and redirect following.
+    """
+    raw = dict(headers)
+    redacted = redact_mapping(raw)
+    if not isinstance(redacted, dict):
+        return redacted
+    for name, value in raw.items():
+        if isinstance(name, str) and name.lower() in _STRUCTURAL_NAV_HEADERS:
+            redacted[name] = value
+    return redacted
 
 
 @register_node()
@@ -714,10 +852,31 @@ class HTTPRequestNode(Node):
             )
             content = response.text  # Fallback to text
 
-        # Create response object
+        # Create response object.
+        #
+        # HEADERS ARE REDACTED AT THIS SURFACE TOO, not only at the logging sink
+        # above. This dict leaves the node as `result["response"]["headers"]` and
+        # reaches workflow callers as `metadata["headers"]` (`rest.py`), which is
+        # itself logged and persisted -- so returning it raw re-leaks exactly what
+        # the `redact_mapping` call ~50 lines up withholds, including `Set-Cookie`,
+        # which the comment there names as a session credential.
+        # `observability.md` Rule 6.3: mask at EVERY surface, not just the logging
+        # one. ONE matcher governs both, deliberately -- a second header set here
+        # would drift from the first.
+        #
+        # `content_type` is read from the RAW headers ABOVE this line and is
+        # unaffected. `Content-Type` is not credential-named and passes through.
+        # `Link` and `Location` pass through BYTE-INTACT because
+        # `_redact_response_headers` exempts them by name -- NOT because they are
+        # merely "not credential-named". That distinction is load-bearing: the
+        # value-level masker eats the `>;` delimiter when a credential is the
+        # last query parameter, and `_parse_link_header` then returns `{}`, so
+        # pagination stops SILENTLY. See `_STRUCTURAL_NAV_HEADERS` for the
+        # measurement. Pinned by
+        # `tests/unit/nodes/test_http_cookie_and_header_redaction.py`.
         http_response = HTTPResponse(
             status_code=response.status_code,
-            headers=dict(response.headers),
+            headers=_redact_response_headers(dict(response.headers)),
             content_type=content_type,
             content=content,
             response_time_ms=response_time,
@@ -1074,10 +1233,17 @@ class AsyncHTTPRequestNode(AsyncNode):
                             )
                             content = await response.text()  # Fallback to text
 
-                        # Create response object
+                        # Create response object. Headers redacted at THIS
+                        # surface as well as the logging one -- same reasoning as
+                        # the sync sibling above, same single matcher.
+                        # `content_type` is read from the RAW headers further
+                        # up and is unaffected. `Link`/`Location` survive intact
+                        # because `_redact_response_headers` exempts them BY NAME
+                        # -- masking their values silently breaks pagination and
+                        # the redirect guard; see `_STRUCTURAL_NAV_HEADERS`.
                         http_response = HTTPResponse(
                             status_code=response.status,
-                            headers=dict(response.headers),
+                            headers=_redact_response_headers(dict(response.headers)),
                             content_type=content_type,
                             content=content,
                             response_time_ms=response_time,

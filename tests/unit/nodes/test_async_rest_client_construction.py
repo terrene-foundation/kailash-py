@@ -25,6 +25,7 @@ from pathlib import Path
 
 from kailash.nodes.api import rest as rest_module
 from kailash.nodes.api.rest import AsyncRESTClientNode, RESTClientNode
+from kailash.nodes.base import NodeParameter
 from kailash.workflow.builder import WorkflowBuilder
 
 _WORKTREE_ROOT = Path(__file__).resolve().parents[3]
@@ -123,6 +124,57 @@ def test_schema_methods_work_on_an_uninitialized_instance():
     bare = AsyncRESTClientNode.__new__(AsyncRESTClientNode)
     assert bare.get_parameters() == RESTClientNode().get_parameters()
     assert bare.get_output_schema() == RESTClientNode().get_output_schema()
+
+
+# --------------------------------------------------------------------------
+# C-F7 — the unbound delegation at rest.py:1914/1931 is only sound while the
+# SYNC methods read no instance state. Nothing pinned that, so the day someone
+# adds a `self.<attr>` read the delegation breaks every construction of
+# AsyncRESTClientNode -- #2230 all over again, because Node.__init__ validates
+# configuration (and therefore calls get_parameters) BEFORE any subclass
+# __init__ body has run.
+#
+# `object()` is the strongest available probe: it has no attributes at ALL, so
+# ANY instance-state read reds these. The `__new__` test above is weaker --
+# it still resolves class attributes and methods.
+# --------------------------------------------------------------------------
+
+
+def test_sync_get_parameters_reads_no_instance_state():
+    """``RESTClientNode.get_parameters`` must be callable on a bare object.
+
+    This is the precondition the unbound ``RESTClientNode.get_parameters(self)``
+    call in ``AsyncRESTClientNode.get_parameters`` silently depends on.
+    """
+    params = RESTClientNode.get_parameters(object())  # type: ignore[arg-type]
+
+    assert isinstance(params, dict)
+    assert params, "get_parameters returned an empty schema"
+    assert all(isinstance(value, NodeParameter) for value in params.values()), (
+        "get_parameters returned a non-NodeParameter value: "
+        f"{ {k: type(v).__name__ for k, v in params.items()} }"
+    )
+
+
+def test_sync_get_output_schema_reads_no_instance_state():
+    """Same precondition, for the ``get_output_schema`` delegation."""
+    schema = RESTClientNode.get_output_schema(object())  # type: ignore[arg-type]
+
+    assert isinstance(schema, dict)
+    assert schema, "get_output_schema returned an empty schema"
+    assert all(isinstance(value, NodeParameter) for value in schema.values()), (
+        "get_output_schema returned a non-NodeParameter value: "
+        f"{ {k: type(v).__name__ for k, v in schema.items()} }"
+    )
+
+
+def test_async_rest_client_still_constructs_under_that_precondition():
+    """The consequence the two tests above protect.
+
+    Asserted here as well as at the top of this module so the C-F7 block reads
+    as one contract: precondition holds => construction succeeds.
+    """
+    assert isinstance(AsyncRESTClientNode(), AsyncRESTClientNode)
 
 
 def test_subclass_that_reorders_init_still_constructs():

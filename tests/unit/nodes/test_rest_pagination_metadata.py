@@ -210,12 +210,25 @@ def test_sync_multi_page_result_drops_every_stale_navigation_pointer():
         "metadata still advertises page 1's Link header after pagination "
         f"merged {_MAX_PAGES} pages into data: {metadata['headers']!r}"
     )
-    assert "links" not in metadata, (
+    # Finding C-F4: the NAVIGATION half of these blocks is what the merge
+    # falsified. The DESCRIPTIVE half still describes the collection and is
+    # kept -- see test_rest_pagination_metadata_split.py for the full contract.
+    assert "next" not in metadata.get("links", {}), (
         "metadata['links'] still points at a page already inside data: "
         f"{metadata.get('links')!r}"
     )
-    assert "pagination" not in metadata, (
-        "metadata['pagination'] still describes page 1 alone: "
+    assert metadata["links"]["self"] == _PAGE_URL, (
+        "the collection-scoped 'self' relation was dropped; the merge did not "
+        f"falsify it: {metadata.get('links')!r}"
+    )
+    assert "next" not in metadata.get("pagination", {}), (
+        "metadata['pagination'] still points at a page already inside data: "
+        f"{metadata.get('pagination')!r}"
+    )
+    # ...while the record count it also carried is a fact about the
+    # COLLECTION that the merge did not falsify.
+    assert metadata["pagination"]["total"] == _TOTAL_ITEMS, (
+        "the record count was dropped along with the stale pointers: "
         f"{metadata.get('pagination')!r}"
     )
     # The fix removes factually-wrong fields; it does not blank the header set.

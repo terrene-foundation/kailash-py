@@ -104,10 +104,17 @@ async def test_merged_hateoas_result_drops_page_one_navigation_pointers():
     assert len(transport.calls) == 2, "the next link must actually be followed"
     meta = result["metadata"]
     assert meta["total_pages_fetched"] == 2
-    assert "links" not in meta, (
+    # Finding C-F4: only the NAVIGATION relations go. ``self`` describes the
+    # collection, not the merged window, so it outlives the merge.
+    assert "next" not in meta.get("links", {}), (
         "metadata still advertises page 1's next link after the merge: "
         f"{meta.get('links')!r}"
     )
+    assert (
+        meta["links"]["self"] == FULL_URL
+    ), f"the collection-scoped 'self' relation was dropped: {meta.get('links')!r}"
+    # Built from the Link header alone here, so dropping `next` empties the
+    # block -- and an empty block is removed rather than presented as ``{}``.
     assert (
         "pagination" not in meta
     ), f"stale pagination block: {meta.get('pagination')!r}"

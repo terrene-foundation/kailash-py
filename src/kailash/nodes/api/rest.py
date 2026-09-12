@@ -21,7 +21,7 @@ from kailash.nodes.api.http import AsyncHTTPRequestNode, HTTPRequestNode
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
-from kailash.utils.url_credentials import mask_error_text
+from kailash.utils.url_credentials import mask_error_text, mask_url
 
 #: Redirect hops allowed per pagination page. Each hop is re-authorized by the
 #: origin guard, so this only bounds a redirect LOOP; it is not a trust control.
@@ -258,6 +258,29 @@ class RESTClientNode(Node):
                 default=True,
                 description="Whether to verify SSL certificates",
             ),
+            "allow_redirects": NodeParameter(
+                name="allow_redirects",
+                type=bool,
+                required=False,
+                default=True,
+                # Mirrors `HTTPRequestNode`'s own declaration (`http.py:337`),
+                # and it must EXIST here for the same reason: an undeclared
+                # parameter is filtered out by `validate_inputs`, so
+                # `add_node("RESTClientNode", "n", {"allow_redirects": False})`
+                # was SILENTLY DROPPED and the control was unreachable from a
+                # workflow. Note the semantics differ from the HTTP node's: the
+                # REST node NEVER lets the transport follow a redirect by
+                # itself (see `_execute_following_redirects`), so this flag
+                # selects whether the NODE follows one under the origin guard.
+                # Default True so existing callers are unaffected.
+                description=(
+                    "Whether 3xx redirects are followed. Following is done by "
+                    "this node, re-authorizing every hop against the origin "
+                    "guard and bounded by _MAX_REDIRECT_HOPS; the underlying "
+                    "client's automatic follow is always OFF. Set False to "
+                    "receive the 3xx response itself."
+                ),
+            ),
             "paginate": NodeParameter(
                 name="paginate",
                 type=bool,
@@ -441,6 +464,7 @@ class RESTClientNode(Node):
         request_headers: dict[str, Any],
         request_timeout: int,
         request_kwargs: dict[str, Any] | None = None,
+        allowed_origins: Any = None,
     ) -> list[Any]:
         """Handle pagination for REST API responses.
 
@@ -476,6 +500,13 @@ class RESTClientNode(Node):
                 (``None``) issues follow-ups with url/headers/params/timeout
                 only -- the historical behaviour, retained for direct callers
                 that have no originating kwarg set.
+            allowed_origins: The caller's ``allowed_pagination_origins``,
+                threaded on into the redirect guard for the follow-up request.
+                Defaults to ``None``, which is the FAIL-CLOSED reading -- an
+                omitted allowlist is never invented. Without this parameter the
+                follow-up hop ran with ``allowed_origins=None`` unconditionally
+                while the initial request honoured the caller's list, so the
+                two halves of one run were guarded to different widths.
 
         Returns:
             Combined list of items from all pages
@@ -629,7 +660,21 @@ class RESTClientNode(Node):
                 }
             )
             try:
-                next_result = self.http_node.execute(**next_call)
+                # Through the redirect guard, never straight at the transport.
+                # This request carries the caller's credentials, and with the
+                # client's automatic follow left ON the server's `Location`
+                # header chose where they went -- past the origin guard, past
+                # `_MAX_REDIRECT_HOPS`, and past the internal-address refusal.
+                #
+                # `caller_chosen=True`: the destination is `request_url`, the
+                # caller's own URL with different query parameters. No
+                # server-supplied value reaches it, which is what separates
+                # this from the async HATEOAS loop's fail-closed link.
+                next_result = self._execute_following_redirects(
+                    next_call,
+                    allowed_origins=allowed_origins,
+                    caller_chosen=True,
+                )
             except NodeValidationError:
                 # A mis-configured request is a programming/configuration
                 # error, not a transient transport failure. Swallowing it is
@@ -675,6 +720,7 @@ class RESTClientNode(Node):
         request_headers: dict[str, Any],
         request_timeout: int,
         request_kwargs: dict[str, Any] | None = None,
+        allowed_origins: Any = None,
     ) -> tuple[Any, int]:
         """Run ``_handle_pagination`` and report how many pages it merged.
 
@@ -704,6 +750,9 @@ class RESTClientNode(Node):
             request_kwargs: The COMPLETE transport keyword set the originating
                 request was issued with, threaded whole -- see
                 ``_handle_pagination`` for why dropping it 401s page 2+.
+            allowed_origins: The caller's ``allowed_pagination_origins``,
+                forwarded verbatim to ``_handle_pagination``. Default ``None``
+                keeps an omitted allowlist fail-closed.
 
         Returns:
             ``(merged_items, pages_merged)``. ``pages_merged`` counts page 1
@@ -753,23 +802,69 @@ class RESTClientNode(Node):
             request_headers=request_headers,
             request_timeout=request_timeout,
             request_kwargs=request_kwargs,
+            allowed_origins=allowed_origins,
         )
         return merged, page_tally["merged"]
+
+    #: Keys inside the ``pagination`` block that POINT AT A PAGE. A multi-page
+    #: merge makes every one of them false: the page they name is already
+    #: inside ``data``. Matched case-insensitively; ``has_prev`` is listed
+    #: alongside ``has_previous`` because that is the spelling
+    #: ``_extract_pagination_metadata`` actually emits, and dropping
+    #: ``has_next`` while keeping its own counterpart would be incoherent.
+    _STALE_PAGINATION_NAV_KEYS = frozenset(
+        {
+            "next",
+            "next_url",
+            "prev",
+            "previous",
+            "prev_url",
+            "has_next",
+            "has_prev",
+            "has_previous",
+        }
+    )
+
+    #: Link relations that point at a page rather than describing the
+    #: collection. ``self``/``first``/``last`` are deliberately absent: they
+    #: still describe the collection after the merge, not the merged window.
+    _STALE_LINK_RELS = frozenset({"next", "prev", "previous"})
 
     @staticmethod
     def _drop_stale_pagination_metadata(
         metadata: dict[str, Any], pages_merged: int
     ) -> dict[str, Any]:
-        """Strip navigation pointers that a multi-page merge made false.
+        """Strip the pagination metadata a multi-page merge made false.
 
         ``metadata`` is assembled from the FIRST page's response, but by the
-        time a caller sees it ``data`` may already span N pages. Page 1's
-        ``Link: ...; rel="next"`` header, its HATEOAS ``links`` block and the
-        ``pagination`` block parsed out of both then advertise pages that are
-        ALREADY inside ``data``: a consumer following ``links["next"]``
-        re-fetches what it was just handed. Present the metadata without those
-        factually-wrong pointers rather than with them, and state how many
-        pages ``data`` actually spans.
+        time a caller sees it ``data`` may already span N pages. That makes
+        SOME of page 1's metadata wrong -- and leaves the rest true. The two
+        are separated here rather than discarded together:
+
+        * NAVIGATION pointers -- the ``Link: ...; rel="next"`` header, the
+          ``next``/``prev`` relations in the HATEOAS ``links`` block, and the
+          ``next``/``prev``/``has_next``/``has_prev`` keys in the
+          ``pagination`` block -- name a PAGE. After the merge that page is
+          ALREADY inside ``data``, so a consumer following ``links["next"]``
+          re-fetches what it was just handed. These are DROPPED.
+        * DESCRIPTIVE facts -- ``total``, ``total_pages``, ``page``,
+          ``per_page``, ``count``, and the ``self``/``first``/``last``
+          relations -- describe the server-side COLLECTION, not the window
+          that was merged. The merge does not falsify any of them, so they are
+          KEPT. Dropping them was a silent data loss: it took the record count
+          with it.
+
+        Keeping the descriptive side is what RESTORES the truncation signal.
+        A caller that capped the run with ``max_pages`` can compare
+        ``pagination["total_pages"]`` (how many pages exist) against
+        ``total_pages_fetched`` (how many it got); when the former exceeds the
+        latter the result is truncated. Under the previous
+        drop-the-whole-block behaviour a truncated result carried NO signal of
+        truncation at all -- which is precisely why the split is drawn here.
+
+        A block left empty by the drop is removed rather than presented as
+        ``{}``: an empty block reads as "the server sent no pagination data",
+        which is a different and false claim.
 
         Call this only when pagination RAN -- ``total_pages_fetched`` is a
         pagination fact and is absent from a non-paginated result. Nothing is
@@ -786,8 +881,25 @@ class RESTClientNode(Node):
         """
         metadata["total_pages_fetched"] = pages_merged
         if pages_merged > 1:
-            metadata.pop("links", None)
-            metadata.pop("pagination", None)
+            cls = RESTClientNode
+            for block_key, stale_keys in (
+                ("pagination", cls._STALE_PAGINATION_NAV_KEYS),
+                ("links", cls._STALE_LINK_RELS),
+            ):
+                block = metadata.get(block_key)
+                if not isinstance(block, dict):
+                    continue
+                kept = {
+                    name: value
+                    for name, value in block.items()
+                    if not (isinstance(name, str) and name.lower() in stale_keys)
+                }
+                if kept:
+                    metadata[block_key] = kept
+                else:
+                    # Nothing true survived; an empty block would read as
+                    # "the server sent no pagination data".
+                    metadata.pop(block_key, None)
             headers = metadata.get("headers")
             if isinstance(headers, dict):
                 # Header names are case-insensitive on the wire.
@@ -839,6 +951,10 @@ class RESTClientNode(Node):
             version (str, optional): API version
             timeout (int, optional): Request timeout in seconds
             verify_ssl (bool, optional): Whether to verify SSL certificates
+            allow_redirects (bool, optional): Whether THIS NODE follows a 3xx,
+                re-authorizing every hop against the origin guard and bounded
+                by ``_MAX_REDIRECT_HOPS``. The underlying client's automatic
+                follow is always off. Defaults to True.
             paginate (bool, optional): Whether to handle pagination
             pagination_params (dict, optional): Pagination configuration
             retry_count (int, optional): Number of times to retry failed requests
@@ -870,6 +986,10 @@ class RESTClientNode(Node):
         version = kwargs.get("version")
         timeout = kwargs.get("timeout", 30)
         verify_ssl = kwargs.get("verify_ssl", True)
+        # Whether the NODE follows a 3xx under the origin guard. The transport
+        # is told False either way -- see `_execute_following_redirects`.
+        allow_redirects = kwargs.get("allow_redirects", True)
+        allowed_pagination_origins = kwargs.get("allowed_pagination_origins")
         paginate = kwargs.get("paginate", False)
         pagination_params = kwargs.get("pagination_params") or {}
         retry_count = kwargs.get("retry_count", 0)
@@ -907,6 +1027,11 @@ class RESTClientNode(Node):
             "response_format": "json",
             "timeout": timeout,
             "verify_ssl": verify_ssl,
+            # The caller's value, threaded so a follow-up page inherits the
+            # same policy (`request_kwargs` carries this dict whole). The
+            # transport is told False regardless: `_execute_following_redirects`
+            # reads this key and then overwrites it.
+            "allow_redirects": allow_redirects,
             "retry_count": retry_count,
             "retry_backoff": retry_backoff,
             "auth_type": auth_type,
@@ -916,9 +1041,23 @@ class RESTClientNode(Node):
             "api_key_header": api_key_header,
         }
 
-        # Execute the HTTP request
-        self.logger.info(f"Making REST {method} request to {url}")
-        result = self.http_node.execute(**http_params)
+        # Execute the HTTP request.
+        #
+        # Masked, and lazily formatted, for parity with `http.py:625`, which
+        # does the identical thing correctly. `url` is `base_url` + resource,
+        # so it can carry userinfo (`https://svc:pw@host`), a presigned
+        # signature, or an `?api_key=` parameter -- an f-string wrote all three
+        # verbatim into the log on EVERY request.
+        self.logger.info("Making REST %s request to %s", method, mask_url(url))
+        result = self._execute_following_redirects(
+            http_params,
+            allowed_origins=allowed_pagination_origins,
+            # The destination is the URL the CALLER built from `base_url` +
+            # `resource`; no server-supplied value reaches it. A cross-origin
+            # 3xx is therefore followed with credentials stripped rather than
+            # refused -- CDN and vanity-domain redirects are routine.
+            caller_chosen=True,
+        )
 
         # Extract response data
         response = result.get("response")
@@ -949,7 +1088,25 @@ class RESTClientNode(Node):
             if status_code:
                 error_message = f"{error_message} (status: {status_code})"
 
-            self.logger.error(f"REST API error: {error_message}")
+            # `error_message` is lifted out of the RESPONSE BODY above
+            # (`content["error"]` / `content["message"]`), so it is fully
+            # server-controlled -- the exact input class `_sanitize_for_log`
+            # was added for. Raw CR/LF in it let an upstream forge whole log
+            # lines, including lines attributed to another component.
+            #
+            # Sanitized ONCE, before BOTH surfaces, and the RETURNED value is
+            # sanitized too -- not only the logged one. They are different
+            # surfaces, and including the returned one is a deliberate call:
+            # this field is a human-readable message whose consumers are all
+            # line-oriented sinks (a caller's own logger, an exception message,
+            # a UI row), so leaving it raw merely moves the forge one hop
+            # downstream, to a caller with no reason to suspect it. Nothing the
+            # caller needs is lost -- a control character carries no
+            # information, and the masking half strips credentials the upstream
+            # echoed back into its own error text. Enforcement-surface parity.
+            error_message = _sanitize_for_log(error_message)
+
+            self.logger.error("REST API error: %s", error_message)
 
             # Return error response with recovery suggestions if available
             error_result = {
@@ -993,6 +1150,7 @@ class RESTClientNode(Node):
                     request_headers=headers,
                     request_timeout=timeout,
                     request_kwargs=http_params,
+                    allowed_origins=allowed_pagination_origins,
                 )
             except NodeExecutionError as e:
                 # Response-shape mismatches (e.g. items_path is not a list)
@@ -1290,17 +1448,43 @@ class RESTClientNode(Node):
     # guard gives the async path the same property.
     # ------------------------------------------------------------------
 
-    #: Header names that carry caller credentials. Dropped case-insensitively
-    #: on any allow-listed CROSS-ORIGIN follow-up page request. The node's
-    #: configured ``api_key_header`` is added to this set at call time.
-    _CREDENTIAL_HEADERS = frozenset(
+    #: Header names that MAY cross an origin boundary. Everything else is
+    #: dropped on an allow-listed CROSS-ORIGIN follow-up page request, and on
+    #: every later hop once credentials have been withheld.
+    #:
+    #: This is an ALLOWLIST, and the inversion is the point. The predecessor
+    #: was a six-name denylist (``authorization``/``cookie``/
+    #: ``proxy-authorization``/``x-api-key``/``x-auth-token``/``api-key``),
+    #: which is the wrong shape at an egress boundary: the set of header names
+    #: that carry a credential is unbounded and grows with every vendor, so
+    #: ``PRIVATE-TOKEN``, ``X-Vault-Token``, ``Ocp-Apim-Subscription-Key``,
+    #: ``X-Amz-Security-Token``, ``X-Shopify-Access-Token``, ``X-Goog-Api-Key``,
+    #: ``Circle-Token``, bare ``Token`` and the rest were each a silent leak
+    #: until somebody remembered to extend the list. Under an allowlist a new
+    #: vendor header is dropped by default and the failure mode is a missing
+    #: header, not an exfiltrated secret.
+    #:
+    #: The node's configured ``api_key_header`` needs no special case here: an
+    #: operator-chosen name is by definition not one of the ten below, so it is
+    #: dropped like anything else. The former explicit add was deleted rather
+    #: than kept -- a second matcher alongside this set is exactly the drift
+    #: the inversion exists to end.
+    #:
+    #: ``X-Tenant``-style caller identity/routing metadata is NOT forward-safe
+    #: and is deliberately absent: disclosing a tenant identifier to a
+    #: third-party origin is precisely what this boundary exists to prevent.
+    _FORWARD_SAFE_HEADERS = frozenset(
         {
-            "authorization",
-            "cookie",
-            "proxy-authorization",
-            "x-api-key",
-            "x-auth-token",
-            "api-key",
+            "accept",
+            "accept-encoding",
+            "accept-language",
+            "accept-charset",
+            "content-type",
+            "user-agent",
+            "x-request-id",
+            "x-correlation-id",
+            "traceparent",
+            "tracestate",
         }
     )
 
@@ -1380,17 +1564,17 @@ class RESTClientNode(Node):
         return normalized
 
     @classmethod
-    def _strip_credential_headers(
-        cls, headers: dict[str, Any], api_key_header: str | None
-    ) -> dict[str, Any]:
-        """Drop credential-bearing headers, matching names case-insensitively."""
-        drop = set(cls._CREDENTIAL_HEADERS)
-        if isinstance(api_key_header, str) and api_key_header.strip():
-            drop.add(api_key_header.strip().lower())
+    def _forward_safe_headers(cls, headers: dict[str, Any]) -> dict[str, Any]:
+        """Keep only ``_FORWARD_SAFE_HEADERS``, matching case-insensitively.
+
+        Allowlist, not denylist: a name this set does not recognize is DROPPED.
+        A non-string key cannot be matched at all, so it is dropped too (fail
+        closed) rather than passed through unexamined.
+        """
         return {
             key: value
             for key, value in headers.items()
-            if not (isinstance(key, str) and key.lower() in drop)
+            if isinstance(key, str) and key.lower() in cls._FORWARD_SAFE_HEADERS
         }
 
     def _evaluate_pagination_next_link(
@@ -1400,7 +1584,6 @@ class RESTClientNode(Node):
         request_url: str,
         request_headers: dict[str, Any] | None = None,
         allowed_origins: Any = None,
-        api_key_header: str | None = None,
         base_url: str | None = None,
     ) -> dict[str, Any]:
         """Decide whether a server-supplied pagination link may be followed.
@@ -1417,8 +1600,10 @@ class RESTClientNode(Node):
            ``http://localhost:8000`` still paginates).
         4. Same origin as the original request (scheme + host + port, default
            ports normalized) -> ALLOW, caller's headers forwarded unchanged.
-        5. Origin present in ``allowed_pagination_origins`` -> ALLOW, but every
-           credential-bearing header is STRIPPED.
+        5. Origin present in ``allowed_pagination_origins`` -> ALLOW, but only
+           the ``_FORWARD_SAFE_HEADERS`` allowlist survives; every other
+           header -- caller credentials and caller identity metadata alike --
+           is DROPPED.
         6. Anything else -> REJECT.
 
         ``request_url`` stays pinned to the ORIGINAL request for the whole
@@ -1430,8 +1615,6 @@ class RESTClientNode(Node):
             request_url: The ORIGINAL request URL; sole source of "same origin".
             request_headers: Headers of the originating request.
             allowed_origins: Caller-supplied origin allowlist (may be None).
-            api_key_header: The node's configured API-key header name, added to
-                the credential-header strip set.
             base_url: URL of the page the link was found on, for relative
                 resolution. Defaults to ``request_url``.
 
@@ -1498,7 +1681,7 @@ class RESTClientNode(Node):
             return {
                 "allow": True,
                 "url": resolved,
-                "headers": self._strip_credential_headers(headers, api_key_header),
+                "headers": self._forward_safe_headers(headers),
                 "reason": None,
                 # The caller's credentials do not go to this origin -- and per
                 # the STICKY rule they must not return to the original origin
@@ -1507,6 +1690,261 @@ class RESTClientNode(Node):
             }
 
         return reject("next link is cross-origin and not allow-listed", resolved)
+
+    # ------------------------------------------------------------------
+    # Redirect-hop policy — SHARED by both transports
+    #
+    # `_evaluate_pagination_next_link` decides whether a DESTINATION may be
+    # requested. This decides whether a `Location` handed back by a hop may
+    # become the next destination, and re-enters that same evaluator so the
+    # origin policy is defined exactly once. It performs no I/O, so the sync
+    # executor below and `AsyncRESTClientNode`'s pagination loop both call it.
+    #
+    # TWO CALLERS, TWO POLICIES, ONE DIFFERENCE THAT MATTERS -- `caller_chosen`:
+    #
+    #   * A PAGINATION LINK is a value read out of the response BODY. The
+    #     server picked it, so it stays FAIL-CLOSED: a cross-origin destination
+    #     that is not in `allowed_pagination_origins` is REFUSED outright.
+    #     (`caller_chosen=False` -- the async HATEOAS loop.)
+    #
+    #   * An INITIAL-REQUEST redirect targets a URL the CALLER chose. Refusing
+    #     every cross-origin 3xx would break ordinary APIs: CDN fronting and
+    #     vanity-domain redirects are routine, and `requests` followed them
+    #     before this guard existed. So a cross-origin hop is FOLLOWED -- but
+    #     with the caller's credentials STRIPPED, exactly the treatment an
+    #     allow-listed cross-origin pagination hop gets. (`caller_chosen=True`.)
+    #
+    # WHO CHOSE THE URL is the whole of the distinction, which is why the sync
+    # pagination follow-up also passes `caller_chosen=True`: its destination is
+    # `request_url`, the caller's own URL with different query parameters -- no
+    # server-supplied value reaches it. The async loop's destination IS a
+    # server-supplied value, and that is the one that stays fail-closed.
+    #
+    # Neither policy softens the internal/metadata/loopback/non-HTTP class:
+    # `_evaluate_pagination_next_link` rules 2 and 3 refuse those BEFORE the
+    # allowlist is consulted, so they are refused on both paths with no
+    # exception. The softening is implemented by adding the resolved target to
+    # the allowlist passed in, never by overriding a rejection -- a rule that
+    # rejects earlier therefore still rejects.
+    # ------------------------------------------------------------------
+
+    def _evaluate_redirect_hop(
+        self,
+        hop_result: Any,
+        *,
+        request_url: str,
+        hop_url: str,
+        hop_index: int,
+        request_headers: dict[str, Any] | None = None,
+        allowed_origins: Any = None,
+        credentials_withheld: bool = False,
+        caller_chosen: bool = False,
+    ) -> dict[str, Any]:
+        """Decide whether a 3xx's ``Location`` may become the next request.
+
+        Args:
+            hop_result: The transport result of the hop that answered 3xx --
+                ``{"response": HTTPResponse.model_dump(), ...}``, the shape
+                BOTH ``HTTPRequestNode.execute`` and
+                ``AsyncHTTPRequestNode.async_run`` return.
+            request_url: The ORIGINAL caller-chosen URL, pinned for the whole
+                run. Sole definition of "same origin", so a third-party origin
+                can never become same-origin on a later hop and win the
+                credentials back.
+            hop_url: URL of the hop that issued this ``Location``; the base a
+                RELATIVE ``Location`` is resolved against.
+            hop_index: 1-based index of this hop. Above ``_MAX_REDIRECT_HOPS``
+                the chain stops, the same bound the async pagination loop uses,
+                instead of the client default (``requests`` 30, aiohttp 10).
+            request_headers: Headers the previous hop was issued with.
+            allowed_origins: Caller-supplied origin allowlist (may be None).
+            credentials_withheld: True once any earlier hop left the original
+                origin. STICKY: credentials are not re-attached for the
+                remainder of the run even if a later hop returns home.
+            caller_chosen: See the block comment above. True softens a
+                cross-origin refusal into a credential-stripped follow.
+
+        Returns:
+            ``{"allow", "url", "headers", "reason", "cross_origin",
+            "credentials_withheld"}``. The caller stops following when
+            ``allow`` is False; the refusal is already logged.
+        """
+
+        def refuse(reason: str, rendered: Any = None) -> dict[str, Any]:
+            # Never echo the server's value raw: an embedded credential would
+            # land in the log this refusal exists to protect, and a CR/LF would
+            # let the server forge whole log lines.
+            self.logger.warning(
+                "Redirect not followed: %s (from=%s)",
+                reason,
+                _sanitize_for_log(hop_url if rendered is None else rendered),
+            )
+            return {
+                "allow": False,
+                "url": None,
+                "headers": {},
+                "reason": reason,
+                "cross_origin": False,
+                "credentials_withheld": credentials_withheld,
+            }
+
+        if hop_index > _MAX_REDIRECT_HOPS:
+            return refuse(f"more than {_MAX_REDIRECT_HOPS} redirect hops")
+
+        response = hop_result.get("response") if isinstance(hop_result, dict) else None
+        hop_headers_in = (
+            (response.get("headers") or {}) if isinstance(response, dict) else {}
+        )
+        location = next(
+            (
+                value
+                for name, value in hop_headers_in.items()
+                if isinstance(name, str) and name.lower() == "location"
+            ),
+            None,
+        )
+        if not isinstance(location, str) or not location.strip():
+            # Fail closed: a redirect we cannot follow is not a destination.
+            return refuse("redirect carried no Location header")
+
+        try:
+            resolved = urljoin(hop_url, location.strip())
+        except ValueError as exc:
+            return refuse(f"Location is unparseable ({type(exc).__name__})", location)
+
+        effective_allowed = list(self._normalize_origin_allowlist(allowed_origins))
+        if caller_chosen:
+            # The softening, expressed as an allowlist entry rather than as an
+            # override, so every EARLIER rule (non-http scheme, no usable
+            # origin, internal/reserved address) still refuses this hop.
+            effective_allowed.append(resolved)
+
+        decision = self._evaluate_pagination_next_link(
+            resolved,
+            request_url=request_url,
+            request_headers=request_headers,
+            allowed_origins=effective_allowed,
+            base_url=hop_url,
+        )
+        if not decision["allow"]:
+            return {**decision, "credentials_withheld": credentials_withheld}
+
+        headers = decision["headers"]
+        cross_origin = bool(decision.get("cross_origin"))
+        if credentials_withheld:
+            headers = self._forward_safe_headers(headers)
+        return {
+            "allow": True,
+            "url": decision["url"],
+            "headers": headers,
+            "reason": None,
+            "cross_origin": cross_origin,
+            "credentials_withheld": credentials_withheld or cross_origin,
+        }
+
+    def _execute_following_redirects(
+        self,
+        http_params: dict[str, Any],
+        *,
+        follow_redirects: bool | None = None,
+        allowed_origins: Any = None,
+        caller_chosen: bool = False,
+    ) -> dict[str, Any]:
+        """Issue a SYNC request, following any redirect through the guard.
+
+        ``allow_redirects`` is forced OFF on every transport call: the guard,
+        not the HTTP client, decides where a credentialed run may go.
+        ``requests`` follows by default, allows 30 hops, and drops only
+        ``Authorization`` on a cross-host redirect -- ``Cookie``, ``X-API-Key``
+        and any custom API-key header ride along to whatever host the server
+        names, including the link-local addresses the guard exists to refuse.
+
+        Both sync request sites go through here so the follow loop exists once.
+        The async sibling cannot reuse this (it awaits a different transport)
+        but shares the POLICY via ``_evaluate_redirect_hop``.
+
+        Args:
+            http_params: The complete transport keyword set for the request.
+            follow_redirects: Whether the NODE follows a 3xx. ``None`` (the
+                default) reads the caller's ``allow_redirects`` out of
+                ``http_params``, which is how a follow-up page inherits it --
+                the originating kwarg set is threaded whole, so the policy is
+                carried rather than re-derived. False returns the 3xx response
+                itself.
+            allowed_origins: Caller-supplied origin allowlist (may be None).
+            caller_chosen: Whether the destination was chosen by the caller
+                rather than read out of a response body -- see the block
+                comment above ``_evaluate_redirect_hop``.
+
+        Returns:
+            The transport result of the final hop. A refused or unfollowable
+            redirect returns the 3xx result itself (the refusal is logged),
+            which the caller surfaces as an unsuccessful response rather than
+            silently presenting as data.
+        """
+        call = dict(http_params)
+        if follow_redirects is None:
+            follow_redirects = bool(call.get("allow_redirects", True))
+        # Not `setdefault`: a caller's True must NOT reach the client. The
+        # caller's value has already been read out, one line above.
+        call["allow_redirects"] = False
+        request_url = call.get("url") or ""
+        result = self.http_node.execute(**call)
+        if not follow_redirects:
+            return result
+
+        hop_url = request_url
+        credentials_withheld = False
+        hop_index = 0
+        while True:
+            status = result.get("status_code")
+            if not (isinstance(status, int) and 300 <= status < 400):
+                return result
+
+            hop_index += 1
+            decision = self._evaluate_redirect_hop(
+                result,
+                request_url=request_url,
+                hop_url=hop_url,
+                hop_index=hop_index,
+                request_headers=call.get("headers") or {},
+                allowed_origins=allowed_origins,
+                credentials_withheld=credentials_withheld,
+                caller_chosen=caller_chosen,
+            )
+            if not decision["allow"]:
+                return result
+
+            credentials_withheld = decision["credentials_withheld"]
+            call = dict(call)
+            call["url"] = decision["url"]
+            call["headers"] = decision["headers"]
+            # The `Location` carries its own query string; re-appending the
+            # originating request's `params` would corrupt the destination.
+            # This is also what `requests` does -- it prepares the redirect
+            # from the Location alone.
+            call["params"] = {}
+            if credentials_withheld:
+                # Node-level auth is injected as a header by `HTTPRequestNode`
+                # ITSELF, from these kwargs rather than from `headers`, so
+                # stripping the headers dict alone would still hand the
+                # credential to a third-party origin.
+                call["auth_type"] = None
+                call["auth_token"] = None
+                call["auth_username"] = None
+                call["auth_password"] = None
+            if status in (301, 302, 303) and call.get("method", "GET").upper() not in (
+                "GET",
+                "HEAD",
+            ):
+                # Same rewrite `requests` performs: a 303, and by long-standing
+                # convention a 301/302 on a POST, continue as a bodiless GET.
+                # A 307/308 preserves method and body, so it is left alone.
+                call["method"] = "GET"
+                call["json_data"] = None
+                call["data"] = None
+            hop_url = decision["url"]
+            result = self.http_node.execute(**call)
 
     def _build_async_result(
         self, http_result: dict[str, Any], url: str, method: str
@@ -1690,13 +2128,39 @@ class RESTClientNode(Node):
             return None
 
         initial_items = page_items(initial_result.get("data"))
+        if initial_items is None:
+            # Page 1's shape did not RESOLVE -- the body is a dict whose
+            # `items_path` is absent. Nothing that follows could ever be merged
+            # into it, so do not enter the walk. Previously `all_data` became
+            # the page-1 ENVELOPE (a dict), the merge was guarded by
+            # `isinstance(all_data, list)` -- False forever -- and every later
+            # page was fetched, COUNTED and DISCARDED; the resulting count of
+            # >1 then made `_drop_stale_pagination_metadata` strip the `links`
+            # the caller needed to walk the pages by hand. Strictly worse than
+            # not paginating. Note this is the `None` case ONLY: a page whose
+            # `items_path` resolves to an EMPTY list is a well-formed page and
+            # still paginates (the loop below handles the empty-page case).
+            self.logger.warning(
+                "Pagination skipped: items_path %r did not resolve to a list in "
+                "the first page's body, so no later page could be merged into "
+                "it; returning page 1 with its navigation metadata intact.",
+                items_path,
+            )
+            result = initial_result.copy()
+            if isinstance(result.get("metadata"), dict):
+                # ONE page merged -- which is the truth, and which keeps the
+                # shared stripper's `pages_merged > 1` branch shut so `links` /
+                # `pagination` / `Link` survive for a manual walk. Copied first:
+                # `.copy()` is shallow.
+                result["metadata"] = self._drop_stale_pagination_metadata(
+                    dict(result["metadata"]), 1
+                )
+            return result
+
         # Copied, never aliased: `extend` on the caller's own list would mutate
-        # the response they still hold.
-        all_data = (
-            list(initial_items)
-            if initial_items is not None
-            else initial_result.get("data", [])
-        )
+        # the response they still hold. Always a list now -- the unresolvable
+        # case returned above.
+        all_data = list(initial_items)
 
         # The ORIGINAL request URL. Pinned for the whole run: it is the sole
         # definition of "same origin", so an allow-listed third-party origin
@@ -1707,7 +2171,9 @@ class RESTClientNode(Node):
         page_url = origin_url
         request_headers = kwargs.get("headers") or {}
         allowed_origins = kwargs.get("allowed_pagination_origins")
-        api_key_header = kwargs.get("api_key_header", "X-API-Key")
+        # No `api_key_header` local here: under the _FORWARD_SAFE_HEADERS
+        # allowlist an operator-chosen auth header name is dropped like any
+        # other unrecognized name, so the former special case is gone.
 
         current_result = initial_result
         # STICKY: once a hop has gone to an origin that is not the original,
@@ -1717,6 +2183,19 @@ class RESTClientNode(Node):
         # fetched with full credentials -- laundering the third party back into
         # the trusted position it was deliberately stripped out of.
         credentials_withheld = False
+        # EVERY page URL already requested, not just the most recent one. The
+        # sync sibling grew `seen_cursors` (#2231) for exactly this: a server
+        # alternating A -> B -> A -> B never compares equal to its immediate
+        # predecessor, so a single-slot check runs to `max_pages` re-merging
+        # the same pages. This loop needs it MORE, not less -- its next URL is
+        # read out of the response BODY, so the cycle is attacker-influenceable.
+        # Keyed on the RESOLVED `decision["url"]` (post-guard, post-redirect),
+        # never the raw link: the same destination can be spelled several ways.
+        # Bounded by construction -- exactly one URL is added per iteration of
+        # the `while page_count < max_pages` loop below, so
+        # `len(seen_urls) < max_pages` always; the loop bound IS the set bound,
+        # and there is no path that adds without iterating.
+        seen_urls: set[str] = set()
 
         while page_count < max_pages:
             # Check for next page link in metadata
@@ -1746,17 +2225,26 @@ class RESTClientNode(Node):
                     request_url=origin_url,
                     request_headers=request_headers,
                     allowed_origins=allowed_origins,
-                    api_key_header=api_key_header,
                     base_url=candidate_base,
                 )
                 if not decision["allow"]:
                     break
 
+                if decision["url"] in seen_urls:
+                    self.logger.warning(
+                        "Pagination stopped: server re-issued page URL %s, which "
+                        "was already requested; fetching it again would "
+                        "duplicate an earlier page.",
+                        _sanitize_for_log(decision["url"]),
+                    )
+                    # Same signal the redirect-hop ceiling uses: `None` ends the
+                    # OUTER loop, so the repeat is refused BEFORE the request.
+                    decision = None
+                    break
+
                 hop_headers = decision["headers"]
                 if credentials_withheld:
-                    hop_headers = self._strip_credential_headers(
-                        hop_headers, api_key_header
-                    )
+                    hop_headers = self._forward_safe_headers(hop_headers)
                 if decision.get("cross_origin"):
                     credentials_withheld = True
 
@@ -1831,18 +2319,45 @@ class RESTClientNode(Node):
             if transport_failed or decision is None or not decision["allow"]:
                 break
 
+            # The one add per outer iteration the bound above is argued from:
+            # only a URL actually fetched is recorded, and an iteration that
+            # broke out above recorded nothing.
+            seen_urls.add(decision["url"])
+
             current_result = self._build_async_result(
                 http_result or {}, decision["url"], "GET"
             )
 
-            if current_result.get("success", False):
-                fetched = page_items(current_result.get("data"))
-                if fetched is not None and isinstance(all_data, list):
-                    all_data.extend(fetched)
-                page_url = decision["url"]
-                page_count += 1
-            else:
+            if not current_result.get("success", False):
                 break
+
+            fetched = page_items(current_result.get("data"))
+            if fetched is None:
+                # The shape did not RESOLVE on this page (see the page-1 case
+                # above). Distinct from `[]` below: that page was well-formed
+                # and simply empty, this one we could not read at all, so say
+                # so rather than reporting it as a quiet end-of-data.
+                self.logger.warning(
+                    "Pagination stopped: items_path %r did not resolve to a "
+                    "list in the page fetched from %s.",
+                    items_path,
+                    _sanitize_for_log(decision["url"]),
+                )
+                break
+            if not fetched:
+                # RESOLVED but EMPTY -- end of data. Break WITHOUT counting, so
+                # `total_pages_fetched` means "pages MERGED" here exactly as it
+                # does on the sync path, whose `_paginate_with_page_count`
+                # docstring pins that "a trailing empty page -- which ends the
+                # loop WITHOUT merging -- is not counted". Counting the fetch
+                # instead let a server of endless empty pages burn the whole
+                # `max_pages` budget and report every wasted round-trip as a
+                # merged page: one output key, two meanings.
+                break
+
+            all_data.extend(fetched)
+            page_url = decision["url"]
+            page_count += 1
 
         # Update result with combined data
         result = initial_result.copy()
@@ -1948,6 +2463,111 @@ class AsyncRESTClientNode(AsyncNode):
         # Forward to the synchronous REST node
         return self.rest_node.execute(**kwargs)
 
+    async def _execute_following_redirects_async(
+        self,
+        http_params: dict[str, Any],
+        *,
+        follow_redirects: bool | None = None,
+        allowed_origins: Any = None,
+        caller_chosen: bool = False,
+    ) -> dict[str, Any]:
+        """Issue an ASYNC request, following any redirect through the guard.
+
+        The async twin of ``RESTClientNode._execute_following_redirects``. The
+        POLICY is not duplicated: both loops call the single
+        ``_evaluate_redirect_hop``, which performs no I/O precisely so this
+        coroutine can reuse it. What cannot be shared is the driving loop --
+        the sync executor calls a blocking ``requests``-backed transport, so
+        awaiting it here would block the event loop.
+
+        ``allow_redirects`` is forced OFF on every transport call: the guard,
+        not the HTTP client, decides where a credentialed run may go. aiohttp
+        follows by default (``http.py:923``) and carries EVERY header across a
+        cross-host redirect -- it does not even drop ``Authorization``, which
+        is the one header ``requests`` drops -- so the server's ``Location``
+        chose where the caller's credentials went, past the origin guard, past
+        ``_MAX_REDIRECT_HOPS``, and past the internal-address refusal.
+
+        Args:
+            http_params: The complete transport keyword set for the request.
+            follow_redirects: Whether the NODE follows a 3xx. ``None`` (the
+                default) reads the caller's ``allow_redirects`` out of
+                ``http_params``. False returns the 3xx response itself.
+            allowed_origins: Caller-supplied origin allowlist (may be None).
+            caller_chosen: Whether the destination was chosen by the caller
+                rather than read out of a response body -- see the block
+                comment above ``_evaluate_redirect_hop``.
+
+        Returns:
+            The transport result of the final hop. A refused or unfollowable
+            redirect returns the 3xx result itself (the refusal is logged),
+            which the caller surfaces as an unsuccessful response rather than
+            silently presenting as data.
+        """
+        call = dict(http_params)
+        if follow_redirects is None:
+            follow_redirects = bool(call.get("allow_redirects", True))
+        # Not `setdefault`: a caller's True must NOT reach the client. The
+        # caller's value has already been read out, one line above.
+        call["allow_redirects"] = False
+        request_url = call.get("url") or ""
+        result = await self.http_node.async_run(**call)  # type: ignore[attr-defined]
+        if not follow_redirects:
+            return result
+
+        hop_url = request_url
+        credentials_withheld = False
+        hop_index = 0
+        while True:
+            status = result.get("status_code")
+            if not (isinstance(status, int) and 300 <= status < 400):
+                return result
+
+            hop_index += 1
+            decision = self.rest_node._evaluate_redirect_hop(  # type: ignore[attr-defined]
+                result,
+                request_url=request_url,
+                hop_url=hop_url,
+                hop_index=hop_index,
+                request_headers=call.get("headers") or {},
+                allowed_origins=allowed_origins,
+                credentials_withheld=credentials_withheld,
+                caller_chosen=caller_chosen,
+            )
+            if not decision["allow"]:
+                return result
+
+            credentials_withheld = decision["credentials_withheld"]
+            call = dict(call)
+            call["url"] = decision["url"]
+            call["headers"] = decision["headers"]
+            # The `Location` carries its own query string; re-appending the
+            # originating request's `params` would corrupt the destination.
+            call["params"] = {}
+            if credentials_withheld:
+                # Node-level auth is injected as a header by
+                # `AsyncHTTPRequestNode` ITSELF, from these kwargs rather than
+                # from `headers` (`http.py::_apply_authentication`), so
+                # stripping the headers dict alone would still hand the
+                # credential to a third-party origin.
+                call["auth_type"] = None
+                call["auth_token"] = None
+                call["auth_username"] = None
+                call["auth_password"] = None
+            if status in (301, 302, 303) and call.get("method", "GET").upper() not in (
+                "GET",
+                "HEAD",
+            ):
+                # Same rewrite the sync executor performs, and the same one
+                # `requests` performs: a 303, and by long-standing convention a
+                # 301/302 on a POST, continue as a bodiless GET. A 307/308
+                # preserves method and body, so it is left alone.
+                call["method"] = "GET"
+                call["json_data"] = None
+                call["data"] = None
+            hop_url = decision["url"]
+            result = await self.http_node.async_run(**call)  # type: ignore[attr-defined]
+
     async def async_run(self, **kwargs) -> dict[str, Any]:
         """Execute a REST API request asynchronously.
 
@@ -1971,6 +2591,10 @@ class AsyncRESTClientNode(AsyncNode):
         version = kwargs.get("version")
         timeout = kwargs.get("timeout", 30)
         verify_ssl = kwargs.get("verify_ssl", True)
+        # Whether the NODE follows a 3xx under the origin guard. The transport
+        # is told False either way -- see `_execute_following_redirects_async`.
+        allow_redirects = kwargs.get("allow_redirects", True)
+        allowed_origins = kwargs.get("allowed_pagination_origins")
         paginate = kwargs.get("paginate", False)
         pagination_params = kwargs.get("pagination_params")
         retry_count = kwargs.get("retry_count", 0)
@@ -2008,6 +2632,12 @@ class AsyncRESTClientNode(AsyncNode):
             "response_format": "json",
             "timeout": timeout,
             "verify_ssl": verify_ssl,
+            # The caller's value, threaded so a follow-up page inherits the
+            # same policy (`request_kwargs` carries this dict whole). The
+            # transport is told False regardless:
+            # `_execute_following_redirects_async` reads this key and then
+            # overwrites it.
+            "allow_redirects": allow_redirects,
             "retry_count": retry_count,
             "retry_backoff": retry_backoff,
             "auth_type": auth_type,
@@ -2017,9 +2647,23 @@ class AsyncRESTClientNode(AsyncNode):
             "api_key_header": api_key_header,
         }
 
-        # Execute the HTTP request asynchronously
-        self.logger.info(f"Making async REST {method} request to {url}")
-        result = await self.http_node.async_run(**http_params)  # type: ignore[attr-defined]
+        # Execute the HTTP request asynchronously.
+        #
+        # Masked, and lazily formatted, for parity with `http.py:625` and with
+        # the synchronous sibling. `url` is `base_url` + resource, so it can
+        # carry userinfo (`https://svc:pw@host`), a presigned signature, or an
+        # `?api_key=` parameter -- an f-string wrote all three verbatim into
+        # the log on EVERY async request.
+        self.logger.info("Making async REST %s request to %s", method, mask_url(url))
+        result = await self._execute_following_redirects_async(
+            http_params,
+            allowed_origins=allowed_origins,
+            # The destination is the URL the CALLER built from `base_url` +
+            # `resource`; no server-supplied value reaches it. A cross-origin
+            # 3xx is therefore followed with credentials stripped rather than
+            # refused -- CDN and vanity-domain redirects are routine.
+            caller_chosen=True,
+        )
 
         # Extract response data
         response = result.get("response")
@@ -2050,7 +2694,18 @@ class AsyncRESTClientNode(AsyncNode):
             if status_code:
                 error_message = f"{error_message} (status: {status_code})"
 
-            self.logger.error(f"REST API error: {error_message}")
+            # `error_message` is lifted out of the RESPONSE BODY above
+            # (`content["error"]` / `content["message"]`), so it is fully
+            # server-controlled -- the exact input class `_sanitize_for_log`
+            # was added for. Raw CR/LF in it let an upstream forge whole log
+            # lines, including lines attributed to another component.
+            #
+            # Sanitized ONCE, before BOTH surfaces, and the RETURNED value is
+            # sanitized too -- matching the synchronous site verbatim, so the
+            # two paths cannot present the same upstream string differently.
+            error_message = _sanitize_for_log(error_message)
+
+            self.logger.error("REST API error: %s", error_message)
 
             # Return error response with recovery suggestions if available
             error_result = {
@@ -2115,6 +2770,7 @@ class AsyncRESTClientNode(AsyncNode):
                     request_headers=headers,
                     request_timeout=timeout,
                     request_kwargs=http_params,
+                    allowed_origins=allowed_origins,
                 )
             except NodeExecutionError as e:
                 # Same split as the synchronous caller: shape mismatches
