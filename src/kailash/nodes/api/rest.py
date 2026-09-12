@@ -1122,6 +1122,14 @@ class RESTClientNode(Node):
                 "url": full_url,
                 "method": method,
                 "headers": http_result.get("headers", {}),
+                # _handle_async_pagination reads metadata["links"]["next"] and
+                # metadata["pagination"]["next_url"] to find the next page. Those
+                # keys are produced by _extract_metadata, which the SYNC path
+                # calls at the equivalent point (:759) and this path did not — so
+                # next_url was unconditionally None and async pagination broke on
+                # the first iteration, returning page 1 as success. Same
+                # link-discovery contract as sync; nothing new is invented here.
+                **self._extract_metadata(http_result),
             },
         }
 
@@ -1178,6 +1186,13 @@ class RESTClientNode(Node):
                         "url": next_url,
                         "method": "GET",
                         "headers": http_result.get("headers", {}),
+                        # SIBLING of the entry-point fix above: the NEXT
+                        # iteration reads its link off this dict. Hand-building
+                        # it without _extract_metadata capped pagination at two
+                        # pages — page 1 carried links, page 2 never did, so the
+                        # loop always broke on its second pass regardless of
+                        # max_pages or what the server advertised.
+                        **self._extract_metadata(http_result),
                     },
                 }
 
