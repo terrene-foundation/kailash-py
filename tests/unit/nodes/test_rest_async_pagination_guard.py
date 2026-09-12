@@ -346,12 +346,29 @@ async def test_allowlisted_cross_origin_proceeds_without_credentials():
 
     assert transport.urls[1] == "https://cdn.example/items?page=2"
     sent = transport.header_sets[1]
-    assert set(sent) == {"X-Tenant", "Accept"}, sent
+    # X-Tenant is DROPPED, and that is a DELIBERATE TIGHTENING, not an
+    # accident -- do not "restore" it. This test previously pinned X-Tenant as
+    # SURVIVING, which it did only because the old six-name credential
+    # DENYLIST did not happen to name it. Under _FORWARD_SAFE_HEADERS the
+    # question is no longer "is this a known credential?" but "is this known
+    # to be safe to disclose?", and caller-supplied identity/routing metadata
+    # is not: handing a tenant identifier to a third-party origin is exactly
+    # what an egress boundary exists to prevent.
+    assert set(sent) == {"Accept"}, sent
+    assert "X-Tenant" not in sent, sent
     assert "Authorization" not in sent
 
 
 async def test_allowlisted_cross_origin_strips_the_configured_api_key_header():
-    """The caller's own ``api_key_header`` name joins the strip set."""
+    """An operator-chosen ``api_key_header`` name does not survive either.
+
+    This used to be carried by an explicit special case that added the
+    configured name to the credential denylist. That special case is DELETED:
+    under ``_FORWARD_SAFE_HEADERS`` an operator-chosen name is simply not on
+    the allowlist, so it is dropped like any other unrecognized header. The
+    test is kept because the BEHAVIOUR is still a contract -- only its
+    mechanism changed.
+    """
     transport = RecordingAsyncTransport(
         [
             transport_return(page([1], next_link="https://cdn.example/items?page=2")),
@@ -372,6 +389,63 @@ async def test_allowlisted_cross_origin_strips_the_configured_api_key_header():
     sent = transport.header_sets[1]
     assert "X-Corp-Secret" not in sent, sent
     assert sent["Accept"] == "application/json"
+
+
+async def test_allowlisted_cross_origin_drops_vendor_auth_headers():
+    """S-HIGH-3: the egress filter is an ALLOWLIST, so unknown names DROP.
+
+    Each header below is a real vendor credential that the previous six-name
+    denylist (``authorization``/``cookie``/``proxy-authorization``/
+    ``x-api-key``/``x-auth-token``/``api-key``) forwarded verbatim to a
+    third-party origin. They are named here not because the allowlist
+    enumerates them -- it cannot, that is the whole point -- but because they
+    are the evidence that an exact-match denylist at an egress boundary is
+    unbounded by construction.
+
+    The compliant pole is asserted in the same test: ``Accept`` and
+    ``Content-Type`` DO survive, so a filter that simply dropped everything
+    would RED here too.
+    """
+    transport = RecordingAsyncTransport(
+        [
+            transport_return(page([1], next_link="https://cdn.example/items?page=2")),
+            transport_return(page([2]), url="https://cdn.example/items?page=2"),
+        ]
+    )
+    node = make_node(transport)
+
+    await node.async_run(
+        base_url=BASE,
+        resource=RESOURCE,
+        paginate=True,
+        headers={
+            "PRIVATE-TOKEN": "glpat-xxxx",
+            "X-Vault-Token": "hvs.yyyy",
+            "Ocp-Apim-Subscription-Key": "azure-zzzz",
+            "X-Amz-Security-Token": "aws-session-token",
+            "X-Shopify-Access-Token": "shpat-aaaa",
+            "X-Goog-Api-Key": "goog-bbbb",
+            "Circle-Token": "circle-cccc",
+            "Token": "bare-dddd",
+            "X-CSRF-Token": "csrf-eeee",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        },
+        allowed_pagination_origins=["https://cdn.example"],
+    )
+
+    sent = transport.header_sets[1]
+    # The four the brief names explicitly, asserted by name so a partial
+    # re-introduction of the denylist cannot pass this test quietly.
+    for leaked in (
+        "PRIVATE-TOKEN",
+        "X-Vault-Token",
+        "Ocp-Apim-Subscription-Key",
+        "X-Amz-Security-Token",
+    ):
+        assert leaked not in sent, f"{leaked} was forwarded cross-origin: {sent}"
+    # ...and the exhaustive form: ONLY forward-safe names survive.
+    assert set(sent) == {"Accept", "Content-Type"}, sent
 
 
 async def test_same_origin_localhost_still_paginates():
