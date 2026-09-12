@@ -181,6 +181,24 @@ from .views import DashboardView   # first `from pkg.dashboard import …` runs 
 
 Origin: kailash-ml 1.1.0 release cycle (2026-04-23) — `km.dashboard` shadowed by `kailash_ml/dashboard/` subpackage after Python 3.14 test-collection reordering; fix commit `8914de3b` installed `_CallableDashboardModule`.
 
+## Never `await` A Task Inside A `finally` — Bound The Join With `asyncio.wait` (MUST)
+
+A cleanup path that cancels a task and then `await`s it inside a `finally` carries TWO defects at once. It never returns when the task does not honour cancellation, stranding the caller; and it RE-RAISES whatever the task died of — which, inside a `finally`, REPLACES the propagating `CancelledError` and demotes it to `__context__`, losing the cancellation silently. Join with `asyncio.wait({task}, timeout=...)` instead: `cancel()` is synchronous and has ALREADY landed, so the task is cancelled regardless of what the join observes — only the CONFIRMATION is bounded, which is the right semantics for a task that may never honour it. The task's own error still has to surface; retrieve it explicitly rather than letting the join raise it.
+
+```python
+# DO — cancel (synchronous, already landed), then bound only the CONFIRMATION
+task.cancel()
+done, pending = await asyncio.wait({task}, timeout=_CLEANUP_JOIN_TIMEOUT)
+# DO NOT — inside a `finally`: hangs on an uncancellable task, and its exception
+# REPLACES the CancelledError that was propagating
+finally:
+    await task
+```
+
+**BLOCKED rationalizations:** "the task always honours cancellation" / "`await` is how you join a task" / "the timeout belongs on the caller, not here" / "suppressing `CancelledError` in cleanup is fine, we're shutting down anyway" / "I fixed the strand" — without naming WHICH task, since a cleanup added to `stop()` may cancel a DIFFERENT task than the one being awaited.
+
+**Why:** The hang and the swallowed cancellation are the same line, and both are invisible in the happy path — a task that always honours cancellation makes the code look correct forever. Shipped fix + full reasoning in-source: `src/kailash/channels/base.py:401-443` (siblings `cli_channel.py:358-366`, `api_channel.py:311-319`).
+
 ## SQLite Connection Management
 
 - Acquire through `AsyncSQLitePool` (`acquire_read` / `acquire_write`)
