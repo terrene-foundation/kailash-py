@@ -150,6 +150,9 @@ async def test_inserted_updated_split_is_exact_across_chunk_boundaries(tmp_path)
 
     # Values really were updated, not merely counted as updates.
     row = await db.express.read("Widget", "w0")
+    # read() is Optional-typed; assert presence FIRST so a missing row fails as
+    # "w0 was not persisted" rather than as an unactionable TypeError on None.
+    assert row is not None, "w0 was not persisted by the upsert under test"
     assert row["name"] == "v3"
 
 
@@ -250,6 +253,11 @@ async def test_effective_batch_size_is_reported_when_clamped(tmp_path):
     """
     db = _fresh_db(tmp_path)
     _wide_model(db, 40, "WideReport")
+    # The ENGINE surface does not auto-create schema; only the express facade
+    # does. Touch the table through express first so the direct engine call
+    # below is decided by STATEMENT CAPACITY rather than by "no such table" —
+    # a missing table makes the clamp assertion vacuous.
+    assert await db.express.count("WideReport") == 0
 
     records = [
         {"id": f"w{i}", **{f"c{j}": f"v{j}" for j in range(40)}} for i in range(900)
