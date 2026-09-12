@@ -2080,10 +2080,41 @@ class DataFlowExpress:
             records: List of record data dicts
             conflict_on: Fields for conflict detection (default: ["id"]).
                 Each field name is validated against the model schema.
-            batch_size: Records processed per database batch (default 1000)
+            batch_size: Records sent per database statement (default 1000).
+                Treated as a CEILING, not an exact size: it is clamped down to
+                whatever the target engine can bind in one statement for this
+                model's column count (issue #2210). Records beyond one batch
+                are written by additional statements.
 
         Returns:
             ``{"records": [...], "created": int, "updated": int, "total": int}``
+
+        Note:
+            **Batch capacity (issue #2210).** There is no fixed row ceiling:
+            the limit is per-STATEMENT and engine-specific, and DataFlow sizes
+            its statements to stay inside it, so a caller may pass an
+            arbitrarily large ``records`` list. Before this was handled, any
+            batch of >=1000 rows on SQLite failed WHOLESALE and persisted zero
+            rows, because the accounting pre-count that derives the
+            created/updated split emitted one ``OR`` term per row and overran
+            SQLite's ``SQLITE_LIMIT_EXPR_DEPTH`` (1000).
+
+            **Atomicity.** ``bulk_upsert`` does NOT guarantee all-or-nothing
+            across batches. When the input exceeds one statement's capacity it
+            is written by several statements, and outside an enclosing
+            ``TransactionScopeNode`` each commits independently — so a failure
+            partway through can leave earlier batches persisted. Wrap the call
+            in a transaction scope when you need all-or-nothing.
+
+            **Failure contract.** Failures are reported in the returned dict
+            (``{"success": False, "error": ...}``) plus a WARN log line, NOT
+            by raising — consistent with ``bulk_create`` / ``bulk_update`` /
+            ``bulk_delete``. Callers MUST inspect ``result["success"]``; do not
+            infer success from the absence of an exception. Caller-actionable
+            CONFIGURATION errors are the exception and do raise (e.g.
+            :class:`BulkUpsertConflictTargetError` for a non-unique
+            ``conflict_on``, ``AppendOnlyViolationError`` for a protected
+            model).
 
         Example:
             result = await db.express.bulk_upsert("User", [
@@ -2136,7 +2167,17 @@ class DataFlowExpress:
             # BulkUpsertNode accepts conflict_columns in its config.
             node.conflict_columns = conflict_fields
             node.batch_size = batch_size
-            result = await node.async_run(data=records)
+            # Issue #2210 (zero-tolerance Rule 3c): the instance attribute
+            # above is INERT — the node resolves batch_size from
+            # ``validate_inputs(**kwargs)`` (core/nodes.py), never from
+            # ``getattr(self, ...)``, so every call reached the bulk engine
+            # with the default 1000 no matter what the caller passed. Measured
+            # before this fix: bulk.bulk_upsert received batch_size=1000 for
+            # express batch_size=100 AND for 400. ``batch_size`` is a declared
+            # NodeParameter for every ``bulk_*`` operation, so passing it as a
+            # run kwarg is the seam that actually binds it. The attribute is
+            # kept for callers that read it back off the node.
+            result = await node.async_run(data=records, batch_size=batch_size)
 
             # Model-scoped cache invalidation (TSG-104)
             await self._invalidate_model_cache(model)
