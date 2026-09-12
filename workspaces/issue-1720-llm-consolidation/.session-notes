@@ -111,7 +111,58 @@ says "this needs its own shard with review", that is evidence, not an obstacle.*
    not exploitable in shipped code (the shape bug keeps the path unreachable, and the commit says
    so), but if a private advisory is preferred, that text is the thing to consider rewriting.
 
-## IN FLIGHT (cont-33) — two PACKED lanes, ledger at `lane-ledger.md`
+## cont-33 STATUS — two lanes LANDED, a third in flight
+
+**Landed and drained:** L2 `4ff0aa0d7` (27 identifier-budget sites) · L1 `613468d4d`
+(#2230 + #2231 + redirect hardening) · `dab1b679d` (red-test fix, below).
+
+**L3 `fix/rest-guard-parity` IN FLIGHT** — 12 findings from two independent gate reviews
+(adversarial security + correctness) of `613468d4d`. One packed lane per MUST-6.
+
+### The shape of the L3 finding set, in one sentence
+
+The origin guard L1 landed is **correct inside its own loop and bypassed at every surface
+outside it** — almost every finding is `security.md` § Enforcement-Surface Parity.
+
+- **S-HIGH-1** `allow_redirects` reached 1 of 5 request sites (confirmed: it appears EXACTLY
+  ONCE in `rest.py` and that is the one `=False`); `RESTClientNode` does not even DECLARE the
+  parameter, so a user cannot turn the control on.
+- **S-HIGH-2** cookies defeat the sticky rule from underneath — session pools are
+  process-global and reused, zero jar suppression in `nodes/api/`, so the jar re-attaches the
+  origin cookie BELOW the header strip. Also cross-caller.
+- **S-HIGH-3** DONE (R1): credential strip inverted from a 6-name denylist to a 10-name
+  allowlist. RED showed 9 vendor credentials forwarded verbatim. `X-Tenant` now dropped
+  (deliberate, pinning test flipped with a do-not-restore comment). The `api_key_header`
+  special case became dead under an allowlist and was deleted in 3 places, contract test kept.
+- S-MED-4/5/6/7, C-F2/F3/F5/F7, and the one DESIGN call (C-F4) — see `lane-ledger.md`.
+
+### Traced and REJECTED — do not re-raise
+
+`PROXY_CREDENTIAL_HEADERS` (`utils/proxy_guard.py:184`, used at `api/gateway.py:916`) is the
+same denylist SHAPE but NOT the same failure mode, and the module documents the asymmetry in
+place: a reverse proxy forwards to a CONFIGURED backend (not an attacker-chosen host),
+`forward_credentials=False` is the real control, and an allowlist there would break every
+backend relying on a custom application header. It is known-incomplete BY DESIGN. Left
+untouched deliberately.
+
+### Known false positives — verify before chasing either
+
+1. **`framework-first.md` hook: "raw SQL string detected"** fires on EVERY edit to
+   `src/kailash/nodes/api/rest.py`. There is no DB work in that file — it matches something
+   else in it. Seen by the orchestrator and two sub-agents. Do NOT restructure code to
+   silence it; if it is worth fixing, fix the hook's matcher.
+
+2. **Pyright "unknown import symbol" / "is not defined" on NEW symbols — 3 instances this
+   session, all false.** Pyright resolves `kailash`/`dataflow` against the INSTALLED
+   site-packages copy, which predates any symbol a lane just added. Measured examples:
+   `identifier_budget_for` reported unknown while defined at `adapters/dialect.py:597` and
+   imported correctly; `NodeParameter` reported undefined while imported at line 28 and the
+   suite passing 17/17. **The discriminating check is to RUN it** — `python -c "from X import Y"`
+   plus the actual test — not to read the diagnostic. This is the same site-packages trap the
+   lanes hit directly, which is why several now ship in-process provenance guards asserting
+   `__file__` resolves under the checkout.
+
+## SUPERSEDED — the original cont-33 dispatch (kept for the packing rationale)
 
 4 dispatchable tasks went to 2 ceiling slots, not 4 — the first application of MUST-6.
 
