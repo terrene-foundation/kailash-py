@@ -1,4 +1,37 @@
-# Session Notes — cont-32 (d684ce20f reconciled; codify backlog cleared; a self-correction)
+# Session Notes — cont-33 (WIP ceilings re-based onto LANES; d684ce20f reconciled)
+
+## cont-33 — the work-ledger / WIP-discipline change (READ FIRST)
+
+**Co-owner directive:** ceilings bind worktrees and branches, NOT agents; every repo's work
+ledger must let a lane pack DEPTH (more agents, more tasks/issues per lane); each lane is a
+MINI-ORCHESTRATOR, not a single serial worker. Landed `d94f597ff`.
+
+The ledger's ROW SHAPE was the binding constraint. The old
+`track → agent → branch → status` admitted exactly ONE agent and ONE task per ceiling-bound
+unit, so an orchestrator filling it CORRECTLY was structurally prevented from packing depth.
+`orchestration-launch-ledger.md` MUST-1 is now LANE-keyed
+(`lane → branch → TASK SET → AGENT ROSTER → status`) and MUST-6 carries the contract.
+`autonomous-execution.md` Rule 1 was amended in the same change: the shard budget binds one
+AGENT's implementation pass, NOT one worktree — that sentence would otherwise have forbidden
+packing. `agents.md` § Triad carries the always-on pointer (baseline, loads every session);
+the `fleet-drain` Stop advisory carries it at the refill moment.
+
+**Three bounds that did NOT move:** per-AGENT shard budget; adaptive concurrency back-off (a
+RATE signal, not a WIP ceiling — depth is packed over a lane's life, not fired at once); joint
+revert-safety on the lane's single branch.
+
+**Deliberately NOT built:** a dispatch-time under-packing detector. Under-packing is a property
+of the DISPATCHABLE SET, which is nowhere in the tool-call input, so any detector would infer a
+counterfactual and be non-discriminating. Recorded in the Wiring as DECLINED, not deferred —
+do not "finish" it.
+
+**UNVERIFIED and owed:** `emit.mjs --all --dry-run` did NOT change its reported byte count after
+5000 bytes were appended to a baseline rule (control), so it is not measuring this repo's rule
+edits despite `REPO` resolving to the repo root. The headroom figures quoted mid-session are
+WITHDRAWN. If the gate really is inert here, `rule-authoring.md` Rule 10's proximity-band
+verdicts in this repo are unfounded. Lane L2 is investigating.
+
+## cont-32 (d684ce20f reconciled; codify backlog cleared; a self-correction)
 
 ## Where we are
 
@@ -78,7 +111,31 @@ says "this needs its own shard with review", that is evidence, not an obstacle.*
    not exploitable in shipped code (the shape bug keeps the path unreachable, and the commit says
    so), but if a private advisory is preferred, that text is the thing to consider rewriting.
 
-## FLEET: FULLY DRAINED
+## IN FLIGHT (cont-33) — two PACKED lanes, ledger at `lane-ledger.md`
+
+4 dispatchable tasks went to 2 ceiling slots, not 4 — the first application of MUST-6.
+
+| lane | branch | tasks | why packed this way |
+| --- | --- | --- | --- |
+| L1-rest | `fix/rest-pagination` | #2230, #2231 | CO-LOCATED, not merely packed: both touch `src/kailash/nodes/api/rest.py`, so splitting them across branches would GUARANTEE a conflict |
+| L2-df | `fix/dataflow-warns` | #1971, emit-forensics | packed by disjointness: `packages/kailash-dataflow/**` and `.claude/bin/**` share no file with each other or with L1 |
+
+Both briefed as mini-orchestrators (fan out internally, waves of ~3). On completion: merge
+`--no-ff` into dev, push, reap the worktree, delete the branch local+remote, re-census.
+
+**L1 carries a HARD ORDERING CONSTRAINT — do not let it reorder.** #2230's shape fix ARMS a
+latent credential-exfiltration path (`_handle_async_pagination` follows a response-body link
+with the caller's headers, no origin validation), unreachable today ONLY because the shape bug
+keeps the link out of metadata. The origin guard lands BEFORE or WITH the shape fix, never
+after. A prior attempt shipped the shape fix without the guard and was reverted (`bbec11e4b`).
+
+## NOT DISPATCHABLE — landed, awaiting promotion (verified cont-33)
+
+#2220 / #2221 / #2222 / #2225 / #2226 / #2227 read OPEN on GitHub but every one has a landing
+commit on `origin/dev` (checked by `git log --grep` per issue). They close when the promotion
+reaches `main`. Do NOT re-dispatch them.
+
+## FLEET (as of cont-33 dispatch)
 
 Primary checkout only. No `fix/*` remote heads, no lane worktrees, `.kailash-py-wt/` empty.
 Remote heads are `dev`, `main`, and the held `promote/2026-09-11-cont30`. Tree clean apart from
