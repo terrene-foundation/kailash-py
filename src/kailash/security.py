@@ -1211,21 +1211,52 @@ def sanitize_input(
 
         # Context-aware sanitization
         if context == "python_exec":
-            # Python execution context: Only remove XSS patterns, preserve shell metacharacters
-            # Python exec() does not execute shell commands, so $, ;, &, |, `, (, ) are safe
-            sanitized = re.sub(
-                r"<script.*?</script>", "", value, flags=re.IGNORECASE | re.DOTALL
-            )
-            sanitized = re.sub(r"javascript:", "", sanitized, flags=re.IGNORECASE)
-            # Remove only the most dangerous HTML tags for XSS prevention
-            sanitized = re.sub(
-                r"</?(?:script|iframe|object|embed).*?>",
-                "",
-                sanitized,
-                flags=re.IGNORECASE,
-            )
+            # Python execution context: the value is passed through unchanged.
+            # exec() does not invoke a shell, so $, ;, &, |, `, (, ) are ordinary
+            # data here, and angle brackets are ordinary characters in Python
+            # source. Type and length validation above still apply.
+            #
+            # #2173 -- WHY THE TAG STRIPPING THAT USED TO BE HERE WAS REMOVED.
+            # It was labelled "XSS prevention" and was not that. It deleted four
+            # literal tag spellings (script/iframe/object/embed) and the
+            # `javascript:` scheme, and was blind to every event-handler payload,
+            # which needs none of those tags: `<img src=x onerror=alert(1)>`,
+            # `<svg onload=alert(1)>` and `<body onload=alert(1)>` were all
+            # returned byte-identical. Worse, it was net-NEGATIVE: a single-pass
+            # re.sub lets the fragments either side of a deleted match join, so
+            # it FUSED a live tag out of input that contained none --
+            #
+            #     "<scr<script>ipt>alert(1)"  -->  "<script>alert(1)"
+            #
+            # i.e. the control manufactured the exact token it existed to remove.
+            # generic and shell_exec never had this defect: their character-class
+            # strips neutralize the fused token. This branch had no angle-bracket
+            # backstop at any point, and that asymmetry IS the defect. Both other
+            # branches are deliberately left UNCHANGED.
+            #
+            # Removing the transform rather than repairing it is correct because
+            # there is no HTML sink for it to protect. The caller set is closed:
+            # validate_node_parameters() passes context="python_exec" from
+            # exactly two sites, both in nodes/code/python.py, and the values
+            # land in an exec() namespace and in **kwargs of a Python callable
+            # -- never in markup. CodeQL py/bad-tag-filter alerts 131/132 are
+            # resolved by this deletion; 133 (shell_exec) and 134 (generic) are
+            # NOT, and keep their own dispositions. Residual: the second site
+            # forwards into an ARBITRARY user-supplied callable, so the no-sink
+            # finding is scoped to this tree and cannot be closed on behalf of
+            # downstream callers.
+            #
+            # IF YOU ROUTE THIS VALUE INTO HTML, NOTHING HERE PROTECTS YOU --
+            # and nothing here ever did. Escape at the rendering sink
+            # (html.escape), as trust/plane/dashboard.py does. Escaping here
+            # instead would corrupt the Python data this branch exists to carry.
+            sanitized = value
         elif context == "shell_exec":
-            # Shell execution context: Remove all shell metacharacters
+            # Shell execution context: Remove all shell metacharacters.
+            # #2173: this strip runs FIRST and removes `<` and `>` outright, so
+            # the tag regex below can never see a tag. CodeQL alert 133 flags
+            # that regex; it is unreachable-as-a-tag-filter behind this line,
+            # and this branch is deliberately left UNCHANGED by #2173.
             sanitized = re.sub(r"[<>;&|`$()]", "", value)
             sanitized = re.sub(
                 r"<script.*?</script>", "", sanitized, flags=re.IGNORECASE | re.DOTALL
@@ -1238,7 +1269,10 @@ def sanitize_input(
                 r"<script.*?</script>", "", value, flags=re.IGNORECASE | re.DOTALL
             )
             sanitized = re.sub(r"javascript:", "", sanitized, flags=re.IGNORECASE)
-            # Remove angle brackets for basic XSS protection
+            # #2173: the angle-bracket strip -- the backstop python_exec lacked
+            # -- is what actually makes this branch resistant to tag injection;
+            # CodeQL alert 134 flags the regex above, which is defence-in-depth
+            # behind this line. Deliberately left UNCHANGED by #2173.
             sanitized = re.sub(r"[<>]", "", sanitized)
 
         if sanitized != value and config.enable_audit_logging:
