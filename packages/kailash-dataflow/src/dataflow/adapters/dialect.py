@@ -592,3 +592,39 @@ class DialectManager:
             f: source.supports_feature(f) and target.supports_feature(f)
             for f in features
         }
+
+
+def identifier_budget_for(database_type: Any) -> int:
+    """Return the identifier-length budget bound to *database_type*.
+
+    Issue #1971. Call sites that interpolate a bare identifier into SQL must
+    validate it against the budget of the engine they are about to hit. Passing
+    ``DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH`` when the engine IS knowable is
+    fail-open: it is SQLite's 128, the loosest budget, so a 64..128-char
+    identifier passes here and is then truncated server-side by PostgreSQL at
+    63 — silently aliasing two models onto one physical table.
+
+    This resolver is the one place DataFlow turns the db-type STRING it already
+    has (``DataFlow._detect_database_type()``, ``SyncDDLExecutor._db_type``)
+    into that bound budget, so no call site hand-rolls the mapping.
+
+    An UNRECOGNISED type returns
+    :data:`~kailash.db.dialect.DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH`
+    deliberately, rather than raising: the budget is a defense-in-depth length
+    check, not the caller's dispatch, and hard-failing here would turn an
+    unsupported-engine string into an exception on a path that previously
+    validated fine. Returning the sentinel keeps the genuinely-unknown case
+    warning exactly as it did before — which is the signal the warning exists
+    to carry — while the known cases fall silent.
+    """
+    # Imported locally: the sentinel is only needed on the miss path, and a
+    # module-level import would place an unbound-budget symbol in this module's
+    # namespace where a future call site could pick it up by accident.
+    from kailash.db.dialect import DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+
+    if not isinstance(database_type, str):
+        return DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+    try:
+        return DialectManager.get_dialect(database_type)._MAX_IDENTIFIER_LENGTH
+    except ValueError:
+        return DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH

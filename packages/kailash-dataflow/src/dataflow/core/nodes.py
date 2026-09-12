@@ -3684,17 +3684,34 @@ class NodeGenerator:
                     # every interpolated identifier against the strict allowlist
                     # BEFORE the dialect builds SQL (same defense as the bulk
                     # path in features/bulk.py::bulk_upsert).
-                    from kailash.db.dialect import DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
                     from kailash.db.dialect import _validate_identifier as _vid
 
-                    _vid(table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH)
+                    from ..adapters.dialect import identifier_budget_for
+
+                    # Issue #1971: ``database_type`` was resolved ~80 lines above
+                    # on BOTH branches (explicit ``database_url`` kwarg ->
+                    # ConnectionParser, otherwise
+                    # ``DataFlow._detect_database_type()``), and is consumed
+                    # immediately below by ``SQLDialectFactory.get_dialect`` to
+                    # pick the engine this SQL is built for. The engine IS known
+                    # here, so bind its budget instead of the unknown sentinel:
+                    # that sentinel is SQLite's 128, the LOOSEST, so on
+                    # PostgreSQL it accepts a 64..128-char identifier the server
+                    # then truncates at 63, silently aliasing two models onto one
+                    # physical table. A db type the dialect registry does not
+                    # know (``ConnectionParser`` also emits ``mongodb``) still
+                    # resolves to the sentinel, so the genuinely-unknown case
+                    # keeps warning exactly as before.
+                    _id_budget = identifier_budget_for(database_type)
+
+                    _vid(table_name, max_length=_id_budget)
                     for _col in (
                         set(conflict_columns)
                         | set(where.keys())
                         | set(insert_data.keys())
                         | set(update_data.keys())
                     ):
-                        _vid(_col, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH)
+                        _vid(_col, max_length=_id_budget)
 
                     # Get SQL dialect for database-specific query generation
                     from ..sql.dialects import SQLDialectFactory

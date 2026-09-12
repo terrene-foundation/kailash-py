@@ -6,13 +6,16 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-from kailash.db.dialect import (
-    DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
-    _validate_identifier,
-)
+from kailash.db.dialect import _validate_identifier
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
+
+# Issue #1971: the one shared resolver that turns the db-type STRING DataFlow
+# already holds into that engine's identifier-length budget. Imported at module
+# scope (no cycle: ``adapters.dialect`` imports only ``kailash.db.dialect``) so
+# both call sites below resolve through it rather than hand-rolling a mapping.
+from ..adapters.dialect import identifier_budget_for
 
 # #499 finding 5 / #1519 — PG/MySQL drivers embed raw column values in DETAIL /
 # Key(...)=(…) clauses. Strip them before any log or return-value echo so
@@ -650,18 +653,23 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
                 f"{sorted(_SUPPORTED_DIALECTS)}"
             )
 
+        # Issue #1971: ``dialect`` was resolved (and allowlist-checked) just
+        # above from ``self.database_type``, so the engine IS known here. Bind
+        # its budget rather than passing the unknown sentinel (SQLite's 128,
+        # the loosest) — on PostgreSQL that sentinel accepts a 64..128-char
+        # identifier the server then truncates at 63, aliasing two models onto
+        # one physical table. The same resolver serves the express bulk engine
+        # (``features/bulk.py``) so the two paths cannot drift.
+        _id_budget = identifier_budget_for(dialect)
+
         # Identifier safety: validate BEFORE any interpolation.
-        _validate_identifier(
-            self.table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-        )
+        _validate_identifier(self.table_name, max_length=_id_budget)
         for col in columns:
-            _validate_identifier(col, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH)
+            _validate_identifier(col, max_length=_id_budget)
         for col in conflict_on:
-            _validate_identifier(col, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH)
+            _validate_identifier(col, max_length=_id_budget)
         if self.version_control and self.version_field:
-            _validate_identifier(
-                self.version_field, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-            )
+            _validate_identifier(self.version_field, max_length=_id_budget)
 
         params: List[Any] = []
         value_rows: List[str] = []
@@ -912,8 +920,16 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
         column is validated (``_validate_identifier``) before interpolation.
         """
         dialect = (self.database_type or "postgresql").lower()
+
+        # Issue #1971: bind the resolved engine's identifier budget instead of
+        # the unknown sentinel — see ``_build_upsert_query``. Unlike that
+        # method this path does NOT allowlist-check ``dialect`` (it falls
+        # through to ``?`` placeholders for anything non-PG/MySQL), so an
+        # unrecognised ``database_type`` still resolves to the sentinel here
+        # and KEEPS warning, which is the signal the warning exists to carry.
+        _id_budget = identifier_budget_for(dialect)
         for col in conflict_on:
-            _validate_identifier(col, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH)
+            _validate_identifier(col, max_length=_id_budget)
 
         clauses: List[str] = []
         params: List[Any] = []

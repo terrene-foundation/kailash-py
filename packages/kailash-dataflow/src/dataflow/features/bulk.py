@@ -1553,10 +1553,16 @@ class BulkOperations:
             # (drivers cannot bind identifiers), so every one MUST pass the
             # strict allowlist validator before interpolation. A conflict-target
             # column absent from the record set is a caller error.
-            from kailash.db.dialect import (
-                DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
-                _validate_identifier,
-            )
+            from kailash.db.dialect import _validate_identifier
+
+            from ..adapters.dialect import identifier_budget_for
+
+            # Issue #1971: ``database_type`` was resolved above, so the engine
+            # IS known here. Bind its budget rather than passing the unknown
+            # sentinel (SQLite's 128, the loosest) — on PostgreSQL that
+            # sentinel accepts a 64..128-char identifier the server then
+            # truncates at 63, aliasing two models onto one table.
+            _id_budget = identifier_budget_for(database_type)
 
             # rules/dataflow-identifier-safety.md MUST-1 (redteam CRITICAL):
             # table_name AND every column name are interpolated as bare
@@ -1567,13 +1573,9 @@ class BulkOperations:
             # otherwise reach the SET/INSERT clause as raw SQL. Validate ALL of
             # them against the strict allowlist BEFORE interpolation, mirroring
             # the workflow node (nodes/bulk_upsert.py).
-            _validate_identifier(
-                table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-            )
+            _validate_identifier(table_name, max_length=_id_budget)
             for col in columns:
-                _validate_identifier(
-                    col, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-                )
+                _validate_identifier(col, max_length=_id_budget)
 
             for col in conflict_columns:
                 if col not in columns:
