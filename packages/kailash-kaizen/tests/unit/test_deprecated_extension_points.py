@@ -15,7 +15,7 @@ from kaizen.strategies.single_shot import SingleShotStrategy
 
 EXPECTED_MESSAGE = (
     "Deprecated since v2.5.0: Use composition wrappers "
-    "(MonitoredAgent, GovernedAgent, StreamingAgent) instead."
+    "(MonitoredAgent, L3GovernedAgent, StreamingAgent) instead."
 )
 
 
