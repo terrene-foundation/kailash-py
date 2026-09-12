@@ -23,10 +23,34 @@ the issue #2075 slot release disabled: they were vacuous.
 
 Ten CONCURRENT loops is the shape the process-wide cap actually exists to
 bound (one pool per worker loop, the JourneyMate / #2211 saturation class),
-and it puts the registry under genuine pressure. Measured on this tree with
-the #2075 ``_unregister_pool`` call in ``_disposal_barrier`` neutralised:
-``pool_count()`` = **10**, i.e. the cap is breached and the assertions RED.
-With the fix in place: **0**.
+and it puts the registry under genuine pressure.
+
+Why a REAL query and a RETAINED adapter are both required
+---------------------------------------------------------
+Ten concurrent loops alone were NOT enough, and an earlier revision of this
+file that stopped there was still vacuous. Two further measurements:
+
+* In fail-fast mode the DDL circuit breaker fires at the HEAD of every model
+  access, so ``express.create`` raised before any connection was opened —
+  ``_disposal_barrier`` was entered **0** times and ``pool_count()`` was 0
+  both with and without the fix. A test for a POOL leak that never opens a
+  pool cannot fail. Each instance therefore issues one real ``express.list``
+  BEFORE the synthetic failure is recorded, which is what registers a pool.
+* ``_PROCESS_POOL_REGISTRY`` is a ``WeakValueDictionary``, so an adapter that
+  nothing references is evicted by garbage collection whether or not the
+  #2075 slot release ran. Retaining the ``DataFlow`` wrapper is not enough —
+  it drops its adapter on close. Each worker therefore retains the ADAPTER
+  objects registered under ITS OWN loop id (the leading segment of
+  ``_generate_pool_key``) and hands them back to the test, so a surviving
+  slot is attributable to the registry and never to GC timing. This is the
+  technique ``test_issue_2075_pool_registry_lifecycle.py`` uses
+  (``kept.append(node._adapter)``).
+
+Measured on this tree, at the assertion point, with the #2075
+``_unregister_pool`` call in ``_disposal_barrier`` neutralised in-process
+(mutation proven to reach the code by a per-caller call counter):
+``pool_count()`` = **10** for both tests, i.e. the cap of 5 is breached and
+both assertions RED. With the fix in place: **0**.
 """
 
 import asyncio
@@ -47,7 +71,11 @@ except ImportError:
         allow_module_level=True,
     )
 
-from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode, set_pool_defaults
+from kailash.nodes.data.async_sql import (
+    _PROCESS_POOL_REGISTRY,
+    AsyncSQLDatabaseNode,
+    set_pool_defaults,
+)
 
 pytestmark = [
     pytest.mark.regression,
@@ -85,6 +113,29 @@ def _run_each_on_its_own_event_loop(coro_factory, count=INSTANCE_COUNT):
             for i in range(count)
         ]
         return [f.result() for f in futures]
+
+
+def _retain_pool_adapters_for_this_loop():
+    """Return STRONG references to every pool adapter registered on this loop.
+
+    ``_PROCESS_POOL_REGISTRY`` is a ``WeakValueDictionary``: an entry whose
+    adapter has no other referent disappears on garbage collection, which is
+    indistinguishable at ``pool_count()`` from the #2075 slot release actually
+    running. Holding the adapters across the assertion removes that second
+    explanation — a slot still occupied at the end is occupied because the
+    registry never freed it.
+
+    ``_generate_pool_key`` leads with ``id(get_running_loop())``, so filtering
+    on this loop's id claims only the adapters this worker caused to be
+    created, never a sibling worker's (the registry is process-wide and ten
+    workers register into it concurrently).
+    """
+    prefix = f"{id(asyncio.get_running_loop())}|"
+    return [
+        adapter
+        for key, adapter in list(_PROCESS_POOL_REGISTRY.items())
+        if key.startswith(prefix)
+    ]
 
 
 @pytest.fixture(autouse=True)
@@ -159,6 +210,16 @@ def test_failed_ddl_does_not_leak_pools_under_saturation(pg_dsn, id_base):
             id: int
             parent_id: int  # synthetic DDL failure recorded below
 
+        # Open a REAL pool on this loop BEFORE the circuit breaker closes the
+        # model off. In fail-fast mode `_check_failed_ddl` runs at the head of
+        # every model access, so once the synthetic failure below is recorded
+        # `express.create` raises without ever connecting — measured on this
+        # tree, `_disposal_barrier` was entered 0 times and `pool_count()` was
+        # 0 with the #2075 fix both enabled and disabled. A pool-leak test that
+        # never opens a pool is vacuous by construction.
+        await db.express.list("DpiD2Child", limit=1)
+        adapters = _retain_pool_adapters_for_this_loop()
+
         # Issue #759 (DPI-A): Pre-record a synthetic DDL failure on this
         # instance so the next express.create exercises the fail-fast
         # circuit breaker deterministically. The model definition carries
@@ -172,7 +233,13 @@ def test_failed_ddl_does_not_leak_pools_under_saturation(pg_dsn, id_base):
             "CREATE TABLE dpi_d2_children (id SERIAL PRIMARY KEY, parent_id INTEGER REFERENCES dpi_d2_parent(id))",
         )
 
-        observed = {"ddl_failed_error": False, "other_error": None}
+        observed = {
+            "ddl_failed_error": False,
+            "other_error": None,
+            # Returned so the strong references outlive `asyncio.run` and are
+            # still held when the bound below is asserted.
+            "adapters": adapters,
+        }
         # Trigger express.create — MUST raise DDLFailedError per DPI-A.
         try:
             await db.express.create("DpiD2Child", {"id": id_base + i, "parent_id": 1})
@@ -187,6 +254,15 @@ def test_failed_ddl_does_not_leak_pools_under_saturation(pg_dsn, id_base):
         return observed
 
     results = _run_each_on_its_own_event_loop(_attempt_access)
+
+    # The bound below reads `pool_count()`, which is only under pressure if
+    # pools were genuinely created. Without this guard a connection that never
+    # happened reads identically to a slot that was correctly released.
+    assert all(r["adapters"] for r in results), (
+        "No pool adapter was registered on "
+        f"{len([r for r in results if not r['adapters']])} of {INSTANCE_COUNT} "
+        "loops — the pool-count bound below would be unfalsifiable"
+    )
 
     # Pool count MUST remain bounded even under failure saturation.
     assert AsyncSQLDatabaseNode.pool_count() <= POOL_CAP, (
@@ -254,6 +330,12 @@ def test_failed_ddl_with_warn_mode_still_bounded(pg_dsn, id_base):
             id: int
             parent_id: int
 
+        # Open a REAL pool on this loop first (see the fail-fast sibling and
+        # the module docstring): the registry cannot be under pressure from an
+        # instance that never connected.
+        await db.express.list("DpiD2WarnChild", limit=1)
+        adapters = _retain_pool_adapters_for_this_loop()
+
         # Force the DDL-FAILURE state this test is named for. Same technique
         # as the fail-fast sibling above; what differs is the CONTRACT being
         # asserted — warn mode must record the failure and continue, where
@@ -270,6 +352,9 @@ def test_failed_ddl_with_warn_mode_still_bounded(pg_dsn, id_base):
             "warn_escape_hatch_taken": False,
             "ddl_failed_error": False,
             "other_error": None,
+            # Strong refs, so a surviving registry slot cannot be blamed on
+            # (or hidden by) WeakValueDictionary GC timing.
+            "adapters": adapters,
         }
 
         # The warn contract: the circuit breaker at the head of every model
@@ -323,6 +408,12 @@ def test_failed_ddl_with_warn_mode_still_bounded(pg_dsn, id_base):
         f"duplicate-key failures resurfaced ({len(duplicate_key)}): "
         f"{duplicate_key[:2]}. This test must exercise the warn/DDL-failure "
         "path, not PK collision with rows left by a previous run"
+    )
+
+    assert all(r["adapters"] for r in results), (
+        "No pool adapter was registered on "
+        f"{len([r for r in results if not r['adapters']])} of {INSTANCE_COUNT} "
+        "warn-mode loops — the pool-count bound below would be unfalsifiable"
     )
 
     # Pool count MUST remain bounded regardless of auto_migrate mode.
