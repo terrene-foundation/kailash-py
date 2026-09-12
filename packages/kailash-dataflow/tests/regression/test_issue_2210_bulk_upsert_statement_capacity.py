@@ -49,6 +49,7 @@ engine whose limits are under test, so substituting anything would remove the
 subject of the test.
 """
 
+import sqlite3
 import uuid
 from pathlib import Path
 
@@ -57,6 +58,7 @@ import pytest
 import dataflow
 from dataflow import DataFlow
 from dataflow.adapters.dialect import DialectManager, statement_capacity_for
+from dataflow.features.bulk import BulkOperations
 
 # Import-path pin (relative to THIS checkout, never a hard-coded worktree path):
 # tests/regression/<file> -> tests/ -> kailash-dataflow/ -> src/dataflow.
@@ -277,6 +279,86 @@ async def test_effective_batch_size_is_reported_when_clamped(tmp_path):
         f"but the statements actually ran at {expected} rows"
     )
     assert engine_result["batch_size"] < 1000
+
+
+# ---------------------------------------------------------------------------
+# Behaviour 2b — a partial write must not be reported as zero rows written
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_failure_partway_reports_the_rows_it_actually_committed(tmp_path):
+    """A mid-batch failure leaves earlier batches PERSISTED — say so.
+
+    bulk_upsert emits one statement per batch and, outside an enclosing
+    TransactionScopeNode, each autocommits. This is PRE-EXISTING behaviour, not
+    introduced by the #2210 capacity fix: measured against the pre-fix code at
+    ``batch_size=500`` (under the old expression ceiling), a middle-chunk
+    failure of 2500 rows left 500 rows in the table just the same. What #2210
+    changed is that the >=1000 path now RUNS, so the hazard is reachable at the
+    default batch size.
+
+    The defect this pins is the REPORT, not the non-atomicity: the failure path
+    returned a flat ``inserted: 0, records_processed: 0`` while the table held
+    1000 rows. A caller reading that would conclude the batch was un-applied.
+    """
+    db = _fresh_db(tmp_path)
+
+    @db.model
+    class Widget:
+        id: str
+        name: str
+
+    assert await db.express.count("Widget") == 0  # materialise the schema
+
+    # Fail the SECOND of three statements, so exactly one batch is committed
+    # before the error. The counter proves the injection reached the code path
+    # — without it, a green here could equally mean the patch never fired.
+    calls = {"n": 0}
+    original = BulkOperations._build_sqlite_upsert
+
+    def failing_on_second_batch(self, table_name, columns, batch, *args, **kwargs):
+        calls["n"] += 1
+        query, params = original(self, table_name, columns, batch, *args, **kwargs)
+        if calls["n"] == 2:
+            query = query.replace(f'"{table_name}"', '"no_such_table_mid_batch"', 1)
+        return query, params
+
+    BulkOperations._build_sqlite_upsert = failing_on_second_batch
+    try:
+        records = [{"id": f"w{i}", "name": f"n{i}"} for i in range(2500)]
+        result = await db.bulk.bulk_upsert(
+            model_name="Widget",
+            data=records,
+            conflict_on=["id"],
+            conflict_resolution="update",
+            batch_size=1000,
+        )
+    finally:
+        BulkOperations._build_sqlite_upsert = original
+
+    assert calls["n"] == 2, (
+        f"injection fired {calls['n']} times — the batch loop did not reach the "
+        f"second statement, so this test proves nothing about partial writes"
+    )
+    assert result["success"] is False
+
+    # Ground truth over an INDEPENDENT connection: DataFlow's own count would be
+    # served from a cache this failed call never invalidated.
+    db_file = Path(
+        db.config.database.get_connection_url("development").split("///")[-1]
+    )
+    with sqlite3.connect(db_file) as raw:
+        persisted = raw.execute("SELECT COUNT(*) FROM widgets").fetchone()[0]
+    assert persisted == 1000, f"expected one committed batch, table holds {persisted}"
+
+    assert result["records_processed"] == persisted, (
+        f"result claims {result['records_processed']} rows processed but the "
+        f"table holds {persisted} — a caller would treat the batch as un-applied"
+    )
+    assert result["inserted"] == persisted
+    assert result["partial_write"] is True
 
 
 # ---------------------------------------------------------------------------

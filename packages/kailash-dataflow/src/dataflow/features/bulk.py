@@ -1525,6 +1525,18 @@ class BulkOperations:
         import time
 
         _upsert_start = time.perf_counter()
+        # Issue #2210: hoisted ABOVE the try so the failure path can report what
+        # was actually COMMITTED. bulk_upsert writes one statement per batch and,
+        # outside an enclosing TransactionScopeNode, each autocommits — so a
+        # failure partway through leaves earlier batches persisted. Measured on
+        # SQLite: a middle-chunk failure of a 2500-row upsert leaves 1000 rows in
+        # the table. Reporting a flat zero there tells the caller nothing was
+        # written when a third of the batch was, which is the WORSE failure —
+        # a retry then double-counts and a rollback never happens.
+        total_inserted = 0
+        total_updated = 0
+        total_skipped = 0
+        batches_processed = 0
         try:
             connection_string = self.dataflow.config.database.get_connection_url(
                 self.dataflow.config.environment
@@ -1585,10 +1597,6 @@ class BulkOperations:
                     )
 
             # Build upsert query based on database type
-            total_inserted = 0
-            total_updated = 0
-            total_skipped = 0
-            batches_processed = 0
 
             # Issue #1546: resolve the MySQL row-alias upsert form ONCE before the
             # batch loop (one cached SELECT VERSION() round-trip, shared with the
@@ -1837,14 +1845,39 @@ class BulkOperations:
             # (rules/observability.md Rule 8; rules/security.md § No secrets in
             # logs).
             safe_error = _sanitize_db_error(str(e))
+            # Issue #2210: report the rows this call actually COMMITTED before it
+            # failed. ``partial_write`` is the caller's signal that the table is
+            # in a half-written state and that a naive retry of the FULL input is
+            # only safe because the operation is an upsert (idempotent on the
+            # conflict target) — it is NOT safe to treat the batch as un-applied.
+            committed = total_inserted + total_updated + total_skipped
             error_result = {
                 "success": False,
                 "error": f"Bulk upsert operation failed: {safe_error}",
-                "records_processed": 0,
-                "inserted": 0,
-                "updated": 0,
-                "skipped": 0,
+                "records_processed": committed,
+                "inserted": total_inserted,
+                "updated": total_updated,
+                "skipped": total_skipped,
+                "batches": batches_processed,
+                "partial_write": committed > 0,
             }
+            if committed > 0:
+                logger.warning(
+                    "bulk.bulk_upsert_partial_write",
+                    extra={
+                        "model": model_name,
+                        "committed_rows": committed,
+                        "submitted_rows": len(data),
+                        "batches_committed": batches_processed,
+                        "reason": (
+                            "bulk_upsert failed partway through a multi-statement "
+                            "batch; earlier batches are already persisted because "
+                            "each autocommits outside an enclosing transaction "
+                            "scope. Wrap the call in a TransactionScopeNode for "
+                            "all-or-nothing semantics."
+                        ),
+                    },
+                )
             logger.error(
                 # exc_info dropped: see bulk_create — the traceback re-leaks the
                 # raw driver message the sanitizer scrubbed (redteam LOW).
