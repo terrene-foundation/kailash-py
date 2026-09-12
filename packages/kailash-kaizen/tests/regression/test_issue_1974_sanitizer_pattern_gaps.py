@@ -41,6 +41,7 @@ import pytest
 from kaizen.nodes.ai.error_sanitizer import (
     _CREDENTIAL_PATTERNS,
     sanitize_provider_error,
+    scrub_credentials,
 )
 
 pytestmark = pytest.mark.regression
@@ -563,7 +564,19 @@ def test_scheme_broadening_is_linear_on_input_with_no_scheme() -> None:
 
     # Guard the guard: a payload that gets redacted first makes the timing
     # assertion below pass vacuously on a 10-char string.
-    assert sanitize_provider_error(RuntimeError(small), "t").endswith(small), (
+    #
+    # Asserted against ``scrub_credentials`` rather than against
+    # ``sanitize_provider_error`` (#2111). The guard's subject is the PATTERN
+    # LIST -- "is this payload consumed by a credential rule before the URL
+    # rules run" -- and that is exactly what ``scrub_credentials`` answers.
+    # ``sanitize_provider_error`` now bounds its OUTPUT at 1024 chars, so an
+    # ``endswith`` against a 7.8 KB payload asks it a question it no longer
+    # answers and would fail for a reason unrelated to vacuity. The timing
+    # assertion below is unaffected: the scrub still walks the FULL input --
+    # it runs BEFORE the bound is applied, which is also what stops a
+    # truncation from cutting a secret in half -- so the work being measured
+    # is the same work it always was.
+    assert scrub_credentials(small).endswith(small), (
         "the linearity payload is being consumed by a credential pattern "
         "before the URL rules run; this test would pass vacuously"
     )
