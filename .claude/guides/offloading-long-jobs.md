@@ -76,6 +76,27 @@ offload itself failed). The engine band:
 as a pass or a failure. That distinction is the whole point of the band: an engine failure
 must never be readable as a clean result.
 
+**A PIPE WILL HAND YOU A FALSE GREEN, and the engine cannot save you from it.** The engine
+faithfully reports YOUR COMMAND's status — and a shell pipeline's status is the LAST stage's.
+Measured here on the first real run:
+
+    -- <bash -lc '... pytest ... 2>&1 | tail -8'>
+    /Users/.../.venv/bin/python: No module named pytest
+    [trestle-remote-run] exit=0 command wall=111.3s
+
+pytest was not installed, nothing ran, and the footer said `exit=0 command` — because `tail`
+exited 0. The engine was not wrong; it reported the status it was given. Always `set -o
+pipefail`, or capture the real status explicitly:
+
+    set -o pipefail
+    pytest ... > /tmp/out.txt 2>&1; rc=$?; tail -4 /tmp/out.txt; echo "RC=$rc"; exit $rc
+
+This is the same failure this repo keeps finding in other clothes: an absence rendered as a
+success. The remote ran nothing and reported cleanly.
+
+Also note `objects_sent=0` on a repeat run — the mirror persists, so a second run is cheap
+even when the first is slow. A slow first run is not evidence the offload is a bad trade.
+
 Hosts are shared. A run can sit waiting on another repo's mirror lock (116 after
 `--lock-wait-s`), and a host busy with someone else's job is slower than its idle benchmark —
 which is a reason to re-measure rather than to trust a stale number.
