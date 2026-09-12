@@ -666,12 +666,38 @@ def redact_pool_key(pool_key: Optional[str]) -> str:
 
 
 def fingerprint_secret(value: str, *, length: int = 8) -> str:
-    """Generate a short non-reversible fingerprint of a secret for log correlation.
+    """Generate a short UNKEYED correlation fingerprint of a secret.
 
     Returns a hex-encoded BLAKE2b digest truncated to ``length`` characters.
     This is a **fingerprint** (an opaque identifier used to correlate log
     lines that reference the same secret) NOT a password hash. It MUST NOT
     be used to store credentials for later verification.
+
+    .. warning::
+
+       This tag is **not** a confidentiality control, and is **reversible
+       for any input drawn from a space an attacker can enumerate** — a
+       URL, a hostname, a filesystem path, a field name, a preset name, an
+       IP address. There is no keying material (see the § below), so anyone
+       holding the tag can hash candidate plaintexts until one matches. On
+       commodity hardware that is roughly 1.3e5 candidates/second/core
+       single-threaded, which exhausts a realistic candidate list in
+       microseconds and the whole IPv4 space in single-core-hours.
+
+       The property this DOES provide is a *confirmation oracle* in
+       reverse: the tag reveals nothing to someone with no candidates, and
+       confirms a guess for someone who has them. What it is FOR is
+       correlation — joining a log line to an exception, or to another
+       service's log line, without reproducing the plaintext verbatim in
+       every record.
+
+       When the input is enumerable AND its confidentiality is genuinely
+       load-bearing, this helper is the wrong tool: use a keyed derivation.
+       :func:`process_local_config_key` below keys per process (defeats
+       enumeration, breaks cross-process correlation), and
+       ``nexus.auth.rate_limit.fingerprint.IdentifierFingerprinter`` keys
+       from deployment-scoped environment material (defeats enumeration and
+       KEEPS cross-node correlation) — that is the shape to copy.
 
     For password verification, use ``argon2-cffi`` or ``bcrypt`` (with
     per-password salts + adaptive work factors). Those libraries exist
@@ -687,11 +713,25 @@ def fingerprint_secret(value: str, *, length: int = 8) -> str:
       fingerprinting with password hashing — is correct, but the fix is
       to change the HELPER so the intent is explicit, not to misuse
       argon2 for log correlation.
-    * BLAKE2b is a fast keyed-hash that CodeQL does not flag for this
-      rule. The 4-byte (8-hex-char) truncation gives 32 bits of entropy:
-      enough to distinguish secrets in a log stream, not enough for
-      an attacker to reverse via rainbow table against typical secret
-      spaces.
+    * BLAKE2b *supports* keying, but this function does NOT use it — no
+      ``key=`` is passed below, so the digest here is unkeyed and every
+      reversibility caveat above applies in full. An earlier revision of
+      this docstring called BLAKE2b "a fast keyed-hash that CodeQL does
+      not flag for this rule" and both halves of that were false: the
+      call is unkeyed, and CodeQL *did* flag this exact line under this
+      exact rule (alert 11474 at ``:731``, re-minted as 11556 at ``:732``
+      after a one-line shift, dismissed on the store-then-verify premise
+      failing — NOT on the hash being strong). Do not restore either
+      half; the choice of BLAKE2b over SHA-256 is about matching the
+      rule's *intent*, and it never bought a cryptographic property.
+    * The 4-byte (8-hex-char) truncation gives 32 bits of entropy:
+      enough to distinguish secrets in a log stream. It is NOT enough to
+      resist reversal by enumeration, and the width is not what makes a
+      high-entropy secret safe here — the *pre-image's* entropy is. A
+      random 256-bit API key is unrecoverable from its tag because the
+      attacker cannot enumerate the key space, not because 32 bits is a
+      barrier. Feed this function an enumerable value and the tag is
+      recoverable regardless of ``length``.
 
     Examples:
         >>> len(fingerprint_secret("sk-1234567890abcdef"))
@@ -735,12 +775,22 @@ def fingerprint_secret(value: str, *, length: int = 8) -> str:
 
 
 def fingerprint_value(value: str, *, length: int = 8) -> str:
-    """Generate a short non-reversible correlation tag for ANY value.
+    """Generate a short UNKEYED correlation tag for ANY value.
 
     This is the canonical implementation; :func:`fingerprint_secret` is the
     same function under a name that says the input is a credential. Both
     return byte-identical output for the same input, so a tag produced by
     one joins a tag produced by the other in the same forensic query.
+
+    .. warning::
+
+       Unkeyed, and therefore **reversible for enumerable inputs** — which
+       is most of what this name is used for (URLs, hostnames, command
+       lines, field names, preset names). See the warning on
+       :func:`fingerprint_secret`, which applies here identically and is
+       not repeated. This is a correlation tag, not a confidentiality
+       control; the callers that log it have each accepted that the tag
+       confirms a guess for a reader who already holds candidates.
 
     Use THIS name when the input is not itself a secret — a URL, a hostname,
     a preset name, a field name, a rate-limit identifier — and especially
