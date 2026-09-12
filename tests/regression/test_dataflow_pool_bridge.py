@@ -9,9 +9,29 @@ work together correctly:
 
 These tests require a live PostgreSQL instance and are skipped automatically
 when Docker services are not available.
+
+Why every instance gets its OWN event loop
+------------------------------------------
+Both tests used to drive ten ``DataFlow`` instances through a single
+``asyncio.gather`` on ONE event loop against ONE DSN. ``_generate_pool_key``
+keys the process-wide registry on ``id(get_running_loop())`` plus the
+connection string, so ten instances sharing both collapse to a handful of
+registry entries — measured on this tree, ``pool_count()`` reached **2**
+against a configured cap of **5**. The ``<= 5`` assertions below could not
+fail no matter what the registry did, so BOTH tests passed identically with
+the issue #2075 slot release disabled: they were vacuous.
+
+Ten CONCURRENT loops is the shape the process-wide cap actually exists to
+bound (one pool per worker loop, the JourneyMate / #2211 saturation class),
+and it puts the registry under genuine pressure. Measured on this tree with
+the #2075 ``_unregister_pool`` call in ``_disposal_barrier`` neutralised:
+``pool_count()`` = **10**, i.e. the cap is breached and the assertions RED.
+With the fix in place: **0**.
 """
 
 import asyncio
+import concurrent.futures
+import random
 
 import pytest
 
@@ -34,6 +54,37 @@ pytestmark = [
     pytest.mark.integration,
     pytest.mark.requires_docker,
 ]
+
+# Number of concurrent DataFlow instances driven at the registry, and the
+# cap they are driven against. INSTANCE_COUNT must exceed POOL_CAP or the
+# bound is untestable by construction (the vacuity these tests carried).
+INSTANCE_COUNT = 10
+POOL_CAP = 5
+assert INSTANCE_COUNT > POOL_CAP, "saturation requires more instances than the cap"
+
+
+def _run_each_on_its_own_event_loop(coro_factory, count=INSTANCE_COUNT):
+    """Run ``count`` coroutines CONCURRENTLY, each on a private event loop.
+
+    ``asyncio.run`` per worker thread gives every instance a distinct
+    ``id(get_running_loop())``, which is the leading segment of
+    ``_generate_pool_key`` — so the registry sees ``count`` distinct pool
+    keys rather than one shared key. ``max_workers=count`` is explicit (not
+    ``asyncio.to_thread``'s CPU-derived default) so all ``count`` loops are
+    genuinely alive at the same moment on any machine; sequential loops get
+    their ``id()`` recycled and collapse back to a single key — measured
+    here as ``pool_count()`` = 1 even with the fix disabled, which would
+    reintroduce the vacuity.
+
+    Returns the list of per-instance observation dicts, ordered by index.
+    Exceptions from a worker propagate out of ``future.result()``.
+    """
+    with concurrent.futures.ThreadPoolExecutor(max_workers=count) as executor:
+        futures = [
+            executor.submit(lambda i=i: asyncio.run(coro_factory(i)))
+            for i in range(count)
+        ]
+        return [f.result() for f in futures]
 
 
 @pytest.fixture(autouse=True)
@@ -63,31 +114,43 @@ def pg_dsn():
     return get_postgres_connection_string()
 
 
-@pytest.mark.asyncio
-async def test_failed_ddl_does_not_leak_pools_under_saturation(pg_dsn):
+@pytest.fixture
+def id_base():
+    """A per-run id offset so repeat runs do not collide on the PK.
+
+    The tables these tests write to persist between runs. Fixed ids made
+    every instance after the first run fail with ``duplicate key value
+    violates unique constraint`` — a failure class that has nothing to do
+    with DDL, and which masked what the tests claim to measure.
+    """
+    return random.randrange(10**9, 2 * 10**9)
+
+
+def test_failed_ddl_does_not_leak_pools_under_saturation(pg_dsn, id_base):
     """Pool count stays bounded when 10 DataFlow instances hit a DDL failure.
 
-    A FK-misordered model (Child references Parent but Parent is not yet
-    migrated) causes DDL failure on every auto_migrate attempt.  The test
+    Each instance pre-records a DDL failure and then calls ``express.create``
+    under the default ``auto_migrate=True`` (fail-fast) mode. The test
     verifies:
     1. Every access raises DDLFailedError (fail-fast, default auto_migrate=True).
     2. Pool count never exceeds the configured cap of 5.
 
     This is the cross-layer assertion for DPI-A (DDLFailedError) +
     DPI-B (_PROCESS_POOL_REGISTRY cap via pool_count()).
+
+    The ten instances run on ten CONCURRENT event loops (see the module
+    docstring): on one shared loop the registry only ever reached 2 entries
+    against the cap of 5, so assertion 2 was unfalsifiable.
     """
     from dataflow import DataFlow
     from dataflow.core.exceptions import DDLFailedError
 
     # Keep pool cap tight so leaks are detectable.
-    set_pool_defaults(max_pool_count_per_process=5, idle_timeout=30)
+    set_pool_defaults(max_pool_count_per_process=POOL_CAP, idle_timeout=30)
 
-    # Model pair with FK misordering: Child declared before Parent.
-    # auto_migrate will fail on the FK constraint in the Child DDL.
     instances = []
-    errors_seen = []
 
-    async def _attempt_access(i: int) -> None:
+    async def _attempt_access(i: int) -> dict:
         db = DataFlow(pg_dsn)
         instances.append(db)
 
@@ -98,65 +161,53 @@ async def test_failed_ddl_does_not_leak_pools_under_saturation(pg_dsn):
 
         # Issue #759 (DPI-A): Pre-record a synthetic DDL failure on this
         # instance so the next express.create exercises the fail-fast
-        # circuit breaker deterministically. Earlier versions of this
-        # test relied on the FK comment above triggering an actual
-        # DDL failure, but the model definition lacks a real FK
-        # declaration — under saturation the failure mode that fired
-        # was pool exhaustion (no DDL ever ran). Pre-recording a DDL
-        # failure makes the propagation assertion deterministic.
+        # circuit breaker deterministically. The model definition carries
+        # no real FK declaration — DataFlow's DDL generator emits no
+        # REFERENCES clause — so an "FK-misordered model" never actually
+        # failed any DDL here. Pre-recording is the sibling technique used
+        # by test_issue_759_express_propagates_ddl_failure.py.
         db._record_failed_ddl(
             "DpiD2Child",
             RuntimeError("synthetic FK-misordered DDL failure"),
             "CREATE TABLE dpi_d2_children (id SERIAL PRIMARY KEY, parent_id INTEGER REFERENCES dpi_d2_parent(id))",
         )
 
+        observed = {"ddl_failed_error": False, "other_error": None}
         # Trigger express.create — MUST raise DDLFailedError per DPI-A.
         try:
-            await db.express.create("DpiD2Child", {"id": i, "parent_id": 1})
-        except DDLFailedError as exc:
-            errors_seen.append(exc)
-        except Exception:
-            # Other DB errors (e.g. table already exists from prior run) are
-            # also acceptable here; what matters is pool count stays bounded.
-            pass
+            await db.express.create("DpiD2Child", {"id": id_base + i, "parent_id": 1})
+        except DDLFailedError:
+            observed["ddl_failed_error"] = True
+        except Exception as exc:  # noqa: BLE001 - classified, not swallowed
+            observed["other_error"] = f"{type(exc).__name__}: {exc}"
         finally:
             # close() is sync (returns None); close_async() is the awaitable
             # cleanup (rules/patterns.md § Async Resource Cleanup).
             await db.close_async()
+        return observed
 
-    # 10 concurrent accesses — all should fail with DDLFailedError, not hang.
-    await asyncio.gather(*[_attempt_access(i) for i in range(10)])
+    results = _run_each_on_its_own_event_loop(_attempt_access)
 
     # Pool count MUST remain bounded even under failure saturation.
-    assert AsyncSQLDatabaseNode.pool_count() <= 5, (
-        f"Pool leaked: pool_count()={AsyncSQLDatabaseNode.pool_count()} > 5 "
-        "after 10 DDL-failing DataFlow instances"
+    assert AsyncSQLDatabaseNode.pool_count() <= POOL_CAP, (
+        f"Pool leaked: pool_count()={AsyncSQLDatabaseNode.pool_count()} > {POOL_CAP} "
+        f"after {INSTANCE_COUNT} DDL-failing DataFlow instances"
     )
 
-    # At least some accesses should have raised DDLFailedError (DPI-A
-    # assertion). Each iteration pre-records a synthetic DDL failure
-    # on its DataFlow instance, then calls express.create — Express's
-    # _raise_for_failed_result MUST convert the node's success-False
-    # dict into the typed DDLFailedError (issue #759 fix).
-    #
-    # Under heavy saturation a subset of instances may fail at pool-
-    # construction time before they reach the synthetic _record_failed_ddl
-    # call (a separate failure class — pool exhaustion, NOT DDL).
-    # Those instances exit through the bare ``except Exception: pass``
-    # branch above. The DPI-A propagation contract is proved as long as
-    # AT LEAST ONE instance successfully reached express.create AND
-    # raised DDLFailedError instead of returning the legacy failure dict.
-    # For the deterministic per-method propagation matrix, see
-    # tests/regression/test_issue_759_express_propagates_ddl_failure.py.
-    assert len(errors_seen) > 0, (
-        f"Expected DDLFailedError on at least one instance but got "
-        f"{len(errors_seen)}; check DPI-A propagation in "
+    # DPI-A propagation: every instance pre-recorded a DDL failure, so in
+    # fail-fast mode every express.create MUST surface the typed
+    # DDLFailedError rather than the legacy success-False dict.
+    ddl_errors = [r for r in results if r["ddl_failed_error"]]
+    assert len(ddl_errors) == INSTANCE_COUNT, (
+        f"Expected DDLFailedError on all {INSTANCE_COUNT} instances, got "
+        f"{len(ddl_errors)}; other errors: "
+        f"{[r['other_error'] for r in results if r['other_error']]}. "
+        "Check DPI-A propagation in "
         "dataflow.features.express.DataFlowExpress._raise_for_failed_result"
     )
 
 
-@pytest.mark.asyncio
-async def test_failed_ddl_with_warn_mode_still_bounded(pg_dsn):
+def test_failed_ddl_with_warn_mode_still_bounded(pg_dsn, id_base):
     """Pool count stays bounded in legacy auto_migrate='warn' mode too.
 
     Warn mode (auto_migrate='warn') logs and continues rather than raising.
@@ -166,28 +217,34 @@ async def test_failed_ddl_with_warn_mode_still_bounded(pg_dsn):
     Issue #2075: the ``xfail`` this carried is REMOVED. The leak was that
     ``_PROCESS_POOL_REGISTRY`` is a ``WeakValueDictionary``, so a slot was
     freed only when the adapter OBJECT was garbage-collected — never when the
-    pool closed. This test retains all ten instances in ``instances``, so ten
-    already-closed adapters stayed reachable and kept counting against the
-    cap. Slot release is now driven explicitly at ``_disposal_barrier``, which
-    every adapter ``disconnect()`` enters.
+    pool closed. Slot release is now driven explicitly at
+    ``_disposal_barrier``, which every adapter ``disconnect()`` enters.
 
-    Honest limits of the verification behind that removal: the reported
-    ``pool_count()==9`` did NOT reproduce on the machine that fixed it
-    (measured 1, matching the Linux figures in the #2079 marker), so this is
-    not a before/after of that number. What was measured before and after, on
-    a real Postgres with all ten instances retained: 1 -> 0 in
-    ``auto_migrate`` warn, True and False alike. The marker was also a DEAD
-    gate — ``strict=False`` reports neither XPASS nor XFAIL — so leaving it
-    would have kept the bound unmeasured in every environment.
+    Two defects that made this test vacuous are fixed here:
+
+    * It never exercised a DDL failure at all. The model declares no real FK
+      (DataFlow emits no REFERENCES clause for a bare ``parent_id: int``),
+      and the table ``dpi_d2_warn_children`` already exists in the test
+      database — so DDL SUCCEEDED and all ten instances instead failed with
+      ``duplicate key value violates unique constraint``. The test named for
+      a DDL-failure pool leak was measuring duplicate-key handling. It now
+      pre-records a real ``FailedDDLRecord`` (the sibling technique) and
+      asserts the warn escape hatch in ``_check_failed_ddl`` is the branch
+      actually taken, with per-run unique ids removing the duplicate-key
+      confound entirely.
+    * Ten instances shared one event loop and one DSN, so the registry
+      reached 2 entries against a cap of 5 and the bound below was
+      unfalsifiable. They now run on ten concurrent loops.
     """
     from dataflow import DataFlow
+    from dataflow.core.exceptions import DDLFailedError
 
     # Same tight pool cap.
-    set_pool_defaults(max_pool_count_per_process=5, idle_timeout=30)
+    set_pool_defaults(max_pool_count_per_process=POOL_CAP, idle_timeout=30)
 
     instances = []
 
-    async def _attempt_access_warn(i: int) -> None:
+    async def _attempt_access_warn(i: int) -> dict:
         # auto_migrate="warn" is the legacy string sentinel for log-and-continue.
         db = DataFlow(pg_dsn, auto_migrate="warn")
         instances.append(db)
@@ -195,25 +252,85 @@ async def test_failed_ddl_with_warn_mode_still_bounded(pg_dsn):
         @db.model
         class DpiD2WarnChild:
             id: int
-            parent_id: int  # same FK misordering
+            parent_id: int
+
+        # Force the DDL-FAILURE state this test is named for. Same technique
+        # as the fail-fast sibling above; what differs is the CONTRACT being
+        # asserted — warn mode must record the failure and continue, where
+        # fail-fast raises.
+        db._record_failed_ddl(
+            "DpiD2WarnChild",
+            RuntimeError("synthetic FK-misordered DDL failure"),
+            "CREATE TABLE dpi_d2_warn_children (id SERIAL PRIMARY KEY, "
+            "parent_id INTEGER REFERENCES dpi_d2_warn_parent(id))",
+        )
+
+        observed = {
+            "ddl_recorded": "DpiD2WarnChild" in db._failed_table_creations,
+            "warn_escape_hatch_taken": False,
+            "ddl_failed_error": False,
+            "other_error": None,
+        }
+
+        # The warn contract: the circuit breaker at the head of every model
+        # access sees the recorded failure and returns WITHOUT raising. In
+        # fail-fast mode the identical call raises DDLFailedError; that
+        # divergence is what proves this is the warn branch and not an
+        # incidental success.
+        try:
+            db._check_failed_ddl("DpiD2WarnChild")
+            observed["warn_escape_hatch_taken"] = True
+        except DDLFailedError:
+            observed["warn_escape_hatch_taken"] = False
 
         try:
-            await db.express.create("DpiD2WarnChild", {"id": i, "parent_id": 1})
-        except Exception:
-            # Warn mode may still raise other errors (missing table, etc.)
-            pass
+            await db.express.create(
+                "DpiD2WarnChild", {"id": id_base + i, "parent_id": 1}
+            )
+        except DDLFailedError:
+            observed["ddl_failed_error"] = True
+        except Exception as exc:  # noqa: BLE001 - classified, not swallowed
+            observed["other_error"] = f"{type(exc).__name__}: {exc}"
         finally:
             # close() is sync (returns None); close_async() is the awaitable
             # cleanup (rules/patterns.md § Async Resource Cleanup).
             await db.close_async()
+        return observed
 
-    await asyncio.gather(*[_attempt_access_warn(i) for i in range(10)])
+    results = _run_each_on_its_own_event_loop(_attempt_access_warn)
+
+    # The path under test really is the DDL-failure path, in warn mode.
+    assert all(r["ddl_recorded"] for r in results), (
+        "Expected a recorded FailedDDLRecord on every warn-mode instance; "
+        "without it this test measures nothing about DDL failure"
+    )
+    assert all(r["warn_escape_hatch_taken"] for r in results), (
+        "auto_migrate='warn' MUST log-and-continue past a recorded DDL "
+        "failure; _check_failed_ddl raised instead"
+    )
+    assert not any(r["ddl_failed_error"] for r in results), (
+        "warn mode MUST NOT raise DDLFailedError — that is the fail-fast "
+        "contract, asserted by the sibling test"
+    )
+    # The duplicate-key failure class is what this test used to measure by
+    # accident. Per-run unique ids remove it; assert it stays removed.
+    duplicate_key = [
+        r["other_error"]
+        for r in results
+        if r["other_error"] and "duplicate key" in r["other_error"]
+    ]
+    assert not duplicate_key, (
+        f"duplicate-key failures resurfaced ({len(duplicate_key)}): "
+        f"{duplicate_key[:2]}. This test must exercise the warn/DDL-failure "
+        "path, not PK collision with rows left by a previous run"
+    )
 
     # Pool count MUST remain bounded regardless of auto_migrate mode.
     # The assertion is UNCHANGED from when this was xfail'd per #2075; only
     # the marker went. The bound was always correct — it was the registry's
     # object-lifetime slot accounting that was wrong.
-    assert AsyncSQLDatabaseNode.pool_count() <= 5, (
-        f"Pool leaked in warn mode: pool_count()={AsyncSQLDatabaseNode.pool_count()} > 5 "
-        "after 10 DDL-failing DataFlow instances with auto_migrate='warn'"
+    assert AsyncSQLDatabaseNode.pool_count() <= POOL_CAP, (
+        f"Pool leaked in warn mode: pool_count()={AsyncSQLDatabaseNode.pool_count()} "
+        f"> {POOL_CAP} after {INSTANCE_COUNT} DDL-failing DataFlow instances "
+        "with auto_migrate='warn'"
     )
