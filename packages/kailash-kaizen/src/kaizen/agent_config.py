@@ -167,8 +167,35 @@ class AgentConfig:
     enable_audit: bool = True
     """Enable compliance audit trails"""
 
-    audit_log_path: str = ".kaizen/audit.jsonl"
-    """Audit log file path"""
+    audit_log_path: Optional[str] = None
+    """
+    Where the compliance audit trail is written.
+
+    ``None`` -- the default -- is a SENTINEL meaning "the caller did not
+    choose". ``__post_init__`` resolves it, per instance, to the XDG state
+    location ``$XDG_STATE_HOME/kaizen/audit.jsonl`` (falling back to
+    ``~/.local/state/kaizen/audit.jsonl``) via
+    ``observability.audit_paths.default_audit_path``. Readers of this
+    attribute therefore always see a concrete absolute path, never the
+    sentinel.
+
+    #2110 -- this used to default to the RELATIVE ``.kaizen/audit.jsonl``,
+    with ``enable_audit`` defaulting ``True``, so a bare ``AgentConfig(...)``
+    wrote into whatever directory the process happened to be launched from.
+    The stray ``.kaizen/`` in the caller's working tree was the visible half;
+    the half that matters is that running the same agent from two directories
+    produced two DISJOINT trails, neither of which is the complete record an
+    auditor asked for. Completeness is the entire value of a compliance
+    artifact, so the default is ANCHORED rather than merely documented as
+    CWD-relative: a library does not get to choose its caller's working
+    directory, and a default that silently depends on it is not a default the
+    caller can reason about.
+
+    An EXPLICIT value is honoured verbatim -- relative ones included.
+    ``audit_log_path="./my.jsonl"`` writes beside the process, because a
+    caller who asks for CWD-relative semantics has chosen them. Only the
+    DEFAULT moved.
+    """
 
     # =========================================================================
     # LAYER 2: Checkpointing Configuration
@@ -409,6 +436,38 @@ class AgentConfig:
             raise ValueError(
                 f"Invalid llm_provider: '{self.llm_provider}'. "
                 f"Valid providers: {sorted(self.VALID_PROVIDERS)}"
+            )
+
+        # #2110 -- resolve the audit-path sentinel.
+        #
+        # Deliberately NOT an import-time default (`= str(default_audit_path())`
+        # in the class body): that form evaluates ONCE, when this module is
+        # first imported, freezing whatever `$XDG_STATE_HOME`/`$HOME` happened
+        # to hold at import. Anything that sets those afterwards -- a test
+        # fixture, a service manager, a setuid drop -- would be silently
+        # ignored, and the frozen value would be untestable by construction.
+        # Resolving HERE makes it per-instance and honours the environment as
+        # it stands when the config is built.
+        #
+        # The resolved value is MATERIALIZED onto the field rather than left
+        # for each reader to resolve, so that every existing consumer
+        # (`smart_defaults.create_observability`, the startup banner) keeps
+        # reading a plain `str` and the resolved location shows up in anything
+        # that displays the config. One resolution, one owner.
+        if self.audit_log_path is None:
+            from kaizen.core.autonomy.observability.audit_paths import (
+                default_audit_path,
+            )
+
+            self.audit_log_path = str(default_audit_path())
+        elif self.audit_log_path == "":
+            # An empty path would resolve to the CWD itself. Refuse rather
+            # than quietly substituting the default: the caller passed
+            # something, and silently overriding it is how a compliance sink
+            # ends up somewhere nobody chose.
+            raise ValueError(
+                "audit_log_path cannot be empty string. Pass None for the "
+                "default location, or an explicit path."
             )
 
     def has_custom_memory(self) -> bool:
