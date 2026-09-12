@@ -23,6 +23,26 @@ from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 from kailash.utils.url_credentials import mask_error_text
 
+#: Redirect hops allowed per pagination page. Each hop is re-authorized by the
+#: origin guard, so this only bounds a redirect LOOP; it is not a trust control.
+_MAX_REDIRECT_HOPS = 5
+
+
+def _sanitize_for_log(value: Any) -> str:
+    """Render an untrusted value safe to put in a single log line.
+
+    ``mask_error_text`` removes embedded credentials but leaves control
+    characters intact, so a server-supplied link containing CR/LF could inject
+    additional, attacker-authored lines into the log -- including lines that
+    look like a different component's output. Masking runs FIRST so the
+    credential rule still applies, then every non-printable character is
+    replaced by a visible escape of the form backslash-x-hex.
+    """
+    text = mask_error_text(value)
+    return "".join(
+        ch if (ch.isprintable() or ch == " ") else f"\\x{ord(ch):02x}" for ch in text
+    )
+
 
 @register_node()
 class RESTClientNode(Node):
@@ -415,7 +435,7 @@ class RESTClientNode(Node):
         self,
         initial_response: dict[str, Any],
         query_params: dict[str, Any],
-        pagination_params: dict[str, Any],
+        pagination_params: dict[str, Any] | None,
         *,
         request_url: str,
         request_headers: dict[str, Any],
@@ -649,7 +669,7 @@ class RESTClientNode(Node):
         self,
         initial_response: dict[str, Any],
         query_params: dict[str, Any],
-        pagination_params: dict[str, Any],
+        pagination_params: dict[str, Any] | None,
         *,
         request_url: str,
         request_headers: dict[str, Any],
@@ -1424,11 +1444,22 @@ class RESTClientNode(Node):
 
         def reject(reason: str, rendered: Any) -> dict[str, Any]:
             # The rejected value is never echoed raw: an embedded credential
-            # would otherwise land in the log the rejection exists to protect.
+            # would otherwise land in the log the rejection exists to protect,
+            # and a CR/LF inside a server-supplied link would let that server
+            # forge whole log lines. Mask first, then neutralize the control
+            # characters the mask does not cover.
             self.logger.warning(
-                "Pagination stopped: %s (link=%s)", reason, mask_error_text(rendered)
+                "Pagination stopped: %s (link=%s)",
+                reason,
+                _sanitize_for_log(rendered),
             )
-            return {"allow": False, "url": None, "headers": {}, "reason": reason}
+            return {
+                "allow": False,
+                "url": None,
+                "headers": {},
+                "reason": reason,
+                "cross_origin": False,
+            }
 
         if not isinstance(next_url, str) or not next_url.strip():
             return reject("next link is missing or not a string", next_url)
@@ -1455,7 +1486,13 @@ class RESTClientNode(Node):
             return reject("next link targets an internal/reserved address", resolved)
 
         if same_origin:
-            return {"allow": True, "url": resolved, "headers": headers, "reason": None}
+            return {
+                "allow": True,
+                "url": resolved,
+                "headers": headers,
+                "reason": None,
+                "cross_origin": False,
+            }
 
         if target_origin in self._normalize_origin_allowlist(allowed_origins):
             return {
@@ -1463,6 +1500,10 @@ class RESTClientNode(Node):
                 "url": resolved,
                 "headers": self._strip_credential_headers(headers, api_key_header),
                 "reason": None,
+                # The caller's credentials do not go to this origin -- and per
+                # the STICKY rule they must not return to the original origin
+                # later in the run either.
+                "cross_origin": True,
             }
 
         return reject("next link is cross-origin and not allow-listed", resolved)
@@ -1624,10 +1665,38 @@ class RESTClientNode(Node):
         Returns:
             Combined results from all pages
         """
-        all_data = initial_result.get("data", [])
         pagination_config = kwargs.get("pagination_params") or {}
         max_pages = pagination_config.get("max_pages", 10)
+        items_path = pagination_config.get("items_path", "data")
         page_count = 1
+
+        def page_items(payload: Any) -> list[Any] | None:
+            """The mergeable item list inside one page, or None.
+
+            A page is ordinarily an envelope (``{"data": [...], "links": …}``)
+            -- and it MUST be, because that is the only shape
+            ``_extract_links`` can read a ``next`` out of. Merging previously
+            required the page itself to BE a list, so on every real HATEOAS
+            response the branch never fired: the loop walked and counted each
+            page, then discarded all of them and returned page 1. Resolve the
+            same ``items_path`` the sync strategies use.
+            """
+            if isinstance(payload, list):
+                return payload
+            if isinstance(payload, dict):
+                found = self._get_nested_value(payload, items_path, None)
+                if isinstance(found, list):
+                    return found
+            return None
+
+        initial_items = page_items(initial_result.get("data"))
+        # Copied, never aliased: `extend` on the caller's own list would mutate
+        # the response they still hold.
+        all_data = (
+            list(initial_items)
+            if initial_items is not None
+            else initial_result.get("data", [])
+        )
 
         # The ORIGINAL request URL. Pinned for the whole run: it is the sole
         # definition of "same origin", so an allow-listed third-party origin
@@ -1641,6 +1710,13 @@ class RESTClientNode(Node):
         api_key_header = kwargs.get("api_key_header", "X-API-Key")
 
         current_result = initial_result
+        # STICKY: once a hop has gone to an origin that is not the original,
+        # the caller's credentials must not be re-attached for the REMAINDER of
+        # the run. Without this, an allow-listed partner can hand back a link
+        # to the ORIGINAL origin, which matches the same-origin rule and is
+        # fetched with full credentials -- laundering the third party back into
+        # the trusted position it was deliberately stripped out of.
+        credentials_withheld = False
 
         while page_count < max_pages:
             # Check for next page link in metadata
@@ -1654,49 +1730,115 @@ class RESTClientNode(Node):
 
             # The link came from the response BODY. Validate its origin before
             # it can receive the caller's credentials (the rejection is logged
-            # inside the guard).
-            decision = self._evaluate_pagination_next_link(
-                next_url,
-                request_url=origin_url,
-                request_headers=request_headers,
-                allowed_origins=allowed_origins,
-                api_key_header=api_key_header,
-                base_url=page_url,
-            )
-            if not decision["allow"]:
-                break
+            # inside the guard). A 3xx answer re-enters this same guard with
+            # its `Location`, so the transport never chooses a destination the
+            # guard has not authorized.
+            candidate = next_url
+            candidate_base = page_url
+            redirect_hops = 0
+            decision = None
+            http_result = None
+            transport_failed = False
 
-            try:
-                # Make async request for next page
-                http_result = await self._async_http_node.async_run(  # type: ignore[attr-defined]
-                    url=decision["url"],
-                    method="GET",
-                    headers=decision["headers"],
-                    timeout=kwargs.get("timeout", 30),
-                    verify_ssl=kwargs.get("verify_ssl", True),
+            while True:
+                decision = self._evaluate_pagination_next_link(
+                    candidate,
+                    request_url=origin_url,
+                    request_headers=request_headers,
+                    allowed_origins=allowed_origins,
+                    api_key_header=api_key_header,
+                    base_url=candidate_base,
                 )
-            except NodeValidationError:
-                # A mis-configured request is a programming/configuration
-                # error, not a transient transport failure -- swallowing it is
-                # what turned a broken follow-up into "page 1 is the whole
-                # result set". Same narrowing as the sync sibling.
-                raise
-            except Exception as e:
-                # Transport-level failures degrade to the pages fetched so far,
-                # but they are no longer SILENT.
-                self.logger.warning(
-                    "Async pagination request failed: %s", mask_error_text(e)
+                if not decision["allow"]:
+                    break
+
+                hop_headers = decision["headers"]
+                if credentials_withheld:
+                    hop_headers = self._strip_credential_headers(
+                        hop_headers, api_key_header
+                    )
+                if decision.get("cross_origin"):
+                    credentials_withheld = True
+
+                try:
+                    http_result = await self._async_http_node.async_run(  # type: ignore[attr-defined]
+                        url=decision["url"],
+                        method="GET",
+                        headers=hop_headers,
+                        timeout=kwargs.get("timeout", 30),
+                        verify_ssl=kwargs.get("verify_ssl", True),
+                        # The guard, not the HTTP client, decides where this
+                        # run may go. Both clients follow redirects by default
+                        # and drop only `Authorization` on a cross-host hop, so
+                        # leaving this on would hand `Cookie` / `X-API-Key` to
+                        # any host a 3xx names -- including the link-local
+                        # addresses rule 3 exists to refuse.
+                        allow_redirects=False,
+                    )
+                except NodeValidationError:
+                    # A mis-configured request is a programming/configuration
+                    # error, not a transient transport failure -- swallowing it
+                    # is what turned a broken follow-up into "page 1 is the
+                    # whole result set". Same narrowing as the sync sibling.
+                    raise
+                except Exception as e:
+                    # Transport-level failures degrade to the pages fetched so
+                    # far, but they are no longer SILENT.
+                    self.logger.warning(
+                        "Async pagination request failed: %s", mask_error_text(e)
+                    )
+                    transport_failed = True
+                    break
+
+                status = http_result.get("status_code")
+                if not (isinstance(status, int) and 300 <= status < 400):
+                    break
+
+                redirect_hops += 1
+                if redirect_hops > _MAX_REDIRECT_HOPS:
+                    self.logger.warning(
+                        "Pagination stopped: more than %d redirect hops from %s",
+                        _MAX_REDIRECT_HOPS,
+                        _sanitize_for_log(decision["url"]),
+                    )
+                    decision = None
+                    break
+
+                hop_response = http_result.get("response") or {}
+                hop_headers_in = (
+                    hop_response.get("headers") or {} if hop_response else {}
                 )
+                location = next(
+                    (
+                        value
+                        for name, value in hop_headers_in.items()
+                        if name.lower() == "location"
+                    ),
+                    None,
+                )
+                if not location:
+                    # Fail closed: a redirect we cannot follow is not a page.
+                    self.logger.warning(
+                        "Pagination stopped: redirect from %s carried no Location",
+                        _sanitize_for_log(decision["url"]),
+                    )
+                    decision = None
+                    break
+
+                candidate = location
+                candidate_base = decision["url"]
+
+            if transport_failed or decision is None or not decision["allow"]:
                 break
 
             current_result = self._build_async_result(
-                http_result, decision["url"], "GET"
+                http_result or {}, decision["url"], "GET"
             )
 
             if current_result.get("success", False):
-                page_data = current_result.get("data", [])
-                if isinstance(page_data, list) and isinstance(all_data, list):
-                    all_data.extend(page_data)
+                fetched = page_items(current_result.get("data"))
+                if fetched is not None and isinstance(all_data, list):
+                    all_data.extend(fetched)
                 page_url = decision["url"]
                 page_count += 1
             else:
@@ -1765,7 +1907,11 @@ class AsyncRESTClientNode(AsyncNode):
         """
         # Same parameters as the synchronous version. RESTClientNode's
         # implementation reads no instance state, so the unbound call is exact.
-        return RESTClientNode.get_parameters(self)
+        # Deliberate: `RESTClientNode.get_parameters` references no
+        # instance state, so it is callable before `__init__` assigns the
+        # delegates -- which is what stops config validation from failing on
+        # every construction of this node.
+        return RESTClientNode.get_parameters(self)  # type: ignore[arg-type]
 
     def get_output_schema(self) -> dict[str, NodeParameter]:
         """Define the output schema for this node.
@@ -1778,7 +1924,11 @@ class AsyncRESTClientNode(AsyncNode):
         """
         # Same output schema as the synchronous version. RESTClientNode's
         # implementation reads no instance state, so the unbound call is exact.
-        return RESTClientNode.get_output_schema(self)
+        # Deliberate: `RESTClientNode.get_output_schema` references no
+        # instance state, so it is callable before `__init__` assigns the
+        # delegates -- which is what stops config validation from failing on
+        # every construction of this node.
+        return RESTClientNode.get_output_schema(self)  # type: ignore[arg-type]
 
     def run(self, **kwargs) -> dict[str, Any]:
         """Synchronous version of the REST request, for compatibility.
@@ -1918,8 +2068,14 @@ class AsyncRESTClientNode(AsyncNode):
 
             return error_result
 
+        # `success` is True here, so the transport returned a payload -- but
+        # nothing in the type says so, and a transport that ever reported
+        # success with `response=None` would raise an opaque TypeError from
+        # the subscript below rather than a usable result.
+        response = response or {}
+
         # Handle pagination if requested.
-        data = response["content"]
+        data = response.get("content")
         paginated = bool(paginate and method == "GET" and success)
         pages_fetched = 1
         if paginated:
@@ -1950,7 +2106,9 @@ class AsyncRESTClientNode(AsyncNode):
                 # request's auth and transport settings.
                 data, pages_fetched = await asyncio.to_thread(
                     self.rest_node._paginate_with_page_count,  # type: ignore[attr-defined]
-                    data,
+                    # `or {}` matches the synchronous caller: a JSON `null`
+                    # body would otherwise reach the pagination walker as None.
+                    data or {},
                     query_params,
                     pagination_params,
                     request_url=url,
@@ -1972,8 +2130,8 @@ class AsyncRESTClientNode(AsyncNode):
         metadata = {
             "url": url,
             "method": method,
-            "response_time_ms": response["response_time_ms"],
-            "headers": response["headers"] or {},
+            "response_time_ms": response.get("response_time_ms", 0),
+            "headers": response.get("headers") or {},
         }
         if paginated:
             # Same helper, and so the same `total_pages_fetched` key, as the

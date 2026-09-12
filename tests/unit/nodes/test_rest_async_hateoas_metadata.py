@@ -13,13 +13,11 @@ finalise through the SAME ``_drop_stale_pagination_metadata`` helper, so a
 future change to what a merged result advertises cannot fix one path and leave
 the others behind.
 
-Known, SEPARATE residual (not pinned here, deliberately): when the followed
-pages are DICT-shaped -- the ordinary REST envelope, and the only shape from
-which ``_extract_links`` can read a ``next`` at all -- the merge branch
-requires ``isinstance(page_data, list)`` and so never fires. The loop still
-walks every page and still counts them, but the extra pages are discarded and
-``data`` remains page 1. Asserting that here would pin a bug as if it were the
-contract, so this module asserts only the metadata behaviour it governs.
+This module asserts the METADATA contract only. The separate defect it
+originally documented -- DICT-shaped pages being walked, counted, and then
+discarded, because the merge branch required the page itself to BE a list --
+was fixed alongside the redirect guard; ``test_rest_pagination_redirects.py``
+pins the merge behaviour, so it is deliberately not duplicated here.
 """
 
 from typing import Any

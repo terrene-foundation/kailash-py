@@ -334,6 +334,26 @@ class HTTPRequestNode(Node):
                 default=True,
                 description="Whether to verify SSL certificates",
             ),
+            "allow_redirects": NodeParameter(
+                name="allow_redirects",
+                type=bool,
+                required=False,
+                default=True,
+                # Both underlying clients follow redirects by DEFAULT
+                # (`requests` and aiohttp alike), and neither drops more than
+                # `Authorization` when a redirect crosses hosts -- `Cookie`,
+                # `X-API-Key` and any custom API-key header ride along to the
+                # new host. A caller that needs to authorize each destination
+                # itself (the REST pagination guard does) must be able to turn
+                # the automatic follow OFF; it was previously unreachable.
+                # Default True so existing callers are unaffected.
+                description=(
+                    "Whether the client follows 3xx redirects automatically. "
+                    "Set False to inspect Location yourself (credential-bearing "
+                    "headers other than Authorization are NOT dropped by the "
+                    "underlying clients on a cross-host redirect)"
+                ),
+            ),
             "retry_count": NodeParameter(
                 name="retry_count",
                 type=int,
@@ -512,6 +532,7 @@ class HTTPRequestNode(Node):
         response_format = kwargs.get("response_format", "auto")
         timeout = kwargs.get("timeout", 30)
         verify_ssl = kwargs.get("verify_ssl", True)
+        allow_redirects = kwargs.get("allow_redirects", True)
         retry_count = kwargs.get("retry_count", 0)
         retry_backoff = kwargs.get("retry_backoff", 0.5)
         auth_type = kwargs.get("auth_type")
@@ -562,6 +583,12 @@ class HTTPRequestNode(Node):
             "params": params,
             "timeout": timeout,
             "verify": verify_ssl,
+            # Explicit rather than inherited: `requests` follows redirects by
+            # default and `Session.rebuild_auth` drops only `Authorization`
+            # when a redirect crosses hosts -- `Cookie`, `X-API-Key` and any
+            # custom API-key header ride along. A caller that authorizes each
+            # destination itself must be able to turn the automatic follow off.
+            "allow_redirects": allow_redirects,
         }
 
         # Add data or json based on what was provided
@@ -893,6 +920,7 @@ class AsyncHTTPRequestNode(AsyncNode):
         response_format = kwargs.get("response_format", "auto")
         timeout = kwargs.get("timeout", 30)
         verify_ssl = kwargs.get("verify_ssl", True)
+        allow_redirects = kwargs.get("allow_redirects", True)
         retry_count = kwargs.get("retry_count", 0)
         retry_backoff = kwargs.get("retry_backoff", 0.5)
         auth_type = kwargs.get("auth_type")
@@ -943,6 +971,10 @@ class AsyncHTTPRequestNode(AsyncNode):
             "params": params,
             "timeout": aiohttp.ClientTimeout(total=timeout),
             "ssl": verify_ssl,
+            # Same reasoning as the sync sibling: aiohttp also follows
+            # redirects by default and also drops only `Authorization` on a
+            # cross-host hop.
+            "allow_redirects": allow_redirects,
         }
 
         # Add data or json based on what was provided
