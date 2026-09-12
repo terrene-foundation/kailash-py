@@ -62,20 +62,7 @@ wrap the stale read in a retry; "shall I fix the invalidation instead?"
 
 **Why:** A symptom patch leaves the defect live and re-pays the diagnosis cost on every recurrence; asking permission for an unambiguous in-envelope fix spends a human turn authorizing what the envelope already authorized.
 
-**BLOCKED rationalizations:**
-
-- "I'll patch it now and file the root cause as a follow-up"
-- "The deeper fix is out of scope for this task"
-- "I should check with the user before changing that"
-- "Asking is the conservative choice"
-- "The user didn't explicitly ask for the deeper fix"
-- "A smaller diff is easier to review"
-- "The root-cause fix touches more files, so it's riskier"
-- "I don't want to assume, so I'll ask"
-- "The patch unblocks us; the root cause is next session's work"
-- "I'll note the root cause in the PR description instead"
-- "Better to confirm the approach before investing the effort"
-- "The symptom fix is what was literally asked for"
+**BLOCKED rationalizations:** 12-phrase corpus (patch-now-file-later, out-of-scope, asking-is-conservative, smaller-diff, note-it-in-the-PR, …) — verbatim in `guides/rule-extracts/autonomous-execution.md` § Root-Cause Fix.
 
 ## Per-Session Capacity Budget
 
@@ -83,7 +70,7 @@ Autonomous capacity is high but not infinite. It degrades along multiple axes si
 
 ### 1. Shard When Any Threshold Is Exceeded (MUST)
 
-A single shard (one session, one worktree, one implementation pass) MUST stay within ALL of:
+A single shard — **one AGENT's implementation pass, NOT one worktree** (a lane may host many agents, each with its own budget: `orchestration-launch-ledger.md` MUST-6) — MUST stay within ALL of:
 
 - **≤500 LOC of load-bearing logic** — state machines, schedulers, invariant-holding code. Does NOT count CRUD, DTOs, route registration, or generated boilerplate.
 - **≤5–10 simultaneous invariants** the implementation must hold (tenant isolation + audit + redaction + cache key shape + error taxonomy = 5).

@@ -90,3 +90,24 @@ Extracted from the rule body 2026-07-29 in the same Rule-10 path (a) paired extr
 **Bounded by the category (`rules/product-completion-first.md` MUST-3).** The fix-now mandate applies to a same-class within-budget gap classified BUG or INVEST-NOW; an INCREMENTAL one (off-path polish) MAY route to the deferred-quality list with a value-anchor. The category verdict — NOT convenience, NOT severity — gates the lane: relabelling a warm BUG/INVEST-NOW gap "incremental" to defer it is BLOCKED.
 
 **Bounded by the shard budget.** This rule does NOT override MUST Rule 1 (shard threshold). If the surfaced gap exceeds ≤500 LOC load-bearing / ≤5–10 invariants / ≤3–4 call-graph hops, filing the follow-up issue IS the correct disposition — the gap is a new shard, not a continuation of the current one.
+
+## § Root-Cause Fix — BLOCKED rationalization corpus
+
+Extracted from the rule body 2026-09-12 under `rule-authoring.md` Rule 10 path (a), as the
+paired extraction funding the baseline additions that landed the lane-packing clauses
+(`orchestration-launch-ledger.md` MUST-1/6 + the `agents.md` § Triad pointer). Verbatim, and
+still load-bearing — each is a phrasing that shipped a symptom patch or spent a permission turn
+on an unambiguous in-envelope fix:
+
+- "I'll patch it now and file the root cause as a follow-up"
+- "The deeper fix is out of scope for this task"
+- "I should check with the user before changing that"
+- "Asking is the conservative choice"
+- "The user didn't explicitly ask for the deeper fix"
+- "A smaller diff is easier to review"
+- "The root-cause fix touches more files, so it's riskier"
+- "I don't want to assume, so I'll ask"
+- "The patch unblocks us; the root cause is next session's work"
+- "I'll note the root cause in the PR description instead"
+- "Better to confirm the approach before investing the effort"
+- "The symptom fix is what was literally asked for"
