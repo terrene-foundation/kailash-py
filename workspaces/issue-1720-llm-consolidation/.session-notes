@@ -21,7 +21,7 @@ No `fix/*` remote heads. `dev` → `main` promotion gap is large and still owner
 | RT-SERVE-1 HIGH (batch cap) | **CLOSED** | `_MAX_BATCH_PRODUCTS = 50` enforced at `serving.py:503` before fan-out; landed via `edf37fa3e`, independently re-derived |
 | RT-3a MED (rate-limit coercion) | **WAS OPEN → FIXED** (lane A, merged `f844ba302`) | fail-closed, not fail-open; see below |
 | RT-1b (cursor dedup) + sub-issue | **WAS OPEN → FIXED** (lane B, merged `3603cbc29`) | the sub-issue was far worse than the finding |
-| RT-6a LOW (empty-list bulk) | lane C — see IN FLIGHT |
+| RT-6a LOW (empty-list bulk) | **WAS OPEN → FIXED** (lane C, merged `91fb53a30`) | wider than the finding: all FOUR bulk methods, and three of them really did dispatch a node on `[]` |
 
 **The "5 HIGH" in the commit subject is unrecoverable and probably an off-by-one.** Its own body
 labels only FOUR HIGH (RT-276-3, RT-277-1, RT-277-2, RT-SERVE-1). `RT-276-2` is missing from the
@@ -78,14 +78,22 @@ says "this needs its own shard with review", that is evidence, not an obstacle.*
    not exploitable in shipped code (the shape bug keeps the path unreachable, and the commit says
    so), but if a private advisory is preferred, that text is the thing to consider rewriting.
 
-## IN FLIGHT at notes-time
+## FLEET: FULLY DRAINED
 
-- **Lane C** (`fix/bulkempty`, worktree `.kailash-py-wt/bulkempty`): empty-list guards on
-  `bulk_update`/`bulk_create`/`bulk_delete`/`bulk_upsert`. If its branch is pushed, merge with
-  `--no-ff`, push, reap the worktree, delete the branch local+remote, re-census. If the worktree
-  is gone, that means SUCCESS.
-- Scoped test runs over `tests/trust/pact/unit/` and the REST area were backgrounded; confirm
-  green before the promotion.
+Primary checkout only. No `fix/*` remote heads, no lane worktrees, `.kailash-py-wt/` empty.
+Remote heads are `dev`, `main`, and the held `promote/2026-09-11-cont30`. Tree clean apart from
+the untracked `.git-merge-msg.tmp` (owner-gated removal).
+
+Lane C landed as `91fb53a30`. It needed ONE resume: its work was complete and staged but
+uncommitted, because a pre-commit isort rewrite aborted its first commit while the wrapper still
+exited 0 — the exact trap in § Traps. It caught that on its own `git rev-parse HEAD` check after
+being resumed. Per `agents.md` § Agent-Result-Delivery a stalled lane is RESUMED, never
+re-dispatched; that is what recovered ~57 minutes of completed work.
+
+**Pre-existing WARN on the bulk path, flagged by lane C, NOT in its diff and still open:**
+`packages/kailash-dataflow/src/dataflow/migrations/sync_ddl_executor.py:583` and
+`features/bulk.py:1570,1574` emit `identifier.unknown_dialect_budget` warnings (#1971) on every
+run. Live WARN output per `observability.md` Rule 5 — worth a lane.
 
 ## Owner-gated — surfaced, NOT agent-actionable
 
