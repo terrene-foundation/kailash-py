@@ -56,6 +56,7 @@ from pathlib import Path
 import pytest
 
 import dataflow
+import kailash
 from dataflow import DataFlow
 from dataflow.adapters.dialect import DialectManager, statement_capacity_for
 from dataflow.features.bulk import BulkOperations
@@ -65,6 +66,7 @@ from dataflow.features.bulk import BulkOperations
 # An unpinned import silently resolves to an installed copy and produces a FALSE
 # GREEN for a fix that is not actually under test.
 _CHECKOUT_SRC = Path(__file__).resolve().parents[2] / "src"
+_REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
 def test_dataflow_is_imported_from_this_checkout():
@@ -73,6 +75,16 @@ def test_dataflow_is_imported_from_this_checkout():
     assert resolved.is_relative_to(_CHECKOUT_SRC), (
         f"dataflow resolved to {resolved}, not this checkout's {_CHECKOUT_SRC} — "
         f"the suite would be testing an installed copy, not the code under test"
+    )
+    # Core `kailash` needs its OWN assertion. This package's pytest.ini pins
+    # only kailash-dataflow's `src`, so an unpinned run resolves `dataflow`
+    # here correctly while `kailash` falls through to the editable install --
+    # a different checkout, in the SAME run. Measured 2026-09-12.
+    resolved_core = Path(kailash.__file__).resolve()
+    assert resolved_core.is_relative_to(_REPO_ROOT / "src"), (
+        f"kailash resolved to {resolved_core}, not this checkout's "
+        f"{_REPO_ROOT / 'src'} -- this suite drives core kailash "
+        f"(AsyncSQLDatabaseNode), so the result would describe another tree"
     )
 
 
