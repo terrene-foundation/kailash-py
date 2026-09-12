@@ -172,3 +172,52 @@ token list sits in it undetected. Undecided and named rather than guessed:
 `client_id` provenance at `kailash_mcp/server.py:4943/5044/5052` (client-supplied
 would make them class (c)), and `calling_agent`/`target_agent` at
 `nexus/trust/mcp_handler.py:301`.
+
+## Every lane's test receipts may certify the MAIN CHECKOUT, not its own branch
+
+MEASURED from inside a live worktree, not inferred:
+
+```
+cwd: /Users/esperie/repos/kailash/build/.kailash-py-wt/dataflow
+  dataflow -> MAIN CHECKOUT  /kailash-py/packages/kailash-dataflow/src/dataflow/__init__.py
+  nexus    -> MAIN CHECKOUT
+  kaizen   -> MAIN CHECKOUT
+```
+
+The editable install in the shared `.venv` resolves to the MAIN checkout's
+`packages/*/src` and `src/`, regardless of cwd. So a bare `pytest` from ANY
+worktree exercises the main checkout's source, **not the branch's edits** — and
+the main checkout is concurrently changing under every lane as merges land.
+
+**Why this is the worst instance of the session's recurring class:** a green
+reads identically whether the fix under test was loaded or not. The receipt is
+not merely weak, it is about a different artifact. It also runs the other way —
+a RED in a worktree may be another lane's change, sending a lane to debug code
+it never touched.
+
+**The check** (in-process; the flag cannot be trusted):
+
+```
+python -c "import dataflow; print(dataflow.__file__)"
+```
+
+**The fix, and its trap:** pin `PYTHONPATH` to the worktree's own `src` paths,
+then ASSERT in-process that the module resolves inside the worktree.
+`-o pythonpath` is **whitespace-separated, not colon-separated**, so a
+colon-joined value silently collapses to one bogus entry and the pin LOOKS
+applied while doing nothing.
+
+**Bounding what this does and does not invalidate.** The two lanes merged today
+(L3 `ce040fdf3`, B2 `e0599ce09`) were verified by me from the MAIN checkout
+AFTER merging — 930 and 90 tests respectively — so those merges stand on
+independent evidence. That is luck rather than design: the post-merge
+verification happens to run in the one tree where imports resolve correctly.
+Branch-side receipts produced before merge are the ones in question.
+
+All five live lanes were warned with the check, the fix and the flag trap, and
+asked to report which receipts survive re-measurement rather than re-asserting
+the originals.
+
+This is a known trap with a standing memory entry; it recurred anyway, because
+nothing in the dispatch brief made lanes verify their import path. Every lane
+brief now carries it.
