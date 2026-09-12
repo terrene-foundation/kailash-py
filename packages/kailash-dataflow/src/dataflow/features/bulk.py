@@ -8,6 +8,9 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
+from kailash.utils.secure_logging import (  # log-injection barrier for logged VALUES
+    sanitize_log_value,
+)
 from kailash.utils.url_credentials import mask_url
 
 from ..core.exceptions import BulkUpsertConflictTargetError
@@ -547,8 +550,15 @@ class BulkOperations:
 
                 # DEBUG (not WARN): the query carries schema column names —
                 # observability.md Rule 8.
+                # The slice bounds VOLUME but not STRUCTURE: a column name or
+                # literal carrying \r or \n inside the first 100 chars still
+                # ends the record mid-line, and everything after the break reads
+                # as a separate, attacker-authored log record. The FLATTEN is
+                # the half that closes that; sanitize_log_value does both.
                 logger.debug(
-                    f"BULK_CREATE: Executing batch {batches_processed + 1}, query='{query[:100]}...', param_count={len(params)}"
+                    f"BULK_CREATE: Executing batch {batches_processed + 1}, "
+                    f"query='{sanitize_log_value(query)}', "
+                    f"param_count={len(params)}"
                 )
 
                 # Execute using cached AsyncSQLDatabaseNode
@@ -823,8 +833,14 @@ class BulkOperations:
                 # DEBUG (not WARN): the query carries schema column names and
                 # params carry row VALUES (potential PII) — must not reach log
                 # aggregators at WARN+ (observability.md Rule 8, security.md).
+                # ``params`` are BOUND VALUES — caller row data at bulk scale.
+                # Interpolated raw they carry both a log-injection vector (a
+                # value with \r or \n forges a second record) and unbounded
+                # PII volume. sanitize_log_value flattens every non-printable
+                # to a space AND bounds the rendered length.
                 logger.debug(
-                    f"BULK_UPDATE: Executing query='{query}' with params={params}"
+                    f"BULK_UPDATE: Executing query='{sanitize_log_value(query)}' "
+                    f"with params={sanitize_log_value(params)}"
                 )
 
                 # Execute using cached AsyncSQLDatabaseNode
@@ -1289,8 +1305,12 @@ class BulkOperations:
                     query = f"DELETE FROM {quoted_table} {where_clause}"
                 # DEBUG (not WARN): query carries schema names, params carry row
                 # VALUES (potential PII) — observability.md Rule 8, security.md.
+                # ``params`` are BOUND VALUES — caller row data at bulk scale;
+                # see BULK_UPDATE above for why a length bound alone is not the
+                # fix here.
                 logger.debug(
-                    f"BULK_DELETE: Executing query='{query}' with params={params}"
+                    f"BULK_DELETE: Executing query='{sanitize_log_value(query)}' "
+                    f"with params={sanitize_log_value(params)}"
                 )
 
                 result = await sql_node.async_run(
