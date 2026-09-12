@@ -627,14 +627,11 @@ class PostgreSQLSchemaInspector:
         MUST NOT invoke ``close()`` itself — see issue #1000.
         """
         if getattr(self, "_explicit_runtime", None) is not None:
-            try:
-                _warnings.warn(
-                    f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
-                    ResourceWarning,
-                    source=self,
-                )
-            except Exception:
-                pass
+            _warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
 
 
 class PostgreSQLMigrationGenerator:
@@ -1359,14 +1356,11 @@ class SQLiteSchemaInspector:
         MUST NOT invoke ``close()`` itself — see issue #1000.
         """
         if getattr(self, "_explicit_runtime", None) is not None:
-            try:
-                _warnings.warn(
-                    f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
-                    ResourceWarning,
-                    source=self,
-                )
-            except Exception:
-                pass
+            _warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
 
 
 class SQLiteMigrationGenerator:
@@ -3291,11 +3285,8 @@ class AutoMigrationSystem:
         a self-owned runtime (legacy / no-parent paths).
         """
         if getattr(self, "_explicit_runtime", None) is not None:
-            try:
-                _warnings.warn(
-                    f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
-                    ResourceWarning,
-                    source=self,
-                )
-            except Exception:
-                pass
+            _warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )

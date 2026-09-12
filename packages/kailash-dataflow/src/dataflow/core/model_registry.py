@@ -1978,12 +1978,8 @@ class ModelRegistry:
         cleaning up the per-event-loop cache.
         """
         if getattr(self, "_explicit_runtime", None) is not None:
-            try:
-                _warnings.warn(
-                    f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
-                    ResourceWarning,
-                    source=self,
-                )
-            except Exception:
-                # Interpreter shutdown or recursive GC — best-effort only.
-                pass
+            _warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
