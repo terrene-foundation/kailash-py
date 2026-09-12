@@ -221,3 +221,51 @@ the originals.
 This is a known trap with a standing memory entry; it recurred anyway, because
 nothing in the dispatch brief made lanes verify their import path. Every lane
 brief now carries it.
+
+## CORRECTION to the section above — my probe created the failure it reported
+
+The preceding section claimed every lane's test receipts may certify the MAIN
+CHECKOUT. **That claim is too strong, and the error was in my instrument.**
+
+I placed the probe test file in `/tmp` and ran pytest against it. That makes
+pytest's **rootdir** `/tmp`, so none of the three `pytest.ini` files (each
+setting `pythonpath = src`) applied, and resolution fell through to the
+editable install pointing at the main checkout. A lane running its OWN tests
+from inside its OWN worktree has rootdir = the worktree, `pythonpath = src`
+resolves to the worktree's `src`, and it imports its own code correctly.
+
+Re-measured, same probe content, only the FILE LOCATION differing:
+
+```
+probe inside <worktree>/tests/unit/   -> .../.kailash-py-wt/dataflow/src/kailash/__init__.py   CORRECT
+same probe run from /tmp              -> .../kailash-py/src/kailash/__init__.py                WRONG
+```
+
+The crypto lane caught this and produced the better argument. It did not rely
+on a path string at all: its branch had DELETED a transform, so branch code
+passes a payload through unchanged while old code fuses it. Its runs showed
+pass-through, which only the branch's own code produces. Stronger still — it
+observed a genuine RED on revert, and reverting worktree source cannot red a
+test that imports somewhere else. **The reds are themselves the evidence.**
+
+### What remains TRUE, narrowed to what was measured
+
+- A bare `python -c` (NOT pytest) from a worktree resolves to the main checkout,
+  and the crypto lane measured a THIRD answer — `~/.pyenv/.../site-packages` —
+  for the same invocation shape. So ad-hoc `python -c` probes are genuinely
+  unreliable, and my own #2173 payload runs (executed as `.venv/bin/python -`
+  from the MAIN checkout) measured the main checkout, exactly as reported.
+- Resolution depends on rootdir, on which `pytest.ini` applies, and on
+  invocation form. It has at least three possible answers.
+- Therefore the durable rule is NOT "pin PYTHONPATH" but **assert the resolved
+  `__file__` in-process, in the same run that banks the receipt** — which is
+  what the standing memory already said, and what both lanes now do.
+
+### The cost, recorded
+
+I sent five lanes an urgent "your receipts may be vacuous" on the strength of a
+probe whose own setup produced the result. No receipt was actually invalid.
+That is attention spent on a false alarm, and the discipline that would have
+prevented it is the one this ledger keeps recording: fire the instrument at a
+known-answer case first. I had no control for "does the probe's own location
+change the answer" — and it did.
