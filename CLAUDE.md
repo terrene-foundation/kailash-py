@@ -67,16 +67,20 @@ Phase commands replace the manual copy-paste workflow. Each loads the correspond
 
 ## Offloading long jobs
 
-Long test runs do not have to run on this workstation. `trestle-remote-run --host <name>
---repo "$PWD" -- <cmd>` ships an exact snapshot (uncommitted edits included) to a fleet host
-and exits with the command's OWN status.
+Long jobs do not have to run on this workstation:
 
-**Measure before offloading** — under ~30s wall clock the local snapshot costs more than it
-saves, and core count does not predict throughput. **Before a first run**, check what ships
-despite `.gitignore`: `git ls-files -z | git check-ignore --no-index -z --stdin`.
+    trestle run -- <your command>
 
-Measured numbers, host provisioning, and the engine's exit-code band (111–116; **114 means
-the outcome is UNKNOWN**, never a pass or a fail): `.claude/guides/offloading-long-jobs.md`.
+trestle picks the host, ships an exact snapshot (uncommitted edits included), and exits with
+the command's OWN status. **Do not name a host and do not coordinate with other sessions** —
+every session shares one arbiter, so runs queue instead of colliding, and it falls back to
+running locally when remotes are full. `--host`/`--local` compare hosts; they are not defaults.
+**Measure first** (under ~30s the snapshot costs more than it saves) and **check what ships
+despite `.gitignore`**: `git ls-files -z | git check-ignore --no-index -z --stdin`.
+
+Measured numbers, host provisioning, the pipeline false-green trap, and the exit band —
+**`114` = outcome UNKNOWN, `116` = nothing ran anywhere** — in
+`.claude/guides/offloading-long-jobs.md`.
 
 ## Rules Index
 
