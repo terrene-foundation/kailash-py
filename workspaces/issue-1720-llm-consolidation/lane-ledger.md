@@ -93,3 +93,36 @@ which aborts the commit. Only the explicit before/after `rev-parse` comparison
 caught it; the push would then have read "Everything up-to-date" over a stale
 HEAD. Landed on the retry as `34d55f5f6`, push confirmed by fetching and
 comparing `local == origin/dev`, not by reading the push output.
+
+## Corpus-wide instrument defect: single-line grep is blind to 30.6% of log call sites
+
+Surfaced by a read-only sub-agent on #2172 and MEASURED here on the main
+checkout before being acted on. Its first sibling-sweep grep returned zero hits
+for `commerce.py` — **the very file the issue names**, so the file HAD to
+appear. That known-answer control is what exposed the instrument rather than
+the tree.
+
+Cause: Black wraps any `logger.x(f"...")` call whose line exceeds the column
+limit, putting the call on one line and the f-string on the next. A single-line
+pattern (`logger\.(info|warning|error|debug)\(.*f"`) cannot see that form.
+
+**Measured, both forms, on `src` + `packages` excluding tests:**
+
+| form | sites | files |
+| --- | --- | --- |
+| same-line `logger.x(f"...` | 3761 | — |
+| **strictly wrapped** (f-string on a LATER line) | **1655** | **370** |
+
+**30.6% of all f-string logger call sites are invisible to a single-line grep.**
+Control fires decisively: `commerce.py` returns 0 hits single-line, 1 multiline.
+
+Correction to my own intermediate reading, recorded rather than overwritten: my
+first comparison (3248 vs 3761) conflated two DIFFERENT patterns and was not a
+wrapped-site count — the `\n?` in that probe made it match same-line calls too.
+The sound figure is the strict one above, from the second measurement.
+
+**Consequence:** any prior log-injection / secret-in-log / PII-in-log sweep of
+this repo that used the single-line form under-reported by roughly a third, and
+its empty-or-small result was read as coverage. Sweeps of this class MUST be
+re-run with a multiline pattern, and MUST fire at a known-answer case first
+(`instrument-discipline.md` MUST-3(a)).
