@@ -66,6 +66,7 @@ bug.
 import asyncio
 import functools
 import inspect
+import os
 
 import pytest
 
@@ -372,3 +373,221 @@ def test_real_source_binds_via_enclosing_scope_not_a_default_argument():
         assert (
             a.kwarg is not None
         ), f"tool_wrapper at line {fn.lineno} cannot forward client arguments"
+
+
+# --- #2086: the REAL agent, and the all-skipped case ------------------------
+#
+# Everything above drives a synthetic one-method ``MCPMixin`` subclass. That is
+# enough to observe a per-method rejection, but it cannot observe the failure
+# #2086 actually describes: a REAL agent whose whole method sweep is refused,
+# leaving a server that advertises nothing. ``BaseAgent`` carries ~40 public
+# methods of every shape -- variadic, un-evaluatable annotations, plain typed
+# ones -- and the sweep meets all of them, so it is the only subject that
+# exercises the aggregate.
+#
+# MEASURED against both backends (fastmcp 2.12.4 standalone, and the official
+# MCP SDK's FastMCP with the standalone module absent): the registration itself
+# is NOT broken -- 32 and 33 tools register respectively. #2086's premise no
+# longer holds on this tree. What remains is that NOTHING would have said so:
+# every refusal is a WARNING and the call returns a server either way, which is
+# how the dead feature survived two releases. The guard below is that missing
+# signal.
+
+
+def _real_agent(agent_id="issue-2086-probe"):
+    """A genuine BaseAgent, not an MCPMixin probe.
+
+    ``llm_provider="mock"`` because registration never calls a provider -- and
+    a real model name would have to come from ``.env``, which no registration
+    test should need.
+    """
+    from kaizen.core.base_agent import BaseAgent
+    from kaizen.core.config import BaseAgentConfig
+
+    return BaseAgent(
+        config=BaseAgentConfig(llm_provider="mock"),
+        mcp_servers=[],
+        agent_id=agent_id,
+    )
+
+
+def _backend_name(server):
+    backend = type(server._mcp)
+    return f"{backend.__module__}.{backend.__qualname__}"
+
+
+def _listed_tool_names(server):
+    """Protocol-level tool names, whichever backend won.
+
+    Deliberately NOT the in-repo ``_tool_registry``: that records what this
+    package believes it registered, while this is what a client would actually
+    be offered. #2086's third possibility -- registration "succeeds" but
+    exposes nothing -- is only visible in the second one.
+    """
+    mcp = server._mcp
+    if hasattr(mcp, "list_tools"):  # official MCP SDK FastMCP
+        return sorted(t.name for t in asyncio.run(mcp.list_tools()))
+    if hasattr(mcp, "get_tools"):  # standalone fastmcp
+        return sorted(asyncio.run(mcp.get_tools()))
+    raise AssertionError(
+        f"no known tool-listing API on {type(mcp).__name__}; teach this helper "
+        "the new backend rather than silently asserting nothing"
+    )
+
+
+@pytest.mark.regression
+def test_expose_as_mcp_server_registers_tools_on_a_real_agent():
+    """#2086: a real agent must end up with a non-empty PUBLISHED inventory.
+
+    Asserts the inventory, not the absence of an exception. ``expose_as_mcp_server``
+    returns a server object on the broken path too -- it warns past every
+    refusal -- so "it did not raise" is consistent with the feature being dead
+    and cannot discriminate. ``len(listed) > 0`` can: it is empty exactly when
+    every method was refused.
+
+    Exercises whichever backend this interpreter resolves; the stack is named in
+    the failure message so a green here can never be read as covering both. The
+    other pole is pinned by
+    ``test_real_agent_registration_also_works_with_standalone_fastmcp_absent``.
+    """
+    pytest.importorskip("kailash_mcp", reason="MCP server package not installed")
+
+    agent = _real_agent()
+    server = agent.expose_as_mcp_server("issue-2086", enable_auto_discovery=False)
+
+    listed = _listed_tool_names(server)
+    assert listed, (
+        f"expose_as_mcp_server published NO tools on a real BaseAgent under "
+        f"{_backend_name(server)}; the agent-as-MCP-server feature is dead, not "
+        f"degraded (refusals: {agent._mcp_unexposed_tools})"
+    )
+
+    # The published list and what the mixin reports having registered must be
+    # the same set -- a divergence is #2086's possibility (iii), a registration
+    # this package believes succeeded that no client can see.
+    assert sorted(agent._mcp_exposed_tools) == listed, (
+        f"mixin reports {sorted(agent._mcp_exposed_tools)!r} registered but "
+        f"{_backend_name(server)} publishes {listed!r}"
+    )
+
+    # A specific ordinary method, so the assertion cannot be satisfied by some
+    # incidental framework-supplied tool.
+    assert "extract_str" in listed, f"published inventory was {listed!r}"
+
+
+@pytest.mark.regression
+def test_real_agent_registration_also_works_with_standalone_fastmcp_absent():
+    """The OTHER stack in #2086's table, in a subprocess.
+
+    ``kailash_mcp`` picks its backend at first use and caches it on the server,
+    and ``fastmcp`` is already imported by the time this file runs, so the
+    absent-standalone pole cannot be simulated in-process. The child blocks the
+    import, then ASSERTS which backend it actually got -- without that assert
+    the test would pass just as happily against the stack it is meant to be the
+    counterpart of, proving nothing.
+    """
+    pytest.importorskip("kailash_mcp", reason="MCP server package not installed")
+
+    import json
+    import subprocess
+    import sys
+
+    child = r"""
+import json, sys, asyncio, warnings, logging
+warnings.filterwarnings("ignore")
+logging.disable(logging.CRITICAL)
+sys.modules["fastmcp"] = None            # block the standalone distribution
+try:
+    import fastmcp
+    print(json.dumps({"error": "standalone fastmcp still importable in child"}))
+    raise SystemExit(0)
+except ImportError:
+    pass
+
+from kaizen.core.base_agent import BaseAgent
+from kaizen.core.config import BaseAgentConfig
+
+agent = BaseAgent(config=BaseAgentConfig(llm_provider="mock"), mcp_servers=[],
+                  agent_id="issue-2086-probe")
+server = agent.expose_as_mcp_server("issue-2086", enable_auto_discovery=False)
+backend = type(server._mcp)
+listed = sorted(t.name for t in asyncio.run(server._mcp.list_tools()))
+print(json.dumps({
+    "backend": backend.__module__ + "." + backend.__qualname__,
+    "listed": listed,
+}))
+"""
+    proc = subprocess.run(
+        [sys.executable, "-c", child],
+        capture_output=True,
+        text=True,
+        timeout=600,
+        env={
+            **os.environ,
+            # The child must resolve the SAME packages this process did, not
+            # whatever site-packages happens to hold.
+            "PYTHONPATH": os.pathsep.join(p for p in sys.path if p),
+        },
+    )
+    assert proc.returncode == 0, f"child failed:\n{proc.stdout}\n{proc.stderr}"
+    payload = json.loads(proc.stdout.strip().splitlines()[-1])
+    assert "error" not in payload, payload["error"]
+
+    # The simulation is only evidence if it actually changed the backend.
+    assert payload["backend"].startswith("mcp.server.fastmcp"), (
+        "blocking `fastmcp` did not move the backend to the official MCP SDK; "
+        f"got {payload['backend']} -- this run did NOT exercise the second stack"
+    )
+    assert payload[
+        "listed"
+    ], f"expose_as_mcp_server published NO tools under {payload['backend']}"
+    assert "extract_str" in payload["listed"]
+
+
+@pytest.mark.regression
+def test_a_server_that_would_expose_no_tools_raises_instead_of_returning(monkeypatch):
+    """The all-refused case must fail loudly, not hand back an empty server.
+
+    Surviving ONE un-publishable method is correct (pinned above). Surviving
+    EVERY one is not: the caller gets an object that looks like a working MCP
+    server, advertises nothing, and the only trace is a WARNING per method.
+    That is precisely the shape that let #2086's defect ship for two releases
+    -- every log line was accurate and no caller could tell.
+
+    The refusal is injected at ``MCPServer.tool`` rather than staged with
+    un-publishable methods, because the mixin's pre-filter cannot produce this
+    state on its own: an agent inherits MCPMixin's own publishable methods, so
+    a sweep always registers something. What CAN produce it is the thing that
+    actually happened -- the server-side framework starting to refuse a shape
+    it used to accept -- and that is what is modelled here, with FastMCP
+    2.12.4's real message.
+    """
+    pytest.importorskip("kailash_mcp", reason="MCP server package not installed")
+    import kailash_mcp.server as kailash_mcp_server
+    from kaizen.core.mcp_mixin import MCPMixin
+
+    def _refuse_everything(self, *args, **kwargs):
+        def decorator(func):
+            raise ValueError("Functions with **kwargs are not supported as tools")
+
+        return decorator
+
+    monkeypatch.setattr(kailash_mcp_server.MCPServer, "tool", _refuse_everything)
+
+    class _ProbeAgent(MCPMixin):
+        agent_id = "issue-2086-refused"
+
+        def greet(self, name: str) -> str:
+            """Greet someone."""
+            return f"hi {name}"
+
+    with pytest.raises(RuntimeError, match="would expose NO tools") as excinfo:
+        _ProbeAgent().expose_as_mcp_server(
+            "issue-2086-empty", enable_auto_discovery=False
+        )
+
+    # The message has to name the methods AND the reason, or the operator is
+    # back to reconstructing what happened from log output.
+    message = str(excinfo.value)
+    assert "greet" in message, message
+    assert "**kwargs are not supported as tools" in message, message

@@ -14,15 +14,26 @@ Systems Tested (All 6):
 - Checkpoints: Auto-checkpoint, resume, compression
 - Interrupts: Graceful shutdown, timeout, budget enforcement
 
-Test Strategy: Tier 3 (E2E) - Full autonomous agents, real Ollama inference
+Test Strategy: Tier 3 (E2E) - Full autonomous agents, real LLM inference
 Duration: 20-45 minutes per test (total: ~95 min)
 Budget: <$2.00 total OpenAI costs
 
-NOTE: Requires Ollama running locally with llama3.2 model
+Providers (as actually configured in the code below, not aspirationally):
+- Test 1 (enterprise workflow) runs entirely on OpenAI: one prod-tier
+  coordinator (OPENAI_PROD_MODEL) plus three dev-tier specialists
+  (OPENAI_DEV_MODEL).
+- Tests 2 and 3 (research pipeline, data pipeline) run on local Ollama
+  (OLLAMA_MODEL).
+
+NOTE: Requires Ollama running locally with the OLLAMA_MODEL model, plus
+OPENAI_API_KEY and the OpenAI model variables. All model identifiers come
+from .env (rules/env-models.md); each test SKIPS with a reason naming the
+missing variable rather than falling back to a hardcoded model.
 """
 
 import asyncio
 import json
+import os
 import tempfile
 import time
 from dataclasses import dataclass
@@ -71,18 +82,55 @@ try:
 except ImportError:
     DATAFLOW_AVAILABLE = False
 
-# Check Ollama availability
+# ═══════════════════════════════════════════════════════════════
+# Model selection - .env is the single source of truth
+# ═══════════════════════════════════════════════════════════════
+# Per rules/env-models.md model identifiers are NEVER hardcoded here. The
+# resolution chains follow the established repo convention (root
+# conftest.py::dev_model, tests/config_unified.py::OLLAMA_CONFIG):
+#   prod/capable OpenAI model -> OPENAI_PROD_MODEL -> DEFAULT_LLM_MODEL
+#   dev/cheap OpenAI model    -> OPENAI_DEV_MODEL  -> DEFAULT_LLM_MODEL
+#   local Ollama model        -> OLLAMA_MODEL
+# Deliberately NO literal default: an unset variable SKIPS the test with a
+# reason naming the variable, instead of silently driving a baked-in model
+# (rules/zero-tolerance.md Rule 3 - silent fallbacks are BLOCKED).
+_OPENAI_PROD_MODEL = (
+    os.environ.get("OPENAI_PROD_MODEL", "").strip()
+    or os.environ.get("DEFAULT_LLM_MODEL", "").strip()
+)
+_OPENAI_DEV_MODEL = (
+    os.environ.get("OPENAI_DEV_MODEL", "").strip()
+    or os.environ.get("DEFAULT_LLM_MODEL", "").strip()
+)
+_OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "").strip()
+
+# Check model configuration and Ollama availability
 pytestmark = [
     pytest.mark.e2e,
     pytest.mark.asyncio,
     pytest.mark.integration,
     pytest.mark.skipif(
+        not _OLLAMA_MODEL,
+        reason=(
+            "OLLAMA_MODEL unset in .env (rules/env-models.md); refusing to "
+            "fall back to a hardcoded model"
+        ),
+    ),
+    pytest.mark.skipif(
+        not (_OPENAI_PROD_MODEL and _OPENAI_DEV_MODEL),
+        reason=(
+            "OPENAI_PROD_MODEL / OPENAI_DEV_MODEL (or DEFAULT_LLM_MODEL) unset "
+            "in .env (rules/env-models.md); Test 1 drives OpenAI"
+        ),
+    ),
+    pytest.mark.skipif(
         not OllamaHealthChecker.is_ollama_running(),
         reason="Ollama not running",
     ),
     pytest.mark.skipif(
-        not OllamaHealthChecker.is_model_available("llama3.2"),
-        reason="llama3.2 model not available",
+        bool(_OLLAMA_MODEL)
+        and not OllamaHealthChecker.is_model_available(_OLLAMA_MODEL),
+        reason=f"Ollama model {_OLLAMA_MODEL!r} (OLLAMA_MODEL) not available",
     ),
 ]
 
@@ -152,7 +200,7 @@ class IntegrationTestConfig:
     """Base configuration for integration tests."""
 
     llm_provider: str = "ollama"
-    model: str = "llama3.2"
+    model: str = _OLLAMA_MODEL
     temperature: float = 0.3
     max_cycles: int = 30
     checkpoint_frequency: int = 5
@@ -445,7 +493,7 @@ async def test_enterprise_workflow_integration():
     - Budget interrupt triggers graceful shutdown
 
     Expected duration: ~30 minutes
-    Budget: <$0.50 OpenAI (mostly Ollama)
+    Budget: <$0.50 OpenAI (this test runs entirely on OpenAI)
     """
     cost_tracker = get_global_tracker()
 
@@ -582,7 +630,7 @@ async def test_enterprise_workflow_integration():
 
         config = AutonomousConfig(
             llm_provider="openai",
-            model="gpt-4o",  # GPT-4o for best instruction following and tool usage
+            model=_OPENAI_PROD_MODEL,  # prod tier: best instruction following + tool usage
             temperature=0.7,  # Higher temperature for exploratory tool usage behavior
             max_cycles=30,
             checkpoint_frequency=5,
@@ -656,7 +704,7 @@ async def test_enterprise_workflow_integration():
         # Create and register billing specialist
         billing_config = AutonomousConfig(
             llm_provider="openai",
-            model="gpt-4o-mini",
+            model=_OPENAI_DEV_MODEL,
             temperature=0.0,
             max_cycles=10,
         )
@@ -677,7 +725,7 @@ async def test_enterprise_workflow_integration():
         # Create and register technical specialist
         technical_config = AutonomousConfig(
             llm_provider="openai",
-            model="gpt-4o-mini",
+            model=_OPENAI_DEV_MODEL,
             temperature=0.0,
             max_cycles=10,
         )
@@ -698,7 +746,7 @@ async def test_enterprise_workflow_integration():
         # Create and register sales specialist
         sales_config = AutonomousConfig(
             llm_provider="openai",
-            model="gpt-4o-mini",
+            model=_OPENAI_DEV_MODEL,
             temperature=0.0,
             max_cycles=10,
         )
@@ -995,7 +1043,7 @@ async def test_enterprise_workflow_integration():
         cost_tracker.track_usage(
             test_name="test_enterprise_workflow_integration",
             provider="ollama",
-            model="llama3.1:8b-instruct-q8_0",
+            model=_OLLAMA_MODEL,
             input_tokens=estimated_tokens // 2,
             output_tokens=estimated_tokens // 2,
         )
@@ -1132,7 +1180,7 @@ async def test_multi_agent_research_pipeline():
 
         pev_config = {
             "llm_provider": "ollama",
-            "model": "llama3.2",
+            "model": _OLLAMA_MODEL,
             "temperature": 0.5,
             "max_iterations": 3,
             "verification_strictness": "medium",
@@ -1142,7 +1190,7 @@ async def test_multi_agent_research_pipeline():
         # NOTE: PEVAgent may not exist yet - use BaseAutonomousAgent with planning
         config = AutonomousConfig(
             llm_provider="ollama",
-            model="llama3.1:8b-instruct-q8_0",
+            model=_OLLAMA_MODEL,
             temperature=0.5,
             max_cycles=40,
             checkpoint_frequency=3,
@@ -1223,7 +1271,7 @@ async def test_multi_agent_research_pipeline():
             # Create new agent to resume from checkpoint
             resume_config = AutonomousConfig(
                 llm_provider="ollama",
-                model="llama3.1:8b-instruct-q8_0",
+                model=_OLLAMA_MODEL,
                 max_cycles=5,
                 resume_from_checkpoint=True,
                 checkpoint_frequency=2,
@@ -1271,7 +1319,7 @@ async def test_multi_agent_research_pipeline():
         cost_tracker.track_usage(
             test_name="test_multi_agent_research_pipeline",
             provider="ollama",
-            model="llama3.1:8b-instruct-q8_0",
+            model=_OLLAMA_MODEL,
             input_tokens=estimated_tokens // 2,
             output_tokens=estimated_tokens // 2,
         )
@@ -1395,7 +1443,7 @@ async def test_autonomous_data_pipeline_error_recovery():
 
         config = AutonomousConfig(
             llm_provider="ollama",
-            model="llama3.1:8b-instruct-q8_0",
+            model=_OLLAMA_MODEL,
             temperature=0.3,
             max_cycles=25,
             checkpoint_frequency=2,
@@ -1478,7 +1526,7 @@ async def test_autonomous_data_pipeline_error_recovery():
         # Create new agent to resume
         resume_config = AutonomousConfig(
             llm_provider="ollama",
-            model="llama3.1:8b-instruct-q8_0",
+            model=_OLLAMA_MODEL,
             max_cycles=10,
             resume_from_checkpoint=True,
             checkpoint_frequency=2,
@@ -1555,7 +1603,7 @@ async def test_autonomous_data_pipeline_error_recovery():
         cost_tracker.track_usage(
             test_name="test_autonomous_data_pipeline_error_recovery",
             provider="ollama",
-            model="llama3.1:8b-instruct-q8_0",
+            model=_OLLAMA_MODEL,
             input_tokens=estimated_tokens // 2,
             output_tokens=estimated_tokens // 2,
         )
@@ -1605,12 +1653,13 @@ Test Coverage: 3 Comprehensive E2E Integration Tests (TODO-176 Week 2)
 
 Total: 3 comprehensive tests
 Expected Runtime: ~95 minutes (real LLM inference)
-Requirements: Ollama running with llama3.2 model
+Requirements: Ollama running with the OLLAMA_MODEL model (Tests 2-3), plus
+OPENAI_API_KEY + OPENAI_PROD_MODEL/OPENAI_DEV_MODEL (Test 1) - all from .env
 Total Budget: <$2.00 (mostly Ollama = $0.00)
 
 All tests validate:
 - Real autonomous execution (NO MOCKING)
-- Real Ollama LLM inference (NO MOCKING)
+- Real LLM inference (OpenAI for Test 1, Ollama for Tests 2-3; NO MOCKING)
 - Real file operations (NO MOCKING)
 - Real checkpoint persistence (NO MOCKING)
 - Real interrupt handling (NO MOCKING)

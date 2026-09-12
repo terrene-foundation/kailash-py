@@ -81,6 +81,7 @@ class BaseAgent(MCPMixin, A2AMixin, OutputExtractionMixin, ControlProtocolMixin,
         mcp_servers: Optional[List[Dict[str, Any]]] = None,
         hook_manager: Optional[Any] = None,
         checkpoint_manager: Optional[Any] = None,
+        description: Optional[str] = None,
     ):
         """Initialize BaseAgent.
 
@@ -101,6 +102,14 @@ class BaseAgent(MCPMixin, A2AMixin, OutputExtractionMixin, ControlProtocolMixin,
                 ``self.checkpoint_manager`` so strategies/hooks that opt
                 into checkpointing can discover it via duck-typing.
                 ``None`` disables checkpointing for this agent.
+            description: Optional human-readable description of what THIS agent
+                instance does. It becomes the ``description`` of the A2A
+                capability card returned by ``to_a2a_card()`` and so feeds
+                semantic capability matching. ``None`` (or an empty string)
+                keeps the historical behaviour of deriving the description from
+                the class docstring — which is shared by every instance of that
+                class, and therefore cannot distinguish two specialists built
+                from the same class. Supply it when it must.
         """
         # Auto-convert domain config to BaseAgentConfig
         if not isinstance(config, BaseAgentConfig):
@@ -119,6 +128,11 @@ class BaseAgent(MCPMixin, A2AMixin, OutputExtractionMixin, ControlProtocolMixin,
         self.memory = memory
         self.shared_memory = shared_memory
         self.agent_id = agent_id if agent_id is not None else f"agent_{id(self)}"
+
+        # Per-instance A2A card description. Consumed by
+        # ``_get_agent_description()`` below, which A2AMixin.to_a2a_card() calls
+        # to populate ``A2AAgentCard.description``.
+        self.description = description
 
         # Control protocol
         self.control_protocol = control_protocol
@@ -270,6 +284,32 @@ class BaseAgent(MCPMixin, A2AMixin, OutputExtractionMixin, ControlProtocolMixin,
                         f"(config flag: {flag}): {exc}"
                     ) from exc
                 mixin_cls.apply(self)
+
+    # =========================================================================
+    # A2A capability card
+    # =========================================================================
+
+    def _get_agent_description(self) -> str:
+        """Describe THIS agent for its A2A capability card.
+
+        An explicitly supplied ``description`` wins, because it is the only
+        source that can distinguish two instances of the SAME class — the
+        docstring fallback in ``A2AMixin`` is class-level and returns the same
+        text for every instance, so same-class specialists would otherwise
+        publish byte-identical cards.
+
+        An empty/whitespace-only string is NOT an identity and is treated as
+        "not supplied", so it cannot blank out the card field; the inherited
+        docstring/signature derivation still runs via ``super()``.
+        """
+        # ``getattr`` mirrors the idiom to_a2a_card() already uses for
+        # ``version``, and keeps this safe for a subclass that builds a card
+        # before BaseAgent.__init__ has run.
+        description = getattr(self, "description", None)
+        if description and description.strip():
+            return description.strip()
+
+        return super()._get_agent_description()
 
     # =========================================================================
     # Node interface
