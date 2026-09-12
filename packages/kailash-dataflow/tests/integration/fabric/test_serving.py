@@ -166,11 +166,18 @@ class TestFabricServingLayer:
         routes = serving.get_routes()
         handler = next(r["handler"] for r in routes if r["path"] == "/fabric/_batch")
 
-        over = ",".join(f"p{i}" for i in range(_MAX_BATCH_PRODUCTS + 1))
+        # The cap VALUE is the contract, not merely the guard's existence.
+        # Deriving the input from _MAX_BATCH_PRODUCTS made this test pass for
+        # EVERY cap: mutating the constant to 10**9 left it green (it just took
+        # 115s to build the input). Pin the value, and use a literal over-cap
+        # input, so a widened cap reds here instead of shipping silently.
+        assert _MAX_BATCH_PRODUCTS == 50
+
+        over = ",".join(f"p{i}" for i in range(51))
         result = await handler(products=over)
 
         assert result["_status"] == 400
-        assert str(_MAX_BATCH_PRODUCTS) in result["error"]
+        assert "50" in result["error"]
 
     @pytest.mark.asyncio
     async def test_batch_handler_allows_exactly_the_cap(self):
