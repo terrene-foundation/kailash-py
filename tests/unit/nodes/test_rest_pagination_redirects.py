@@ -50,6 +50,7 @@ Every transport double is built from the REAL declared type: an actual
 """
 
 import logging
+import pathlib
 from contextlib import asynccontextmanager, contextmanager
 from typing import Any
 
@@ -74,16 +75,29 @@ CREDENTIAL_HEADERS = {
 }
 
 
-def test_source_under_test_is_this_worktree():
-    """Pin the import path.
+def test_source_under_test_is_this_checkout():
+    """Pin the import path to THIS checkout, wherever it is.
 
-    pytest in a linked worktree silently imports the MAIN checkout when
-    ``pythonpath`` resolves elsewhere, which would make every assertion below a
-    statement about code this shard never edited.
+    pytest silently imports a different tree when ``pythonpath`` resolves
+    elsewhere — the main checkout from inside a linked worktree, or an installed
+    site-packages copy from anywhere — which would make every assertion below a
+    statement about code this file never edited.
+
+    The anchor is derived from THIS FILE's location rather than hard-coded, so
+    the pin survives the worktree being reaped. The original form asserted a
+    literal ``/.kailash-py-wt/rest/src/`` and went red the moment the lane's
+    worktree was removed and the work landed on the trunk — pinning the
+    authoring location rather than the invariant.
     """
     from kailash.nodes.api import rest as rest_module
 
-    assert "/.kailash-py-wt/rest/src/" in rest_module.__file__, rest_module.__file__
+    repo_root = pathlib.Path(__file__).resolve().parents[3]
+    module_path = pathlib.Path(rest_module.__file__).resolve()
+
+    assert module_path.is_relative_to(repo_root / "src"), (
+        f"kailash.nodes.api.rest resolved to {module_path}, which is not under "
+        f"{repo_root / 'src'} — the assertions below would describe a different tree"
+    )
 
 
 def transport_return(content, *, headers=None, status=200, url=FULL_URL):
