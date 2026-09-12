@@ -38,7 +38,10 @@ from enum import Enum
 from typing import Any, Optional
 
 from kailash.trust._canonical import canonical_scalars
-from kailash.trust.action_policy import allowed_actions_tightening_violation
+from kailash.trust.action_policy import (
+    allowed_actions_tightening_violation,
+    blocked_actions_tightening_violation,
+)
 from kailash.trust.signing.algorithm_id import (
     AlgorithmIdentifier,
     coerce_algorithm_id,
@@ -927,9 +930,16 @@ class ConstraintEnvelope:
         if other.operational is not None:
             if self.operational is None:
                 return False
-            # Blocked actions: this must be superset
-            if not set(other.operational.blocked_actions).issubset(
-                set(self.operational.blocked_actions)
+            # Blocked actions: this must be a SUPERSET of other's. Routed
+            # through the shared predicate (GH #2225) rather than a local
+            # set comparison, so this surface and the pact tightening
+            # validator cannot drift on how an unreadable or absent
+            # blocklist ranks (security.md § Enforcement-Surface Parity).
+            if (
+                blocked_actions_tightening_violation(
+                    other.operational, self.operational
+                )
+                is not None
             ):
                 return False
             # Allowed actions: this allowlist must be a SUBSET of other's.

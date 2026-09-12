@@ -21,7 +21,10 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
-from kailash.trust.action_policy import allowed_actions_tightening_violation
+from kailash.trust.action_policy import (
+    allowed_actions_tightening_violation,
+    blocked_actions_tightening_violation,
+)
 from kailash.trust.signing.crypto import serialize_for_signing
 
 logger = logging.getLogger(__name__)
@@ -50,13 +53,29 @@ __all__ = [
 class OperationalConstraints:
     """EATP OPERATIONAL dimension — what the AI can do."""
 
-    allowed_actions: list[str] = field(default_factory=list)
-    blocked_actions: list[str] = field(default_factory=list)
+    # tuple, not list: ``frozen=True`` blocks REBINDING the attribute and does
+    # NOTHING about mutating a list it holds, so ``.allowed_actions.append(...)``
+    # was a permanent self-granted permission -- and ``from_dict`` ALIASED the
+    # caller's list, so the widening could also land from outside AFTER a
+    # tightening check had already passed (GH #2225, same class as #2226). The
+    # sibling ``pact.config.OperationalConstraintConfig`` already spells these
+    # two fields as tuples for the same reason.
+    allowed_actions: tuple[str, ...] = field(default_factory=tuple)
+    blocked_actions: tuple[str, ...] = field(default_factory=tuple)
+
+    def __post_init__(self) -> None:
+        # frozen=True requires object.__setattr__ in __post_init__. Coercing
+        # here (rather than trusting the annotation) is what makes EVERY
+        # construction path immutable -- a dataclass does not validate or
+        # convert field types, so a caller passing a list would otherwise keep
+        # a live handle into the envelope.
+        object.__setattr__(self, "allowed_actions", tuple(self.allowed_actions))
+        object.__setattr__(self, "blocked_actions", tuple(self.blocked_actions))
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "allowed_actions": self.allowed_actions,
-            "blocked_actions": self.blocked_actions,
+            "allowed_actions": list(self.allowed_actions),
+            "blocked_actions": list(self.blocked_actions),
         }
 
     @classmethod
@@ -74,10 +93,13 @@ class OperationalConstraints:
 class DataAccessConstraints:
     """EATP DATA_ACCESS dimension — what data the AI can see and modify."""
 
-    read_paths: list[str] = field(default_factory=list)
-    write_paths: list[str] = field(default_factory=list)
-    blocked_paths: list[str] = field(default_factory=list)
-    blocked_patterns: list[str] = field(default_factory=list)
+    # tuple, not list -- see OperationalConstraints (GH #2225). The
+    # normalization below already rebuilt these, so they did not alias the
+    # caller's list, but they stayed mutable IN PLACE on the stored object.
+    read_paths: tuple[str, ...] = field(default_factory=tuple)
+    write_paths: tuple[str, ...] = field(default_factory=tuple)
+    blocked_paths: tuple[str, ...] = field(default_factory=tuple)
+    blocked_patterns: tuple[str, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
         from kailash.trust.pathutils import normalize_resource_path
@@ -86,30 +108,30 @@ class DataAccessConstraints:
         object.__setattr__(
             self,
             "read_paths",
-            [normalize_resource_path(p) for p in self.read_paths],
+            tuple(normalize_resource_path(p) for p in self.read_paths),
         )
         object.__setattr__(
             self,
             "write_paths",
-            [normalize_resource_path(p) for p in self.write_paths],
+            tuple(normalize_resource_path(p) for p in self.write_paths),
         )
         object.__setattr__(
             self,
             "blocked_paths",
-            [normalize_resource_path(p) for p in self.blocked_paths],
+            tuple(normalize_resource_path(p) for p in self.blocked_paths),
         )
         object.__setattr__(
             self,
             "blocked_patterns",
-            [normalize_resource_path(p) for p in self.blocked_patterns],
+            tuple(normalize_resource_path(p) for p in self.blocked_patterns),
         )
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "read_paths": self.read_paths,
-            "write_paths": self.write_paths,
-            "blocked_paths": self.blocked_paths,
-            "blocked_patterns": self.blocked_patterns,
+            "read_paths": list(self.read_paths),
+            "write_paths": list(self.write_paths),
+            "blocked_paths": list(self.blocked_paths),
+            "blocked_patterns": list(self.blocked_patterns),
         }
 
     @classmethod
@@ -205,15 +227,22 @@ class TemporalConstraints:
 class CommunicationConstraints:
     """EATP COMMUNICATION dimension — external communication boundaries."""
 
-    allowed_channels: list[str] = field(default_factory=list)
-    blocked_channels: list[str] = field(default_factory=list)
-    requires_review: list[str] = field(default_factory=list)
+    # tuple, not list -- see OperationalConstraints (GH #2225). These three
+    # aliased the caller's list on every construction path.
+    allowed_channels: tuple[str, ...] = field(default_factory=tuple)
+    blocked_channels: tuple[str, ...] = field(default_factory=tuple)
+    requires_review: tuple[str, ...] = field(default_factory=tuple)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "allowed_channels", tuple(self.allowed_channels))
+        object.__setattr__(self, "blocked_channels", tuple(self.blocked_channels))
+        object.__setattr__(self, "requires_review", tuple(self.requires_review))
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "allowed_channels": self.allowed_channels,
-            "blocked_channels": self.blocked_channels,
-            "requires_review": self.requires_review,
+            "allowed_channels": list(self.allowed_channels),
+            "blocked_channels": list(self.blocked_channels),
+            "requires_review": list(self.requires_review),
         }
 
     @classmethod
@@ -324,9 +353,14 @@ class ConstraintEnvelope:
         - Allowlists: this must be a subset (fewer things allowed)
         - Numeric limits: this must be ≤ (lower limits)
         """
-        # Blocked actions: this must be superset of other (more blocked = tighter)
-        if not set(other.operational.blocked_actions).issubset(
-            set(self.operational.blocked_actions)
+        # Blocked actions: this must be a SUPERSET of other's (more blocked =
+        # tighter). Routed through the shared predicate (GH #2225) rather than
+        # a local set comparison, so every tightening surface ranks an
+        # unreadable or absent blocklist identically
+        # (security.md § Enforcement-Surface Parity).
+        if (
+            blocked_actions_tightening_violation(other.operational, self.operational)
+            is not None
         ):
             return False
         # Allowed actions: this allowlist must be a SUBSET of other's.

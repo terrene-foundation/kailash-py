@@ -31,6 +31,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from kailash.trust.action_policy import (
     allowed_actions_tightening_violation,
+    blocked_actions_tightening_violation,
     operational_view,
 )
 
@@ -597,16 +598,19 @@ class ConstraintValidator:
             # Parent doesn't forbid anything
             return
 
-        parent_forbidden = set(parent_constraints.get("forbidden_actions", []))
-        child_forbidden = set(child_constraints.get("forbidden_actions", []))
-
-        # All parent's forbidden actions must be in child's forbidden list
-        removed_forbidden = parent_forbidden - child_forbidden
-        if removed_forbidden:
+        # Shared restrictiveness model (GH #2225): the child's blocklist must
+        # be a SUPERSET of the parent's. Routed through the same predicate the
+        # envelope tightening surfaces use -- this dimension is spelled
+        # ``forbidden_actions`` here and ``blocked_actions`` there, but it is
+        # the same control and must rank unreadable values identically
+        # (security.md § Enforcement-Surface Parity).
+        fa_violation = blocked_actions_tightening_violation(
+            operational_view(blocked=parent_constraints.get("forbidden_actions", [])),
+            operational_view(blocked=child_constraints.get("forbidden_actions", [])),
+        )
+        if fa_violation is not None:
             violations.append(ConstraintViolation.FORBIDDEN_ACTION_REMOVED)
-            details["forbidden_actions"] = (
-                f"Parent's forbidden actions removed: {removed_forbidden}"
-            )
+            details["forbidden_actions"] = fa_violation
 
     def _validate_resource_scopes(
         self,

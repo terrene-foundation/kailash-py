@@ -21,7 +21,10 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from kailash.trust.action_policy import allowed_actions_tightening_violation
+from kailash.trust.action_policy import (
+    allowed_actions_tightening_violation,
+    blocked_actions_tightening_violation,
+)
 from kailash.trust.pact.addressing import Address
 from kailash.trust.pact.config import (
     CONFIDENTIALITY_ORDER,
@@ -565,6 +568,22 @@ class RoleEnvelope:
         )
         if aa_violation is not None:
             violations.append(f"Operational: {aa_violation}")
+
+        # Operational: child blocked_actions must be a SUPERSET of the parent's
+        # (GH #2225). Monotonic tightening has TWO directions and this surface
+        # only ever checked one: a child could keep an impeccable allowlist
+        # subset while EMPTYING the blocklist, and register. Measured before
+        # the fix, a child of a parent blocking "transfer_funds" registered
+        # with an empty blocklist, and every surface reading that child
+        # envelope directly then PERMITTED the transfer. Uses the SAME shared
+        # restrictiveness model the sibling surfaces consume -- three of them
+        # hand-wrote this comparison, so the predicate is shared rather than
+        # spelled a fourth time (security.md § Enforcement-Surface Parity).
+        ba_violation = blocked_actions_tightening_violation(
+            parent_envelope.operational, child_envelope.operational
+        )
+        if ba_violation is not None:
+            violations.append(f"Operational: {ba_violation}")
 
         # Operational: circuit-breaker (BH5 #1510). A re-registration/tightening
         # that STRIPS or LOOSENS a parent breaker is a widening -- a privilege

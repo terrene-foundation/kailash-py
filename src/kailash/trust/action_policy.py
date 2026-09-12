@@ -66,6 +66,7 @@ __all__ = [
     "evaluate_scope",
     "scope_permitted",
     "allowed_actions_tightening_violation",
+    "blocked_actions_tightening_violation",
 ]
 
 
@@ -533,4 +534,96 @@ def allowed_actions_tightening_violation(
     return (
         f"allowed_actions widened: child adds {sorted(extra)}, which is not in "
         f"the parent allowed set {sorted(parent_allowed)}"
+    )
+
+
+def blocked_actions_tightening_violation(
+    parent_operational: Any,
+    child_operational: Any,
+) -> str | None:
+    """Return a WIDENING message if the child PERMITS what the parent BLOCKS.
+
+    The blocklist is the other half of monotonic tightening, and it cannot be
+    checked the way the allowlist is. The invariant this enforces is:
+
+        child.permitted (allowed - blocked)  disjoint from  parent.blocked
+
+    WHY NOT a plain "child blocklist must be a SUPERSET of the parent's".
+    That is the textbook statement, and it is what three sibling surfaces
+    historically spelled inline, but it is WRONG for this surface and was
+    measured wrong: a TASK envelope is an intersected OVERLAY that declares
+    only what it narrows, so it legitimately omits ``blocked_actions``
+    entirely. Under a strict-superset rule every task envelope would have to
+    restate its parent's whole blocklist, and adding one blocked action to a
+    role envelope would retroactively invalidate every task envelope beneath
+    it. ``tests/trust/pact/unit/test_envelope_adapter.py`` encodes exactly
+    that legitimate pattern and a strict-superset rule fails it.
+
+    WHY THE WEAKER-LOOKING RULE IS THE SECURITY-CORRECT ONE. The threat
+    (GH #2225) is not "the child's blocklist got shorter" -- it is "a surface
+    reading the CHILD envelope DIRECTLY grants an action the parent denies".
+    Measured before this predicate existed: a parent blocking
+    ``transfer_funds`` accepted a child declaring
+    ``allowed=["read","transfer_funds"], blocked=[]``, and
+    ``evaluate_action`` on that child returned PERMITTED. Dropping a blocked
+    action the child never allows escalates nothing -- the allowlist still
+    denies it -- so rejecting that case buys no safety and costs a working
+    pattern.
+
+    This deliberately REFUTES the premise recorded in
+    :func:`allowed_actions_tightening_violation`'s docstring, that a child
+    restating an ancestor-blocked action is harmless "because the intersection
+    already denies it at evaluation". The intersection does deny it; the
+    surfaces that read the child envelope WITHOUT intersecting do not.
+
+    Unrecognized values rank TIGHTEST on both sides:
+
+    * Parent ``None`` or MALFORMED -> blocks nothing recorded / permits
+      nothing at all; the allowlist axis already fails closed there. ``None``.
+    * Child ``None`` while the parent blocks something -> the child drops the
+      dimension, so the parent's own allowlist is what it inherits; anything
+      the parent blocks that the parent also allows becomes reachable.
+      Rejected.
+    * Child MALFORMED -> permits nothing, the tightest state. ``None``.
+
+    Returns:
+        ``None`` when the child permits nothing its parent blocks, else a
+        message naming the actions it would unblock.
+    """
+    if parent_operational is None:
+        return None
+
+    parent_policy = read_action_policy(parent_operational)
+    if parent_policy is None:  # pragma: no cover - guarded above
+        return None
+
+    # A malformed parent permits nothing; the allowlist axis owns that failure.
+    if parent_policy.malformed:
+        return None
+
+    parent_blocked = parent_policy.blocked
+    if not parent_blocked:
+        return None
+
+    if child_operational is None:
+        return (
+            "blocked_actions widened: parent blocks "
+            f"{sorted(parent_blocked)} but the child drops the operational "
+            "dimension entirely, so nothing re-applies them"
+        )
+
+    child_policy = read_action_policy(child_operational)
+    assert child_policy is not None  # child_operational is not None
+
+    # A malformed child permits nothing -- the TIGHTEST state on this axis.
+    if child_policy.malformed:
+        return None
+
+    unblocked = child_policy.permitted & parent_blocked
+    if not unblocked:
+        return None
+
+    return (
+        f"blocked_actions widened: child permits {sorted(unblocked)}, which "
+        f"the parent explicitly blocks {sorted(sorted(parent_blocked))}"
     )
