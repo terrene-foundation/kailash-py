@@ -48,6 +48,9 @@ try:
 except ImportError:
     AsyncNode = Node  # type: ignore[assignment,misc]
 
+from kailash.utils.secure_logging import (  # log-injection barrier for logged VALUES
+    sanitize_log_value,
+)
 from kailash.utils.url_credentials import (  # Issue #2027: field-name fingerprints
     fingerprint_secret,
 )
@@ -3119,8 +3122,16 @@ class NodeGenerator:
                     import logging
 
                     logger = logging.getLogger(__name__)
+                    # `record_id` is CALLER-CONTROLLED. Interpolated raw, a value
+                    # carrying \r or \n ends the record mid-line and everything
+                    # after the break reads as a separate, attacker-authored log
+                    # record. sanitize_log_value flattens every non-printable to
+                    # a space AND bounds the length; the FLATTEN is the half that
+                    # closes the hole -- a length bound alone leaves it open.
                     logger.debug(
-                        f"DELETE: table={table_name}, id={record_id}, query={query}"
+                        f"DELETE: table={table_name}, "
+                        f"id={sanitize_log_value(record_id)}, "
+                        f"query={sanitize_log_value(query)}"
                     )
 
                     # Get or create cached AsyncSQLDatabaseNode for connection pooling
