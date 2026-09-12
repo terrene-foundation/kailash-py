@@ -19,6 +19,31 @@ Endpoints:
 Each endpoint includes a ``request: Request`` parameter as required by
 slowapi rate limiting. The limiter and rate_limit are optionally passed
 into the router constructor for per-route rate limiting.
+
+ACTOR PROVENANCE (issue #2194)
+------------------------------
+Actor fields -- ``granted_by_role_address``, ``created_by_role_address``,
+``defining_role_address`` -- arrive in the request body. They are caller
+ASSERTIONS: ``GovernanceAuth`` authenticates a single shared bearer token
+and yields a constant identity, so no actor role address can be derived
+server-side (``security.md`` § Identity-derivation parity).
+
+Rather than fabricate an authorization check against a constant, every such
+assertion is passed through ``unverified_actor_claim`` so that it is never
+recorded in the same grammar as a server-derived fact:
+
+* durable records store the claim prefixed with ``unverified-claim:``;
+* governance events publish it under ``<field>_claimed`` alongside
+  ``actor_verified`` and the server-derived ``authenticated_identity``.
+
+One exception, and it is deliberate: ``defining_role_address`` is resolved
+by the engine to compute the parent envelope for the monotonic-tightening
+check, so marking the STORED value would make that lookup miss and skip the
+check. Only its audit payload is labelled.
+
+This is an honesty fix, not an authorization model. Which model to adopt --
+per-principal tokens, token-scope authorization, or keeping the labelled
+claim -- is the open decision in #2194.
 """
 
 from __future__ import annotations
@@ -41,7 +66,7 @@ from kailash.trust.pact.config import (
 from kailash.trust.pact.engine import GovernanceEngine
 from kailash.trust.pact.envelopes import RoleEnvelope
 from kailash.trust.pact.knowledge import KnowledgeItem
-from pact.governance.api.auth import GovernanceAuth
+from pact.governance.api.auth import GovernanceAuth, unverified_actor_claim
 from pact.governance.api.events import GovernanceEventType, emit_governance_event
 from pact.governance.api.schemas import (
     CheckAccessRequest,
@@ -141,6 +166,10 @@ def create_governance_router(
                 "role_address": req.role_address,
                 "item_id": req.item_id,
                 "allowed": decision.allowed,
+                # #2194: role_address above is the SUBJECT of the evaluation,
+                # supplied by the caller. This is the only fact the server
+                # derived about who made the call.
+                "authenticated_identity": identity,
             },
             source_role_address=req.role_address,
         )
@@ -186,6 +215,8 @@ def create_governance_router(
                 "action": req.action,
                 "level": verdict.level,
                 "allowed": verdict.allowed,
+                # #2194: role_address is the caller-supplied SUBJECT.
+                "authenticated_identity": identity,
             },
             source_role_address=req.role_address,
         )
@@ -314,11 +345,19 @@ def create_governance_router(
         if node is not None:
             resolved_address = node.address
 
+        # #2194: the grantor address is a caller ASSERTION -- the shared
+        # bearer token yields no principal to derive it from, so it is
+        # recorded marked-unverified rather than in the grammar of a
+        # server-derived fact. The claim itself is preserved.
+        recorded_granted_by, actor_audit = unverified_actor_claim(
+            req.granted_by_role_address, identity, field="granted_by"
+        )
+
         clearance = RoleClearance(
             role_address=resolved_address,
             max_clearance=ConfidentialityLevel(req.max_clearance),
             compartments=frozenset(req.compartments),
-            granted_by_role_address=req.granted_by_role_address,
+            granted_by_role_address=recorded_granted_by,
             vetting_status=VettingStatus.ACTIVE,
         )
 
@@ -332,9 +371,9 @@ def create_governance_router(
             {
                 "role_address": req.role_address,
                 "max_clearance": req.max_clearance,
-                "granted_by": req.granted_by_role_address,
+                **actor_audit,
             },
-            source_role_address=req.granted_by_role_address,
+            source_role_address=recorded_granted_by,
         )
 
         return {
@@ -379,6 +418,9 @@ def create_governance_router(
                 "role_a": req.role_a_address,
                 "role_b": req.role_b_address,
                 "bridge_type": req.bridge_type,
+                # #2194: role_a is a bridge ENDPOINT, not the caller. It is
+                # carried in source_role_address only as a correlation key.
+                "authenticated_identity": identity,
             },
             source_role_address=req.role_a_address,
         )
@@ -402,13 +444,17 @@ def create_governance_router(
     ) -> dict[str, Any]:
         """Create a Knowledge Share Policy for cross-unit access."""
         ksp_id = f"ksp-{uuid4().hex[:8]}"
+        # #2194: same shape as POST /clearances -- caller-asserted actor.
+        recorded_created_by, actor_audit = unverified_actor_claim(
+            req.created_by_role_address, identity, field="created_by"
+        )
         ksp = KnowledgeSharePolicy(
             id=ksp_id,
             source_unit_address=req.source_unit_address,
             target_unit_address=req.target_unit_address,
             max_classification=ConfidentialityLevel(req.max_classification),
             compartments=frozenset(req.compartments),
-            created_by_role_address=req.created_by_role_address,
+            created_by_role_address=recorded_created_by,
             min_clearance=(
                 ConfidentialityLevel(req.min_clearance)
                 if req.min_clearance is not None
@@ -433,8 +479,9 @@ def create_governance_router(
                 "ksp_id": ksp_id,
                 "source_unit": req.source_unit_address,
                 "target_unit": req.target_unit_address,
+                **actor_audit,
             },
-            source_role_address=req.created_by_role_address,
+            source_role_address=recorded_created_by,
         )
 
         return {
@@ -485,12 +532,23 @@ def create_governance_router(
         except Exception as exc:
             raise HTTPException(status_code=400, detail=_sanitize_error(exc))
 
+        # #2194: defining_role_address is ALSO a caller assertion, but unlike
+        # granted_by / created_by it is FUNCTIONALLY load-bearing --
+        # GovernanceEngine.set_role_envelope resolves it to compute the parent
+        # envelope for the monotonic-tightening check. Marking the stored value
+        # would make that lookup miss and SKIP the check, so only the audit
+        # payload is labelled here; the durable field stays resolvable.
+        _, actor_audit = unverified_actor_claim(
+            req.defining_role_address, identity, field="defining_role"
+        )
+
         await emit_governance_event(
             GovernanceEventType.ENVELOPE_SET,
             {
                 "envelope_id": req.envelope_id,
                 "defining_role": req.defining_role_address,
                 "target_role": req.target_role_address,
+                **actor_audit,
             },
             source_role_address=req.defining_role_address,
         )
