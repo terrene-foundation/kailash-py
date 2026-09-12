@@ -27,11 +27,19 @@ executes ungoverned.
 
 ``_inner`` is NOT a containment boundary and does not claim to be. It is the
 wrapper machinery's own link: every wrapper's ``run``/``run_async`` calls
-through it, ``_collect_wrapper_types`` walks it to validate stacking order,
+through it, ``_collect_wrapper_types`` walks it to validate stacking order, and
 ``StreamingAgent`` walks it to resolve the model config and system prompt from
-the base agent, and ``Delegate.core_agent`` walks it to expose the loop-agent
-bridge. Substituting a proxy there would have to be done in all five places at
-once and would change what those resolvers can read. A caller who reaches for
+the base agent. Measured, that is 21 traversal sites across 5 modules
+(``wrapper_base`` 7, ``streaming_agent`` 6, ``supervisor_wrapper`` 4,
+``governed_agent`` 2, ``monitored_agent`` 2). ``Delegate.core_agent`` was a
+22nd, in a 6th module, until #2227 Route C -- it is no longer, because walking
+this link is exactly what let a PUBLIC accessor hand back a raw runnable agent;
+it now defers to :attr:`WrapperBase.innermost`. Substituting a proxy on the link
+itself would have to be done at all 21 at once and would change what those
+resolvers can read -- ``streaming_agent`` reads ``_system_prompt`` through a
+bare ``getattr``, which no allowlist can ever expose, because
+:class:`~kailash.trust.readonly_proxy.ReadOnlyAttributeProxy` rejects
+leading-underscore names at construction. A caller who reaches for
 ``wrapper._inner`` is reaching into private machinery, which Python does not
 prevent and this module does not claim to -- the same honest scope statement
 :mod:`kailash.trust.readonly_proxy` makes about its own boundary. Tracked as
