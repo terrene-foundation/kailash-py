@@ -164,8 +164,16 @@ class TestAPINodesWithRealData:
             assert call_args[1]["url"] == "https://api.techcorp.com/v1/users"
             assert call_args[1]["headers"] == {"Authorization": "Bearer test_token"}
 
-    def test_rest_client_with_pagination(self):
-        """Test RESTClientNode with paginated responses."""
+    def test_rest_client_manual_page_by_page_requests(self):
+        """Two SEPARATE un-paginated requests, one per page, as a caller that
+        walks pages itself would issue them.
+
+        Renamed from ``test_rest_client_with_pagination``: it never passed
+        ``paginate=True`` and never has, so despite the old name it was never
+        an oracle for the pagination feature -- a caller-side page walk is all
+        it exercises. ``test_rest_client_paginate_true_merges_pages`` below is
+        the real oracle.
+        """
         node = RESTClientNode()
 
         # Mock paginated responses
@@ -218,6 +226,79 @@ class TestAPINodesWithRealData:
             assert result2["status_code"] == 200
             assert len(result2["data"]["users"]) == 1
             assert result2["data"]["has_next"] is False
+
+    def test_rest_client_paginate_true_merges_pages(self):
+        """The coverage the renamed test above never provided: ONE call with
+        ``paginate=True``, which must issue the follow-up page ITSELF and hand
+        back the merged item list.
+
+        The double sits at the ``requests.Session`` seam, the same seam every
+        other test in this class uses, so the whole production stack below
+        ``run()`` is real -- ``HTTPRequestNode.execute``, the real
+        ``HTTPResponse`` construction, the real ``response``/``status_code``/
+        ``success`` envelope. Nothing about the transport contract is assumed
+        here; it is executed.
+        """
+        node = RESTClientNode()
+
+        page1_response = {
+            "users": REAL_USER_API_RESPONSE["users"][:2],
+            "total": 3,
+            "page": 1,
+            "per_page": 2,
+        }
+        page2_response = {
+            "users": REAL_USER_API_RESPONSE["users"][2:],
+            "total": 3,
+            "page": 2,
+            "per_page": 2,
+        }
+
+        mock_session = Mock()
+        mock_session.request.side_effect = [
+            MockResponse(page1_response),
+            MockResponse(page2_response),
+        ]
+
+        with patch("kailash.nodes.api.http._http_session_pool.acquire") as mock_acquire:
+            mock_acquire.return_value.__enter__.return_value = mock_session
+
+            result = node.execute(
+                base_url="https://api.techcorp.com",
+                resource="/v1/users",
+                method="GET",
+                headers={"Authorization": "Bearer test_token"},
+                query_params={"page": 1, "per_page": 2},
+                paginate=True,
+                pagination_params={
+                    "type": "page",
+                    "items_path": "users",
+                    "page_param": "page",
+                    "limit_param": "per_page",
+                    "max_pages": 2,
+                },
+            )
+
+        assert result["success"] is True
+        # Merged across BOTH pages -- page 1 alone is 2 users, which is what a
+        # `paginate=True` no-op returns.
+        assert [u["name"] for u in result["data"]] == [
+            "Sarah Johnson",
+            "Michael Chen",
+            "Emily Rodriguez",
+        ]
+
+        # The node issued the follow-up itself, and it asked for page 2 with
+        # the caller's other query params and auth intact. Without these the
+        # merge above could equally come from a stub queue rather than from
+        # what actually went on the wire.
+        assert mock_session.request.call_count == 2
+        first, second = mock_session.request.call_args_list
+        assert first[1]["params"] == {"page": 1, "per_page": 2}
+        assert second[1]["params"] == {"page": "2", "per_page": 2}
+        for call in (first, second):
+            assert call[1]["url"] == "https://api.techcorp.com/v1/users"
+            assert call[1]["headers"]["Authorization"] == "Bearer test_token"
 
     def test_oauth2_node_with_real_flow(self):
         """Test OAuth2Node with realistic OAuth flow."""

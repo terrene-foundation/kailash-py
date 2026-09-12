@@ -24,6 +24,7 @@ that let defect 1 ship past the existing ``max_pages`` test.
 
 import pytest
 
+from kailash.nodes.api.http import HTTPResponse
 from kailash.nodes.api.rest import RESTClientNode
 from kailash.sdk_exceptions import NodeValidationError
 
@@ -31,6 +32,33 @@ BASE = "https://api.example.com"
 RESOURCE = "items"
 FULL_URL = f"{BASE}/{RESOURCE}"
 AUTH_HEADERS = {"Authorization": "Bearer secret-token", "Accept": "application/json"}
+
+
+def transport_result(content, status_code: int = 200):
+    """Build the EXACT payload ``HTTPRequestNode.execute`` returns.
+
+    The double is constructed from the REAL declared type -- ``HTTPResponse``
+    (``kailash/nodes/api/http.py``), dumped exactly as the production node
+    dumps it at ``http.py:691`` -- and wrapped in the same three-key envelope
+    (``response``/``status_code``/``success``) the node returns at
+    ``http.py:704-708``. Hand-rolling ``{"response": {"content": ...}}`` from
+    what the CALL SITE happens to read is how a double ends up asserting
+    against a shape the real transport never produces: the envelope's
+    ``status_code`` key and every ``HTTPResponse`` field but ``content`` were
+    missing, so a consumer reading any of them was exercised against nothing.
+    """
+    return {
+        "response": HTTPResponse(
+            status_code=status_code,
+            headers={"Content-Type": "application/json"},
+            content_type="application/json",
+            content=content,
+            response_time_ms=1.5,
+            url=FULL_URL,
+        ).model_dump(),
+        "status_code": status_code,
+        "success": 200 <= status_code < 300,
+    }
 
 
 class RecordingTransport:
@@ -42,13 +70,21 @@ class RecordingTransport:
         self.calls = []
 
     def execute(self, **kwargs):
-        self.calls.append(kwargs)
+        # Record a SNAPSHOT, params included: what a page actually put on the
+        # wire is what the dict held at call time. Storing the live object
+        # would let a later mutation rewrite history, so a per-page ``params``
+        # assertion could no longer distinguish "sent page=2" from "sent
+        # page=1 and mutated the dict afterwards".
+        recorded = dict(kwargs)
+        if isinstance(recorded.get("params"), dict):
+            recorded["params"] = dict(recorded["params"])
+        self.calls.append(recorded)
         # Mirror HTTPRequestNode's real contract: no URL is a validation error,
         # not a quietly-empty response.
         if not kwargs.get("url"):
             raise NodeValidationError("URL parameter is required")
         content = self._pages.pop(0) if self._pages else {"data": []}
-        return {"success": True, "response": {"content": content}}
+        return transport_result(content)
 
 
 def test_followup_request_carries_the_originating_url_headers_and_timeout():
@@ -60,7 +96,7 @@ def test_followup_request_carries_the_originating_url_headers_and_timeout():
 
     all_items = node._handle_pagination(
         {"data": [1, 2]},
-        {"page": "1", "per_page": "2"},
+        {"page": "1", "per_page": "2", "sort": "desc"},
         {"type": "page", "items_path": "data", "max_pages": 3},
         request_url=FULL_URL,
         request_headers=AUTH_HEADERS,
@@ -73,6 +109,17 @@ def test_followup_request_carries_the_originating_url_headers_and_timeout():
         # Auth headers must survive to page 2+, or the follow-up 401s.
         assert call["headers"] == AUTH_HEADERS
         assert call["timeout"] == 17
+    # The WHOLE query for each follow-up, not merely that one was issued: the
+    # accumulated items below come from the stub's queue, so a regression that
+    # re-sent `page=1` forever would still hand back [1,2,3,4,5,6] and pass
+    # every assertion above it. Only the params say which page was requested.
+    # Asserted as EXACT dicts (and `==` on the full list, not per-key), so a
+    # dropped `sort`/`per_page` -- the shape of the auth-drop defect, applied
+    # to the query rather than the headers -- fails here too.
+    assert [call["params"] for call in transport.calls] == [
+        {"page": "2", "per_page": "2", "sort": "desc"},
+        {"page": "3", "per_page": "2", "sort": "desc"},
+    ]
     # Pages actually accumulate now, instead of stopping at page 1.
     assert all_items == [1, 2, 3, 4, 5, 6]
 
@@ -96,7 +143,7 @@ def test_end_to_end_run_threads_the_request_target_into_pagination():
         resource=RESOURCE,
         method="GET",
         headers={"Authorization": "Bearer secret-token"},
-        query_params={"page": "1", "per_page": "2"},
+        query_params={"page": "1", "per_page": "2", "sort": "desc"},
         timeout=17,
         paginate=True,
         pagination_params={
@@ -113,6 +160,14 @@ def test_end_to_end_run_threads_the_request_target_into_pagination():
         assert call["url"] == FULL_URL
         assert call["headers"]["Authorization"] == "Bearer secret-token"
         assert call["timeout"] == 17
+    # Same params discipline end-to-end: the page number must ADVANCE on the
+    # wire (1 -> 2 -> 3) and the caller's non-pagination query must survive
+    # `run()`'s threading of the request target into `_handle_pagination`.
+    assert [call["params"] for call in transport.calls] == [
+        {"page": "1", "per_page": "2", "sort": "desc"},
+        {"page": "2", "per_page": "2", "sort": "desc"},
+        {"page": "3", "per_page": "2", "sort": "desc"},
+    ]
 
 
 def test_constant_cursor_stops_instead_of_duplicating_pages():
@@ -122,15 +177,13 @@ def test_constant_cursor_stops_instead_of_duplicating_pages():
 
     class ConstantCursorTransport(RecordingTransport):
         def execute(self, **kwargs):
-            self.calls.append(kwargs)
+            recorded = dict(kwargs)
+            if isinstance(recorded.get("params"), dict):
+                recorded["params"] = dict(recorded["params"])
+            self.calls.append(recorded)
             if not kwargs.get("url"):
                 raise NodeValidationError("URL parameter is required")
-            return {
-                "success": True,
-                "response": {
-                    "content": {"items": [7], "meta": {"next": "STUCK"}},
-                },
-            }
+            return transport_result({"items": [7], "meta": {"next": "STUCK"}})
 
     transport = ConstantCursorTransport([])
     node.http_node = transport  # type: ignore[assignment]
@@ -215,9 +268,12 @@ def test_transport_failure_still_degrades_to_pages_fetched_so_far():
 
     class FlakyTransport(RecordingTransport):
         def execute(self, **kwargs):
-            self.calls.append(kwargs)
+            recorded = dict(kwargs)
+            if isinstance(recorded.get("params"), dict):
+                recorded["params"] = dict(recorded["params"])
+            self.calls.append(recorded)
             if len(self.calls) == 1:
-                return {"success": True, "response": {"content": {"data": [3, 4]}}}
+                return transport_result({"data": [3, 4]})
             raise ConnectionError("connection reset by peer")
 
     transport = FlakyTransport([])
