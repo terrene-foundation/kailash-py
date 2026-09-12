@@ -138,8 +138,32 @@ class TestSQLiteTransactionDel:
         # The traceback should reference this test file
         assert "test_sqlite_transaction_lifecycle" in msg or "Created at:" in msg
 
-    def test_del_attempts_sync_rollback(self):
-        """__del__ should attempt a synchronous rollback via the underlying sqlite3 connection."""
+    def test_del_performs_no_rollback(self):
+        """__del__ warns and returns; it does NOT roll back.
+
+        Renamed from ``test_del_attempts_sync_rollback`` and inverted (issue
+        #2107). The old name and assertion pinned exactly the behaviour
+        ``rules/patterns.md`` § "Async Resource Cleanup" BLOCKS: performing
+        cleanup from a finalizer.
+
+        The rollback was blocking database I/O in a GC callback. A finalizer
+        fires at an arbitrary bytecode boundary on whichever thread drops the
+        last reference, and this adapter opens connections with
+        ``check_same_thread=False``, so the call really did execute SQL on that
+        arbitrary thread — where it can block for the full busy-timeout on
+        ``SQLITE_BUSY`` and race the aiosqlite worker thread already using the
+        same connection. The enclosing ``except Exception: pass`` bought
+        nothing against either hazard (a stall is not an exception) while
+        hiding genuine rollback failures (``zero-tolerance.md`` Rule 3).
+
+        Dropping it does not commit the abandoned work: sqlite3 rolls back any
+        open transaction from its own C-level deallocator when the connection
+        is closed or deallocated.
+
+        The ResourceWarning half of the old contract is unchanged and is still
+        asserted by the sibling tests above; only the forced-rollback half is
+        inverted.
+        """
 
         class FakeUnderlyingConn:
             def __init__(self):
@@ -161,9 +185,12 @@ class TestSQLiteTransactionDel:
             warnings.simplefilter("always")
             txn.__del__()
 
-        assert (
-            fake_conn._conn.rollback_called
-        ), "Expected __del__ to call _conn.rollback()"
+        assert not fake_conn._conn.rollback_called, (
+            "__del__ must not call _conn.rollback() -- it is blocking database "
+            "I/O executed from a GC callback on an arbitrary thread "
+            "(issue #2107). sqlite3's own deallocator rolls back the "
+            "abandoned transaction."
+        )
 
     @pytest.mark.asyncio
     async def test_aexit_sets_committed_on_success(self):

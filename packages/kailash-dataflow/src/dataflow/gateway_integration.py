@@ -759,14 +759,11 @@ class DataFlowGateway:
         already held by the finalizer thread.
         """
         if getattr(self, "_explicit_runtime", None) is not None:
-            try:
-                _warnings.warn(
-                    f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
-                    ResourceWarning,
-                    source=self,
-                )
-            except Exception:
-                pass
+            _warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
 
     def get_workflow_info(self) -> Dict[str, Any]:
         """Get information about available workflows."""

@@ -4525,18 +4525,14 @@ class DataFlow(DataFlowEventMixin):
         _warnings default arg so this still works if `warnings` has been
         shimmed out during interpreter shutdown.
         """
-        try:
-            if not getattr(self, "_closed", True):
-                _warnings.warn(
-                    f"Unclosed DataFlow instance {getattr(self, '_instance_id', '?')}. "
-                    "Use 'with DataFlow(...) as db:' or call db.close() "
-                    "(or `await db.close_async()` in async contexts).",
-                    ResourceWarning,
-                    source=self,
-                )
-        except Exception:
-            # Finalizers must never raise.
-            pass
+        if not getattr(self, "_closed", True):
+            _warnings.warn(
+                f"Unclosed DataFlow instance {getattr(self, '_instance_id', '?')}. "
+                "Use 'with DataFlow(...) as db:' or call db.close() "
+                "(or `await db.close_async()` in async contexts).",
+                ResourceWarning,
+                source=self,
+            )
 
     def get_connection_pool(self):
         """Return a `MockConnectionPool` reflecting the current connection-manager state.

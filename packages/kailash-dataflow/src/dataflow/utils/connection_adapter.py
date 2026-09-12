@@ -366,14 +366,11 @@ class ConnectionManagerAdapter:
         MUST NOT invoke ``close()`` itself — see issue #1000.
         """
         if getattr(self, "_runtime", None) is not None:
-            try:
-                _warnings.warn(
-                    f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
-                    ResourceWarning,
-                    source=self,
-                )
-            except Exception:
-                pass
+            _warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
 
     def _convert_parameters(
         self, sql: str, params: Optional[List]

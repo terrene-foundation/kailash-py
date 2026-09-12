@@ -2846,18 +2846,13 @@ class SyncExpress:
         ``db.close()`` / ``await db.close_async()``.
         """
         if not getattr(self, "_closed", True):
-            try:
-                _warnings.warn(
-                    f"{type(self).__name__} not closed; call "
-                    f"db.close()/await db.close_async() to stop the BG "
-                    f"event loop thread cleanly.",
-                    ResourceWarning,
-                    stacklevel=2,
-                )
-            except Exception:
-                # Finalizer must not raise. Hooks/cleanup carve-out per
-                # rules/zero-tolerance.md Rule 3.
-                pass
+            _warnings.warn(
+                f"{type(self).__name__} not closed; call "
+                f"db.close()/await db.close_async() to stop the BG "
+                f"event loop thread cleanly.",
+                ResourceWarning,
+                stacklevel=2,
+            )
 
     def _check_append_only(self, model: str, operation: str) -> None:
         """Sync delegate to :meth:`DataFlowExpress._check_append_only`.
