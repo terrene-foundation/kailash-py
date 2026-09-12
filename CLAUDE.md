@@ -65,6 +65,19 @@ Phase commands replace the manual copy-paste workflow. Each loads the correspond
 
 **Session continuity**: Run `/wrapup` before ending a session to write `.session-notes`. The next session's startup reads these notes and shows workspace progress automatically.
 
+## Offloading long jobs
+
+Long test runs do not have to run on this workstation. `trestle-remote-run --host <name>
+--repo "$PWD" -- <cmd>` ships an exact snapshot (uncommitted edits included) to a fleet host
+and exits with the command's OWN status.
+
+**Measure before offloading** — under ~30s wall clock the local snapshot costs more than it
+saves, and core count does not predict throughput. **Before a first run**, check what ships
+despite `.gitignore`: `git ls-files -z | git check-ignore --no-index -z --stdin`.
+
+Measured numbers, host provisioning, and the engine's exit-code band (111–116; **114 means
+the outcome is UNKNOWN**, never a pass or a fail): `.claude/guides/offloading-long-jobs.md`.
+
 ## Rules Index
 
 | Concern                               | Rule File                       | Scope                                                                 |
