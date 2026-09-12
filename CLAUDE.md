@@ -10,7 +10,27 @@ These override ALL other instructions. They govern behavior before any rule file
 
 Kailash Python SDK is a **Terrene Foundation project**. It is fully independent. There is NO relationship between Kailash Python SDK and any commercial product, proprietary codebase, or commercial entity. Do not reference, compare with, or design against any proprietary product. Do not use language like "open-source version of X" or "Python port of Y." Kailash Python SDK IS the product — not a derivative of anything.
 
-### 1. Framework-First
+### 1. Every `/sweep` and `/wrapup` Also Writes to the Obsidian Vault
+
+**Two files, never one**, into `/Users/esperie/repos/work-consol/pickup/kailash/kailash-py/`:
+
+    YYYY-MM-DD-##-sweep.md      YYYY-MM-DD-##-wrapup.md
+
+`##` is a per-day sequence; **a sweep and its wrapup share the SAME `##`** — one session, one
+pair, adjacent and cross-linkable. No repo slug in the filename (the directory says it); keep
+the `-sweep`/`-wrapup` suffix — it is the kind.
+
+Frontmatter on both: `date`, `seq`, `kind`, `title`, `repo`, `trunk`, `tags`, `pairs_with`.
+The sweep is the full decision report (tables, no length limit); the wrapup carries mode, what
+landed, in-session corrections recorded rather than smoothed, standing state, hazards,
+unfinished work, and the verbatim `/clear` seed in a fenced block.
+
+**IN ADDITION to the in-repo artifacts, never instead.** `.session-notes.d/` and
+`.wave-tracker.d/` stay the working index; the vault is the durable handover that outlives this
+repo. work-consol is an Obsidian vault, **not** a git repo — writing the file IS the operation;
+do not commit, do not push. `obsidian-cli` is not on PATH.
+
+### 2. Framework-First
 
 Never write code from scratch before checking whether the Kailash frameworks already handle it.
 
@@ -20,29 +40,29 @@ Never write code from scratch before checking whether the Kailash frameworks alr
 - Instead of custom agentic platform → check with **kaizen-specialist**
 - Instead of custom governance/access control → check with **pact-specialist**
 
-### 2. .env Is the Single Source of Truth
+### 3. .env Is the Single Source of Truth
 
 All API keys and model names MUST come from `.env`. Never hardcode model strings like `"gpt-4"` or `"claude-3-opus"`. Root `conftest.py` auto-loads `.env` for pytest.
 
 See `rules/env-models.md` for full details.
 
-### 3. Implement, Don't Document
+### 4. Implement, Don't Document
 
 When you discover a missing feature, endpoint, or record — **implement or create it**. Do not note it as a gap and move on. The only acceptable skip is explicit user instruction.
 
 See `rules/e2e-god-mode.md` and `rules/zero-tolerance.md` for enforcement details.
 
-### 4. Zero Tolerance
+### 5. Zero Tolerance
 
 Pre-existing failures MUST be fixed, not reported. Stubs are BLOCKED. Naive fallbacks are BLOCKED. SDK bugs get deep-dived and fixed directly (this IS the SDK). See `rules/zero-tolerance.md`.
 
-### 5. Recommended Reviews
+### 6. Recommended Reviews
 
 - **Code review** (reviewer) after file changes — see `rules/agents.md`
 - **Security review** (security-reviewer) before commits — see `rules/agents.md`
 - **NO MOCKING** in Tier 2/3 tests — use real infrastructure — see `rules/testing.md`
 
-### 6. LLM-First Agent Reasoning
+### 7. LLM-First Agent Reasoning
 
 When building AI agents: **the LLM does ALL reasoning. Tools are dumb data endpoints.** No if-else routing, no keyword matching, no regex classification in agent decision paths. The LLM IS the router, classifier, extractor, and evaluator. Deterministic logic is BLOCKED unless the user explicitly opts in. See `rules/agent-reasoning.md` for the full rule and detection patterns.
 
@@ -75,8 +95,7 @@ trestle picks the host, ships an exact snapshot (uncommitted edits included), an
 the command's OWN status. **Do not name a host and do not coordinate with other sessions** —
 every session shares one arbiter, so runs queue instead of colliding, and it falls back to
 running locally when remotes are full. `--host`/`--local` compare hosts; they are not defaults.
-**Measure first** (under ~30s the snapshot costs more than it saves) and **check what ships
-despite `.gitignore`**: `git ls-files -z | git check-ignore --no-index -z --stdin`.
+**Measure first** (under ~30s the snapshot costs more than it saves) and **check what ships despite `.gitignore`**: `git ls-files -z | git check-ignore --no-index -z --stdin`.
 
 Measured numbers, host provisioning, the pipeline false-green trap, and the exit band —
 **`114` = outcome UNKNOWN, `116` = nothing ran anywhere** — in
@@ -162,28 +181,9 @@ For SDK implementation patterns, see `.claude/skills/` — organized by framewor
 
 ## Critical Execution Rules
 
-```python
-# DataFlow: Use Express API for simple CRUD (23x faster than workflows)
-result = await db.express.create("User", {"id": "u1", "name": "Alice"})
-user = await db.express.read("User", "u1")
-users = await db.express.list("User", {"active": True}, limit=10)
-await db.express.update("User", "u1", {"name": "Bob"})
-count = await db.express.count("User", {"active": True})
-# Sync variant: db.express_sync.create("User", {...})
-
-# Workflow API: Only for multi-node operations
-runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build())
-
-# Async workflows (Docker/FastAPI):
-runtime = AsyncLocalRuntime()
-results, run_id = await runtime.execute_workflow_async(workflow.build(), inputs={})
-
-# String-based nodes only
-workflow.add_node("NodeType", "node_id", {"param": "value"})
-
-# Return structure is always (results, run_id)
-```
+Canonical call shapes — Express-vs-WorkflowBuilder, sync vs async runtime, the
+`(results, run_id)` return, string-based node types:
+`.claude/guides/critical-execution-rules.md`. Normative rule: `rules/patterns.md`.
 
 ## Kailash Platform
 
