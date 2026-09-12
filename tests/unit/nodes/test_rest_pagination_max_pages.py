@@ -35,12 +35,26 @@ def test_max_pages_caps_fetch_loop():
     }
 
     all_items = node._handle_pagination(
-        initial_response, query_params, pagination_params
+        initial_response,
+        query_params,
+        pagination_params,
+        request_url="https://api.example.com/v1/items",
+        request_headers={},
+        request_timeout=30,
     )
 
     # pages_fetched starts at 1 (the initial page), loop runs while < 3 → 2 fetches.
     assert node.http_node.execute.call_count == 2
-    # initial [1, 2] + two fetched pages [3, 4] each
+    # initial [1, 2] + two fetched pages [3, 4] each.
+    #
+    # The repeated [3, 4] is the stub returning identical CONTENT for every
+    # page, not a pagination defect: each request carries a distinct ?page=N,
+    # so the loop-control token advances every iteration. Cursor dedup (see
+    # test_rest_pagination_request_target.py) keys on the CURSOR the server
+    # hands back, which is the only protocol-level "I am not advancing"
+    # signal. Page-based pagination has no such signal, and content-equality
+    # dedup would wrongly discard legitimately-identical pages, so this
+    # assertion is deliberately UNCHANGED.
     assert all_items == [1, 2, 3, 4, 3, 4]
 
 
@@ -55,6 +69,9 @@ def test_max_pages_one_disables_followup_fetches():
         {"data": [1, 2]},
         {"page": "1", "per_page": "2"},
         {"type": "page", "items_path": "data", "max_pages": 1},
+        request_url="https://api.example.com/v1/items",
+        request_headers={},
+        request_timeout=30,
     )
 
     assert node.http_node.execute.call_count == 0

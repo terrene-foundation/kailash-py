@@ -397,6 +397,10 @@ class RESTClientNode(Node):
         initial_response: dict[str, Any],
         query_params: dict[str, Any],
         pagination_params: dict[str, Any],
+        *,
+        request_url: str,
+        request_headers: dict[str, Any],
+        request_timeout: int,
     ) -> list[Any]:
         """Handle pagination for REST API responses.
 
@@ -409,12 +413,24 @@ class RESTClientNode(Node):
             initial_response: Response from the first API call
             query_params: Original query parameters
             pagination_params: Configuration for pagination handling
+            request_url: Fully-built URL of the originating request. Follow-up
+                page requests are issued against this exact URL; it is
+                keyword-only and required so a caller cannot silently fall back
+                to an unusable default.
+            request_headers: Headers of the originating request (auth headers
+                included) — follow-up pages need the same credentials.
+            request_timeout: Timeout of the originating request, in seconds.
 
         Returns:
             Combined list of items from all pages
 
         Raises:
-            NodeExecutionError: If pagination fails
+            NodeExecutionError: If the response shape does not match the
+                configured pagination paths.
+            NodeValidationError: If a follow-up page request is mis-configured
+                (e.g. an unusable URL). This is deliberately NOT swallowed:
+                doing so silently returned page 1 as if it were the whole
+                result set.
         """
         if not pagination_params:
             # Default pagination configuration
@@ -466,6 +482,10 @@ class RESTClientNode(Node):
         # Fetch remaining pages
         max_pages = int(pagination_params.get("max_pages", 10))
         pages_fetched = 1
+        # Last cursor we actually requested. A server that keeps handing back
+        # the same cursor would otherwise loop to max_pages, appending the same
+        # page over and over, and the caller would receive duplicated records.
+        prev_cursor: str | None = None
 
         while pages_fetched < max_pages:
             next_query = dict(query_params)
@@ -480,30 +500,40 @@ class RESTClientNode(Node):
                 next_cursor = self._get_nested_value(initial_response, next_cursor_path)
                 if not next_cursor:
                     break
-                next_query[cursor_param] = str(next_cursor)
+                if prev_cursor is not None and str(next_cursor) == prev_cursor:
+                    self.logger.warning(
+                        "Pagination stopped: server repeated cursor %r; "
+                        "fetching it again would duplicate the previous page.",
+                        next_cursor,
+                    )
+                    break
+                prev_cursor = str(next_cursor)
+                next_query[cursor_param] = prev_cursor
             else:
                 break
 
-            # Make the next request
+            # Make the next request against the SAME url/headers/timeout the
+            # first page used — they are threaded in from the caller rather
+            # than reconstructed here.
             try:
                 next_result = self.http_node.execute(
-                    url=(
-                        self._build_url(
-                            query_params.get("_base_url", ""),
-                            query_params.get("_resource", ""),
-                            {},
-                            None,
-                        )
-                        if hasattr(self, "_last_url")
-                        else None
-                    ),
+                    url=request_url,
                     method="GET",
-                    headers=query_params.get("_headers", {}),
+                    headers=request_headers,
                     params=next_query,
                     response_format="json",
-                    timeout=query_params.get("_timeout", 30),
+                    timeout=request_timeout,
                 )
+            except NodeValidationError:
+                # A mis-configured request is a programming/configuration
+                # error, not a transient transport failure. Swallowing it is
+                # exactly what made `paginate=True` a silent no-op: every
+                # follow-up request failed validation, was logged at WARNING,
+                # and the caller got page 1 presented as the complete result.
+                raise
             except Exception as e:
+                # Transport-level failures (connection reset, timeout, ...)
+                # still degrade gracefully to the pages fetched so far.
                 self.logger.warning("Pagination request failed: %s", e)
                 break
 
@@ -700,9 +730,19 @@ class RESTClientNode(Node):
         if paginate and method == "GET" and success:
             try:
                 data = self._handle_pagination(
-                    data or {}, query_params, pagination_params
+                    data or {},
+                    query_params,
+                    pagination_params,
+                    request_url=url,
+                    request_headers=headers,
+                    request_timeout=timeout,
                 )
-            except Exception as e:
+            except NodeExecutionError as e:
+                # Response-shape mismatches (e.g. items_path is not a list)
+                # degrade to the first page. A NodeValidationError — a
+                # mis-configured follow-up request — deliberately propagates:
+                # returning page 1 as the whole result set is the bug this
+                # narrowing exists to prevent.
                 self.logger.warning(f"Pagination handling failed: {str(e)}")
 
         # Return processed results
@@ -1354,9 +1394,16 @@ class AsyncRESTClientNode(AsyncNode):
         if paginate and method == "GET" and success:
             try:
                 data = self.rest_node._handle_pagination(  # type: ignore[attr-defined]
-                    data, query_params, pagination_params
+                    data,
+                    query_params,
+                    pagination_params,
+                    request_url=url,
+                    request_headers=headers,
+                    request_timeout=timeout,
                 )
-            except Exception as e:
+            except NodeExecutionError as e:
+                # Same split as the synchronous caller: shape mismatches
+                # degrade to page 1, configuration errors surface.
                 self.logger.warning(f"Pagination handling failed: {str(e)}")
 
         # Return processed results
