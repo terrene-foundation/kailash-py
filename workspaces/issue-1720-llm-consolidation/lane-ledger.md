@@ -269,3 +269,49 @@ That is attention spent on a false alarm, and the discipline that would have
 prevented it is the one this ledger keeps recording: fire the instrument at a
 known-answer case first. I had no control for "does the probe's own location
 change the answer" — and it did.
+
+## CONVERGED rule (third measurement) — my retraction over-corrected
+
+The governance lane counter-measured my retraction instead of accepting it, and
+was right to. I was wrong TWICE, in OPPOSITE directions: first too alarmist (a
+probe in `/tmp`), then too reassuring (a blanket "no pin needed"). Three
+independent measurements now agree on a finer mechanism than any of us stated.
+
+**What decides resolution: pytest's ROOTDIR, which selects which `pytest.ini`
+applies, and `pythonpath = src` is relative to THAT rootdir.**
+
+| probe location (run from the worktree, UNPINNED) | `kailash` resolves to | `<pkg>` resolves to |
+| --- | --- | --- |
+| `<wt>/tests/unit/**` | **WORKTREE** | — |
+| `<wt>/packages/kailash-dataflow/tests/**` (pkg HAS own pytest.ini) | **MAIN CHECKOUT** | **WORKTREE** |
+| `<wt>/packages/kailash-pact/tests/**` (pkg has NO pythonpath) | **MAIN CHECKOUT** | **MAIN CHECKOUT** |
+| `/tmp/**` (my original probe) | **MAIN CHECKOUT** | — |
+| any of the above, PINNED | WORKTREE | WORKTREE |
+
+Two consequences neither earlier account captured:
+
+1. **A package-scoped test importing CORE `kailash` gets the main checkout even
+   when its own package resolves correctly.** The dataflow row above is the
+   proof: `dataflow` → worktree, `kailash` → main checkout, same run. A lane
+   editing core and testing from `packages/*/tests` would measure a mix.
+2. **It is per-package.** `kailash-dataflow` has its own `pytest.ini`;
+   `kailash-pact` does not. So the answer differs BETWEEN packages in the same
+   worktree, which is why the governance lane and I got different results while
+   both measuring correctly.
+
+### The operative rule
+
+- change under `src/kailash/**`, tested from `<wt>/tests/**` → no pin needed
+- change under `packages/*/src/**`, or any test living under `packages/*/tests/**`
+  → **PIN**, or the receipt may be vacuous
+- **always** assert the resolved `__file__` in-process in the run that banks the
+  receipt — that is the only step that is correct under all four rows
+- prefer a behavioural discriminator where one exists: a genuine RED on revert
+  is impossible if the test imports from elsewhere
+
+### Process note
+
+Three rounds, three corrections, each driven by someone re-measuring rather than
+deferring. The governance lane's counter-measurement is the one that landed the
+mechanism, and it explicitly tested a claim from its own coordinator because it
+cut against a result it had measured itself. That is the behaviour to keep.
