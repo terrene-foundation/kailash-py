@@ -80,7 +80,27 @@ logger = logging.getLogger(__name__)
 
 
 def _url_fingerprint(raw: str | None) -> str:
-    """Produce a short, non-reversible tag for a URL.
+    """Produce a short, UNKEYED correlation tag for a URL.
+
+    NOT non-reversible, which this docstring claimed until #2170. The tag is
+    an unkeyed 32-bit BLAKE2b digest and a URL is drawn from a space an
+    attacker can enumerate, so anyone holding the tag can hash candidate URLs
+    until one matches -- measured at 50 candidates in under a millisecond for
+    an internal-metadata URL. The tag is a CONFIRMATION ORACLE: it tells a
+    reader who already holds candidate URLs which one was rejected, and tells
+    a reader without candidates nothing.
+
+    That is ACCEPTED at this sink, deliberately, and the reasoning turns on
+    WHOSE URL this is. `raw_url` here is the caller-supplied URL the SSRF
+    guard just REFUSED, so an attacker probing the guard is fingerprinting
+    their own input and recovers nothing they did not type. The residual case
+    is narrower and real: an operator's misconfigured internal endpoint is
+    refused, and someone holding the logs but not the config enumerates
+    hostnames to recover it. Weighed against that, the tag exists to join this
+    log line to the `InvalidEndpoint` raised beside it, and that join requires
+    determinism ACROSS PROCESSES -- which any keying destroys. There is no
+    version of "key it" that keeps the feature. Recorded on #2170, approved
+    2026-08-17.
 
     Must match the shape used by `errors._fingerprint` so log entries can be
     correlated with the fingerprint stored on the raised `InvalidEndpoint`.
@@ -106,9 +126,9 @@ def _url_fingerprint(raw: str | None) -> str:
     result of any call whose callee name matches `secret` as sensitive data
     and raises HIGH when it reaches a logging sink — interprocedurally, so a
     local wrapper does not clear it. The finding is a naming artifact (the
-    logged value is 8 hex chars of a non-reversible digest, i.e. the
-    SANITIZED form), and the honest fix is to call the helper by what it
-    produces rather than to suppress the alert.
+    logged value is 8 hex chars of a digest, i.e. the SANITIZED form -- NOT
+    a non-reversible one, see above), and the honest fix is to call the
+    helper by what it produces rather than to suppress the alert.
 
     Deliberately NOT the shared guard's `url_fingerprint` (SHA-256): that one
     serves core's audit trail, this one has to join kaizen's log line to
