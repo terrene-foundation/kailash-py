@@ -459,17 +459,43 @@ class RESTClientNode(Node):
         # Return immediately if no additional pages
         current_page = 1
         if pagination_type == "page":
-            current_page = int(
-                query_params.get(pagination_params.get("page_param", "page"), 1)
-            )
+            # These coercions raise BUILTIN ValueError/TypeError on a
+            # non-numeric value. Both callers now catch NodeExecutionError only
+            # (the deliberate narrowing that stops a mis-configured request
+            # being swallowed), and NodeValidationError is a SIBLING of it, not
+            # a subclass — so an unwrapped builtin escapes the node entirely,
+            # outside the documented Raises taxonomy, taking page 1's data with
+            # it. Wrap into the taxonomy and name the offending value.
+            page_param = pagination_params.get("page_param", "page")
+            limit_param = pagination_params.get("limit_param", "per_page")
+            try:
+                current_page = int(query_params.get(page_param, 1))
+            except (ValueError, TypeError, OverflowError) as exc:
+                raise NodeValidationError(
+                    f"pagination page parameter '{page_param}' must be an "
+                    f"integer; got {query_params.get(page_param)!r}"
+                ) from exc
             total_path = pagination_params.get("total_path")
-            per_page = int(
-                query_params.get(pagination_params.get("limit_param", "per_page"), 20)
-            )
+            try:
+                per_page = int(query_params.get(limit_param, 20))
+            except (ValueError, TypeError, OverflowError) as exc:
+                raise NodeValidationError(
+                    f"pagination limit parameter '{limit_param}' must be an "
+                    f"integer; got {query_params.get(limit_param)!r}"
+                ) from exc
 
             # If we have total info, check if more pages exist
             if total_path:
                 total_items = self._get_nested_value(initial_response, total_path, 0)
+                # A server-supplied total is untrusted: "1,234" or "many" makes
+                # the comparison below raise TypeError against an int.
+                if total_items is not None and not isinstance(
+                    total_items, (int, float)
+                ):
+                    raise NodeValidationError(
+                        f"pagination total_path '{total_path}' must resolve to a "
+                        f"number; got {type(total_items).__name__} {total_items!r}"
+                    )
                 if not total_items or current_page * per_page >= total_items:
                     return all_items
 
