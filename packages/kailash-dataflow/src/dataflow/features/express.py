@@ -1832,6 +1832,19 @@ class DataFlowExpress:
             await self._check_protection_if_enabled(
                 model, "bulk_create", {"data": records}
             )
+            # RT-6a: an empty batch is a no-op — do NOT dispatch the node,
+            # flush the model cache, or emit a `bulk_create` write event
+            # announcing a write that never happened. Deliberately placed
+            # AFTER the protection precheck above so a write-blocked model
+            # still raises ProtectionViolation on bulk_create([]) — the
+            # guard skips side effects, never an authorization gate.
+            # Return shape: `[]` is the declared contract (-> List[Dict])
+            # and is ALREADY what the three `_apply_classification_mask_rows`
+            # branches below yield for an empty batch; only the unrecognized-
+            # shape passthrough (`return result`) differs, so this introduces
+            # no dual-shape return (zero-tolerance Rule 3d).
+            if not records:
+                return []
             node = self._create_node(model, "BulkCreate")
             node._express_protection_precheck_done = True
             result = await node.async_run(data=records)
@@ -1924,6 +1937,17 @@ class DataFlowExpress:
 
         async def _bulk_update():
             self._check_append_only(model, "bulk_update")
+            # RT-6a: an empty batch is a no-op — the per-record loop below
+            # already executes no query, but the cache flush and the
+            # `bulk_update` write event after it fired unconditionally,
+            # telling subscribers a write occurred when none did.
+            # Deliberately placed AFTER _check_append_only so an
+            # append-only model still raises AppendOnlyViolationError on
+            # bulk_update([]) — the guard skips side effects, never a gate.
+            # Return shape matches the non-empty path's `return results`
+            # (a list) for an all-empty batch: [].
+            if not records:
+                return []
             # Issue #490 redaction contract: bulk_update delegates to
             # self.update(), which applies _apply_classification_mask_record
             # on its return. Do NOT inline a SELECT + row_to_dict here
@@ -2006,6 +2030,16 @@ class DataFlowExpress:
             self._check_append_only(model, "bulk_delete")
             # Issue #1058 Shard 2: protection precheck (see create()).
             await self._check_protection_if_enabled(model, "bulk_delete", {"ids": ids})
+            # RT-6a: an empty id list is a no-op. Without this guard the
+            # BulkDelete node was dispatched with the degenerate filter
+            # {"id": {"$in": []}}, then the model cache was flushed and a
+            # `bulk_delete` write event emitted for a delete that removed
+            # nothing. Deliberately placed AFTER _check_append_only and the
+            # protection precheck so both still fire on bulk_delete([]).
+            # Return shape matches the non-empty path's bool contract:
+            # "True if all deletions succeeded" is vacuously true for none.
+            if not ids:
+                return True
             node = self._create_node(model, "BulkDelete")
             node._express_protection_precheck_done = True
             # Convert IDs list to filter format expected by BulkDeleteNode
@@ -2088,6 +2122,15 @@ class DataFlowExpress:
             await self._check_protection_if_enabled(
                 model, "bulk_upsert", {"data": records}
             )
+            # RT-6a: an empty batch is a no-op — do NOT dispatch the node,
+            # flush the model cache, or emit a `bulk_upsert` write event.
+            # Deliberately placed AFTER _check_append_only and the
+            # protection precheck so both still fire on bulk_upsert([]).
+            # Return shape is byte-identical to what the non-empty path
+            # produced for an empty batch pre-fix (measured):
+            # {"records": [], "created": 0, "updated": 0, "total": 0}.
+            if not records:
+                return {"records": [], "created": 0, "updated": 0, "total": 0}
             node = self._create_node(model, "BulkUpsert")
             node._express_protection_precheck_done = True
             # BulkUpsertNode accepts conflict_columns in its config.
