@@ -10,12 +10,18 @@ Key Components:
     * Resource path builders and response handlers
 """
 
+import asyncio
+import copy
+import ipaddress
+import types
 from typing import Any
+from urllib.parse import urljoin, urlparse
 
 from kailash.nodes.api.http import AsyncHTTPRequestNode, HTTPRequestNode
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
+from kailash.utils.url_credentials import mask_error_text
 
 
 @register_node()
@@ -246,6 +252,19 @@ class RESTClientNode(Node):
                 default=None,
                 description="Pagination configuration parameters",
             ),
+            "allowed_pagination_origins": NodeParameter(
+                name="allowed_pagination_origins",
+                type=list,
+                required=False,
+                default=None,
+                description=(
+                    "Origins (scheme://host[:port]) a server-supplied pagination "
+                    "link may point to besides the original request's own origin. "
+                    "A follow-up page on an allow-listed cross-origin target is "
+                    "fetched WITHOUT credential-bearing headers; anything not "
+                    "same-origin and not allow-listed stops pagination."
+                ),
+            ),
             "retry_count": NodeParameter(
                 name="retry_count",
                 type=int,
@@ -401,6 +420,7 @@ class RESTClientNode(Node):
         request_url: str,
         request_headers: dict[str, Any],
         request_timeout: int,
+        request_kwargs: dict[str, Any] | None = None,
     ) -> list[Any]:
         """Handle pagination for REST API responses.
 
@@ -420,6 +440,22 @@ class RESTClientNode(Node):
             request_headers: Headers of the originating request (auth headers
                 included) — follow-up pages need the same credentials.
             request_timeout: Timeout of the originating request, in seconds.
+            request_kwargs: The COMPLETE transport keyword set the originating
+                request was issued with (the caller's ``http_params`` dict,
+                threaded whole and never re-enumerated). Follow-up pages are
+                issued from a copy of it, so node-level transport settings that
+                never reach ``request_headers`` -- ``auth_type``/``auth_token``/
+                ``auth_username``/``auth_password``/``api_key_header`` (the
+                ``Authorization`` header is injected by ``HTTPRequestNode``
+                itself, not by the caller's headers dict), plus ``verify_ssl``,
+                ``retry_count`` and ``retry_backoff`` -- apply to page 2+ as
+                well as page 1. Threading the whole dict rather than listing
+                keywords is deliberate: a transport parameter added to
+                ``http_params`` later propagates to follow-up pages with no
+                edit here, so it cannot be silently dropped. Omitting it
+                (``None``) issues follow-ups with url/headers/params/timeout
+                only -- the historical behaviour, retained for direct callers
+                that have no originating kwarg set.
 
         Returns:
             Combined list of items from all pages
@@ -455,6 +491,13 @@ class RESTClientNode(Node):
             raise NodeExecutionError(
                 f"Pagination items path '{items_path}' did not return a list in response"
             )
+        # `_get_nested_value` hands back the SAME list object that is nested
+        # inside the caller's response, and the loop below `extend`s the
+        # accumulator in place -- so merely reading the pages mutated the
+        # caller's own `response["content"][items_path]` from 2 entries to
+        # 2*N. Accumulate into our own list; the caller's response is left
+        # exactly as the transport returned it.
+        all_items = list(all_items)
 
         # Return immediately if no additional pages
         current_page = 1
@@ -508,10 +551,15 @@ class RESTClientNode(Node):
         # Fetch remaining pages
         max_pages = int(pagination_params.get("max_pages", 10))
         pages_fetched = 1
-        # Last cursor we actually requested. A server that keeps handing back
-        # the same cursor would otherwise loop to max_pages, appending the same
-        # page over and over, and the caller would receive duplicated records.
-        prev_cursor: str | None = None
+        # EVERY cursor we have already requested, not just the most recent one.
+        # A single-slot `prev_cursor` only catches an IMMEDIATE repeat: a server
+        # alternating A -> B -> A -> B never compares equal to its predecessor,
+        # so the loop ran to `max_pages` appending the same two pages over and
+        # over. Bounded by construction -- exactly one cursor is added per
+        # iteration of the `while pages_fetched < max_pages` loop below, so
+        # `len(seen_cursors) < max_pages` always; the loop bound IS the set
+        # bound, and there is no path that adds without iterating.
+        seen_cursors: set[str] = set()
 
         while pages_fetched < max_pages:
             next_query = dict(query_params)
@@ -526,30 +574,42 @@ class RESTClientNode(Node):
                 next_cursor = self._get_nested_value(initial_response, next_cursor_path)
                 if not next_cursor:
                     break
-                if prev_cursor is not None and str(next_cursor) == prev_cursor:
+                cursor_key = str(next_cursor)
+                if cursor_key in seen_cursors:
                     self.logger.warning(
-                        "Pagination stopped: server repeated cursor %r; "
-                        "fetching it again would duplicate the previous page.",
+                        "Pagination stopped: server re-issued cursor %r, which "
+                        "was already requested; fetching it again would "
+                        "duplicate an earlier page.",
                         next_cursor,
                     )
                     break
-                prev_cursor = str(next_cursor)
-                next_query[cursor_param] = prev_cursor
+                seen_cursors.add(cursor_key)
+                next_query[cursor_param] = cursor_key
             else:
                 break
 
-            # Make the next request against the SAME url/headers/timeout the
-            # first page used — they are threaded in from the caller rather
-            # than reconstructed here.
+            # Make the next request with the SAME transport configuration the
+            # first page used — threaded in from the caller rather than
+            # reconstructed here. Everything the originating request carried is
+            # inherited (auth_*, verify_ssl, retry_*, ...); only the fields that
+            # MUST differ for a follow-up GET are overridden.
+            next_call = dict(request_kwargs or {})
+            next_call.update(
+                {
+                    "url": request_url,
+                    "method": "GET",
+                    "headers": request_headers,
+                    "params": next_query,
+                    "response_format": "json",
+                    "timeout": request_timeout,
+                    # A follow-up page is a GET: never replay the originating
+                    # request's body.
+                    "json_data": None,
+                    "data": None,
+                }
+            )
             try:
-                next_result = self.http_node.execute(
-                    url=request_url,
-                    method="GET",
-                    headers=request_headers,
-                    params=next_query,
-                    response_format="json",
-                    timeout=request_timeout,
-                )
+                next_result = self.http_node.execute(**next_call)
             except NodeValidationError:
                 # A mis-configured request is a programming/configuration
                 # error, not a transient transport failure. Swallowing it is
@@ -560,7 +620,14 @@ class RESTClientNode(Node):
             except Exception as e:
                 # Transport-level failures (connection reset, timeout, ...)
                 # still degrade gracefully to the pages fetched so far.
-                self.logger.warning("Pagination request failed: %s", e)
+                # Masked for parity with every rendered-exception sink in
+                # `http.py` (`:639, 651, 686, 1041, 1073, 1085`): a driver
+                # renders the full request URL, credentials and all, into its
+                # exception text. Defence-in-depth / enforcement-surface
+                # parity — no concrete credential has been traced to THIS sink
+                # (http.py catches and masks `RequestException` itself, so what
+                # arrives here is the non-`RequestException` residue).
+                self.logger.warning("Pagination request failed: %s", mask_error_text(e))
                 break
 
             next_response = next_result.get("response", {})
@@ -577,6 +644,139 @@ class RESTClientNode(Node):
             initial_response = next_content  # For cursor extraction on next iteration
 
         return all_items
+
+    def _paginate_with_page_count(
+        self,
+        initial_response: dict[str, Any],
+        query_params: dict[str, Any],
+        pagination_params: dict[str, Any],
+        *,
+        request_url: str,
+        request_headers: dict[str, Any],
+        request_timeout: int,
+        request_kwargs: dict[str, Any] | None = None,
+    ) -> tuple[Any, int]:
+        """Run ``_handle_pagination`` and report how many pages it merged.
+
+        ``_handle_pagination`` returns items only, so the number of pages it
+        merged is not otherwise observable -- and every caller needs it to
+        decide whether page 1's navigation pointers still describe the merged
+        ``data`` (see ``_drop_stale_pagination_metadata``). Count through a
+        per-call proxy over the transport, installed on a SHALLOW COPY of this
+        node so no state shared with a concurrent call is mutated.
+
+        This is the SINGLE definition of the page-counting semantics: both
+        ``RESTClientNode.run`` and ``AsyncRESTClientNode.async_run`` (which
+        reaches it through ``asyncio.to_thread``, since ``_handle_pagination``
+        blocks the calling thread) call it rather than each carrying a copy of
+        the proxy. Two copies of this would satisfy their tests on the day
+        they were written and then drift; this module has already paid that
+        exact price once, in the divergent async result shaping that returned
+        ``data=None`` on every call.
+
+        Args:
+            initial_response: Parsed content of the first page.
+            query_params: Original query parameters.
+            pagination_params: Pagination configuration (may be empty).
+            request_url: Fully-built URL of the originating request.
+            request_headers: Headers of the originating request.
+            request_timeout: Timeout of the originating request, in seconds.
+            request_kwargs: The COMPLETE transport keyword set the originating
+                request was issued with, threaded whole -- see
+                ``_handle_pagination`` for why dropping it 401s page 2+.
+
+        Returns:
+            ``(merged_items, pages_merged)``. ``pages_merged`` counts page 1
+            plus every follow-up page whose items were actually merged, so a
+            trailing empty page -- which ends the loop WITHOUT merging -- is
+            not counted.
+
+        Raises:
+            NodeExecutionError: Propagated from ``_handle_pagination`` on a
+                response-shape mismatch. Deliberately NOT caught here: the two
+                callers degrade to page 1 differently (one has a ``None``
+                first-page content case the other cannot produce), and
+                flattening that difference into this helper would silently
+                change what each returns on the failure path.
+            NodeValidationError: Propagated -- a mis-configured follow-up
+                request must never be swallowed.
+        """
+        paging_node = copy.copy(self)
+        transport = self.http_node
+        # Mirrors `_handle_pagination`'s own default for this key.
+        items_path = (pagination_params or {}).get("items_path", "data")
+        page_tally = {"merged": 1}
+
+        def _counting_execute(**call_kwargs):
+            """Count follow-up pages whose items were merged into the result.
+
+            Mirrors the two conditions `_handle_pagination` increments
+            `pages_fetched` on -- a successful response whose `items_path`
+            yields a non-empty list. On anything else its loop breaks without
+            counting the page, and so does this.
+            """
+            page_result = transport.execute(**call_kwargs)
+            if page_result.get("success"):
+                page_response = page_result.get("response") or {}
+                page_content = page_response.get("content") or {}
+                if self._get_nested_value(page_content, items_path, []):
+                    page_tally["merged"] += 1
+            return page_result
+
+        paging_node.http_node = types.SimpleNamespace(execute=_counting_execute)
+
+        merged = paging_node._handle_pagination(
+            initial_response,
+            query_params,
+            pagination_params,
+            request_url=request_url,
+            request_headers=request_headers,
+            request_timeout=request_timeout,
+            request_kwargs=request_kwargs,
+        )
+        return merged, page_tally["merged"]
+
+    @staticmethod
+    def _drop_stale_pagination_metadata(
+        metadata: dict[str, Any], pages_merged: int
+    ) -> dict[str, Any]:
+        """Strip navigation pointers that a multi-page merge made false.
+
+        ``metadata`` is assembled from the FIRST page's response, but by the
+        time a caller sees it ``data`` may already span N pages. Page 1's
+        ``Link: ...; rel="next"`` header, its HATEOAS ``links`` block and the
+        ``pagination`` block parsed out of both then advertise pages that are
+        ALREADY inside ``data``: a consumer following ``links["next"]``
+        re-fetches what it was just handed. Present the metadata without those
+        factually-wrong pointers rather than with them, and state how many
+        pages ``data`` actually spans.
+
+        Call this only when pagination RAN -- ``total_pages_fetched`` is a
+        pagination fact and is absent from a non-paginated result. Nothing is
+        stripped when only one page was fetched: page 1's pointers still
+        describe ``data`` exactly, and blanking them would discard true
+        information.
+
+        Args:
+            metadata: The metadata dict to finalise; mutated in place.
+            pages_merged: Page count from ``_paginate_with_page_count``.
+
+        Returns:
+            The same ``metadata`` dict, for call-site convenience.
+        """
+        metadata["total_pages_fetched"] = pages_merged
+        if pages_merged > 1:
+            metadata.pop("links", None)
+            metadata.pop("pagination", None)
+            headers = metadata.get("headers")
+            if isinstance(headers, dict):
+                # Header names are case-insensitive on the wire.
+                metadata["headers"] = {
+                    name: value
+                    for name, value in headers.items()
+                    if name.lower() != "link"
+                }
+        return metadata
 
     def _get_nested_value(
         self, obj: dict[str, Any], path: str, default: Any | None = None
@@ -753,15 +953,26 @@ class RESTClientNode(Node):
 
         # Handle pagination if requested
         data = response["content"] if response else None
-        if paginate and method == "GET" and success:
+        paginated = bool(paginate and method == "GET" and success)
+        pages_merged = 1
+        if paginated:
             try:
-                data = self._handle_pagination(
+                # Shared with `AsyncRESTClientNode.async_run`: the
+                # page-counting proxy lives in ONE place so the two clients
+                # cannot drift apart on what a "page" counts as. The whole
+                # originating kwarg set is threaded intact -- auth_type /
+                # auth_token / auth_username / auth_password / api_key_header /
+                # verify_ssl / retry_count / retry_backoff would otherwise be
+                # dropped on page 2+, which 401s and silently returns page 1 as
+                # the complete result set.
+                data, pages_merged = self._paginate_with_page_count(
                     data or {},
                     query_params,
                     pagination_params,
                     request_url=url,
                     request_headers=headers,
                     request_timeout=timeout,
+                    request_kwargs=http_params,
                 )
             except NodeExecutionError as e:
                 # Response-shape mismatches (e.g. items_path is not a list)
@@ -769,7 +980,9 @@ class RESTClientNode(Node):
                 # mis-configured follow-up request — deliberately propagates:
                 # returning page 1 as the whole result set is the bug this
                 # narrowing exists to prevent.
-                self.logger.warning(f"Pagination handling failed: {str(e)}")
+                self.logger.warning(
+                    "Pagination handling failed: %s", mask_error_text(e)
+                )
 
         # Return processed results
         metadata = {
@@ -783,6 +996,12 @@ class RESTClientNode(Node):
             metadata["headers"] = response.get("headers", {})
             # Extract additional metadata
             metadata.update(self._extract_metadata(response))
+
+        if paginated:
+            # `response` is still the FIRST page, so the `links` / `pagination`
+            # blocks just extracted from it -- and its `Link` header -- describe
+            # page 1 alone, while `data` may already span N pages.
+            self._drop_stale_pagination_metadata(metadata, pages_merged)
 
         return {
             "data": data,
@@ -1038,6 +1257,249 @@ class RESTClientNode(Node):
 
         return links
 
+    # ------------------------------------------------------------------
+    # Pagination link-following guard
+    #
+    # ``metadata["links"]["next"]`` is a SERVER-SUPPLIED value. The async
+    # pagination loop below issues a follow-up request against it carrying the
+    # caller's request headers -- ``Authorization`` included -- so an upstream
+    # API that is hostile (or merely compromised) could redirect those
+    # credentials to any host it likes, or point the node at ``file:///`` or at
+    # the cloud metadata endpoint. The sync ``_handle_pagination`` is immune
+    # because no server-supplied value ever reaches its destination URL; this
+    # guard gives the async path the same property.
+    # ------------------------------------------------------------------
+
+    #: Header names that carry caller credentials. Dropped case-insensitively
+    #: on any allow-listed CROSS-ORIGIN follow-up page request. The node's
+    #: configured ``api_key_header`` is added to this set at call time.
+    _CREDENTIAL_HEADERS = frozenset(
+        {
+            "authorization",
+            "cookie",
+            "proxy-authorization",
+            "x-api-key",
+            "x-auth-token",
+            "api-key",
+        }
+    )
+
+    #: Non-literal hostnames that resolve to an internal/metadata endpoint.
+    #: Deliberately small -- literal addresses are covered by ``ipaddress``,
+    #: and a general DNS-rebinding defense belongs at the transport layer.
+    _INTERNAL_HOSTNAMES = frozenset(
+        {
+            "localhost",
+            "metadata",
+            "metadata.google.internal",
+        }
+    )
+
+    @staticmethod
+    def _pagination_origin(parsed) -> str | None:
+        """Normalize a parsed URL to ``scheme://host:port``.
+
+        Default ports are made explicit so ``http://h:80`` and ``http://h``
+        compare equal. Returns None when the URL carries no usable origin.
+        """
+        scheme = (parsed.scheme or "").lower()
+        host = (parsed.hostname or "").lower()
+        if not scheme or not host:
+            return None
+        try:
+            port = parsed.port
+        except ValueError:
+            # Malformed port ("http://h:notaport") -- no usable origin.
+            return None
+        if port is None:
+            port = {"http": 80, "https": 443}.get(scheme)
+        if port is None:
+            return None
+        return f"{scheme}://{host}:{port}"
+
+    @classmethod
+    def _is_internal_host(cls, host: str | None) -> bool:
+        """True for loopback / link-local / private / reserved address literals.
+
+        A missing host counts as internal (fail closed). Bracketed IPv6 hosts
+        are unwrapped before parsing.
+        """
+        if not host:
+            return True
+        candidate = host.strip("[]")
+        try:
+            ip = ipaddress.ip_address(candidate)
+        except ValueError:
+            return candidate.lower() in cls._INTERNAL_HOSTNAMES
+        return (
+            ip.is_loopback
+            or ip.is_link_local
+            or ip.is_private
+            or ip.is_reserved
+            or ip.is_unspecified
+            or ip.is_multicast
+        )
+
+    @classmethod
+    def _normalize_origin_allowlist(cls, allowed_origins: Any) -> set[str]:
+        """Normalize caller-supplied origins to the ``_pagination_origin`` form."""
+        if not allowed_origins:
+            return set()
+        if isinstance(allowed_origins, str):
+            allowed_origins = [allowed_origins]
+        normalized: set[str] = set()
+        for entry in allowed_origins:
+            if not isinstance(entry, str) or not entry.strip():
+                continue
+            try:
+                origin = cls._pagination_origin(urlparse(entry.strip()))
+            except ValueError:
+                continue
+            if origin:
+                normalized.add(origin)
+        return normalized
+
+    @classmethod
+    def _strip_credential_headers(
+        cls, headers: dict[str, Any], api_key_header: str | None
+    ) -> dict[str, Any]:
+        """Drop credential-bearing headers, matching names case-insensitively."""
+        drop = set(cls._CREDENTIAL_HEADERS)
+        if isinstance(api_key_header, str) and api_key_header.strip():
+            drop.add(api_key_header.strip().lower())
+        return {
+            key: value
+            for key, value in headers.items()
+            if not (isinstance(key, str) and key.lower() in drop)
+        }
+
+    def _evaluate_pagination_next_link(
+        self,
+        next_url: Any,
+        *,
+        request_url: str,
+        request_headers: dict[str, Any] | None = None,
+        allowed_origins: Any = None,
+        api_key_header: str | None = None,
+        base_url: str | None = None,
+    ) -> dict[str, Any]:
+        """Decide whether a server-supplied pagination link may be followed.
+
+        Policy, applied in order:
+
+        1. A relative link is resolved against ``base_url`` (the page it was
+           found on, which for the first hop is the original request URL).
+        2. Any scheme other than ``http``/``https`` is REJECTED -- this covers
+           ``file:``, ``javascript:``, ``data:`` and ``gopher:``.
+        3. A loopback / link-local / private / reserved / unspecified address
+           literal, or a cloud-metadata hostname, is REJECTED unless its origin
+           is identical to the original request's origin (so a node pointed at
+           ``http://localhost:8000`` still paginates).
+        4. Same origin as the original request (scheme + host + port, default
+           ports normalized) -> ALLOW, caller's headers forwarded unchanged.
+        5. Origin present in ``allowed_pagination_origins`` -> ALLOW, but every
+           credential-bearing header is STRIPPED.
+        6. Anything else -> REJECT.
+
+        ``request_url`` stays pinned to the ORIGINAL request for the whole
+        pagination run, so an allow-listed third-party origin can never become
+        "same origin" on a later hop and win the credentials back.
+
+        Args:
+            next_url: The server-supplied link, absolute or relative.
+            request_url: The ORIGINAL request URL; sole source of "same origin".
+            request_headers: Headers of the originating request.
+            allowed_origins: Caller-supplied origin allowlist (may be None).
+            api_key_header: The node's configured API-key header name, added to
+                the credential-header strip set.
+            base_url: URL of the page the link was found on, for relative
+                resolution. Defaults to ``request_url``.
+
+        Returns:
+            ``{"allow": bool, "url": str | None, "headers": dict,
+            "reason": str | None}``. The caller stops paginating when
+            ``allow`` is False; the rejection is already logged here.
+        """
+        headers = dict(request_headers or {})
+
+        def reject(reason: str, rendered: Any) -> dict[str, Any]:
+            # The rejected value is never echoed raw: an embedded credential
+            # would otherwise land in the log the rejection exists to protect.
+            self.logger.warning(
+                "Pagination stopped: %s (link=%s)", reason, mask_error_text(rendered)
+            )
+            return {"allow": False, "url": None, "headers": {}, "reason": reason}
+
+        if not isinstance(next_url, str) or not next_url.strip():
+            return reject("next link is missing or not a string", next_url)
+
+        resolution_base = base_url or request_url or ""
+        try:
+            resolved = urljoin(resolution_base, next_url.strip())
+            parsed = urlparse(resolved)
+            origin_parsed = urlparse(request_url or "")
+        except ValueError as exc:
+            return reject(f"next link is unparseable ({type(exc).__name__})", next_url)
+
+        scheme = (parsed.scheme or "").lower()
+        if scheme not in ("http", "https"):
+            return reject(f"scheme {scheme!r} is not http(s)", resolved)
+
+        target_origin = self._pagination_origin(parsed)
+        if target_origin is None:
+            return reject("next link has no usable origin", resolved)
+        source_origin = self._pagination_origin(origin_parsed)
+        same_origin = source_origin is not None and target_origin == source_origin
+
+        if not same_origin and self._is_internal_host(parsed.hostname):
+            return reject("next link targets an internal/reserved address", resolved)
+
+        if same_origin:
+            return {"allow": True, "url": resolved, "headers": headers, "reason": None}
+
+        if target_origin in self._normalize_origin_allowlist(allowed_origins):
+            return {
+                "allow": True,
+                "url": resolved,
+                "headers": self._strip_credential_headers(headers, api_key_header),
+                "reason": None,
+            }
+
+        return reject("next link is cross-origin and not allow-listed", resolved)
+
+    def _build_async_result(
+        self, http_result: dict[str, Any], url: str, method: str
+    ) -> dict[str, Any]:
+        """Shape an ``AsyncHTTPRequestNode.async_run`` return into node output.
+
+        The transport returns ``{"response": HTTPResponse.model_dump(),
+        "status_code", "success"}`` -- ``content``, ``headers`` and
+        ``response_time_ms`` live INSIDE ``response``, and ``response`` is
+        ``None`` on the failure path. Reading ``content``/``headers`` off the
+        TOP level (what this node used to do) always yielded ``None``/``{}``,
+        which is why every async call reported success with no data and why
+        pagination never found a link.
+        """
+        response = http_result.get("response") or {}
+        if not isinstance(response, dict):
+            response = {}
+
+        metadata: dict[str, Any] = {"url": url, "method": method}
+        if response:
+            metadata["response_time_ms"] = response.get("response_time_ms", 0)
+            metadata["headers"] = response.get("headers", {}) or {}
+            # Rate-limit / pagination / HATEOAS links, same as the sync path.
+            metadata.update(self._extract_metadata(response))
+        else:
+            metadata["headers"] = {}
+
+        return {
+            "data": response.get("content"),
+            "status_code": http_result.get("status_code"),
+            "success": http_result.get("success", False),
+            "metadata": metadata,
+        }
+
     def _extract_links(self, content: Any) -> dict[str, Any] | None:
         """Extract HATEOAS links from response content.
 
@@ -1139,17 +1601,10 @@ class RESTClientNode(Node):
             verify_ssl=kwargs.get("verify_ssl", True),
         )
 
-        # Process response (simplified version for async)
-        result = {
-            "data": http_result.get("content"),
-            "status_code": http_result.get("status_code"),
-            "success": http_result.get("success", False),
-            "metadata": {
-                "url": full_url,
-                "method": method,
-                "headers": http_result.get("headers", {}),
-            },
-        }
+        # Process response. content/headers are nested under "response" -- see
+        # _build_async_result for why reading them off the top level returned
+        # data=None on every async call.
+        result = self._build_async_result(http_result, full_url, method)
 
         # Handle pagination if requested (async version)
         if kwargs.get("paginate", False) and result.get("success", False):
@@ -1170,60 +1625,97 @@ class RESTClientNode(Node):
             Combined results from all pages
         """
         all_data = initial_result.get("data", [])
-        pagination_config = kwargs.get("pagination_params", {})
+        pagination_config = kwargs.get("pagination_params") or {}
         max_pages = pagination_config.get("max_pages", 10)
         page_count = 1
+
+        # The ORIGINAL request URL. Pinned for the whole run: it is the sole
+        # definition of "same origin", so an allow-listed third-party origin
+        # cannot become same-origin on a later hop and win the credentials back.
+        origin_url = (initial_result.get("metadata") or {}).get("url") or ""
+        # URL of the page the next link was read from -- the base for resolving
+        # a RELATIVE link. Advances with each hop.
+        page_url = origin_url
+        request_headers = kwargs.get("headers") or {}
+        allowed_origins = kwargs.get("allowed_pagination_origins")
+        api_key_header = kwargs.get("api_key_header", "X-API-Key")
 
         current_result = initial_result
 
         while page_count < max_pages:
             # Check for next page link in metadata
             metadata = current_result.get("metadata", {})
-            pagination = metadata.get("pagination", {})
-            links = metadata.get("links", {})
+            pagination = metadata.get("pagination") or {}
+            links = metadata.get("links") or {}
 
             next_url = links.get("next") or pagination.get("next_url")
             if not next_url:
                 break
 
+            # The link came from the response BODY. Validate its origin before
+            # it can receive the caller's credentials (the rejection is logged
+            # inside the guard).
+            decision = self._evaluate_pagination_next_link(
+                next_url,
+                request_url=origin_url,
+                request_headers=request_headers,
+                allowed_origins=allowed_origins,
+                api_key_header=api_key_header,
+                base_url=page_url,
+            )
+            if not decision["allow"]:
+                break
+
             try:
                 # Make async request for next page
                 http_result = await self._async_http_node.async_run(  # type: ignore[attr-defined]
-                    url=next_url,
+                    url=decision["url"],
                     method="GET",
-                    headers=kwargs.get("headers", {}),
+                    headers=decision["headers"],
                     timeout=kwargs.get("timeout", 30),
                     verify_ssl=kwargs.get("verify_ssl", True),
                 )
+            except NodeValidationError:
+                # A mis-configured request is a programming/configuration
+                # error, not a transient transport failure -- swallowing it is
+                # what turned a broken follow-up into "page 1 is the whole
+                # result set". Same narrowing as the sync sibling.
+                raise
+            except Exception as e:
+                # Transport-level failures degrade to the pages fetched so far,
+                # but they are no longer SILENT.
+                self.logger.warning(
+                    "Async pagination request failed: %s", mask_error_text(e)
+                )
+                break
 
-                current_result = {
-                    "data": http_result.get("content"),
-                    "status_code": http_result.get("status_code"),
-                    "success": http_result.get("success", False),
-                    "metadata": {
-                        "url": next_url,
-                        "method": "GET",
-                        "headers": http_result.get("headers", {}),
-                    },
-                }
+            current_result = self._build_async_result(
+                http_result, decision["url"], "GET"
+            )
 
-                if current_result.get("success", False):
-                    page_data = current_result.get("data", [])
-                    if isinstance(page_data, list):
-                        all_data.extend(page_data)
-                    page_count += 1
-                else:
-                    break
-
-            except Exception:
-                # Stop pagination on error
+            if current_result.get("success", False):
+                page_data = current_result.get("data", [])
+                if isinstance(page_data, list) and isinstance(all_data, list):
+                    all_data.extend(page_data)
+                page_url = decision["url"]
+                page_count += 1
+            else:
                 break
 
         # Update result with combined data
         result = initial_result.copy()
         result["data"] = all_data
-        if "metadata" in result:
-            result["metadata"]["total_pages_fetched"] = page_count
+        if isinstance(result.get("metadata"), dict):
+            # `metadata` still describes page 1, but `data` now spans
+            # `page_count` pages: page 1's `links`/`pagination`/`Link` point at
+            # records the caller was just handed. Same shared stripper the
+            # page/offset/cursor paths use, so the three pagination strategies
+            # cannot drift on what a merged result advertises. Copied first --
+            # `initial_result.copy()` is shallow, so mutating the metadata in
+            # place would reach back into the caller's own dict.
+            result["metadata"] = self._drop_stale_pagination_metadata(
+                dict(result["metadata"]), page_count
+            )
 
         return result
 
@@ -1262,20 +1754,31 @@ class AsyncRESTClientNode(AsyncNode):
     def get_parameters(self) -> dict[str, NodeParameter]:
         """Define the parameters this node accepts.
 
+        Delegates to the synchronous node's *class-level* definition rather
+        than to ``self.rest_node``. ``Node.__init__`` validates configuration,
+        and therefore calls this method, before any subclass ``__init__`` body
+        has run — so reading instance state here is unsound regardless of the
+        order in which ``__init__`` makes its assignments (issue #2230).
+
         Returns:
             Dictionary of parameter definitions
         """
-        # Same parameters as the synchronous version
-        return self.rest_node.get_parameters()
+        # Same parameters as the synchronous version. RESTClientNode's
+        # implementation reads no instance state, so the unbound call is exact.
+        return RESTClientNode.get_parameters(self)
 
     def get_output_schema(self) -> dict[str, NodeParameter]:
         """Define the output schema for this node.
 
+        Class-level delegation, for the same reason as ``get_parameters``:
+        this must not depend on instance state that ``__init__`` establishes.
+
         Returns:
             Dictionary of output parameter definitions
         """
-        # Same output schema as the synchronous version
-        return self.rest_node.get_output_schema()
+        # Same output schema as the synchronous version. RESTClientNode's
+        # implementation reads no instance state, so the unbound call is exact.
+        return RESTClientNode.get_output_schema(self)
 
     def run(self, **kwargs) -> dict[str, Any]:
         """Synchronous version of the REST request, for compatibility.
@@ -1415,30 +1918,71 @@ class AsyncRESTClientNode(AsyncNode):
 
             return error_result
 
-        # Handle pagination if requested (simplified for now)
+        # Handle pagination if requested.
         data = response["content"]
-        if paginate and method == "GET" and success:
+        paginated = bool(paginate and method == "GET" and success)
+        pages_fetched = 1
+        if paginated:
+            # `_handle_pagination` is SYNCHRONOUS: every follow-up page goes
+            # through a `requests`-backed node, which blocks the calling
+            # thread. Called inline from this coroutine it blocked the EVENT
+            # LOOP for up to `(max_pages - 1) * timeout` seconds, starving
+            # every other task on it (#2230). Offload it to a worker thread --
+            # the same `asyncio.to_thread` offload `base_async.py` uses for its
+            # own blocking calls.
+            #
+            # An async twin of `_handle_pagination` was considered and
+            # rejected: it is ~190 lines of page/offset/cursor logic, a
+            # seen-cursor set, auth-kwarg threading and masked error sinks,
+            # and a second copy would drift from it. This module has already
+            # paid that exact price once -- the divergent async result shaping
+            # fixed earlier in this same issue. `_handle_async_pagination`
+            # remains the async HATEOAS link-following strategy; it is not a
+            # substitute for the page/offset/cursor strategy run here.
             try:
-                data = self.rest_node._handle_pagination(  # type: ignore[attr-defined]
+                # `_paginate_with_page_count` owns the per-call counting proxy
+                # AND the `_handle_pagination` invocation; the synchronous
+                # client calls the SAME method. The page-counting semantics
+                # therefore exist in exactly one place, so the two clients
+                # cannot drift apart on what a "page" counts as. The whole
+                # `http_params` dict is threaded through, same as the
+                # synchronous caller, so follow-up pages keep the originating
+                # request's auth and transport settings.
+                data, pages_fetched = await asyncio.to_thread(
+                    self.rest_node._paginate_with_page_count,  # type: ignore[attr-defined]
                     data,
                     query_params,
                     pagination_params,
                     request_url=url,
                     request_headers=headers,
                     request_timeout=timeout,
+                    request_kwargs=http_params,
                 )
             except NodeExecutionError as e:
                 # Same split as the synchronous caller: shape mismatches
                 # degrade to page 1, configuration errors surface.
-                self.logger.warning(f"Pagination handling failed: {str(e)}")
+                self.logger.warning(
+                    "Pagination handling failed: %s", mask_error_text(e)
+                )
 
-        # Return processed results
+        # Return processed results. `response` is still the FIRST page, so its
+        # navigation headers describe page 1 alone -- see
+        # `_drop_stale_pagination_metadata` for why they are not presented
+        # verbatim once `data` spans several pages.
         metadata = {
             "url": url,
             "method": method,
             "response_time_ms": response["response_time_ms"],
-            "headers": response["headers"],
+            "headers": response["headers"] or {},
         }
+        if paginated:
+            # Same helper, and so the same `total_pages_fetched` key, as the
+            # synchronous client. This metadata carries no `links`/`pagination`
+            # block (it is not built via `_extract_metadata`), so here the
+            # helper's strip reduces to the stale `Link` header.
+            self.rest_node._drop_stale_pagination_metadata(  # type: ignore[attr-defined]
+                metadata, pages_fetched
+            )
 
         return {
             "data": data,
