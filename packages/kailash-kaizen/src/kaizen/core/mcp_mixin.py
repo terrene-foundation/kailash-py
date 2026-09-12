@@ -745,7 +745,16 @@ class MCPMixin:
             **server_kwargs: Additional MCPServer arguments.
 
         Returns:
-            MCPServer: Configured server (call .run() to start).
+            MCPServer: Configured server (call .run() to start). The names that
+            registered are on ``self._mcp_exposed_tools``; anything refused is
+            on ``self._mcp_unexposed_tools`` as ``{name: reason}``.
+
+        Raises:
+            ValueError: A method named explicitly via ``tools=`` could not be
+                published. An explicit list is a demand, not a sweep.
+            RuntimeError: Every candidate method was refused, so the server
+                would advertise no tools at all. Returning that server would
+                report success for a feature that does nothing.
         """
         try:
             from kailash_mcp.discovery import enable_auto_discovery as enable_discovery
@@ -774,15 +783,26 @@ class MCPMixin:
                 if not m.startswith("_") and callable(getattr(self, m))
             ]
 
+        # Per-method skips are individually survivable, but a server on which
+        # NOTHING registered is the dead feature this whole path exists to
+        # prevent -- and it is invisible, because every skip is a WARNING and
+        # the call still hands back a server object. Count both sides so the
+        # all-skipped case can be told apart from a partial sweep.
+        considered: List[str] = []
+        registered: List[str] = []
+        skipped: Dict[str, str] = {}
+
         for tool_name in tools:
             if not hasattr(self, tool_name):
                 logger.warning(f"Tool {tool_name} not found on agent, skipping")
                 continue
 
+            considered.append(tool_name)
             method = getattr(self, tool_name)
 
             reason = _unpublishable_reason(method)
             if reason is not None:
+                skipped[tool_name] = reason
                 message = f"Tool {tool_name} cannot be exposed as an MCP tool: {reason}"
                 if not auto_discovered:
                     raise ValueError(
@@ -839,10 +859,35 @@ class MCPMixin:
                         f"Tool {tool_name} was requested explicitly via `tools=` "
                         f"but the MCP server refused to register it: {exc}"
                     ) from exc
+                skipped[tool_name] = str(exc)
                 logger.warning(
                     f"Tool {tool_name} could not be registered as an MCP tool "
                     f"({exc}), skipping"
                 )
+            else:
+                registered.append(tool_name)
+
+        # Publishability is decided per method by a framework this package does
+        # not control, so ANY of the skips above can start firing on a version
+        # bump. Surviving one skip is right; surviving ALL of them is not -- a
+        # server advertising zero tools serves no purpose, and handing it back
+        # as a success is exactly how this feature stayed dead through two
+        # releases while every individual WARNING was technically accurate.
+        # Fail here instead, naming every reason, so the next such regression
+        # is a stack trace rather than a silent no-op.
+        if considered and not registered:
+            reasons = "; ".join(f"{name}: {why}" for name, why in skipped.items())
+            raise RuntimeError(
+                f"MCP server '{server_name}' would expose NO tools: all "
+                f"{len(considered)} candidate method(s) on {type(self).__name__} "
+                f"were refused ({reasons}). A server with no tools is not a "
+                "degraded server, it is a non-functional one."
+            )
+
+        # Consumers that need to know WHICH methods made it -- and why the rest
+        # did not -- read these rather than re-deriving from log output.
+        self._mcp_exposed_tools = tuple(registered)
+        self._mcp_unexposed_tools = dict(skipped)
 
         self._mcp_server = server
 
