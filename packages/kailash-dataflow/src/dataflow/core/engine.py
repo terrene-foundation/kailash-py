@@ -168,6 +168,55 @@ ErrorEnhancer = PlatformErrorEnhancer
 logger = logging.getLogger(__name__)
 
 
+class _TableVerificationInconclusive(RuntimeError):
+    """Issue #2206 — internal marker: the committed-state existence check for a
+    table could not be COMPLETED, on a path where schema management had already
+    reported SUCCESS.
+
+    Residual of #1548. That fix made ``ensure_table_exists`` verify physical
+    existence on a fresh committed-state connection, but treated an
+    INCONCLUSIVE verdict (``None``) exactly like a confirmed one: it fell
+    through to ``mark_table_ensured()`` and returned ``True``. The check goes
+    inconclusive when the fresh verify connect is REFUSED or TIMES OUT — i.e.
+    under the connection-pool exhaustion / process-state accumulation that
+    #1548 was filed for — so the guard failed OPEN precisely in the condition it
+    exists to catch, and ``mark_table_ensured()`` then CACHED that fail-open, so
+    every later access short-circuited at the schema-cache fast path and never
+    re-verified.
+
+    SCOPE, MEASURED (issue #2206 re-derivation, 2026-09-12). This closes a real
+    fail-open, but it is NOT the window that produced #2206's reported symptom,
+    and it must not be cited as such. On DataFlow's DEFAULT path the EAGER SYNC
+    creation path (``_create_tables_batch`` / ``_create_table_sync``) marks the
+    table ensured with NO physical verification, and every later
+    ``ensure_table_exists`` then short-circuits at the schema-cache fast path.
+    So the #1548 verify — and therefore this #2206 handling — NEVER EXECUTES
+    there. Measured: 0 verify invocations across 500 harness iterations (250 on
+    this code, 250 on its parent) AND across
+    ``test_issue_1249_tenant_isolation_leak_postgres.py`` itself, which marked
+    ensured from ``_create_tables_batch`` and then took 13 consecutive cache
+    hits. The reported ~1/137 non-durable-write signature reproduced at 2/250
+    (0.80%) WITH this code applied. #1548's guard is unreachable on the default
+    path — a REACHABILITY gap, not a logic gap — which is why #1548's fix is in
+    the tree while its symptom still reproduces. Closing that gap (verifying on
+    the sync path too) is a separate, unshipped decision: it would add a fresh
+    connect per model at startup, which ADR-001 performance constrains.
+
+    Raised ONLY for the ERROR-class inconclusive (transient, retryable). The
+    STRUCTURAL-class inconclusive — an unknown backend with no SQL table
+    concept, or bare in-memory SQLite with no shared URI — is NOT raised for:
+    re-checking can never make it conclusive, so blocking on it would break
+    legitimate flows with no durability benefit.
+
+    Handled by a dedicated ``except`` clause in ``ensure_table_exists`` that
+    converts it to ``DDLFailedError`` (the only type ``nodes.py`` propagates
+    rather than log-and-continue) WITHOUT recording failed-DDL state: the
+    condition is transient, and the #696 circuit breaker has no TTL, so
+    recording it would permanently brick the model on this instance instead of
+    letting the next access self-heal.
+    """
+
+
 class DataFlow(DataFlowEventMixin):
     """Main DataFlow interface."""
 
@@ -2502,11 +2551,22 @@ class DataFlow(DataFlowEventMixin):
             # per actual ensure-miss (the schema-cache HIT fast path returned
             # early above, so ADR-001 performance is untouched). A DEFINITIVE
             # "table absent" raises below so the caller sees a loud failure and
-            # the next access self-heals; an INCONCLUSIVE check (verification
-            # could not run) logs WARN and does not block — the primary
-            # durability guarantee is the un-swallowed migration path above.
-            physically_exists = await self._verify_table_physically_exists(
-                model_name, database_url
+            # the next access self-heals.
+            #
+            # Issue #2206 (residual of #1548): an INCONCLUSIVE verdict used to
+            # fall through to mark_table_ensured() + return True, i.e. it was
+            # treated exactly like a CONFIRMED one. The check goes inconclusive
+            # when the fresh verify connect is refused or times out — under the
+            # very pool exhaustion #1548 was filed for — so the guard failed
+            # OPEN precisely when it was needed, and marking the cache ensured
+            # then CACHED that fail-open: every later access short-circuited at
+            # the schema-cache fast path above and never re-verified, so one
+            # transient blip blinded the instance to a missing table for its
+            # whole lifetime. The two kinds of inconclusive are now separated.
+            physically_exists, verify_reason = (
+                await self._verify_table_physically_exists_detailed(
+                    model_name, database_url
+                )
             )
             if physically_exists is False:
                 # DEFINITIVE absent despite a "success" return — the exact
@@ -2519,6 +2579,46 @@ class DataFlow(DataFlowEventMixin):
                     "fresh committed-state existence check returned absent"
                 )
 
+            if physically_exists is None and verify_reason == "check-error":
+                # Issue #2206: TRANSIENT inconclusive. Retry ONCE — a refused /
+                # timed-out connect under momentary saturation usually clears,
+                # and a retry that comes back conclusive costs one short sleep
+                # on the already-slow ensure-MISS path while sparing callers a
+                # spurious hard failure.
+                await asyncio.sleep(self._VERIFY_RETRY_DELAY_SECONDS)
+                physically_exists, verify_reason = (
+                    await self._verify_table_physically_exists_detailed(
+                        model_name, database_url
+                    )
+                )
+                if physically_exists is False:
+                    raise RuntimeError(
+                        "schema management reported success but the table does "
+                        "not physically exist (issue #1548 silent-write-loss "
+                        "guard); fresh committed-state existence check returned "
+                        "absent on retry"
+                    )
+                if physically_exists is None and verify_reason == "check-error":
+                    # Still could not reach committed state. Durability is
+                    # UNCONFIRMED, and on this path the verify is the ONLY
+                    # evidence the table is durable (schema management already
+                    # claimed success, so the un-swallowed migration path has
+                    # nothing left to say). Refuse to cache it and refuse to
+                    # report success — a loud failure the next access can
+                    # self-heal from, rather than a silent write into a table
+                    # that may not exist.
+                    raise _TableVerificationInconclusive(
+                        "schema management reported success but committed-state "
+                        "verification could not be completed after a retry "
+                        "(issue #2206); durability is unconfirmed, so the table "
+                        "was NOT marked ensured"
+                    )
+
+            # STRUCTURAL inconclusive ("unverifiable-backend": unknown backend,
+            # bare in-memory SQLite) still proceeds — re-checking can never make
+            # it conclusive, so blocking buys no durability and only breaks
+            # legitimate flows. Unchanged from #1548.
+
             # ADR-001: Mark as successfully ensured in cache
             self._schema_cache.mark_table_ensured(
                 model_name, database_url, schema_checksum
@@ -2529,6 +2629,40 @@ class DataFlow(DataFlowEventMixin):
                 extra={"model_name": model_name},
             )
             return True
+
+        except _TableVerificationInconclusive as e:
+            # Issue #2206. Deliberately handled BEFORE the generic handler and
+            # with DIFFERENT bookkeeping, because this is not a DDL failure —
+            # it is an UNKNOWN outcome under a TRANSIENT condition.
+            #
+            # NOT done here, on purpose:
+            #   * mark_table_ensured — caching an unverified success is the
+            #     fail-open this issue exists to close.
+            #   * mark_table_failed / _record_failed_ddl — the #696 circuit
+            #     breaker has NO TTL (_check_failed_ddl raises until something
+            #     calls _clear_failed_ddl), so recording a momentary connect
+            #     refusal would permanently brick this model on this instance.
+            #     Leaving both cache and breaker untouched is what lets the very
+            #     next access re-run the ensure and self-heal.
+            logger.error(
+                "engine.table_verification_inconclusive",
+                extra={
+                    "model_name": model_name,
+                    "error": self._sanitize_db_error(str(e)),
+                },
+            )
+            if self._auto_migrate_warn:
+                # Legacy log-and-continue escape hatch, consistent with the
+                # generic handler below.
+                return False
+            # DDLFailedError is the ONLY exception type nodes.py re-raises
+            # rather than logging and continuing into the CRUD call, so it is
+            # the type that actually stops a write into an unverified table.
+            raise self._DDLFailedError(
+                model_name=model_name,
+                original_error=RuntimeError(self._sanitize_db_error(str(e))),
+                statement_preview="",
+            ) from e
 
         except Exception as e:
             logger.error(
@@ -2608,11 +2742,24 @@ class DataFlow(DataFlowEventMixin):
 
             return False
 
+    # Issue #2206: delay between the first ERROR-class inconclusive verify and
+    # its single retry. A refused/timed-out fresh connect under pool saturation
+    # usually clears within a moment; retrying once keeps a transient blip from
+    # surfacing as a hard failure, while bounding the added latency on what is
+    # already the slow ensure-MISS path (the cache-HIT fast path never gets
+    # here, so ADR-001 performance is untouched).
+    _VERIFY_RETRY_DELAY_SECONDS = 0.25
+
     async def _verify_table_physically_exists(
         self, model_name: str, database_url: str
     ) -> Optional[bool]:
         """Issue #1548: verify a table PHYSICALLY exists using a fresh
         connection that reflects COMMITTED state.
+
+        Thin delegate over :meth:`_verify_table_physically_exists_detailed`,
+        which carries the WHY of an inconclusive verdict (issue #2206). Kept as
+        the stable three-state entry point for callers that only need the
+        verdict.
 
         The async lazy-DDL path can (under fault injection or a genuinely
         false-success migration) report success without the table existing.
@@ -2626,9 +2773,13 @@ class DataFlow(DataFlowEventMixin):
                     DDLFailedError; the silent-write-loss guard).
             None  — the check could not run conclusively (e.g. bare in-memory
                     SQLite with no shared URI, or a verification-time
-                    connection error). Logged at WARN; caller does NOT block,
-                    because the primary durability guarantee is the
-                    un-swallowed migration path, not this secondary check.
+                    connection error). Logged at WARN. Issue #2206: what a
+                    caller may do with this is NOT uniform — see
+                    :meth:`_verify_table_physically_exists_detailed` for the
+                    reason code that separates the STRUCTURAL kind (proceed;
+                    a retry can never help) from the TRANSIENT kind (retry,
+                    then refuse to report success — it is the pool-exhaustion
+                    signature, so it must not be read as a confirmation).
 
         The identifier is DataFlow-internally generated (model → table name)
         and is passed as a BOUND parameter to the existence query — never
@@ -2648,6 +2799,37 @@ class DataFlow(DataFlowEventMixin):
         tables in a non-default schema exclusively via a runtime ``SET
         search_path`` on pooled connections (NOT the DSN) are unsupported by the
         creation path itself and out of scope here.
+        """
+        verdict, _reason = await self._verify_table_physically_exists_detailed(
+            model_name, database_url
+        )
+        return verdict
+
+    async def _verify_table_physically_exists_detailed(
+        self, model_name: str, database_url: str
+    ) -> Tuple[Optional[bool], str]:
+        """Issue #2206: :meth:`_verify_table_physically_exists` plus the REASON
+        an inconclusive verdict was inconclusive.
+
+        #1548 collapsed both kinds of ``None`` into one "do not block" outcome.
+        They are not the same, and the difference decides whether re-checking
+        can ever help:
+
+        Returns ``(verdict, reason)`` where ``reason`` is one of:
+
+        ``"verified"``
+            The verdict is conclusive (``True`` or ``False``).
+        ``"unverifiable-backend"``
+            STRUCTURAL inconclusive — an unknown backend with no SQL table
+            concept, or bare in-memory SQLite with no shared URI. Deterministic:
+            a retry returns the identical verdict, so callers proceed (blocking
+            buys no durability, only broken flows).
+        ``"check-error"``
+            TRANSIENT inconclusive — the check itself raised (fresh connect
+            REFUSED, timed out, DSN rebuild failed). This is the signature of
+            the connection-pool exhaustion #1548 was filed for, so it is exactly
+            when a missing table is MOST likely; callers must NOT treat it as a
+            confirmation. See :class:`_TableVerificationInconclusive`.
         """
         table_name = self._get_table_name(model_name)
         url_lower = database_url.lower()
@@ -2688,7 +2870,7 @@ class DataFlow(DataFlowEventMixin):
                     # the connection search_path, matching how CRUD reaches
                     # the same table (see the schema-resolution note above).
                     reg = await conn.fetchval("SELECT to_regclass($1)", table_name)
-                    return reg is not None
+                    return (reg is not None), "verified"
                 finally:
                     await conn.close()
 
@@ -2714,7 +2896,9 @@ class DataFlow(DataFlowEventMixin):
                         "engine.table_existence_check_inconclusive_memory",
                         extra={"model_name": model_name},
                     )
-                    return None
+                    # Issue #2206: STRUCTURAL — a retry reopens the same
+                    # different-empty-DB and returns the identical verdict.
+                    return None, "unverifiable-backend"
                 else:
                     # File-based SQLite: strip the scheme prefix if present.
                     path = database_url
@@ -2729,7 +2913,7 @@ class DataFlow(DataFlowEventMixin):
                         "WHERE type='table' AND name=?",
                         (table_name,),
                     )
-                    return cur.fetchone() is not None
+                    return (cur.fetchone() is not None), "verified"
                 finally:
                     conn.close()
 
@@ -2740,14 +2924,17 @@ class DataFlow(DataFlowEventMixin):
                     "engine.table_existence_check_inconclusive_backend",
                     extra={"model_name": model_name},
                 )
-                return None
+                # Issue #2206: STRUCTURAL — no SQL table concept to verify.
+                return None, "unverifiable-backend"
 
         except Exception as e:
             # A verification-time connection error is inconclusive, NOT a
-            # definitive "absent". Log at WARN and let the caller proceed — the
-            # primary durability guarantee is the un-swallowed migration path;
-            # a false raise here would break legitimate flows under a transient
-            # connection blip.
+            # definitive "absent" — returning False here would raise on a
+            # transient blip against a table that exists. Issue #2206: it is
+            # equally NOT a confirmation, so it is reported as the TRANSIENT
+            # "check-error" kind and the caller decides (ensure_table_exists
+            # retries once, then fails loud rather than caching an unverified
+            # success).
             # Red-team #5: log the exception TYPE + a masked DB URL only. The raw
             # exception message is NOT logged — ConnectionParser errors can echo
             # DSN/URL fragments (credentials), and mask_url canonicalizes the URL
@@ -2760,7 +2947,10 @@ class DataFlow(DataFlowEventMixin):
                     "database": mask_url(database_url),
                 },
             )
-            return None
+            # Issue #2206: TRANSIENT — the check could not RUN. This is the
+            # pool-exhaustion signature #1548 targets, NOT a confirmation, so
+            # the success path must not read it as one.
+            return None, "check-error"
 
     # ------------------------------------------------------------------
     # Issue #1600 — additive column reconciliation (ALTER-ADD new columns

@@ -8,6 +8,9 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
+from kailash.utils.secure_logging import (  # log-injection barrier for logged VALUES
+    sanitize_log_value,
+)
 from kailash.utils.url_credentials import mask_url
 
 from ..core.exceptions import BulkUpsertConflictTargetError
@@ -547,8 +550,15 @@ class BulkOperations:
 
                 # DEBUG (not WARN): the query carries schema column names —
                 # observability.md Rule 8.
+                # The slice bounds VOLUME but not STRUCTURE: a column name or
+                # literal carrying \r or \n inside the first 100 chars still
+                # ends the record mid-line, and everything after the break reads
+                # as a separate, attacker-authored log record. The FLATTEN is
+                # the half that closes that; sanitize_log_value does both.
                 logger.debug(
-                    f"BULK_CREATE: Executing batch {batches_processed + 1}, query='{query[:100]}...', param_count={len(params)}"
+                    f"BULK_CREATE: Executing batch {batches_processed + 1}, "
+                    f"query='{sanitize_log_value(query)}', "
+                    f"param_count={len(params)}"
                 )
 
                 # Execute using cached AsyncSQLDatabaseNode
@@ -823,8 +833,14 @@ class BulkOperations:
                 # DEBUG (not WARN): the query carries schema column names and
                 # params carry row VALUES (potential PII) — must not reach log
                 # aggregators at WARN+ (observability.md Rule 8, security.md).
+                # ``params`` are BOUND VALUES — caller row data at bulk scale.
+                # Interpolated raw they carry both a log-injection vector (a
+                # value with \r or \n forges a second record) and unbounded
+                # PII volume. sanitize_log_value flattens every non-printable
+                # to a space AND bounds the rendered length.
                 logger.debug(
-                    f"BULK_UPDATE: Executing query='{query}' with params={params}"
+                    f"BULK_UPDATE: Executing query='{sanitize_log_value(query)}' "
+                    f"with params={sanitize_log_value(params)}"
                 )
 
                 # Execute using cached AsyncSQLDatabaseNode
@@ -1289,8 +1305,12 @@ class BulkOperations:
                     query = f"DELETE FROM {quoted_table} {where_clause}"
                 # DEBUG (not WARN): query carries schema names, params carry row
                 # VALUES (potential PII) — observability.md Rule 8, security.md.
+                # ``params`` are BOUND VALUES — caller row data at bulk scale;
+                # see BULK_UPDATE above for why a length bound alone is not the
+                # fix here.
                 logger.debug(
-                    f"BULK_DELETE: Executing query='{query}' with params={params}"
+                    f"BULK_DELETE: Executing query='{sanitize_log_value(query)}' "
+                    f"with params={sanitize_log_value(params)}"
                 )
 
                 result = await sql_node.async_run(
@@ -1525,6 +1545,18 @@ class BulkOperations:
         import time
 
         _upsert_start = time.perf_counter()
+        # Issue #2210: hoisted ABOVE the try so the failure path can report what
+        # was actually COMMITTED. bulk_upsert writes one statement per batch and,
+        # outside an enclosing TransactionScopeNode, each autocommits — so a
+        # failure partway through leaves earlier batches persisted. Measured on
+        # SQLite: a middle-chunk failure of a 2500-row upsert leaves 1000 rows in
+        # the table. Reporting a flat zero there tells the caller nothing was
+        # written when a third of the batch was, which is the WORSE failure —
+        # a retry then double-counts and a rollback never happens.
+        total_inserted = 0
+        total_updated = 0
+        total_skipped = 0
+        batches_processed = 0
         try:
             connection_string = self.dataflow.config.database.get_connection_url(
                 self.dataflow.config.environment
@@ -1585,10 +1617,6 @@ class BulkOperations:
                     )
 
             # Build upsert query based on database type
-            total_inserted = 0
-            total_updated = 0
-            total_skipped = 0
-            batches_processed = 0
 
             # Issue #1546: resolve the MySQL row-alias upsert form ONCE before the
             # batch loop (one cached SELECT VERSION() round-trip, shared with the
@@ -1601,9 +1629,46 @@ class BulkOperations:
                     )
                 )
 
+            # Issue #2210: a multi-row INSERT binds ``rows * columns``
+            # parameters, so a batch_size legal for a narrow model overruns the
+            # driver's parameter ceiling on a wide one — failing the WHOLE
+            # statement ("too many SQL variables" on SQLite) and persisting
+            # ZERO rows. Clamp the batch to what the resolved engine can
+            # actually bind, so every statement is executable by construction.
+            #
+            # Clamping does NOT weaken any atomicity guarantee: this method's
+            # contract is already "records are split into batches of
+            # batch_size" (specs/dataflow-express.md §16) with no all-or-
+            # nothing promise across batches, and the clamp engages ONLY where
+            # the unclamped statement would have been REJECTED outright — i.e.
+            # the alternative it replaces is zero rows written, never a larger
+            # successful atomic write.
+            from ..adapters.dialect import statement_capacity_for
+
+            capacity = statement_capacity_for(database_type)
+            max_rows = capacity.max_rows_per_statement(len(columns))
+            effective_batch_size = max(1, min(int(batch_size), max_rows))
+            if effective_batch_size < batch_size:
+                logger.warning(
+                    "bulk.bulk_upsert_batch_size_clamped",
+                    extra={
+                        "model": model_name,
+                        "database_type": database_type,
+                        "requested_batch_size": batch_size,
+                        "effective_batch_size": effective_batch_size,
+                        "columns_per_row": len(columns),
+                        "bind_parameter_budget": capacity.max_bind_parameters,
+                        "reason": (
+                            "requested batch_size would exceed the engine's "
+                            "bound-parameter budget for this column count; "
+                            "clamped so each statement is executable"
+                        ),
+                    },
+                )
+
             # Process in batches
-            for i in range(0, len(data), batch_size):
-                batch = data[i : i + batch_size]
+            for i in range(0, len(data), effective_batch_size):
+                batch = data[i : i + effective_batch_size]
 
                 # Cross-tenant WRITE breach fix: emit the tenant-scoped DO-UPDATE
                 # guard iff this is a multi_tenant model with a bound tenant
@@ -1752,7 +1817,7 @@ class BulkOperations:
                     "updated": total_updated,
                     "skipped": total_skipped,
                     "batches": batches_processed,
-                    "batch_size": batch_size,
+                    "batch_size": effective_batch_size,
                     "conflict_resolution": conflict_resolution,
                     "error": (
                         "bulk_upsert refused a cross-tenant id collision: one or "
@@ -1768,7 +1833,7 @@ class BulkOperations:
                 "updated": total_updated,
                 "skipped": total_skipped,
                 "batches": batches_processed,
-                "batch_size": batch_size,
+                "batch_size": effective_batch_size,
                 "conflict_resolution": conflict_resolution,
                 "success": True,
                 "performance_metrics": {
@@ -1800,14 +1865,39 @@ class BulkOperations:
             # (rules/observability.md Rule 8; rules/security.md § No secrets in
             # logs).
             safe_error = _sanitize_db_error(str(e))
+            # Issue #2210: report the rows this call actually COMMITTED before it
+            # failed. ``partial_write`` is the caller's signal that the table is
+            # in a half-written state and that a naive retry of the FULL input is
+            # only safe because the operation is an upsert (idempotent on the
+            # conflict target) — it is NOT safe to treat the batch as un-applied.
+            committed = total_inserted + total_updated + total_skipped
             error_result = {
                 "success": False,
                 "error": f"Bulk upsert operation failed: {safe_error}",
-                "records_processed": 0,
-                "inserted": 0,
-                "updated": 0,
-                "skipped": 0,
+                "records_processed": committed,
+                "inserted": total_inserted,
+                "updated": total_updated,
+                "skipped": total_skipped,
+                "batches": batches_processed,
+                "partial_write": committed > 0,
             }
+            if committed > 0:
+                logger.warning(
+                    "bulk.bulk_upsert_partial_write",
+                    extra={
+                        "model": model_name,
+                        "committed_rows": committed,
+                        "submitted_rows": len(data),
+                        "batches_committed": batches_processed,
+                        "reason": (
+                            "bulk_upsert failed partway through a multi-statement "
+                            "batch; earlier batches are already persisted because "
+                            "each autocommits outside an enclosing transaction "
+                            "scope. Wrap the call in a TransactionScopeNode for "
+                            "all-or-nothing semantics."
+                        ),
+                    },
+                )
             logger.error(
                 # exc_info dropped: see bulk_create — the traceback re-leaks the
                 # raw driver message the sanitizer scrubbed (redteam LOW).
@@ -2156,28 +2246,53 @@ class BulkOperations:
         if not clauses:
             return 0
 
-        where = " OR ".join(clauses)
-        query = f"SELECT COUNT(*) AS match_count FROM {quoted_table} WHERE {where}"
-        result = await sql_node.async_run(
-            query=query,
-            params=params,
-            fetch_mode="all",
-            validate_queries=False,
-            transaction_mode="auto",
-            transaction=transaction,  # #1585: count on the scope's connection
-        )
-        rows = []
-        if result and "result" in result:
-            rows = result["result"].get("data", []) or []
-        if rows and isinstance(rows[0], dict):
-            value = (
-                rows[0].get("match_count")
-                or rows[0].get("COUNT(*)")
-                or rows[0].get("count")
-                or 0
+        # Issue #2210: this OR-chain is ONE expression node per row, so a batch
+        # at or above the dialect's expression-depth budget made the WHOLE
+        # upsert fail ("Expression tree is too large (maximum depth 1000)") and
+        # persist ZERO rows — even though the INSERT it gates would have
+        # succeeded. Split the chain into legal-by-construction windows and SUM
+        # the counts. COUNT(*) over disjoint equality predicates is additive,
+        # and the batch is de-duplicated on the conflict target upstream (see
+        # bulk_upsert), so no row is counted twice across windows.
+        #
+        # Chunking a READ is atomicity-NEUTRAL: this pre-count is an accounting
+        # query for the inserted/updated split, never a write. The upsert
+        # statement it precedes is untouched and keeps its existing batch
+        # granularity.
+        per_clause_terms = max(1, len(conflict_columns))
+        max_clauses = dialect.max_terms_per_expression(per_clause_terms)
+        # A window also may not outspend the parameter budget: each clause
+        # binds one value per conflict column.
+        max_clauses = min(max_clauses, dialect.max_rows_per_statement(per_clause_terms))
+
+        total = 0
+        for start in range(0, len(clauses), max_clauses):
+            window = clauses[start : start + max_clauses]
+            window_params = params[
+                start * per_clause_terms : (start + len(window)) * per_clause_terms
+            ]
+            where = " OR ".join(window)
+            query = f"SELECT COUNT(*) AS match_count FROM {quoted_table} WHERE {where}"
+            result = await sql_node.async_run(
+                query=query,
+                params=window_params,
+                fetch_mode="all",
+                validate_queries=False,
+                transaction_mode="auto",
+                transaction=transaction,  # #1585: count on the scope's connection
             )
-            return int(value)
-        return 0
+            rows = []
+            if result and "result" in result:
+                rows = result["result"].get("data", []) or []
+            if rows and isinstance(rows[0], dict):
+                value = (
+                    rows[0].get("match_count")
+                    or rows[0].get("COUNT(*)")
+                    or rows[0].get("count")
+                    or 0
+                )
+                total += int(value)
+        return total
 
     def _parse_upsert_result(
         self,
