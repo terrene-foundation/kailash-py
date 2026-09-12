@@ -129,6 +129,8 @@ try:
 except ImportError:  # pragma: no cover - Windows
     resource = None  # type: ignore[assignment]
 
+from kailash.utils.secure_logging import sanitize_log_value
+
 logger = logging.getLogger(__name__)
 
 
@@ -285,7 +287,9 @@ def validate_file_path(
         if ".." in str(file_path):
             if config.enable_audit_logging:
                 logger.warning(
-                    f"Path traversal attempt detected: {file_path} -> {path}"
+                    "Path traversal attempt detected: %s -> %s",
+                    sanitize_log_value(file_path),
+                    sanitize_log_value(path),
                 )
             raise PathTraversalError(f"Path traversal attempt detected: {file_path}")
 
@@ -294,14 +298,20 @@ def validate_file_path(
         if any(path_str.startswith(sensitive) for sensitive in sensitive_dirs):
             if config.enable_audit_logging:
                 logger.warning(
-                    f"Path traversal attempt detected: {file_path} -> {path}"
+                    "Path traversal attempt detected: %s -> %s",
+                    sanitize_log_value(file_path),
+                    sanitize_log_value(path),
                 )
             raise PathTraversalError(f"Path traversal attempt detected: {file_path}")
 
         # Validate file extension
         if path.suffix and path.suffix.lower() not in config.allowed_file_extensions:
             if config.enable_audit_logging:
-                logger.warning(f"File extension not allowed: {path.suffix} in {path}")
+                logger.warning(
+                    "File extension not allowed: %s in %s",
+                    sanitize_log_value(path.suffix),
+                    sanitize_log_value(path),
+                )
             raise SecurityError(f"File extension not allowed: {path.suffix}")
 
         # Check if path is within allowed directories
@@ -327,7 +337,10 @@ def validate_file_path(
 
         if not path_in_allowed_dir:
             if config.enable_audit_logging:
-                logger.warning(f"Path outside allowed directories: {path}")
+                logger.warning(
+                    "Path outside allowed directories: %s",
+                    sanitize_log_value(path),
+                )
             raise SecurityError(f"Path outside allowed directories: {path}")
 
         if config.enable_audit_logging:
