@@ -21,15 +21,28 @@ FOR THAT WORKLOAD. A number nobody re-derives becomes folklore, so write it down
 
 ### Measured for THIS repo
 
-| workload | where | wall | notes |
-| --- | --- | --- | --- |
-| `pytest tests/unit` (5072 tests) | this workstation | **174.4s** | measured 2026-09-12 at load avg **137**, 21 users — inflated, re-measure on a quiet machine |
-| `pytest tests/unit` | esperie-mac-mini | UNMEASURED | first run must provision the venv in the mirror |
-| `pytest tests/unit` | esperie-ai | UNMEASURED | |
+| workload | where | pytest-internal | end-to-end wall | result |
+| --- | --- | --- | --- | --- |
+| `pytest tests/unit` | this workstation | **174.4s** | 202.8s | 5072 passed, **1 failed**, 14 skipped |
+| `pytest tests/unit` | **esperie-mac-mini** | **43.6s** | **65.8s** | **5073 passed**, 14 skipped |
+| `pytest tests/unit` | esperie-ai | UNMEASURED | | |
 
-Do not cite the local 174.4s as this repo's clean baseline; it was taken on a machine under
-heavy contention. It is above the ~30s threshold by enough that the adopt-or-not question is
-settled regardless, which is the only thing it was used for.
+Measured 2026-09-12. **~4x on the suite itself, ~3x end-to-end including snapshot, transfer
+and mirror lock.** The end-to-end number is the honest one to plan with, because you pay it
+every run; the 43.6s is what the host is actually capable of.
+
+Two caveats that cut in opposite directions and roughly cancel. The local run was taken at
+load average **137** across 21 users, so it is inflated — an idle workstation would be faster
+than 174.4s. But the remote figure came from a WARM mirror (`objects_sent=6`, 3.13 KiB); the
+first run to a cold mirror cost 111.3s in `uv sync` alone. Both numbers are real; neither is
+a clean-room benchmark.
+
+The remote run also settled an open question for free: the local suite's single failure
+(`test_performance_overhead_to_dict_objects`) PASSED remotely, giving 5073/5073. That is a
+third independent line of evidence — full local run RED, isolated local re-run GREEN in
+6.93s, remote run GREEN — that the failure is machine load and not a code regression. When a
+timing test fails locally under load, offloading it is a cheaper discriminator than arguing
+about it.
 
 A general caveat this repo has already hit: wall-clock-threshold tests fail under that load
 for reasons unrelated to the code. `tests/unit/nodes/test_w8_serialization_bug_fix.py::
