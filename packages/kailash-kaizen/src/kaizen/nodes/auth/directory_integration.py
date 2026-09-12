@@ -17,6 +17,8 @@ from typing import Any, Dict, List, Optional
 from kailash.nodes.auth.directory_integration import (
     DirectoryIntegrationNode as CoreDirectoryIntegrationNode,
 )
+from kailash.utils.secure_logging import sanitize_log_value
+from kailash.utils.url_credentials import fingerprint_value
 from kaizen.nodes._env_model import detect_provider, resolve_default_model
 from kaizen.nodes.ai import LLMAgentNode
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
@@ -274,10 +276,13 @@ Example output:
                 raise ValueError("LLM result missing nested response.content")
             search_intent = json.loads(response_content)
 
+            # `query` is the caller-supplied directory search term; the three
+            # `search_intent` values are parsed from the LLM response. Both
+            # are untrusted for log-forging purposes.
             logger.info(
-                f"AI search analysis for '{query}': "
-                f"users={search_intent.get('search_users')}, "
-                f"groups={search_intent.get('search_groups')}, "
+                f"AI search analysis for '{sanitize_log_value(query)}': "
+                f"users={sanitize_log_value(search_intent.get('search_users'))}, "
+                f"groups={sanitize_log_value(search_intent.get('search_groups'))}, "
                 f"attributes={len(search_intent.get('search_attributes', []))}"
             )
 
@@ -286,7 +291,7 @@ Example output:
         except Exception as e:
             logger.warning(
                 "AI search analysis failed for '%s', falling back to default: %s",
-                query,
+                sanitize_log_value(query),
                 sanitize_provider_error(e, "LLM"),
             )
             # Fallback to safe default - search for users with basic attributes
@@ -464,8 +469,15 @@ Example output:
             if "user" not in roles:
                 roles.insert(0, "user")
 
+            # Same disposition as the SSO role-assignment record: the email is
+            # directory-supplied PII on the provisioning path, so it is
+            # replaced by the stable non-reversible correlation tag rather
+            # than merely flattened. See `nodes/auth/sso.py` for the reasoning.
+            email = user_data.get("email")
             logger.info(
-                f"AI role assignment for {user_data.get('email', 'unknown')}: {roles}"
+                "AI role assignment for %s: %s",
+                f"email:{fingerprint_value(str(email))}" if email else "unknown",
+                sanitize_log_value(roles),
             )
 
             return roles
