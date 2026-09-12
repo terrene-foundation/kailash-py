@@ -19,6 +19,7 @@ from kailash.trust.constraints.dimension import (
     ConstraintDimension,
     ConstraintValue,
 )
+from kailash.utils.secure_logging import sanitize_log_value
 
 logger = logging.getLogger(__name__)
 
@@ -146,8 +147,13 @@ class CommerceConstraint(ConstraintDimension):
         if parsed.get("attribution_required"):
             attribution_chain = context.get("attribution_chain", [])
             if not attribution_chain and beneficiary:
-                logger.info(
-                    f"Attribution required but no chain provided for beneficiary {beneficiary}"
+                # DEBUG, not INFO: this branch is benign -- the check still
+                # returns satisfied=True -- so an INFO record would write a
+                # financial counterparty identifier into default-enabled logs
+                # for a condition that triggers no enforcement action.
+                logger.debug(
+                    "Attribution required but no chain provided for beneficiary %s",
+                    sanitize_log_value(beneficiary, 128),
                 )
 
         return ConstraintCheckResult(
