@@ -1032,6 +1032,36 @@ class NodeGenerator:
                         # value: the field may be `password`/`token` and the
                         # value is attacker- or user-supplied plaintext. The
                         # fingerprint still correlates repeat hits on one field.
+                        #
+                        # #2171: the tag is UNKEYED and a column name is drawn
+                        # from the schema, so anyone holding the log line and
+                        # the schema can hash field names until one matches --
+                        # it is a correlation tag, NOT a way to keep the column
+                        # secret, and the value (the part that is genuinely
+                        # sensitive) is what is actually withheld here. Keying
+                        # it is deliberately NOT done: these lines are joined
+                        # across processes and against the cross-SDK 8-hex
+                        # contract in rules/event-payload-classification.md 2.
+                        #
+                        # #2171: the tag is UNKEYED and a column name is drawn
+                        # from the schema, so anyone holding the log line and
+                        # the schema can hash field names until one matches --
+                        # it is a correlation tag, NOT a way to keep the column
+                        # secret, and the value (the part that is genuinely
+                        # sensitive) is what is actually withheld here. Keying
+                        # it is deliberately NOT done: these lines are joined
+                        # across processes and against the cross-SDK 8-hex
+                        # contract in rules/event-payload-classification.md 2.
+                        #
+                        # #2171: the tag is UNKEYED and a column name is drawn
+                        # from the schema, so anyone holding the log line and
+                        # the schema can hash field names until one matches --
+                        # it is a correlation tag, NOT a way to keep the column
+                        # secret, and the value (the part that is genuinely
+                        # sensitive) is what is actually withheld here. Keying
+                        # it is deliberately NOT done: these lines are joined
+                        # across processes and against the cross-SDK 8-hex
+                        # contract in rules/event-payload-classification.md 2.
                         field_fp = fingerprint_secret(str(field_name))
                         for pattern in sql_injection_patterns:
                             if re.search(pattern, original_value):
