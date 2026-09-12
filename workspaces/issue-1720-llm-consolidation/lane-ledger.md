@@ -126,3 +126,49 @@ this repo that used the single-line form under-reported by roughly a third, and
 its empty-or-small result was read as coverage. Sweeps of this class MUST be
 re-run with a multiline pattern, and MUST fire at a known-answer case first
 (`instrument-discipline.md` MUST-3(a)).
+
+## Wrapped-log-site triage — 1581 sites, 14 genuinely unsanitized, 0 credential leaks
+
+Read-only lane, zero ceiling slots. Control fired first: `commerce.py` returns
+**1** multiline hit and **0** single-line, so the instrument discriminates.
+
+**Two instruments RECONCILED rather than one overriding the other.** The lane
+measured 1581 where I measured 1655. The 74-site gap is fully explained, not
+noise: I excluded only `tests`, it additionally excluded `examples/` (72),
+`scripts/` (1), `benchmarks/` (1). 1581 + 74 = 1655 exactly. Agreement once the
+denominators are aligned is stronger evidence than either figure alone.
+
+| class | count | disposition |
+| --- | --- | --- |
+| (a) credential / secret | **0 genuine** (12 candidates) | nothing to fix |
+| (b) PII / party identifier | 94 | provenance not traced per-site |
+| (c) unsanitized caller-controlled | **14** | routed to owning lanes |
+| (d) benign | ~1475 | RESIDUAL by subtraction, not read through |
+
+**Class (a) is clean and was verified, not assumed.** All 12 credential-shaped
+sites route through a masking helper, and the lane READ both helpers rather
+than trusting their names: `_mask_connection_password` (`sql.py:722-727`) and
+`mask_url` (`utils/url_credentials.py:300`, which masks userinfo AND
+`password=`/`sslkey=` query params).
+
+**Worst site in the corpus — `security.py:288` and `:297`:**
+`f"Path traversal attempt detected: {file_path} -> {path}"` at WARN, where
+`file_path` IS the rejected hostile input. A `\n`-bearing path forges log
+records in the exact sink an auditor reads after an attack. The control logs
+the attack verbatim into the record of the attack.
+
+Routing (each to the lane already holding that package's worktree, so no new
+ceiling slot and no two-writer collision):
+- `security.py:288/297` → crypto lane (already editing `security.py`)
+- `bulk.py:551/827/1293`, `core/nodes.py:3123` → dataflow lane
+- `sso.py:318`, `directory_integration.py:278`, `kaizen/nodes/base.py:182`,
+  3 document providers → kaizen lane
+- `nexus/transports/webhook.py:706`, `nexus/plugins.py:331/337` → no lane owns
+  nexus; taken on `dev` directly
+
+**Honesty bounds the lane stated itself, carried forward:** class (d) is a
+residual by subtraction — a class (a)/(c) site whose variable name matched no
+token list sits in it undetected. Undecided and named rather than guessed:
+`client_id` provenance at `kailash_mcp/server.py:4943/5044/5052` (client-supplied
+would make them class (c)), and `calling_agent`/`target_agent` at
+`nexus/trust/mcp_handler.py:301`.
