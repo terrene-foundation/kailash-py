@@ -3741,16 +3741,28 @@ class GovernanceEngine:
     def verify_audit_integrity(self) -> tuple[bool, str | None]:
         """Walk the audit chain and verify all content_hash and chain_hash values.
 
-        If no SQLite audit log is configured (memory backend), returns
-        (True, None) -- vacuously valid because there are no entries to verify.
+        Fails CLOSED when there is nothing to verify (#2221). If no SQLite audit
+        log is configured (memory backend), this returns ``(False, <reason>)``:
+        "no audit log is configured" is a DIFFERENT fact from "the audit log is
+        intact", and returning ``(True, None)`` for both made an unaudited engine
+        indistinguishable from a verified one at the only field callers gate on.
+        The reason string names the configuration cause, so a caller that
+        legitimately runs unaudited can tell it apart from a tamper finding.
 
         Returns:
-            A tuple (is_valid, error_message). is_valid is True if the chain
-            is intact. error_message describes the first violation found, or
-            None if the chain is valid.
+            A tuple (is_valid, error_message). is_valid is True only when a
+            configured audit log was walked and every hash verified.
+            error_message describes the first violation found, or the reason
+            verification could not run; None only when the chain is valid.
         """
         if self._sqlite_audit_log is None:
-            return (True, None)
+            return (
+                False,
+                "no SQLite audit log configured (memory backend): audit "
+                "integrity is unverifiable (fail-closed). This is NOT a tamper "
+                "finding -- configure store_backend='sqlite' to enable "
+                "verification.",
+            )
         # _sqlite_audit_log is typed Any | None; pin the return shape.
         result: tuple[bool, str | None] = self._sqlite_audit_log.verify_integrity()
         return result

@@ -88,6 +88,46 @@ and the workflow-count metric is `None`-safe so such a channel reports unhealthy
 the health report. Note this does **not** detect a "corrupt-but-nonempty" registry — it is a
 crash-fix plus a falsifiable init-state check, not a content-integrity check.
 
+### Changed (BREAKING) — residual audit/chain verifiers fail closed on an empty basis (#2221)
+
+A re-sweep of `src/kailash/trust` for the same "an absence rendered as a success" class (#2189)
+found five more verifiers that returned a PASS verdict for an input they never examined. Each
+returned the identical value for "checked everything and it was sound" and "there was nothing to
+check", so a wiped store was indistinguishable from a verified one at the only field callers gate
+on. All five now fail closed, and each carries a reason string naming the empty/unconfigured cause
+so it stays distinguishable from a genuine tamper finding:
+
+- `SqliteAuditLog.verify_integrity()` (`trust/pact/stores/sqlite.py`) returned `(True, None)` for a
+  table with no rows. A **wiped `pact_audit_log` table** verified clean. Now `(False, "empty audit
+  log: ...")`.
+- `GovernanceEngine.verify_audit_integrity()` (`trust/pact/engine.py`) returned `(True, None)` when
+  no SQLite audit log was configured — its own docstring called this "vacuously valid". "No audit
+  log is configured" and "the audit log is intact" are different facts; an entirely unaudited
+  engine now reports `(False, "no SQLite audit log configured ...")`.
+- `LinkedHashChain.verify_chain_linkage()` (`trust/chain.py`) returned `(True, None)` for an empty
+  `original_hashes` list. This is the method the SECURITY NOTE on `verify_chain` designates as the
+  **full cryptographic verification** path, so `True` reads as "cryptographically proven"; zero
+  hashes prove nothing. Now `(False, None)`.
+- `LinkedHashChain.verify_chain()` (and its `verify_integrity()` deprecation shim) returned
+  `(True, None)` for an empty chain as "structurally valid". Now `(False, None)`.
+- `AuditChain.verify_chain_integrity()` (`trust/pact/audit.py`) computed `len(errors) == 0` over a
+  loop that never ran, so a chain with no anchors returned `(True, [])`. Now
+  `(False, ["empty chain: ..."])`. `AuditChain.from_dict` is unaffected — it already skipped
+  verification for an anchor-less chain.
+
+**Migration.** Callers treating a `True` verdict as "sound" need no code change — an absent chain is
+simply no longer reported sound. Callers that legitimately operate without a persisted audit log
+(memory backend) and called `verify_audit_integrity()` for a green check must now either configure
+`store_backend="sqlite"` or branch on the returned reason string, which names the configuration
+cause explicitly rather than reporting success.
+
+Three in-tree tests asserted these vacuous passes **as intended behaviour** — the
+"test asserting the vulnerability" flavour #2189 warned about — and were corrected rather than
+worked around: `test_verify_audit_integrity_empty`, `test_engine_verify_audit_integrity_no_audit_log`,
+and `test_verify_integrity_empty_chain`. Each new probe ships with a paired CONTROL asserting the
+populated/intact case still verifies `True`, so none of these fixes can be satisfied by
+"now always False".
+
 ### Fixed — the first `PythonCodeNode` execution no longer imports the whole ML stack (#2000)
 
 On a machine with torch and sklearn installed, the **first** `PythonCodeNode` execution in a
