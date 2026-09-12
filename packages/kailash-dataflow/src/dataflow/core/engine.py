@@ -47,10 +47,7 @@ FailedDDLRecord = _namedtuple(
 # __init__ rather than silently degrading to fail-fast.
 _AUTO_MIGRATE_WARN = "warn"
 
-from kailash.db.dialect import (
-    DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
-    _validate_identifier,
-)
+from kailash.db.dialect import _validate_identifier
 from kailash.runtime import AsyncLocalRuntime, LocalRuntime
 
 # Conservative SQL type allowlist for dynamic ALTER TABLE ... TYPE statements
@@ -5334,6 +5331,18 @@ class DataFlow(DataFlowEventMixin):
         try:
             await adapter.connect()
 
+            # Issue #1971: this method inspects a SQLite database through
+            # ``SQLiteAdapter`` — the engine every PRAGMA below reaches is
+            # SQLite, statically, so the identifier budget IS knowable here.
+            # Resolve it through the shared resolver rather than passing
+            # ``DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH``: that sentinel is
+            # numerically SQLite's own 128, so the two agree on this path, but
+            # the sentinel carries "nobody bound a dialect" and would keep
+            # warning on a path that has one.
+            from ..adapters.dialect import identifier_budget_for
+
+            _id_budget = identifier_budget_for("sqlite")
+
             schema = {}
 
             # Get all tables (excluding SQLite system tables and DataFlow tables)
@@ -5355,9 +5364,7 @@ class DataFlow(DataFlowEventMixin):
                 # one before interpolating into PRAGMA DDL so a future refactor
                 # that reads table names from a different (user-influenced)
                 # source cannot silently reopen an injection vector.
-                _validate_identifier(
-                    table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-                )
+                _validate_identifier(table_name, max_length=_id_budget)
 
                 # Get columns for this table using PRAGMA table_info
                 columns_query = f"PRAGMA table_info({table_name})"
@@ -5380,9 +5387,7 @@ class DataFlow(DataFlowEventMixin):
                 # Get foreign keys using PRAGMA foreign_key_list
                 # Defense-in-depth: table_name was validated above, but keep
                 # the call local so the audit reads linearly.
-                _validate_identifier(
-                    table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-                )
+                _validate_identifier(table_name, max_length=_id_budget)
                 fk_query = f"PRAGMA foreign_key_list({table_name})"
                 fk_result = await adapter.execute_query(fk_query)
 
@@ -5411,9 +5416,7 @@ class DataFlow(DataFlowEventMixin):
                 # Get indexes using PRAGMA index_list and index_info
                 # Defense-in-depth: table_name was validated above, but keep
                 # the call local so the audit reads linearly.
-                _validate_identifier(
-                    table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-                )
+                _validate_identifier(table_name, max_length=_id_budget)
                 indexes_query = f"PRAGMA index_list({table_name})"
                 indexes_result = await adapter.execute_query(indexes_query)
 
@@ -6856,6 +6859,18 @@ class DataFlow(DataFlowEventMixin):
         table_name = self._get_table_name(model_name)
         constraints = []
 
+        # Issue #1971: ``database_type`` names the engine this ALTER TABLE is
+        # generated FOR, so the identifier budget IS knowable here. Bind it
+        # rather than passing ``DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH`` — that
+        # sentinel is SQLite's 128, the LOOSEST budget, so on PostgreSQL a
+        # 64..128-char constraint name passes validation here and is truncated
+        # server-side at 63, colliding two FK constraints onto one identifier.
+        # An unrecognised ``database_type`` still resolves to the sentinel, so
+        # a genuinely-unknown target keeps warning exactly as before.
+        from ..adapters.dialect import identifier_budget_for
+
+        _id_budget = identifier_budget_for(database_type)
+
         # Get relationships for this model
         relationships = self.get_relationships(model_name)
         for rel_name, rel_info in relationships.items():
@@ -6880,21 +6895,11 @@ class DataFlow(DataFlowEventMixin):
                 # `foreign_key` / `target_table` / `target_key` come from
                 # model-relationship metadata which is model-registry-derived
                 # today but may be caller-influenced after a future refactor.
-                _validate_identifier(
-                    table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-                )
-                _validate_identifier(
-                    constraint_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-                )
-                _validate_identifier(
-                    foreign_key, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-                )
-                _validate_identifier(
-                    target_table, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-                )
-                _validate_identifier(
-                    target_key, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-                )
+                _validate_identifier(table_name, max_length=_id_budget)
+                _validate_identifier(constraint_name, max_length=_id_budget)
+                _validate_identifier(foreign_key, max_length=_id_budget)
+                _validate_identifier(target_table, max_length=_id_budget)
+                _validate_identifier(target_key, max_length=_id_budget)
 
                 sql = (
                     f"ALTER TABLE {table_name} "
@@ -8170,17 +8175,26 @@ class DataFlow(DataFlowEventMixin):
         # interpolation. table_name comes from the migration framework but
         # MigrationOperation.details may carry caller-influenced column names
         # and types — refuse anything that fails the allowlist.
-        _validate_identifier(
-            table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-        )
+        #
+        # Issue #1971: ``database_type`` names the engine this ALTER TABLE is
+        # generated FOR (the caller resolves it from the live connection), so
+        # the identifier budget IS knowable. Bind it rather than passing
+        # ``DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH`` — that sentinel is SQLite's
+        # 128, the LOOSEST budget, so on PostgreSQL a 64..128-char column or
+        # table name passes here and is truncated server-side at 63. An
+        # unrecognised ``database_type`` still resolves to the sentinel, so a
+        # genuinely-unknown target keeps warning exactly as before.
+        from ..adapters.dialect import identifier_budget_for
+
+        _id_budget = identifier_budget_for(database_type)
+
+        _validate_identifier(table_name, max_length=_id_budget)
 
         if operation_type == "ADD_COLUMN":
             column_name = details.get("column_name")
             if not column_name:
                 return ""
-            _validate_identifier(
-                column_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-            )
+            _validate_identifier(column_name, max_length=_id_budget)
 
             # Get the field info for this column from the model
             # issue #1573 (sibling of #1541): match the physical ``table_name``
@@ -8213,18 +8227,14 @@ class DataFlow(DataFlowEventMixin):
             column_name = details.get("column_name")
             if not column_name:
                 return ""
-            _validate_identifier(
-                column_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-            )
+            _validate_identifier(column_name, max_length=_id_budget)
             return f"ALTER TABLE {table_name} DROP COLUMN {column_name};"
 
         elif operation_type == "MODIFY_COLUMN":
             column_name = details.get("column_name")
             if not column_name:
                 return ""
-            _validate_identifier(
-                column_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-            )
+            _validate_identifier(column_name, max_length=_id_budget)
 
             # Get new type from changes or details
             changes = details.get("changes", {})

@@ -22,16 +22,15 @@ import re
 import sqlite3
 from typing import Any, Dict, List, Optional, Tuple
 
+from dataflow.adapters.dialect import identifier_budget_for
+
 # Issue #1550: this executor is the LOWEST layer that touches the raw driver
 # exception on the eager-DDL path — it logs the error BEFORE returning it to the
 # engine, so sanitizing only at the engine layer leaves this log raw. Redact
 # here, at the single point every DDL caller (engine, schema_state_manager,
 # auto_migration_system) funnels through.
 from dataflow.core.exceptions import sanitize_db_error
-from kailash.db.dialect import (
-    DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
-    _validate_identifier,
-)
+from kailash.db.dialect import _validate_identifier
 from kailash.utils.url_credentials import mask_url
 
 logger = logging.getLogger(__name__)
@@ -580,8 +579,11 @@ class SyncDDLExecutor:
             # rules/dataflow-identifier-safety.md MUST 1: identifiers in DDL/PRAGMA
             # paths MUST be validated against the canonical regex before
             # interpolation. PRAGMA arguments are not parameterizable.
+            # Issue #1971: this branch is guarded by ``self._db_type ==
+            # "sqlite"``, so the engine is known — bind SQLite's budget rather
+            # than the unknown sentinel.
             _validate_identifier(
-                table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+                table_name, max_length=identifier_budget_for(self._db_type)
             )
             sql = f"PRAGMA table_info({table_name})"
             result = self.execute_query(sql)
