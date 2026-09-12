@@ -130,6 +130,40 @@ _BRIDGE_APPROVAL_TTL: timedelta = timedelta(hours=24)
 _MAX_ENVELOPE_CACHE_ENTRIES: int = 10_000
 """Maximum number of cached effective envelope entries (bounded collection)."""
 
+# ---------------------------------------------------------------------------
+# Caller-supplied numeric coercion -- ONE place owns the exception tuple
+# ---------------------------------------------------------------------------
+
+_COERCION_ERRORS: tuple[type[BaseException], ...] = (
+    ValueError,
+    TypeError,
+    OverflowError,
+)
+"""Every way ``int()``/``float()`` can reject a caller-supplied ``ctx`` value.
+
+``OverflowError`` is NOT a subclass of ``ValueError``/``TypeError`` (its MRO is
+``OverflowError -> ArithmeticError -> Exception``), so a tuple of only the
+latter two lets ``int(float("inf"))`` escape. The tuple lives here, once, so a
+future coercion site cannot re-open that hole by re-deriving a shorter one.
+"""
+
+
+def _coerce_or_none(value: Any, caster: type) -> Any | None:
+    """Coerce a caller-supplied ``ctx`` value, returning ``None`` if it cannot be.
+
+    ``int``/``float`` never return ``None``, so ``None`` is an unambiguous
+    "not coercible" sentinel. Callers turn it into a SPECIFIC ``blocked``
+    verdict naming the offending field (``pact-governance.md`` Rule 4:
+    fail-closed), rather than letting the raw coercion error unwind into
+    ``verify_action``'s generic internal-error handler -- which would abort the
+    evaluation before the live rate tally and degrade the audit row to
+    ``{"error": "internal_error"}``.
+    """
+    try:
+        return caster(value)
+    except _COERCION_ERRORS:
+        return None
+
 
 @dataclass
 class _CachedEnvelope:
@@ -1541,7 +1575,19 @@ class GovernanceEngine:
                 daily_calls is not None
                 and envelope.operational.max_actions_per_day is not None
             ):
-                daily_calls_int = int(daily_calls)
+                daily_calls_int = _coerce_or_none(daily_calls, int)
+                if daily_calls_int is None:
+                    logger.warning(
+                        "Non-numeric ctx['daily_calls'] (%s) for action=%s -- "
+                        "fail-closed to BLOCKED",
+                        type(daily_calls).__name__,
+                        action,
+                    )
+                    return (
+                        "blocked",
+                        "ctx['daily_calls'] is not a valid integer "
+                        f"(got {type(daily_calls).__name__}) -- fail-closed to BLOCKED",
+                    )
                 if daily_calls_int >= envelope.operational.max_actions_per_day:
                     return (
                         "blocked",
@@ -1553,7 +1599,19 @@ class GovernanceEngine:
                 hourly_calls is not None
                 and envelope.operational.max_actions_per_hour is not None
             ):
-                hourly_calls_int = int(hourly_calls)
+                hourly_calls_int = _coerce_or_none(hourly_calls, int)
+                if hourly_calls_int is None:
+                    logger.warning(
+                        "Non-numeric ctx['hourly_calls'] (%s) for action=%s -- "
+                        "fail-closed to BLOCKED",
+                        type(hourly_calls).__name__,
+                        action,
+                    )
+                    return (
+                        "blocked",
+                        "ctx['hourly_calls'] is not a valid integer "
+                        f"(got {type(hourly_calls).__name__}) -- fail-closed to BLOCKED",
+                    )
                 if hourly_calls_int >= envelope.operational.max_actions_per_hour:
                     return (
                         "blocked",
@@ -1564,8 +1622,23 @@ class GovernanceEngine:
         # --- Financial: check cost against max_spend_usd ---
         cost = ctx.get("cost")
         if cost is not None and envelope.financial is not None:
+            # Validate cost is COERCIBLE first -- the isfinite() guard below
+            # only runs on an already-converted float, so it cannot catch a
+            # value float() outright rejects.
+            cost_float = _coerce_or_none(cost, float)
+            if cost_float is None:
+                logger.warning(
+                    "Non-numeric ctx['cost'] (%s) for action=%s -- "
+                    "fail-closed to BLOCKED",
+                    type(cost).__name__,
+                    action,
+                )
+                return (
+                    "blocked",
+                    "ctx['cost'] is not a valid number "
+                    f"(got {type(cost).__name__}) -- fail-closed to BLOCKED",
+                )
             # Validate cost is finite (NaN-safe)
-            cost_float = float(cost)
             if not math.isfinite(cost_float):
                 return (
                     "blocked",
