@@ -94,6 +94,23 @@ pact-conformance-runner = "pact.conformance.cli:main"
 packages = ["src/pact"]
 
 [tool.pytest.ini_options]
+# This block makes pyproject.toml the configfile and THIS directory the rootdir, so
+# `pythonpath` entries resolve against the package, not the repo root -- and without
+# them `import kailash` falls through to whatever is installed in site-packages. The
+# suite then dies in conftest on a module the installed copy predates, collecting zero
+# tests: an import error reported where a test result belongs. Entries are listed
+# literally because pytest does NOT glob them.
+pythonpath = [
+  "src",
+  "../../src",
+  "../kailash-align/src",
+  "../kailash-dataflow/src",
+  "../kailash-kaizen/src",
+  "../kailash-mcp/src",
+  "../kailash-ml/src",
+  "../kailash-nexus/src",
+  "../kaizen-agents/src",
+]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 timeout = 120
