@@ -97,7 +97,31 @@ async function main() {
   }
 
   if (result.state === lib.SILENT) return passthrough(null);
-  return passthrough(lib.renderAdvisory(result));
+
+  // Deliver through the canonical instructAndWait shape rather than a bare
+  // `additionalContext` string. The transport is identical for a non-block severity at
+  // PreToolUse — `{continue:true}` + `additionalContext`, exit 0 — but the BODY carries
+  // `agent_must_report` / `agent_must_wait`, and `user_summary` reaches the operator on
+  // stderr. A plain context string is prose an agent may skim; this is a contract it must
+  // answer, which is the whole point of firing before the decision.
+  //
+  // `emit()` calls `process.exit` itself, so the fallback timer is cleared first — it is
+  // already `unref`'d and could not hold the process open, but leaving an armed timer
+  // whose callback also writes a payload is exactly the double-write shape this guard
+  // should not model for the next hook author.
+  let emit;
+  try {
+    ({ emit } = require("./lib/instruct-and-wait.js"));
+  } catch {
+    // The canonical emitter is unavailable (a consumer that strips hooks/lib). Degrade to
+    // the plain-context form rather than losing the finding entirely.
+    const f = lib.buildFinding(result);
+    return passthrough(`${f.what_happened}\n\n${f.why}`);
+  }
+
+  if (fallback) clearTimeout(fallback);
+  const finding = lib.buildFinding(result);
+  emit({ hookEvent: "PreToolUse", ...finding });
 }
 
 main().catch(() => passthrough(null));

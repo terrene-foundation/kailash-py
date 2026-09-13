@@ -5,9 +5,11 @@
  *
  * REAL GIT, NOT MOCKS. The predicate IS git process state, so a mocked git would test the mock.
  * Every repo below is a real `git init` with a real commit backdated via GIT_COMMITTER_DATE, and a
- * real `refs/remotes/origin/<trunk>` created with `git update-ref`. The two UNDETERMINED cases are
- * the exception and are labelled where they appear: one is a genuinely corrupt ref (real), one
- * injects a killed-process error because a true timeout cannot be produced deterministically.
+ * `refs/remotes/origin/<trunk>` created by an actual `git push` into a real bare remote — the
+ * way a clone builds it, not a hand-made `update-ref` stand-in. The UNDETERMINED cases are real
+ * too: a corrupt ref, and a 1ms probe budget against a genuine git invocation. One injected
+ * killed-process error remains, labelled where it appears, to pin the error-shape classifier
+ * itself; it is the only synthetic input in the file.
  *
  * THE THRESHOLD IS INJECTABLE, and both sides of it are crossed below. A threshold no test can
  * cross is a threshold nobody has checked.
@@ -58,37 +60,84 @@ function git(cwd, args, env = {}) {
 }
 
 /**
- * A real repo with one real commit, backdated, and optionally a real remote-tracking trunk ref.
- * @param {{tipAgeMs?:number, trunk?:string|null, corruptRef?:boolean}} opts
+ * A real repo whose `refs/remotes/origin/<trunk>` was created by an ACTUAL PUSH.
+ *
+ * `git init --bare` -> `git clone` -> `git push -u` builds the remote-tracking ref the way a
+ * clone really builds it. An earlier draft fabricated it with `git update-ref`: a ref that
+ * LOOKS right but was never produced by the mechanism under test — a hand-made stand-in for
+ * the artifact the predicate reads. Same reason the commits are real and backdated rather
+ * than mocked; the predicate IS git process state, so a convenient substitute tests the
+ * substitute.
+ *
+ * @param {{tipAgeMs?:number, trunk?:string|null, corruptRef?:boolean, alsoPush?:string[]}} opts
  */
 function makeRepo(opts = {}) {
-  const { tipAgeMs = 0, trunk = "dev", corruptRef = false } = opts;
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "disp-fresh-"));
-  tmpRoots.push(dir);
+  const { tipAgeMs = 0, trunk = "dev", corruptRef = false, alsoPush = [] } = opts;
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "disp-fresh-"));
+  tmpRoots.push(root);
 
-  git(dir, ["init", "--quiet", "-b", "work"]);
-  git(dir, ["config", "user.email", "t@example.invalid"]);
-  git(dir, ["config", "user.name", "T"]);
-  fs.writeFileSync(path.join(dir, "f.txt"), "x\n");
-  git(dir, ["add", "f.txt"]);
+  const branch = trunk || "wip";
+  const local = path.join(root, "local");
+
+  if (trunk) {
+    const remote = path.join(root, "remote.git");
+    fs.mkdirSync(remote);
+    execFileSync("git", ["init", "--bare", "--quiet", `--initial-branch=${branch}`, remote], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    execFileSync("git", ["clone", "--quiet", remote, local], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } else {
+    // No remote at all — the deliberate no-trunk case.
+    fs.mkdirSync(local);
+    git(local, ["init", "--quiet", `--initial-branch=${branch}`]);
+  }
+
+  git(local, ["config", "user.email", "t@example.invalid"]);
+  git(local, ["config", "user.name", "T"]);
+  git(local, ["config", "commit.gpgsign", "false"]);
+  fs.writeFileSync(path.join(local, "f.txt"), "x\n");
+  git(local, ["add", "f.txt"]);
 
   const stamp = new Date(NOW_MS - tipAgeMs).toISOString();
-  git(dir, ["commit", "--quiet", "-m", "base"], {
+  git(local, ["commit", "--quiet", "-m", "base"], {
     GIT_COMMITTER_DATE: stamp,
     GIT_AUTHOR_DATE: stamp,
   });
 
-  const sha = git(dir, ["rev-parse", "HEAD"]).trim();
+  if (trunk) {
+    git(local, ["push", "--quiet", "-u", "origin", branch]);
+    for (const extra of alsoPush) {
+      git(local, ["push", "--quiet", "origin", `${branch}:${extra}`]);
+    }
+    git(local, ["fetch", "--quiet", "origin"]);
+  }
+
   if (corruptRef) {
     // A ref pointing at an object that does not exist: git can neither resolve it nor call it
-    // absent. This is a REAL unanswerable probe, not a simulated one.
-    const refFile = path.join(dir, ".git", "refs", "remotes", "origin");
-    fs.mkdirSync(refFile, { recursive: true });
-    fs.writeFileSync(path.join(refFile, "dev"), `${"0".repeat(39)}1\n`);
-  } else if (trunk) {
-    git(dir, ["update-ref", `refs/remotes/origin/${trunk}`, sha]);
+    // absent. A REAL unanswerable probe, not a simulated one.
+    const refDir = path.join(local, ".git", "refs", "remotes", "origin");
+    fs.mkdirSync(refDir, { recursive: true });
+    fs.writeFileSync(path.join(refDir, branch), `${"0".repeat(39)}1\n`);
+    // A packed-refs entry would still resolve the real value and mask the corruption.
+    const packed = path.join(local, ".git", "packed-refs");
+    if (fs.existsSync(packed)) {
+      fs.writeFileSync(
+        packed,
+        fs
+          .readFileSync(packed, "utf8")
+          .split("\n")
+          .filter((l) => !l.includes(`refs/remotes/origin/${branch}`))
+          .join("\n"),
+      );
+    }
   }
-  return { dir, sha };
+
+  const sha = trunk && !corruptRef ? git(local, ["rev-parse", "HEAD"]).trim() : null;
+  return { dir: local, sha };
 }
 
 function evaluate(cwd, extra = {}) {
@@ -177,9 +226,21 @@ describe("dispatch-freshness predicate", () => {
   });
 
   it("prefers dev over main when both exist (this repo's integration trunk)", () => {
-    const { dir, sha } = makeRepo({ tipAgeMs: 30 * DAY });
-    git(dir, ["update-ref", "refs/remotes/origin/main", sha]);
+    const { dir } = makeRepo({ tipAgeMs: 30 * DAY, alsoPush: ["main"] });
+    // Control: BOTH refs really exist, so the preference is a choice and not an accident
+    // of only one being present.
+    assert.match(git(dir, ["for-each-ref", "--format=%(refname)", "refs/remotes/origin/"]), /origin\/main/);
     assert.equal(evaluate(dir).ref, "refs/remotes/origin/dev");
+  });
+
+  it("reports UNDETERMINED on a REAL timeout, not only an injected one", () => {
+    // A 1ms budget makes a genuine git invocation unanswerable — no fabricated error object,
+    // so this exercises the same catch path a wedged git would take in production.
+    const { dir } = makeRepo({ tipAgeMs: 30 * DAY });
+    assert.equal(evaluate(dir).state, lib.FIRES, "precondition: answerable at the normal budget");
+    const r = evaluate(dir, { timeoutMs: 1 });
+    assert.equal(r.state, lib.UNDETERMINED, `got ${r.state} (${r.reason})`);
+    assert.notEqual(r.state, lib.SILENT, "a timeout must never read as fresh");
   });
 });
 
@@ -187,29 +248,44 @@ describe("dispatch-freshness predicate", () => {
 // The message — the fourth element is the one most likely to be dropped
 // ---------------------------------------------------------------------------
 
-describe("advisory message", () => {
-  it("states ref, tip date, age, the fetch remedy, the explicit out, and the tracker warning", () => {
+describe("the structured finding", () => {
+  it("carries the spec's four message requirements as REPORTABLE items", () => {
     const { dir } = makeRepo({ tipAgeMs: 25 * DAY });
-    const text = lib.renderAdvisory(evaluate(dir));
-    assert.match(text, /refs\/remotes\/origin\/dev/); // 1: the ref
-    assert.match(text, /2026-08-19/); // 1: the tip DATE
-    assert.match(text, /25\.0 days/); // 1: the age
-    assert.match(text, /git fetch origin/); // 2: the remedy
-    assert.match(text, /quiet/i); // 3: the explicit out
-    assert.match(text, /tracker|issue list/i); // 4: re-derive the issue list
-    assert.match(text, /stale TOGETHER/); // 4: and WHY it is coupled
+    const f = lib.buildFinding(evaluate(dir));
+
+    // pre-action, NOT halt-and-report: at PreToolUse the dispatch has not run, and
+    // instruct-and-wait renders every non-block head as the action's FATE.
+    assert.equal(f.severity, "pre-action");
+
+    // 1 — the ref, its tip date, and its age.
+    assert.match(f.what_happened, /refs\/remotes\/origin\/dev/);
+    assert.match(f.what_happened, /2026-08-19/);
+    assert.match(f.what_happened, /25\.0 days/);
+
+    const report = f.agent_must_report.join("\n");
+    assert.match(report, /git fetch origin/); // 2 — the remedy
+    assert.match(report, /quiet/i); // 3 — the explicit out
+    assert.match(report, /tracker|issue list/i); // 4 — re-derive the tracker
+    assert.match(report, /stale TOGETHER/); // 4 — and WHY it is coupled
+
+    assert.ok(f.agent_must_wait.length > 0);
+    assert.match(f.user_summary, /dispatch-freshness/);
+    assert.match(f.why, /0\/53|none before|40%/); // the incident, not a generic warning
   });
 
   it("says UNDETERMINED out loud rather than reading as a clean proceed", () => {
-    const text = lib.renderAdvisory({
+    const f = lib.buildFinding({
       state: lib.UNDETERMINED,
       ref: "refs/remotes/origin/dev",
       reason: "git not found",
       thresholdHours: 72,
     });
-    assert.match(text, /UNDETERMINED/);
-    assert.match(text, /NOT a clean reading/);
-    assert.match(text, /tracker|issue list/i);
+    assert.equal(f.severity, "pre-action");
+    assert.match(f.what_happened, /could NOT answer|UNKNOWN/);
+    assert.match(f.user_summary, /UNDETERMINED/);
+    // The tracker warning survives into the UNDETERMINED branch too — it is the item the
+    // spec calls most droppable, and a third-state message is exactly where it would drop.
+    assert.match(f.agent_must_report.join("\n"), /tracker|issue list/i);
   });
 });
 

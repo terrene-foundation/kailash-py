@@ -251,60 +251,76 @@ function resolveTrunkCandidates(opts) {
 }
 
 /**
- * Render the operator-facing message.
+ * Build the structured finding for `instruct-and-wait.js::emit()`.
  *
- * The spec requires FOUR things, and point 4 is both the most droppable and the one that cost the
- * most in the incident: the tree and the tracker go stale TOGETHER, which is what made the 0/53
- * split read as internal consistency rather than as a warning.
+ * Returns FIELDS, not prose, so the hook owns presentation and the predicate stays
+ * unit-testable without spawning a process. The four `agent_must_report` items are the
+ * spec's four message requirements, in order.
+ *
+ * SEVERITY IS `pre-action`, NOT `halt-and-report`. This fires at PreToolUse: the dispatch
+ * has NOT happened and is NOT blocked. `instruct-and-wait.js` renders every non-block head
+ * as the ACTION'S FATE (loom#1715 H-1), so `halt-and-report` here would state "the action
+ * ALREADY RAN" of a wave that has not been cut — false, and it removes the decision the
+ * advisory exists to prompt. `pre-action` is the register built for exactly this moment.
  */
-function renderAdvisory(result) {
+function buildFinding(result) {
   if (result.state === UNDETERMINED) {
-    return [
-      "⚠ Dispatch-freshness precondition: UNDETERMINED — the probe could not answer.",
-      "",
-      `- ref: ${result.ref}`,
-      `- reason: ${result.reason}`,
-      "",
-      "This is NOT a clean reading. An unanswerable probe and a current trunk look identical in a",
-      "'proceed' response, so it is reported rather than assumed fresh. Establish the base's age",
-      "by hand before dispatching a wave:",
-      "",
-      "    git fetch origin && git log -1 --format=%ci refs/remotes/origin/<trunk>",
-      "",
-      "⚠ Re-derive any issue list or tracker snapshot feeding this wave as well — the tree and the",
-      "  tracker go stale together.",
-    ].join("\n");
+    return {
+      severity: "pre-action",
+      what_happened:
+        `The dispatch-freshness probe could NOT answer for \`${result.ref}\` ` +
+        `(${result.reason}). The age of the base this wave would be cut from is UNKNOWN.`,
+      why:
+        "An unanswerable probe and a current trunk are byte-identical in a proceed " +
+        "response — that is precisely how a guard stops guarding without anyone noticing. " +
+        "So this is reported rather than assumed fresh.",
+      agent_must_report: [
+        `State that the freshness probe was UNANSWERABLE for \`${result.ref}\`, and why.`,
+        "Establish the base's age by hand before cutting a wave: " +
+          "`git fetch origin && git log -1 --format=%ci refs/remotes/origin/<trunk>`.",
+        "Re-derive any issue list or tracker snapshot feeding this wave — the tree and " +
+          "the tracker go stale together.",
+      ],
+      agent_must_wait:
+        "Do not cut a wave of lanes until the base's age has been established.",
+      user_summary: `dispatch-freshness: UNDETERMINED for ${result.ref} — ${result.reason}`,
+    };
   }
 
-  const days = result.ageDays;
-  const tipIso = new Date(result.tipSeconds * 1000)
-    .toISOString()
-    .replace("T", " ")
-    .slice(0, 19);
-  const thresholdDays = result.thresholdHours / 24;
+  const days = result.ageDays.toFixed(1);
+  const tipIso = new Date(result.tipSeconds * 1000).toISOString().replace("T", " ").slice(0, 19);
+  const thresholdDays = (result.thresholdHours / 24).toFixed(1);
 
-  return [
-    `⚠ Dispatch-freshness precondition: STALE BASE — advisory, not a block.`,
-    "",
-    `- ref:      ${result.ref}`,
-    `- tip date: ${tipIso} UTC`,
-    `- age:      ${days.toFixed(1)} days (${Math.round(result.ageHours)}h) — threshold ${thresholdDays.toFixed(1)} days`,
-    "",
-    "Every lane you are about to dispatch will be cut from this base and will measure it as",
-    "CORRECT — clean status, real log, every file present and every file possibly superseded.",
-    "Staleness belongs to the base, not to any lane, so this is the last moment it can be seen.",
-    "",
-    "Before dispatching:",
-    "",
-    "    git fetch origin && git log -1 --format=%ci " + result.ref,
-    "",
-    "⚠ Re-derive any issue list or tracker snapshot feeding this wave. The tree and the tracker go",
-    "  stale TOGETHER — in the incident behind this check, 53 of 134 issues (40%) had closed, all",
-    "  of them after the snapshot date, and the wave's internal consistency is exactly what hid it.",
-    "",
-    "If the trunk genuinely is quiet and this age is correct, say so and proceed — an old tip and",
-    "an unfetched ref are the same reading from here, and you are the only one who can tell which.",
-  ].join("\n");
+  return {
+    severity: "pre-action",
+    what_happened:
+      `About to dispatch, but \`${result.ref}\` points at a commit dated ` +
+      `**${tipIso} UTC** — ${days} days old (threshold ${thresholdDays}d).\n\n` +
+      "A remote-tracking ref is only as fresh as the last fetch, so every lane cut from " +
+      "it inherits this staleness — and no lane can detect it, because each measures its " +
+      "own tree correctly.",
+    why:
+      "Measured 2026-09-13: a 32-lane wave ran against a tree 25 days and 3,850 commits " +
+      "stale. 53 of its 134 issues (40%) had closed in the interim — all after the " +
+      "snapshot date, none before. One lane recommended closing an issue that had closed " +
+      "as COMPLETED three weeks earlier.",
+    agent_must_report: [
+      `State the measured age: \`${result.ref}\` tip is ${tipIso} UTC, ${days} days old.`,
+      "Run `git fetch origin` and re-check BEFORE dispatching, so the wave is cut from a " +
+        "current base.",
+      "If the trunk is genuinely quiet and this age is correct, say so explicitly — an old " +
+        "tip and an unfetched ref are the same reading from here.",
+      "Re-derive any issue list or tracker snapshot feeding this wave. The tree and the " +
+        "tracker go stale TOGETHER, which is what made the 0/53 closure split read as " +
+        "internal consistency rather than as a warning.",
+    ],
+    agent_must_wait:
+      "Do not cut a wave of lanes from a trunk ref older than the threshold without " +
+      "fetching first, or stating why the age is correct.",
+    user_summary:
+      `dispatch-freshness: ${result.ref} tip is ${days}d old (${tipIso} UTC) — ` +
+      "fetch before cutting lanes",
+  };
 }
 
 module.exports = {
@@ -317,5 +333,5 @@ module.exports = {
   UNDETERMINED,
   probeRefTipSeconds,
   evaluateDispatchFreshness,
-  renderAdvisory,
+  buildFinding,
 };
