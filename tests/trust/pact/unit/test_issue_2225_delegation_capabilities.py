@@ -121,7 +121,11 @@ def test_task_envelope_record_excludes_blocked_action(
     task_env = TaskEnvelope(
         id="te-2225-task",
         task_id="task-2225",
-        parent_envelope_id="re-2225-nonexistent",  # unresolved -> tightening skipped
+        # #2238: an UNRESOLVABLE parent id now fails closed -- it asserts an
+        # authority that does not exist. This test is about the delegation
+        # RECORD, not tightening, and no role envelope is being narrowed, so it
+        # names no parent at all: the supported "narrows nothing" form.
+        parent_envelope_id="",
         envelope=ConstraintEnvelopeConfig(
             id="env-2225-task",
             description="divergence envelope (task)",
@@ -161,7 +165,10 @@ def test_both_sites_agree_on_the_shared_derivation(
         TaskEnvelope(
             id="te-2225-both",
             task_id="task-2225-both",
-            parent_envelope_id="re-2225-nonexistent",
+            # #2238: name the REAL role envelope created immediately above
+            # instead of a ghost id -- identical operational policy, so the
+            # tightening gate passes and the record assertion is unchanged.
+            parent_envelope_id="re-2225-both",
             envelope=ConstraintEnvelopeConfig(
                 id="env-2225-both-task", description="", operational=op
             ),

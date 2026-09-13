@@ -3218,20 +3218,57 @@ class GovernanceEngine:
             envelope: The RoleEnvelope to set.
 
         Raises:
+            PactError: If ``defining_role_address`` does not resolve to a role
+                in the compiled organization.
             MonotonicTighteningError: If the envelope is wider than the
                 defining role's effective envelope.
         """
         with self._lock:
+            # SECURITY: resolve the defining role BEFORE trusting it. The
+            # monotonic-tightening gate below is skipped when the defining
+            # envelope is None -- which is the legitimate state for a genuine
+            # ROOT envelope, but was ALSO the state produced by an address that
+            # exists nowhere in the org: the envelope store's prefix scan
+            # returns {} for a ghost without raising. A caller who could submit
+            # an envelope could therefore name a well-formed but non-existent
+            # definer (e.g. "D9-R9", or a case variant of a real address -- node
+            # lookup is case-sensitive while Address.parse is not) and write an
+            # arbitrarily WIDE envelope over an already-governed role.
+            # Resolving fail-closed through the shared helper restores parity
+            # with the three sibling state mutations (grant_clearance,
+            # revoke_clearance, transition_clearance) and with the YAML surface
+            # (yaml_resolvers.resolve_envelope), which already resolve the
+            # defining address before an envelope is ever constructed.
+            try:
+                defining_address = self._resolve_role_address(
+                    envelope.defining_role_address
+                )
+            except PactError as exc:
+                # Re-raise naming the FIELD: set_role_envelope carries two
+                # addresses, so the helper's generic message is ambiguous here.
+                raise PactError(
+                    f"Cannot set role envelope '{envelope.id}': defining role "
+                    f"address '{envelope.defining_role_address}' does not "
+                    f"resolve to any role in the compiled organization",
+                    details={
+                        "envelope_id": envelope.id,
+                        "defining_role_address": envelope.defining_role_address,
+                        "target_role_address": envelope.target_role_address,
+                    },
+                ) from exc
+
             # Check if this is a new or modified envelope
             is_new = (
                 self._envelope_store.get_role_envelope(envelope.target_role_address)
                 is None
             )
 
-            # Validate monotonic tightening: child cannot be wider than parent
-            defining_envelope = self._compute_envelope_locked(
-                envelope.defining_role_address
-            )
+            # Validate monotonic tightening: child cannot be wider than parent.
+            # Computed from the RESOLVED address: a config role ID ("r-cfo")
+            # names a real role but matches no stored envelope, so computing
+            # from the raw field would skip this gate for the same reason a
+            # ghost did.
+            defining_envelope = self._compute_envelope_locked(defining_address)
             if defining_envelope is not None:
                 RoleEnvelope.validate_tightening(
                     parent_envelope=defining_envelope,
@@ -3332,20 +3369,51 @@ class GovernanceEngine:
             envelope: The TaskEnvelope to set.
 
         Raises:
+            PactError: If ``parent_envelope_id`` names a role envelope that
+                does not exist.
             MonotonicTighteningError: If the task envelope is wider than the
                 parent role envelope.
         """
         with self._lock:
-            # Validate monotonic tightening: task envelope cannot be wider
-            # than the parent role envelope.
-            parent_role_env = self._find_role_envelope_by_id_locked(
-                envelope.parent_envelope_id
-            )
-            if parent_role_env is not None:
+            # SECURITY: a NAMED parent that does not exist is not the same as
+            # NO parent, and the two must be treated oppositely. The lookup
+            # returns None for both, so the old `if parent is not None` guard
+            # silently skipped monotonic tightening for a caller who asserted
+            # an authority that does not exist -- persisting a task envelope
+            # wider than any envelope it claimed to narrow. The distinction is
+            # therefore made BEFORE the lookup, on whether an id was supplied
+            # at all. Sibling site: set_role_envelope, which resolves
+            # defining_role_address through _resolve_role_address for the same
+            # reason.
+            if envelope.parent_envelope_id:
+                parent_role_env = self._find_role_envelope_by_id_locked(
+                    envelope.parent_envelope_id
+                )
+                if parent_role_env is None:
+                    raise PactError(
+                        f"Cannot set task envelope '{envelope.id}': parent "
+                        f"envelope id '{envelope.parent_envelope_id}' does not "
+                        f"match any role envelope in this organization",
+                        details={
+                            "envelope_id": envelope.id,
+                            "task_id": envelope.task_id,
+                            "parent_envelope_id": envelope.parent_envelope_id,
+                        },
+                    )
+                # Validate monotonic tightening: task envelope cannot be wider
+                # than the parent role envelope.
                 RoleEnvelope.validate_tightening(
                     parent_envelope=parent_role_env.envelope,
                     child_envelope=envelope.envelope,
                 )
+            # An EMPTY parent_envelope_id is the only expressible "this task
+            # envelope narrows no role envelope" (the field is a required str
+            # with no None form). There is nothing to tighten against, and it
+            # cannot widen enforcement: compute_effective_envelope INTERSECTS
+            # the task envelope with every ancestor role envelope
+            # (envelopes.py:782-787), measured at 100.0 for a $1M task envelope
+            # under a $100 role envelope. Only a non-empty id asserts an
+            # authority, and only an assertion can be false.
             self._envelope_store.save_task_envelope(envelope)
 
             # N2: Invalidate any cached envelope entries that match this task_id.
