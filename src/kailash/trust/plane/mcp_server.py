@@ -283,8 +283,15 @@ async def trust_status() -> dict:
         status["session_actions"] = project.session.action_count
     if project.constraint_envelope is not None:
         env = project.constraint_envelope
-        status["blocked_actions"] = env.operational.blocked_actions
-        status["blocked_paths"] = env.data_access.blocked_paths
+        # list(...), not the raw field: this dict is an outbound MCP response
+        # (a serialization boundary), so it emits the same list shape to_dict()
+        # does. Assigning the field directly also handed the caller a live
+        # handle into the envelope's own collection -- the GH #2225/#2226
+        # mutable-internals class -- which the tuple retype now prevents, but
+        # copying at the boundary is what keeps that true regardless of which
+        # collection type the field happens to hold.
+        status["blocked_actions"] = list(env.operational.blocked_actions)
+        status["blocked_paths"] = list(env.data_access.blocked_paths)
     return status
 
 
