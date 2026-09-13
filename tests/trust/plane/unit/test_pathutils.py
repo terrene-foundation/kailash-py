@@ -162,10 +162,10 @@ class TestDataAccessConstraintsNormalization:
             blocked_paths=["keys\\", ".env"],
             blocked_patterns=["*.key", "credentials*"],
         )
-        assert dac.read_paths == ["src/trustplane/models.py", "docs/readme.md"]
-        assert dac.write_paths == ["output/results"]
-        assert dac.blocked_paths == ["keys", ".env"]
-        assert dac.blocked_patterns == ["*.key", "credentials*"]
+        assert dac.read_paths == ("src/trustplane/models.py", "docs/readme.md")
+        assert dac.write_paths == ("output/results",)
+        assert dac.blocked_paths == ("keys", ".env")
+        assert dac.blocked_patterns == ("*.key", "credentials*")
 
     def test_mixed_separators_normalized_on_init(self):
         """Mixed separators are normalized in __post_init__."""
@@ -177,7 +177,7 @@ class TestDataAccessConstraintsNormalization:
             blocked_paths=[],
             blocked_patterns=[],
         )
-        assert dac.read_paths == ["src/trustplane/models.py"]
+        assert dac.read_paths == ("src/trustplane/models.py",)
 
     def test_double_slashes_collapsed_on_init(self):
         """Double slashes are collapsed in __post_init__."""
@@ -189,7 +189,7 @@ class TestDataAccessConstraintsNormalization:
             blocked_paths=[],
             blocked_patterns=[],
         )
-        assert dac.read_paths == ["src/trustplane/models.py"]
+        assert dac.read_paths == ("src/trustplane/models.py",)
 
     def test_from_dict_normalizes_paths(self):
         """Paths loaded via from_dict are normalized."""
@@ -202,10 +202,10 @@ class TestDataAccessConstraintsNormalization:
             "blocked_patterns": ["*.key"],
         }
         dac = DataAccessConstraints.from_dict(data)
-        assert dac.read_paths == ["src/trustplane/models.py"]
-        assert dac.write_paths == ["output/results"]
-        assert dac.blocked_paths == ["keys"]
-        assert dac.blocked_patterns == ["*.key"]
+        assert dac.read_paths == ("src/trustplane/models.py",)
+        assert dac.write_paths == ("output/results",)
+        assert dac.blocked_paths == ("keys",)
+        assert dac.blocked_patterns == ("*.key",)
 
     def test_already_normalized_paths_unchanged(self):
         """Forward-slash paths pass through without modification."""
@@ -217,7 +217,7 @@ class TestDataAccessConstraintsNormalization:
             blocked_paths=["keys", ".env"],
             blocked_patterns=["*.key"],
         )
-        assert dac.read_paths == ["src/trustplane/models.py"]
-        assert dac.write_paths == ["output/results"]
-        assert dac.blocked_paths == ["keys", ".env"]
-        assert dac.blocked_patterns == ["*.key"]
+        assert dac.read_paths == ("src/trustplane/models.py",)
+        assert dac.write_paths == ("output/results",)
+        assert dac.blocked_paths == ("keys", ".env")
+        assert dac.blocked_patterns == ("*.key",)
