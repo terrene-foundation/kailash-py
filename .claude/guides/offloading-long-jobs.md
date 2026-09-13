@@ -59,7 +59,7 @@ comparison-only form** — re-measure through `trestle run` when a number next m
 | workload | where | pytest-internal | end-to-end | result |
 | --- | --- | --- | --- | --- |
 | `pytest tests/unit` (5087 tests) | this workstation | **174.4s** | 202.8s | 5072 passed, **1 failed** |
-| `pytest tests/unit` | esperie-mac-mini | **43.6s** | **65.8s** | **5073 passed** |
+| `pytest tests/unit` | an arbiter-picked remote | **43.6s** | **65.8s** | **5073 passed** |
 
 ~4x on the suite, ~3x end-to-end. The end-to-end figure is the one to plan with; you pay it
 every run.
