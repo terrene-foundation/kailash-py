@@ -226,8 +226,9 @@ dist/
 # Operator-local repo-linkage resolver config (gitignored at loom; never synced — disclosure class).
 .claude/bin/loom-links.local.json
 
-# Operator-local repin target registry (gitignored at loom; never synced — same disclosure class
-# as the linkage resolver above, and the sibling that was actually committed here).
+# Operator-local repin target registry — same disclosure class as the linkage resolver above,
+# and the sibling that was actually committed here. PR #2239 removed it from the index but
+# added no ignore rule, so nothing stopped the next sync re-adding it.
 .claude/bin/repin-targets.local.json
 
 # Operator-local runbook value files (real deployment hostnames/labels; never committed —
