@@ -3254,16 +3254,18 @@ class GovernanceEngine:
     def create_ksp(self, ksp: KnowledgeSharePolicy) -> None:
         """Create a Knowledge Share Policy. Thread-safe. Emits audit anchor.
 
-        Both unit addresses are resolved to positional D/T addresses before the
-        policy is stored, so a KSP can never be persisted under a key that
-        enforcement never reads.
+        Both unit addresses are resolved to their positional addresses before
+        the policy is stored, so a KSP can never be persisted under a key that
+        enforcement never reads. Resolution accepts exactly what the YAML
+        authoring surface accepts -- a positional address of any node (a
+        department, a team, or a role), or a config department/team id.
 
         Args:
             ksp: The KnowledgeSharePolicy to create.
 
         Raises:
             PactError: If ``source_unit_address`` or ``target_unit_address``
-                does not resolve to a unit or role in the compiled organization.
+                does not resolve to a node in the compiled organization.
         """
         with self._lock:
             # SECURITY: this method previously persisted the policy verbatim,
@@ -3395,10 +3397,14 @@ class GovernanceEngine:
                     },
                 ) from exc
 
-            # Durable form: the store, the cache-invalidation target, the audit
-            # payload and the EATP DelegationRecord all key on the positional
-            # address, so an alias can never address a different envelope than
-            # the role it names.
+            # Durable form: the TARGET address is what the store key, the
+            # cache-invalidation scope, the audit payload and the EATP
+            # DelegationRecord carry, so an alias can never address a different
+            # envelope than the role it names. Only the target is normalised --
+            # defining_role_address is deliberately left as the caller supplied
+            # it, because the HTTP surface relies on that field staying
+            # resolvable (endpoints.py:535-543) and a config role id is
+            # resolvable as given.
             resolved_envelope = replace(envelope, target_role_address=target_address)
 
             # Check if this is a new or modified envelope

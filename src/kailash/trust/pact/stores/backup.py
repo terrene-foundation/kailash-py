@@ -263,7 +263,15 @@ def restore_governance_store(engine: Any, path: str) -> None:
         )
         engine.set_role_envelope(role_envelope)
 
-    # Restore KSPs via public API for audit trail
+    # Restore KSPs directly to store -- bypass the creation gate, for the same
+    # reason the bridge leg below does (issue #2238). Restoring is a PRIVILEGED
+    # ADMIN OPERATION, not a re-authorisation: a backup is a cross-org-version
+    # artifact (this engine's existing org is preserved; the backup's org is
+    # used only for verification), so a unit address that resolved when the
+    # backup was written need not resolve in the org it is restored into.
+    # Re-feeding these through create_ksp made a restore of any pre-fix backup
+    # raise part-way through the loop -- after clearances and envelopes above
+    # had already been applied, leaving a half-restored engine.
     for ksp_data in data.get("ksps", []):
         expires_at = None
         if ksp_data.get("expires_at") is not None:
@@ -295,7 +303,7 @@ def restore_governance_store(engine: Any, path: str) -> None:
             ),
             conditions=ksp_data.get("conditions", {}),
         )
-        engine.create_ksp(ksp)
+        engine._access_policy_store.save_ksp(ksp)
 
     # Restore bridges directly to store -- bypass LCA approval check.
     # Restored bridges were already approved when originally created;
