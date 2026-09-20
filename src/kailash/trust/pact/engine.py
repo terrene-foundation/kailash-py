@@ -23,7 +23,7 @@ import math
 import threading
 import time
 from collections import OrderedDict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
@@ -2736,8 +2736,29 @@ class GovernanceEngine:
                 )
 
             # Vacancy check: vacant roles cannot approve bridges
+            #
+            # SECURITY: an approver that resolves to NO node must fail closed.
+            # The vacancy check is the only gate that reads the approver node,
+            # and it was written `if approver_node is not None and ...`, so a
+            # well-formed approver address naming no node skipped it entirely
+            # and the approval was RECORDED -- measured: a bridge between two
+            # ghosts recorded "D9-R9", a node that exists nowhere, as its
+            # approving LCA. An approval whose decider cannot be looked up
+            # cannot be shown to come from a non-vacant role, so it is refused
+            # rather than trusted. Same precedent as register_compliance_role,
+            # which already refuses an address that is not in the org.
             approver_node = self._compiled_org.nodes.get(approver_address)
-            if approver_node is not None and approver_node.is_vacant:
+            if approver_node is None:
+                raise PactError(
+                    f"Bridge approval requires an approver that exists in the "
+                    f"organization: '{approver_address}' names no role",
+                    details={
+                        "approver_address": approver_address,
+                        "source_address": source_address,
+                        "target_address": target_address,
+                    },
+                )
+            if approver_node.is_vacant:
                 raise PactError(
                     f"Bridge approval cannot be given by vacant role '{approver_address}'",
                     details={
@@ -2969,16 +2990,54 @@ class GovernanceEngine:
                 be parsed, or if no common ancestor exists.
         """
         with self._lock:
+            # SECURITY: an endpoint must EXIST, not merely be well-formed.
+            # The parse below rejects malformed input and NOTHING else --
+            # "D9-R9" parses cleanly -- while both the LCA and the approval
+            # gate are computed from the PARSED strings. A name that no node
+            # backs therefore satisfied every remaining check and persisted as
+            # a governance record asserting a connection that exists nowhere.
+            # Each endpoint is resolved through the same helper every other
+            # state mutation uses, which fails closed on a name nothing backs.
+            # Parity: yaml_resolvers.resolve_bridge resolves role_a and role_b
+            # the same way before a PactBridge is ever constructed, so this
+            # also closes the gap between the two authoring surfaces.
+            resolved: dict[str, str] = {}
+            for field_name in ("role_a_address", "role_b_address"):
+                endpoint = getattr(bridge, field_name)
+                try:
+                    resolved[field_name] = self._resolve_role_address(endpoint)
+                except PactError as exc:
+                    raise PactError(
+                        f"Cannot create bridge '{bridge.id}': {field_name} "
+                        f"'{endpoint}' does not resolve to any role in the "
+                        f"compiled organization",
+                        details={
+                            "bridge_id": bridge.id,
+                            field_name: endpoint,
+                            "role_a_address": bridge.role_a_address,
+                            "role_b_address": bridge.role_b_address,
+                        },
+                    ) from exc
+
+            # Durable form: the store, the audit payload and the EATP records
+            # all carry positional addresses, so a bridge can never be persisted
+            # under an alias or ghost key that enforcement never reads.
+            resolved_bridge = replace(
+                bridge,
+                role_a_address=resolved["role_a_address"],
+                role_b_address=resolved["role_b_address"],
+            )
+
             # Parse addresses for LCA computation
             try:
-                source_addr = Address.parse(bridge.role_a_address)
-                target_addr = Address.parse(bridge.role_b_address)
+                source_addr = Address.parse(resolved_bridge.role_a_address)
+                target_addr = Address.parse(resolved_bridge.role_b_address)
             except Exception as exc:
                 raise PactError(
                     f"Cannot parse bridge addresses: {exc}",
                     details={
-                        "role_a_address": bridge.role_a_address,
-                        "role_b_address": bridge.role_b_address,
+                        "role_a_address": resolved_bridge.role_a_address,
+                        "role_b_address": resolved_bridge.role_b_address,
                         "bridge_id": bridge.id,
                     },
                 ) from exc
@@ -2995,7 +3054,10 @@ class GovernanceEngine:
                     },
                 )
 
-            # Check for valid approval from the LCA
+            # Check for valid approval from the LCA. approve_bridge records the
+            # caller's OWN strings verbatim, so this lookup stays on the raw
+            # fields (identical to the resolved pair for every positional
+            # input, which is the only shape approve_bridge accepts).
             approval = self._check_bridge_approval(
                 bridge.role_a_address, bridge.role_b_address
             )
@@ -3032,12 +3094,14 @@ class GovernanceEngine:
                     },
                 )
 
-            # Bilateral consent check (Section 4.4)
-            source_address = bridge.role_a_address
-            target_address = bridge.role_b_address
+            # Bilateral consent check (Section 4.4). consent_bridge records the
+            # caller's OWN strings verbatim, so this lookup stays on the raw
+            # fields; the durable artifacts below use the resolved bridge.
+            source_address = resolved_bridge.role_a_address
+            target_address = resolved_bridge.role_b_address
             if self._require_bilateral_consent:
                 now_check = datetime.now(UTC)
-                for role_addr in (source_address, target_address):
+                for role_addr in (bridge.role_a_address, bridge.role_b_address):
                     key = (role_addr, bridge.id)
                     consent_time = self._bridge_consents.get(key)
                     if consent_time is None:
@@ -3052,17 +3116,17 @@ class GovernanceEngine:
                         )
 
             # Validate bridge scope against endpoint envelopes
-            self._validate_bridge_scope_locked(bridge)
+            self._validate_bridge_scope_locked(resolved_bridge)
 
             # All checks passed -- persist the bridge
-            self._access_policy_store.save_bridge(bridge)
+            self._access_policy_store.save_bridge(resolved_bridge)
 
         self._emit_audit(
             PactAuditAction.BRIDGE_ESTABLISHED.value,
             create_pact_audit_details(
                 PactAuditAction.BRIDGE_ESTABLISHED,
-                role_address=bridge.role_a_address,
-                target_address=bridge.role_b_address,
+                role_address=resolved_bridge.role_a_address,
+                target_address=resolved_bridge.role_b_address,
                 reason=f"Bridge '{bridge.id}' ({bridge.bridge_type}) established",
                 bridge_id=bridge.id,
                 bridge_type=bridge.bridge_type,
@@ -3099,14 +3163,14 @@ class GovernanceEngine:
         # N5: Emit observation for bridge creation
         self._emit_observation(
             event_type="bridge_event",
-            role_address=bridge.role_a_address,
+            role_address=resolved_bridge.role_a_address,
             level="info",
             payload={
                 "bridge_action": "created",
                 "bridge_id": bridge.id,
                 "bridge_type": bridge.bridge_type,
-                "role_a_address": bridge.role_a_address,
-                "role_b_address": bridge.role_b_address,
+                "role_a_address": resolved_bridge.role_a_address,
+                "role_b_address": resolved_bridge.role_b_address,
                 "lca_approver": approval.approved_by,
             },
         )
@@ -3190,21 +3254,67 @@ class GovernanceEngine:
     def create_ksp(self, ksp: KnowledgeSharePolicy) -> None:
         """Create a Knowledge Share Policy. Thread-safe. Emits audit anchor.
 
+        Both unit addresses are resolved to positional D/T addresses before the
+        policy is stored, so a KSP can never be persisted under a key that
+        enforcement never reads.
+
         Args:
             ksp: The KnowledgeSharePolicy to create.
+
+        Raises:
+            PactError: If ``source_unit_address`` or ``target_unit_address``
+                does not resolve to a unit or role in the compiled organization.
         """
         with self._lock:
-            self._access_policy_store.save_ksp(ksp)
+            # SECURITY: this method previously persisted the policy verbatim,
+            # with NO validation at all -- not even an Address.parse. A KSP
+            # naming units that exist nowhere ("D9", "NOT-AN-ADDRESS", "") was
+            # stored as a governance record, and because _check_ksps matches
+            # source/target by raw string prefix, such a record is a grant the
+            # org never authorised the moment any prefix of it becomes real.
+            # Resolution is delegated to the SAME unit resolver the YAML surface
+            # uses (yaml_resolvers.resolve_ksp -> _resolve_unit_address), so the
+            # two authoring surfaces cannot drift on what a unit identifier
+            # means: both accept a positional D/T address or a config
+            # department/team id, and both fail closed on anything else.
+            from kailash.trust.pact.yaml_resolvers import _resolve_unit_address
+
+            resolved: dict[str, str] = {}
+            for field_name in ("source_unit_address", "target_unit_address"):
+                unit = getattr(ksp, field_name)
+                try:
+                    resolved[field_name] = _resolve_unit_address(
+                        self._compiled_org, unit, ctx=f"KSP '{ksp.id}'"
+                    )
+                except PactError as exc:
+                    raise PactError(
+                        f"Cannot create KSP '{ksp.id}': {field_name} "
+                        f"'{unit}' does not resolve to any unit in the compiled "
+                        f"organization",
+                        details={
+                            "ksp_id": ksp.id,
+                            field_name: unit,
+                            "source_unit_address": ksp.source_unit_address,
+                            "target_unit_address": ksp.target_unit_address,
+                        },
+                    ) from exc
+
+            resolved_ksp = replace(
+                ksp,
+                source_unit_address=resolved["source_unit_address"],
+                target_unit_address=resolved["target_unit_address"],
+            )
+            self._access_policy_store.save_ksp(resolved_ksp)
 
         self._emit_audit(
             PactAuditAction.KSP_CREATED.value,
             create_pact_audit_details(
                 PactAuditAction.KSP_CREATED,
                 role_address=ksp.created_by_role_address,
-                reason=f"KSP '{ksp.id}': {ksp.source_unit_address} -> {ksp.target_unit_address}",
+                reason=f"KSP '{ksp.id}': {resolved_ksp.source_unit_address} -> {resolved_ksp.target_unit_address}",
                 ksp_id=ksp.id,
-                source_unit=ksp.source_unit_address,
-                target_unit=ksp.target_unit_address,
+                source_unit=resolved_ksp.source_unit_address,
+                target_unit=resolved_ksp.target_unit_address,
             ),
         )
 
@@ -3218,8 +3328,8 @@ class GovernanceEngine:
             envelope: The RoleEnvelope to set.
 
         Raises:
-            PactError: If ``defining_role_address`` does not resolve to a role
-                in the compiled organization.
+            PactError: If ``defining_role_address`` or ``target_role_address``
+                does not resolve to a role in the compiled organization.
             MonotonicTighteningError: If the envelope is wider than the
                 defining role's effective envelope.
         """
@@ -3257,10 +3367,43 @@ class GovernanceEngine:
                     },
                 ) from exc
 
+            # SECURITY: resolve the TARGET role before writing it, for the same
+            # reason and through the same helper as the definer above. The
+            # envelope store is keyed on the raw target_role_address, and every
+            # consumer reaches an envelope only for addresses in the target's
+            # accountability_chain, so a target naming no node -- or naming a
+            # real role by an alias -- was an ABSENCE RENDERED AS A SUCCESS: the
+            # envelope was accepted and persisted under a key nothing reads,
+            # while the caller believed the role was now constrained. Measured
+            # pre-fix: narrowing the Lead to $25 via its config role id was
+            # ACCEPTED and left compute_envelope reporting $100.
+            # Parity: yaml_resolvers.resolve_envelope resolves spec.target the
+            # same way before a RoleEnvelope is ever constructed.
+            try:
+                target_address = self._resolve_role_address(
+                    envelope.target_role_address
+                )
+            except PactError as exc:
+                raise PactError(
+                    f"Cannot set role envelope '{envelope.id}': target role "
+                    f"address '{envelope.target_role_address}' does not "
+                    f"resolve to any role in the compiled organization",
+                    details={
+                        "envelope_id": envelope.id,
+                        "defining_role_address": envelope.defining_role_address,
+                        "target_role_address": envelope.target_role_address,
+                    },
+                ) from exc
+
+            # Durable form: the store, the cache-invalidation target, the audit
+            # payload and the EATP DelegationRecord all key on the positional
+            # address, so an alias can never address a different envelope than
+            # the role it names.
+            resolved_envelope = replace(envelope, target_role_address=target_address)
+
             # Check if this is a new or modified envelope
             is_new = (
-                self._envelope_store.get_role_envelope(envelope.target_role_address)
-                is None
+                self._envelope_store.get_role_envelope(target_address) is None
             )
 
             # Validate monotonic tightening: child cannot be wider than parent.
@@ -3288,15 +3431,15 @@ class GovernanceEngine:
                         "effective envelope (no additional tightening). "
                         "Consider whether this delegation adds value.",
                         envelope.id,
-                        envelope.target_role_address,
+                        target_address,
                     )
 
-            self._envelope_store.save_role_envelope(envelope)
+            self._envelope_store.save_role_envelope(resolved_envelope)
 
             # N2: Cascade-invalidate the target address and all descendants.
             # The target role and any role beneath it in the D/T/R tree may
             # have cached envelopes that depend on this role envelope.
-            self._cascade_invalidate(envelope.target_role_address)
+            self._cascade_invalidate(target_address)
 
         audit_action = (
             PactAuditAction.ENVELOPE_CREATED
@@ -3308,8 +3451,8 @@ class GovernanceEngine:
             create_pact_audit_details(
                 audit_action,
                 role_address=envelope.defining_role_address,
-                target_address=envelope.target_role_address,
-                reason=f"Role envelope '{envelope.id}' {'created' if is_new else 'modified'} for '{envelope.target_role_address}'",
+                target_address=target_address,
+                reason=f"Role envelope '{envelope.id}' {'created' if is_new else 'modified'} for '{target_address}'",
                 envelope_id=envelope.id,
                 is_passthrough=is_passthrough,
             ),
@@ -3325,7 +3468,7 @@ class GovernanceEngine:
                 delegation = DelegationRecord(
                     id=f"pact-deleg-{uuid4().hex[:8]}",
                     delegator_id=envelope.defining_role_address,
-                    delegatee_id=envelope.target_role_address,
+                    delegatee_id=target_address,
                     task_id="",
                     # GH #2225: advertise only what enforcement would GRANT --
                     # the permitted set (allowed - blocked) from the SAME shared
@@ -3347,7 +3490,7 @@ class GovernanceEngine:
         # N5: Emit observation for role envelope change
         self._emit_observation(
             event_type="envelope_change",
-            role_address=envelope.target_role_address,
+            role_address=target_address,
             level="info",
             payload={
                 "envelope_id": envelope.id,
