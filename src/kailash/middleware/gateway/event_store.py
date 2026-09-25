@@ -137,11 +137,12 @@ class EventStore:
 
         # Start flush task
         try:
-            self._flush_task = asyncio.create_task(self._flush_loop())
+            loop = asyncio.get_running_loop()
         except RuntimeError:
-            # If no event loop is running, defer task creation
-            # Don't create the coroutine here as it will never be awaited
+            # Defer both the task and coroutine until append() has a loop.
             self._flush_task = None
+        else:
+            self._flush_task = loop.create_task(self._flush_loop())
 
     @staticmethod
     def _resolve_backend(backend: Optional[Union[Any, str]]) -> Optional[Any]:
