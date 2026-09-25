@@ -34,13 +34,13 @@ Each count is rendered `value⟨token⟩`. The token is derived from that count'
 
 | page | total | Signed off | Built-not-walked | In progress | Not started | Blocked on you | Open | Open: from original register | Open: arrived since |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| GitHub issues | 63⟨473a39⟩ | 0⟨b7ceca⟩ | 23⟨580633⟩ | 4⟨793329⟩ | 24⟨d8a223⟩ | 12⟨864542⟩ | 63⟨4dc744⟩ | 63⟨f12d9b⟩ | 0⟨8223ae⟩ |
-| Standing forest | 10⟨655d38⟩ | 0⟨3329dc⟩ | 0⟨340fbb⟩ | 8⟨2c1895⟩ | 0⟨1681af⟩ | 2⟨6e5836⟩ | 10⟨c09084⟩ | 10⟨2a532f⟩ | 0⟨3d83d8⟩ |
-| **ALL PAGES** | **73⟨d02f14⟩** | **0⟨9cf385⟩** | **23⟨142baa⟩** | **12⟨1ab196⟩** | **24⟨351c6c⟩** | **14⟨7ac2ec⟩** | **73⟨638858⟩** | **73⟨fa73ed⟩** | **0⟨e2ad80⟩** |
+| GitHub issues | 63⟨af605e⟩ | 0⟨e56723⟩ | 17⟨1f00e3⟩ | 10⟨c6ca1a⟩ | 24⟨e47bcc⟩ | 12⟨a7fe11⟩ | 63⟨855d54⟩ | 63⟨92a5ac⟩ | 0⟨dcf1b8⟩ |
+| Standing forest | 10⟨b3b146⟩ | 0⟨ec413d⟩ | 0⟨2069c2⟩ | 8⟨4243ff⟩ | 0⟨ca7a32⟩ | 2⟨bea97d⟩ | 10⟨515f57⟩ | 10⟨eba352⟩ | 0⟨0edd58⟩ |
+| **ALL PAGES** | **73⟨d98745⟩** | **0⟨6c5684⟩** | **17⟨f09ac8⟩** | **18⟨f7ae2a⟩** | **24⟨8935f9⟩** | **14⟨0c9fc1⟩** | **73⟨f6c877⟩** | **73⟨037abe⟩** | **0⟨99bef9⟩** |
 
 A page is complete only when `Signed off` equals `total`. No page is complete: GitHub issues is 0 of 63, Standing forest is 0 of 10.
 
-generated_from_sha: bb4129bf6ba7357af17d13146b7162c0e9de6f62
-sources_digest: b575e173c78fa195ef41fe9576fb56a8f70184eed636422f732e46ac12d75a44
+generated_from_sha: 7844c7b10a286fbbeb4128f632ffe847991823ce
+sources_digest: b946e5fc8432b40a9619f7ee98ac6cbcd4bd437b2970b1dc8d48852fd5a08c6c
 
 <!-- BURNDOWN:END -->
