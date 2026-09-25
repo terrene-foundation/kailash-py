@@ -72,6 +72,7 @@ except ImportError:
     )
 
 from kailash.nodes.data.async_sql import (
+    _POOL_LOOP_ATTR,
     _PROCESS_POOL_REGISTRY,
     AsyncSQLDatabaseNode,
     set_pool_defaults,
@@ -125,16 +126,16 @@ def _retain_pool_adapters_for_this_loop():
     explanation — a slot still occupied at the end is occupied because the
     registry never freed it.
 
-    ``_generate_pool_key`` leads with ``id(get_running_loop())``, so filtering
-    on this loop's id claims only the adapters this worker caused to be
-    created, never a sibling worker's (the registry is process-wide and ten
-    workers register into it concurrently).
+    Every registered adapter carries its owning loop. Registry keys differ
+    for shared, fallback and dedicated pools, so key-prefix matching misses
+    the fallback pools created under contention. Match the actual owner to
+    retain all this worker's adapters and none from a sibling worker.
     """
-    prefix = f"{id(asyncio.get_running_loop())}|"
+    loop = asyncio.get_running_loop()
     return [
         adapter
-        for key, adapter in list(_PROCESS_POOL_REGISTRY.items())
-        if key.startswith(prefix)
+        for adapter in list(_PROCESS_POOL_REGISTRY.values())
+        if getattr(adapter, _POOL_LOOP_ATTR, None) is loop
     ]
 
 
