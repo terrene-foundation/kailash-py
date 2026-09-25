@@ -324,7 +324,6 @@ class TestResourceWarningContract:
         """The other pole: the warning is a leak signal, not noise on every drop."""
         store = SQLiteStorage(str(tmp_path / "w2.db"))
         store.close()
-        store.conn = None  # close() shuts the handle; drop the attr it checks
 
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
