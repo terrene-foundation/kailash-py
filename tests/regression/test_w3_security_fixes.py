@@ -348,8 +348,7 @@ async def test_workflow_blob_size_cap_rejects_oversized() -> None:
     Why the regression: an unbounded workflow_blob OOMs every dequeueing
     worker on json.loads. The cap is the structural defense.
     """
-    from kailash.runtime import _workflow_blob as wb_mod
-    from kailash.runtime import scheduler as scheduler_mod
+    from kailash.runtime import _workflow_blob as wb_mod, scheduler as scheduler_mod
 
     # Patch the helper module — the size-cap check now lives in
     # `serialize_workflow_to_blob`, which reads its own module-scope

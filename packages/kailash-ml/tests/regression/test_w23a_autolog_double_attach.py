@@ -15,6 +15,8 @@ from typing import Any, List
 from unittest.mock import patch
 
 import pytest
+
+from kailash.ml.errors import AutologAttachError, AutologDoubleAttachError
 from kailash_ml.autolog import (
     AutologConfig,
     FrameworkIntegration,
@@ -22,8 +24,6 @@ from kailash_ml.autolog import (
     register_integration,
     unregister_integration,
 )
-
-from kailash.ml.errors import AutologAttachError, AutologDoubleAttachError
 
 
 class _RaiseOnSecondAttach(FrameworkIntegration):

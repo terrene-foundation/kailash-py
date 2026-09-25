@@ -89,14 +89,12 @@ from kailash_mcp.advanced.features import (
 )
 from kailash_mcp.auth.providers import (
     AuthenticationError as ProviderAuthenticationError,
-)
-from kailash_mcp.auth.providers import (
     AuthManager,
     AuthProvider,
     PermissionManager,
     RateLimiter,
+    RateLimitError as ProviderRateLimitError,
 )
-from kailash_mcp.auth.providers import RateLimitError as ProviderRateLimitError
 from kailash_mcp.errors import (
     AuthenticationError,
     AuthorizationError,

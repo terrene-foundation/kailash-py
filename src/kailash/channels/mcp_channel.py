@@ -19,8 +19,8 @@ from .base import (
 )
 
 try:
-    from ..middleware.mcp.enhanced_server import MCPServerConfig as _MCPServerConfig
     from ..middleware.mcp.enhanced_server import (
+        MCPServerConfig as _MCPServerConfig,
         MiddlewareMCPServer as _MiddlewareMCPServer,
     )
 

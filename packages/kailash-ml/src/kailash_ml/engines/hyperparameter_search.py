@@ -16,6 +16,7 @@ from typing import Any
 
 import numpy as np
 import polars as pl
+
 from kailash_ml.types import FeatureSchema
 
 logger = logging.getLogger(__name__)
@@ -541,6 +542,7 @@ class HyperparameterSearch:
         parent_run_id: str | None = None,
     ) -> SearchResult:
         import optuna
+
         from kailash_ml.engines.training_pipeline import ModelSpec
 
         optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -642,6 +644,7 @@ class HyperparameterSearch:
         compute on the most promising hyperparameter regions.
         """
         import optuna
+
         from kailash_ml.engines.training_pipeline import ModelSpec
 
         optuna.logging.set_verbosity(optuna.logging.WARNING)

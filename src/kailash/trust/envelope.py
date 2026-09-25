@@ -1621,9 +1621,9 @@ def to_plane_envelope(canonical: ConstraintEnvelope) -> Any:
     Returns:
         A ``kailash.trust.plane.models.ConstraintEnvelope`` instance.
     """
-    from kailash.trust.plane.models import CommunicationConstraints
-    from kailash.trust.plane.models import ConstraintEnvelope as PlaneConstraintEnvelope
     from kailash.trust.plane.models import (
+        CommunicationConstraints,
+        ConstraintEnvelope as PlaneConstraintEnvelope,
         DataAccessConstraints,
         FinancialConstraints,
         OperationalConstraints,

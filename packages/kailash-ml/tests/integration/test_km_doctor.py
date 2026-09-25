@@ -23,8 +23,9 @@ import shutil
 import subprocess
 import sys
 
-import kailash_ml as km
 import pytest
+
+import kailash_ml as km
 from kailash_ml.doctor import doctor, main
 
 pytestmark = [pytest.mark.integration]

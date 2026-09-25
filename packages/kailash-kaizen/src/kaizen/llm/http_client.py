@@ -92,11 +92,14 @@ import httpx
 # divergence here would mean the parse-time and connect-time checks disagreed
 # about what "private" means. Verified identical on a 19-address sweep before
 # consolidating (`zero-tolerance.md` Rule 4).
-from kailash.utils.network_guard import METADATA_IPS as _METADATA_IPS
-from kailash.utils.network_guard import ip_reason as _ip_reason
-from kailash.utils.network_guard import is_private_ipv4 as _is_private_ipv4
-from kailash.utils.network_guard import is_private_ipv6 as _is_private_ipv6
-from kailash.utils.network_guard import loopback_allowed, metadata_candidates
+from kailash.utils.network_guard import (
+    METADATA_IPS as _METADATA_IPS,
+    ip_reason as _ip_reason,
+    is_private_ipv4 as _is_private_ipv4,
+    is_private_ipv6 as _is_private_ipv6,
+    loopback_allowed,
+    metadata_candidates,
+)
 from kaizen.llm.errors import InvalidEndpoint, ProviderError, RateLimited
 
 # ---------------------------------------------------------------------------

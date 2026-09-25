@@ -237,10 +237,12 @@ extend-exclude = '''
 
 [tool.isort]
 profile = "black"
+# Keep aliased imports compatible with Black, including narrow inline pragmas.
+combine_as_imports = true
 line_length = 88
 # MUST match the root pyproject.toml list exactly — see the note in
 # packages/kailash-kaizen/pyproject.toml (#1995).
-known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact", "kailash_mcp"]
+known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact", "kailash_mcp", "kailash_ml", "kailash_align"]
 multi_line_output = 3
 include_trailing_comma = true
 force_grid_wrap = 0

@@ -47,9 +47,9 @@ from .configuration import (
 from .core.config import DataFlowConfig, LoggingConfig, mask_sensitive
 from .core.engine import DataFlow
 from .core.exceptions import DDLFailedError
-from .core.logging_config import DEFAULT_SENSITIVE_PATTERNS
-from .core.logging_config import LoggingConfig as AdvancedLoggingConfig
 from .core.logging_config import (
+    DEFAULT_SENSITIVE_PATTERNS,
+    LoggingConfig as AdvancedLoggingConfig,
     SensitiveMaskingFilter,
     install_dataflow_logger_mask,
     mask_sensitive_values,

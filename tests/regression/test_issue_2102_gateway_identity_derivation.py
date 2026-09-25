@@ -437,8 +437,7 @@ class TestSubjectClaimPrecedenceIsShared:
         agree on the same token, which is exactly what a second copy of the
         precedence would silently stop doing.
         """
-        from kailash.trust.auth.jwt import JWTConfig as TrustJWTConfig
-        from kailash.trust.auth.jwt import JWTValidator
+        from kailash.trust.auth.jwt import JWTConfig as TrustJWTConfig, JWTValidator
 
         gateway = APIGateway(title="test")
         token = gateway.auth_manager.create_access_token(user_id="alice")

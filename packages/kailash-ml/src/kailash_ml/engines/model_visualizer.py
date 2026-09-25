@@ -16,6 +16,7 @@ from typing import Any
 
 import numpy as np
 import plotly.express as px
+
 from kailash_ml._decorators import experimental
 
 logger = logging.getLogger(__name__)
@@ -135,8 +136,7 @@ class ModelVisualizer:
         plotly.graph_objects.Figure
         """
         import plotly.graph_objects as go
-        from sklearn.metrics import auc as sk_auc
-        from sklearn.metrics import roc_curve as sk_roc_curve
+        from sklearn.metrics import auc as sk_auc, roc_curve as sk_roc_curve
 
         y_true_np = _to_numpy(y_true)
         y_scores_np = _to_numpy(y_scores)
@@ -192,8 +192,10 @@ class ModelVisualizer:
         plotly.graph_objects.Figure
         """
         import plotly.graph_objects as go
-        from sklearn.metrics import average_precision_score
-        from sklearn.metrics import precision_recall_curve as sk_pr_curve
+        from sklearn.metrics import (
+            average_precision_score,
+            precision_recall_curve as sk_pr_curve,
+        )
 
         y_true_np = _to_numpy(y_true)
         y_scores_np = _to_numpy(y_scores)

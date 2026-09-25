@@ -16,8 +16,7 @@ from __future__ import annotations
 
 import math
 
-from hypothesis import given, settings
-from hypothesis import strategies as st
+from hypothesis import given, settings, strategies as st
 
 from kailash.trust.pact.config import (
     CONFIDENTIALITY_ORDER,

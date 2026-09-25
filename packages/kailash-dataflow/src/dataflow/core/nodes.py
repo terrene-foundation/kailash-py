@@ -60,8 +60,8 @@ from .exceptions import sanitize_db_error  # Issue #1552: redact driver-error VA
 from .exceptions import (  # Issue #1519/#1520: typed conflict-target error propagation
     BulkUpsertConflictTargetError,
     UpsertConflictTargetError,
+    is_conflict_target_error as _is_conflict_target_error,
 )
-from .exceptions import is_conflict_target_error as _is_conflict_target_error
 from .logging_config import mask_sensitive_values  # Phase 7: Sensitive value masking
 
 

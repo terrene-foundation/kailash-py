@@ -20,10 +20,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
+from kailash.db.connection import ConnectionManager
 from kailash_ml.errors import ModelNotFoundError
 from kailash_ml.types import MetricSpec, ModelSignature
-
-from kailash.db.connection import ConnectionManager
 
 logger = logging.getLogger(__name__)
 
@@ -211,9 +210,8 @@ async def _ensure_registry_tables_via_migration(conn: ConnectionManager) -> None
     # Local import — keeps the registry module's import graph minimal
     # for unit tests that don't exercise migration. Also matches the
     # pattern used by ``ExperimentTracker._apply_pending_migrations``.
-    from kailash_ml.tracking.tracker import _MigrationConnAdapter
-
     from kailash.tracking.migrations._registry import get_registry
+    from kailash_ml.tracking.tracker import _MigrationConnAdapter
 
     registry = get_registry()
     await registry.apply_pending(_MigrationConnAdapter(conn))

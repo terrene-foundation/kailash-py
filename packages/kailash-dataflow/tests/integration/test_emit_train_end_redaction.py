@@ -40,9 +40,13 @@ from dataflow.classification import (
     MaskingStrategy,
     RetentionPolicy,
 )
-from dataflow.ml import ML_TRAIN_END_EVENT, TrainingContext, emit_train_end
-from dataflow.ml import hash as df_hash
-from dataflow.ml import on_train_end
+from dataflow.ml import (
+    ML_TRAIN_END_EVENT,
+    TrainingContext,
+    emit_train_end,
+    hash as df_hash,
+    on_train_end,
+)
 
 pytestmark = [pytest.mark.integration, pytest.mark.regression]
 

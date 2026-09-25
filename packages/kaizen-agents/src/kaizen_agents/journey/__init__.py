@@ -162,9 +162,9 @@ from kaizen_agents.journey.manager import (
     JourneyHookContext,
     JourneyHookEvent,
     JourneyHookResult,
+    JourneyResponse as EnhancedJourneyResponse,
+    PathwayManager as EnhancedPathwayManager,
 )
-from kaizen_agents.journey.manager import JourneyResponse as EnhancedJourneyResponse
-from kaizen_agents.journey.manager import PathwayManager as EnhancedPathwayManager
 
 # DataFlow models (TODO-JO-005 REQ-INT-004)
 from kaizen_agents.journey.models import (

@@ -81,17 +81,26 @@ async def test_cache_controls_bypass_warm_inner_cache(tmp_path, surface, cache_p
         if cache_policy == "disabled":
             reader.express._cache_enabled = False
         if surface == "generated_list":
-            operation = lambda: generated.async_run(
-                **params, cache_ttl=ttl, enable_cache=cache_policy != "disabled"
-            )
+
+            async def operation():
+                return await generated.async_run(
+                    **params, cache_ttl=ttl, enable_cache=cache_policy != "disabled"
+                )
+
         elif surface == "find_one":
-            operation = lambda: reader.express.find_one(
-                "CacheControlRow", {"id": "one"}, cache_ttl=ttl
-            )
+
+            async def operation():
+                return await reader.express.find_one(
+                    "CacheControlRow", {"id": "one"}, cache_ttl=ttl
+                )
+
         else:
-            operation = lambda: reader.express.list(
-                "CacheControlRow", filter={"id": "one"}, limit=1, cache_ttl=ttl
-            )
+
+            async def operation():
+                return await reader.express.list(
+                    "CacheControlRow", filter={"id": "one"}, limit=1, cache_ttl=ttl
+                )
+
         result, calls = await _observe_sql(sql_node, operation)
         print("BYPASS_SQL_CALLS", surface, cache_policy, calls())
         assert calls() > 0, "disabled caching must execute SQL below both cache layers"

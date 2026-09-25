@@ -17,6 +17,7 @@ from typing import Any
 
 import numpy as np
 import polars as pl
+
 from kailash_ml.interop import to_sklearn_input
 
 logger = logging.getLogger(__name__)

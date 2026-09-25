@@ -19,9 +19,11 @@ import secrets
 import statistics
 import time
 import tracemalloc
-from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import TimeoutError as FuturesTimeoutError
-from concurrent.futures import as_completed
+from concurrent.futures import (
+    ThreadPoolExecutor,
+    TimeoutError as FuturesTimeoutError,
+    as_completed,
+)
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from kailash.nodes.base import Node, NodeParameter, register_node

@@ -753,8 +753,7 @@ class Nexus:
 
         # Apply preset if specified (after gateway, so middleware/plugins can be applied)
         if preset:
-            from nexus.presets import NexusConfig as _PresetConfig
-            from nexus.presets import apply_preset
+            from nexus.presets import NexusConfig as _PresetConfig, apply_preset
 
             self._nexus_config = _PresetConfig(
                 cors_origins=self._cors_origins or ["*"],

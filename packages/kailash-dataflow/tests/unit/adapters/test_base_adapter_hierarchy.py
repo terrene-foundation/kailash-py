@@ -160,11 +160,13 @@ class TestBaseAdapterHierarchy:
         """Ensure backward compatible imports still work."""
         # Old code should still work
         # New code should also work
-        from dataflow.adapters import BaseAdapter as Base1
-        from dataflow.adapters import DatabaseAdapter as DB1
-        from dataflow.adapters import MySQLAdapter as MySQL1
-        from dataflow.adapters import PostgreSQLAdapter as Postgres1
-        from dataflow.adapters import SQLiteAdapter as SQLite1
+        from dataflow.adapters import (
+            BaseAdapter as Base1,
+            DatabaseAdapter as DB1,
+            MySQLAdapter as MySQL1,
+            PostgreSQLAdapter as Postgres1,
+            SQLiteAdapter as SQLite1,
+        )
 
         # All imports should succeed
         assert DB1 is not None

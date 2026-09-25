@@ -82,8 +82,10 @@ from kailash.trust.pact.config import (
 from kailash.trust.pact.engine import GovernanceEngine
 from kailash.trust.pact.envelopes import MonotonicTighteningError, RoleEnvelope
 from kailash.trust.pact.exceptions import PactError
-from kailash.trust.plane.models import ConstraintEnvelope as PlaneEnvelope
-from kailash.trust.plane.models import OperationalConstraints as PlaneOperational
+from kailash.trust.plane.models import (
+    ConstraintEnvelope as PlaneEnvelope,
+    OperationalConstraints as PlaneOperational,
+)
 
 # Surface 3 of the parity this file asserts lives in kaizen_agents, which the
 # "Test PACT" job deliberately does NOT install -- tests/unit/test_enforcement_modes.py

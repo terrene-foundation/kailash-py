@@ -27,8 +27,11 @@ except ImportError:
 
 # Import Kaizen components
 from kaizen.core.base_agent import BaseAgent
-from kaizen.integrations.nexus import NEXUS_AVAILABLE as INTEGRATION_AVAILABLE
-from kaizen.integrations.nexus import NexusSessionManager, deploy_multi_channel
+from kaizen.integrations.nexus import (
+    NEXUS_AVAILABLE as INTEGRATION_AVAILABLE,
+    NexusSessionManager,
+    deploy_multi_channel,
+)
 from kaizen.signatures import InputField, OutputField, Signature
 
 # Skip all tests if Nexus not available

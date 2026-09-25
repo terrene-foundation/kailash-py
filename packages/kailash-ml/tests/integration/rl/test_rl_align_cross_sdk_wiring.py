@@ -243,8 +243,9 @@ async def test_km_rl_train_dispatches_to_align_dpo(tmp_path):
     ``rules/orphan-detection.md`` §2a style: runs only when the extra is
     installed AND explicit E2E opt-in is signalled.
     """
-    import kailash_ml as km
     import polars as pl
+
+    import kailash_ml as km
     from kailash_ml.engines.experiment_tracker import ExperimentTracker
     from kailash_ml.rl.protocols import RLLifecycleProtocol
 

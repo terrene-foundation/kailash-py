@@ -166,8 +166,7 @@ def test_hash_format_is_sha256_prefixed_64hex():
 
 @pytest.mark.unit
 def test_hash_rejects_non_polars_input():
-    from dataflow.ml import LineageHashError
-    from dataflow.ml import hash as df_hash
+    from dataflow.ml import LineageHashError, hash as df_hash
 
     with pytest.raises(LineageHashError):
         df_hash({"not": "a frame"})  # type: ignore[arg-type]
@@ -178,8 +177,7 @@ def test_hash_rejects_non_polars_input():
 
 @pytest.mark.unit
 def test_hash_rejects_unsupported_algorithm():
-    from dataflow.ml import LineageHashError
-    from dataflow.ml import hash as df_hash
+    from dataflow.ml import LineageHashError, hash as df_hash
 
     df = pl.DataFrame({"a": [1]})
     with pytest.raises(LineageHashError, match="algorithm"):

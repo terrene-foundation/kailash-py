@@ -1030,9 +1030,11 @@ class DataFlow(DataFlowEventMixin):
         # DDL retry — allowing operators who fix the root cause to retry
         # without restarting the application (though restart is the
         # canonical recovery path documented on DDLFailedError).
-        from .exceptions import DDLFailedError as _DDLFailedError
-        from .exceptions import MigrationNotAppliedError as _MigrationNotAppliedError
-        from .exceptions import sanitize_db_error as _sanitize_db_error
+        from .exceptions import (
+            DDLFailedError as _DDLFailedError,
+            MigrationNotAppliedError as _MigrationNotAppliedError,
+            sanitize_db_error as _sanitize_db_error,
+        )
 
         self._DDLFailedError = _DDLFailedError  # cached symbol for hot path
         # Issue #1548: typed "migration completed but did not apply" error

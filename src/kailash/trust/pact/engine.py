@@ -1695,9 +1695,7 @@ class GovernanceEngine:
 
         # --- Temporal: check active hours and blackout periods ---
         if envelope.temporal is not None:
-            from datetime import datetime as _dt
-            from datetime import timezone as _tz
-            from datetime import tzinfo as _TzInfo
+            from datetime import datetime as _dt, timezone as _tz, tzinfo as _TzInfo
 
             _tz_name = envelope.temporal.timezone or "UTC"
             _tzinfo: _TzInfo

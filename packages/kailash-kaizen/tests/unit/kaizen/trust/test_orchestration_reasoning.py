@@ -205,8 +205,6 @@ class TestKaizenShimReExports:
         """Kaizen shim should re-export the same class as EATP."""
         from kailash.trust.orchestration.runtime import (
             TrustAwareOrchestrationRuntime as EatpRuntime,
-        )
-        from kailash.trust.orchestration.runtime import (
             TrustAwareOrchestrationRuntime as KaizenRuntime,
         )
 

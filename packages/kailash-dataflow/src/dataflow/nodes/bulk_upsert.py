@@ -26,8 +26,8 @@ from ..adapters.dialect import identifier_budget_for
 from ..core.exceptions import (  # Issue #1519: typed conflict-target error
     BulkUpsertConflictTargetError,
     is_conflict_target_error,
+    sanitize_db_error as _sanitize_db_error,
 )
-from ..core.exceptions import sanitize_db_error as _sanitize_db_error
 
 # Allowlist of supported dialects. Unknown values (typos like "postgres",
 # "pg") MUST raise loudly rather than fall through to SQLite REPLACE

@@ -43,8 +43,10 @@ from typing import Any, Optional
 from kailash.utils.url_credentials import fingerprint_secret
 
 try:
-    from google.auth import default as _google_auth_default
-    from google.auth import load_credentials_from_dict as _google_load_creds_from_dict
+    from google.auth import (
+        default as _google_auth_default,
+        load_credentials_from_dict as _google_load_creds_from_dict,
+    )
     from google.auth.transport.requests import Request as _GoogleAuthRequest
     from google.oauth2 import service_account as _google_service_account
 except ImportError:  # pragma: no cover - optional-extra guard

@@ -61,8 +61,9 @@ def test_catboost_trainable_fit_predict_classification_round_trip() -> None:
     """
     import numpy as np
     import polars as pl
-    from kailash_ml import CatBoostTrainable
     from sklearn.datasets import make_classification
+
+    from kailash_ml import CatBoostTrainable
 
     X, y = make_classification(
         n_samples=120,
@@ -122,8 +123,9 @@ def test_catboost_trainable_fit_regression_round_trip() -> None:
     """Regression task — task='regression' constructs CatBoostRegressor."""
     import numpy as np
     import polars as pl
-    from kailash_ml import CatBoostTrainable
     from sklearn.datasets import make_regression
+
+    from kailash_ml import CatBoostTrainable
 
     X, y = make_regression(
         n_samples=120,

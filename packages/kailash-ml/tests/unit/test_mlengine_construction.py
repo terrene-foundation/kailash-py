@@ -11,6 +11,7 @@ Phase 3-5 completes the bodies.
 from __future__ import annotations
 
 import pytest
+
 from kailash_ml import MLEngine
 
 
@@ -78,6 +79,7 @@ class TestMLEngineDeferredBodies:
         deferral test that asserted NotImplementedError).
         """
         import polars as pl
+
         from kailash_ml import SetupResult
 
         engine = MLEngine()
@@ -105,6 +107,7 @@ class TestMLEngineDeferredBodies:
         coroutine, not a ``TrainingResult``; this test MUST await.
         """
         import polars as pl
+
         from kailash_ml import train
 
         df = pl.DataFrame(

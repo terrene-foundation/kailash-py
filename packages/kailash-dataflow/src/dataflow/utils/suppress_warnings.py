@@ -120,8 +120,10 @@ def configure_dataflow_logging(
 
     # Import here to avoid circular imports
     from dataflow.core.config import LoggingConfig as ConfigLoggingConfig
-    from dataflow.core.logging_config import LoggingConfig as NewLoggingConfig
-    from dataflow.core.logging_config import SensitiveMaskingFilter
+    from dataflow.core.logging_config import (
+        LoggingConfig as NewLoggingConfig,
+        SensitiveMaskingFilter,
+    )
 
     # Determine the effective config
     if config is None and level is None and format is None:

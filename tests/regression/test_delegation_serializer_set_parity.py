@@ -92,8 +92,7 @@ from kailash.trust.chain import (
     GenesisRecord,
     TrustLineageChain,
 )
-from kailash.trust.interop import jwt as jwt_interop
-from kailash.trust.interop import w3c_vc
+from kailash.trust.interop import jwt as jwt_interop, w3c_vc
 from kailash.trust.interop.ucan import (
     _b64url_decode,
     _b64url_encode,

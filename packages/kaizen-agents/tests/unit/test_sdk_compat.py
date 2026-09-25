@@ -13,13 +13,15 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from kaizen.l3.envelope.types import GradientZone as SdkGradientZone
-from kaizen.l3.plan.types import EdgeType as SdkEdgeType
-from kaizen.l3.plan.types import Plan as SdkPlan
-from kaizen.l3.plan.types import PlanEdge as SdkPlanEdge
-from kaizen.l3.plan.types import PlanNode as SdkPlanNode
-from kaizen.l3.plan.types import PlanNodeOutput as SdkPlanNodeOutput
-from kaizen.l3.plan.types import PlanNodeState as SdkPlanNodeState
-from kaizen.l3.plan.types import PlanState as SdkPlanState
+from kaizen.l3.plan.types import (
+    EdgeType as SdkEdgeType,
+    Plan as SdkPlan,
+    PlanEdge as SdkPlanEdge,
+    PlanNode as SdkPlanNode,
+    PlanNodeOutput as SdkPlanNodeOutput,
+    PlanNodeState as SdkPlanNodeState,
+    PlanState as SdkPlanState,
+)
 from kaizen_agents._sdk_compat import (
     edge_type_from_sdk,
     edge_type_to_sdk,
@@ -44,18 +46,21 @@ from kaizen_agents._sdk_compat import (
 # isort: off  (isort and the pre-commit-pinned ruff 0.3.4 disagree on the
 # canonical placement of the lowercase `make_envelope` among the aliased
 # class imports — each "fixes" the other's output in an endless ping-pong)
-from kaizen_agents.types import AgentSpec, ConstraintEnvelope
-from kaizen_agents.types import DimensionGradient as LocalDimensionGradient
-from kaizen_agents.types import EdgeType as LocalEdgeType
-from kaizen_agents.types import GradientZone as LocalGradientZone
-from kaizen_agents.types import Plan as LocalPlan
-from kaizen_agents.types import PlanEdge as LocalPlanEdge
-from kaizen_agents.types import PlanGradient as LocalPlanGradient
-from kaizen_agents.types import PlanNode as LocalPlanNode
-from kaizen_agents.types import PlanNodeOutput as LocalPlanNodeOutput
-from kaizen_agents.types import PlanNodeState as LocalPlanNodeState
-from kaizen_agents.types import PlanState as LocalPlanState
-from kaizen_agents.types import make_envelope
+from kaizen_agents.types import (
+    AgentSpec,
+    ConstraintEnvelope,
+    DimensionGradient as LocalDimensionGradient,
+    EdgeType as LocalEdgeType,
+    GradientZone as LocalGradientZone,
+    Plan as LocalPlan,
+    PlanEdge as LocalPlanEdge,
+    PlanGradient as LocalPlanGradient,
+    PlanNode as LocalPlanNode,
+    PlanNodeOutput as LocalPlanNodeOutput,
+    PlanNodeState as LocalPlanNodeState,
+    PlanState as LocalPlanState,
+    make_envelope,
+)
 
 # isort: on
 

@@ -6,6 +6,11 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 import pytest
+from sklearn.datasets import make_classification, make_regression
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.linear_model import LogisticRegression, Ridge
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
+
 from kailash_ml.engines.ensemble import (
     BagResult,
     BlendResult,
@@ -17,10 +22,6 @@ from kailash_ml.engines.ensemble import (
     _get_model_name,
     _split_data,
 )
-from sklearn.datasets import make_classification, make_regression
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn.linear_model import LogisticRegression, Ridge
-from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
 # ---------------------------------------------------------------------------
 # Fixtures

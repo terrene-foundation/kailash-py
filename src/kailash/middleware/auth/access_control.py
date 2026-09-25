@@ -14,8 +14,8 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 # Import existing Kailash access control components
-from kailash.access_control import AccessControlManager as BaseAccessControlManager
 from kailash.access_control import (
+    AccessControlManager as BaseAccessControlManager,
     AccessDecision,
     NodePermission,
     PermissionEffect,
