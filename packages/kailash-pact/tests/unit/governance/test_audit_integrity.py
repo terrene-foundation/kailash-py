@@ -114,13 +114,14 @@ class TestAuditIntegrity:
         assert error is None
 
     def test_verify_audit_integrity_empty(self) -> None:
-        """Empty audit log should verify successfully."""
+        """An empty audit log is unverifiable, not verified evidence (#2221)."""
         from kailash.trust.pact.stores.sqlite import SqliteAuditLog
 
         log = SqliteAuditLog(":memory:")
         is_valid, error = log.verify_integrity()
-        assert is_valid is True
-        assert error is None
+        assert is_valid is False
+        assert error is not None
+        assert "empty audit log" in error
 
     def test_verify_audit_integrity_detects_tampered_content(self) -> None:
         """If details_json is modified, verify_integrity detects the mismatch."""
@@ -211,12 +212,13 @@ class TestEngineAuditIntegrity:
         assert error is None
 
     def test_engine_verify_audit_integrity_no_audit_log(self) -> None:
-        """Engine without audit log should report integrity as valid (no entries)."""
+        """An unconfigured audit log cannot establish integrity (#2221)."""
         from kailash.trust.pact.engine import GovernanceEngine
 
         org = _make_compiled_org("no-audit-test")
         engine = GovernanceEngine(org)  # memory backend, no sqlite audit log
 
         is_valid, error = engine.verify_audit_integrity()
-        assert is_valid is True
-        assert error is None
+        assert is_valid is False
+        assert error is not None
+        assert "no SQLite audit log configured" in error

@@ -971,14 +971,13 @@ class PactEngine:
         chain = self._governance.audit_chain
         chain_id = getattr(chain, "chain_id", None) if chain is not None else None
 
-        # Fail-closed on no chain: report zero verified, is_valid=True for
-        # an empty chain window (nothing to verify), matches semantics of
-        # AuditChain.verify_chain_integrity on an empty chain.
+        # An unavailable chain cannot establish integrity (#2221).
+        # This is distinct from selecting an empty window of an existing chain.
         if chain is None:
             return ChainVerificationResult(
-                is_valid=True,
+                is_valid=False,
                 verified_count=0,
-                first_break_reason=None,
+                first_break_reason="no audit chain configured: integrity is unverifiable",
                 first_break_sequence=None,
                 tenant_id=tenant_id,
                 chain_id=None,

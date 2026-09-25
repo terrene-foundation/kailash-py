@@ -1199,6 +1199,9 @@ def sanitize_input(
                 if isinstance(value, pd.DataFrame):
                     type_allowed = True
             except ImportError:
+                # Optional pandas is unavailable during this compatibility
+                # check. Keep type_allowed false; the remaining type checks
+                # below must independently accept the value or reject it.
                 pass
 
     # Additional check for numpy scalar types
