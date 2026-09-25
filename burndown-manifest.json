@@ -1,0 +1,20 @@
+{
+  "_schema": "burndown-manifest/v1",
+  "target": "burndown/REGISTER.md",
+  "pages": [
+    "GitHub issues",
+    "Standing forest"
+  ],
+  "sources": [
+    {
+      "path": "burndown/2026-09-25-register.json",
+      "kind": "register",
+      "precedence": 0
+    },
+    {
+      "path": "burndown/2026-09-25-growth.json",
+      "kind": "growth",
+      "precedence": 0
+    }
+  ]
+}
