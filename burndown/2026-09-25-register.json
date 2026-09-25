@@ -1,5 +1,5 @@
 {
-  "_note": "Frozen session baseline from GitHub open-issue set captured before work, plus standing forest. F27–F30 supplied by root handover mapping. Agent triage is not owner acceptance.",
+  "_note": "Frozen session baseline from GitHub open-issue set captured before work, plus standing forest. F27\u2013F30 supplied by root handover mapping. Agent triage is not owner acceptance.",
   "_generated": "2026-09-25",
   "_authority": "agent",
   "_id_convention": "ISSUE-<GitHub number> or FOREST-F<standing ledger number>",
@@ -8,7 +8,7 @@
       "id": "ISSUE-2000",
       "page": "GitHub issues",
       "status": "Built-not-walked",
-      "title": "Core: PythonCodeNode first execution costs ~9-11s — security.py eagerly imports torch/sklearn, failing nexus e2e test_concurrent_requests 3/3",
+      "title": "Core: PythonCodeNode first execution costs ~9-11s \u2014 security.py eagerly imports torch/sklearn, failing nexus e2e test_concurrent_requests 3/3",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2000",
       "labels": [],
       "created_at": "2026-08-04T15:06:26Z",
@@ -49,7 +49,7 @@
       "id": "ISSUE-2039",
       "page": "GitHub issues",
       "status": "Not started",
-      "title": "chore: isort mode disagreement (--files vs --all-files) — cause UNKNOWN, three hypotheses excluded; src_paths half closed by 2cf40a17b",
+      "title": "chore: isort mode disagreement (--files vs --all-files) \u2014 cause UNKNOWN, three hypotheses excluded; src_paths half closed by 2cf40a17b",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2039",
       "labels": [],
       "created_at": "2026-08-10T11:30:36Z",
@@ -72,7 +72,7 @@
       "id": "ISSUE-2044",
       "page": "GitHub issues",
       "status": "Not started",
-      "title": "codeql: py/clear-text-logging-sensitive-data persists at 3 redacted sites — the query does not model fingerprint_secret as a sanitizer",
+      "title": "codeql: py/clear-text-logging-sensitive-data persists at 3 redacted sites \u2014 the query does not model fingerprint_secret as a sanitizer",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2044",
       "labels": [],
       "created_at": "2026-08-10T12:43:55Z",
@@ -270,7 +270,7 @@
       "id": "ISSUE-2127",
       "page": "GitHub issues",
       "status": "Not started",
-      "title": "codeql: defer py/clear-text-logging-sensitive-data — mfa_config name heuristic reaches the MFA opt-out WARN through a **kwargs splat",
+      "title": "codeql: defer py/clear-text-logging-sensitive-data \u2014 mfa_config name heuristic reaches the MFA opt-out WARN through a **kwargs splat",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2127",
       "labels": [
         "security"
@@ -288,7 +288,7 @@
       "id": "ISSUE-2135",
       "page": "GitHub issues",
       "status": "Not started",
-      "title": "kailash-align has no GPU-hardware test coverage — test-gpu job removed in #2076 until real tests exist",
+      "title": "kailash-align has no GPU-hardware test coverage \u2014 test-gpu job removed in #2076 until real tests exist",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2135",
       "labels": [
         "bug"
@@ -306,7 +306,7 @@
       "id": "ISSUE-2138",
       "page": "GitHub issues",
       "status": "Blocked on you",
-      "title": "RotatingCredentialNode drives CredentialManagerNode through four operations that do not exist — rotation never fires",
+      "title": "RotatingCredentialNode drives CredentialManagerNode through four operations that do not exist \u2014 rotation never fires",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2138",
       "labels": [],
       "created_at": "2026-08-15T12:06:11Z",
@@ -360,7 +360,7 @@
       "id": "ISSUE-2146",
       "page": "GitHub issues",
       "status": "Not started",
-      "title": "codeql: defer py/weak-sensitive-data-hashing — SHA-256 over CSPRNG-generated API keys in api_keys.py",
+      "title": "codeql: defer py/weak-sensitive-data-hashing \u2014 SHA-256 over CSPRNG-generated API keys in api_keys.py",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2146",
       "labels": [],
       "created_at": "2026-08-15T12:37:15Z",
@@ -379,7 +379,7 @@
       "id": "ISSUE-2153",
       "page": "GitHub issues",
       "status": "Blocked on you",
-      "title": "kaizen SSRF guard permits CGNAT (100.64.0.0/10) while nexus blocks it — decide the posture",
+      "title": "kaizen SSRF guard permits CGNAT (100.64.0.0/10) while nexus blocks it \u2014 decide the posture",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2153",
       "labels": [
         "bug",
@@ -416,7 +416,7 @@
       "id": "ISSUE-2166",
       "page": "GitHub issues",
       "status": "Built-not-walked",
-      "title": "MiddlewareAccessControlManager.check_session_access can never succeed — PermissionCheckNode declares none of the kwargs it passes",
+      "title": "MiddlewareAccessControlManager.check_session_access can never succeed \u2014 PermissionCheckNode declares none of the kwargs it passes",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2166",
       "labels": [],
       "created_at": "2026-08-16T12:24:53Z",
@@ -483,7 +483,7 @@
       "id": "ISSUE-2171",
       "page": "GitHub issues",
       "status": "Built-not-walked",
-      "title": "Nexus rate-limit middleware fingerprints a client IP with an unkeyed hash — the privacy it claims does not hold",
+      "title": "Nexus rate-limit middleware fingerprints a client IP with an unkeyed hash \u2014 the privacy it claims does not hold",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2171",
       "labels": [],
       "created_at": "2026-08-16T13:28:26Z",
@@ -549,7 +549,7 @@
       "id": "ISSUE-2178",
       "page": "GitHub issues",
       "status": "Not started",
-      "title": "codeql: defer py/clear-text-logging-sensitive-data — http.py masked-log sites (PR #2176)",
+      "title": "codeql: defer py/clear-text-logging-sensitive-data \u2014 http.py masked-log sites (PR #2176)",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2178",
       "labels": [],
       "created_at": "2026-08-16T13:53:33Z",
@@ -567,7 +567,7 @@
       "id": "ISSUE-2180",
       "page": "GitHub issues",
       "status": "Not started",
-      "title": "CI: kailash-kaizen tests/integration/ (131 files) is invoked by no workflow — the #2074 bug class, third instance",
+      "title": "CI: kailash-kaizen tests/integration/ (131 files) is invoked by no workflow \u2014 the #2074 bug class, third instance",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2180",
       "labels": [],
       "created_at": "2026-08-16T14:04:11Z",
@@ -583,7 +583,7 @@
       "id": "ISSUE-2181",
       "page": "GitHub issues",
       "status": "Not started",
-      "title": "codeql: defer 11474 / 11484 / 11485 — three FALSE POSITIVES from the open-HIGH triage (url_credentials, gateway/security)",
+      "title": "codeql: defer 11474 / 11484 / 11485 \u2014 three FALSE POSITIVES from the open-HIGH triage (url_credentials, gateway/security)",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2181",
       "labels": [],
       "created_at": "2026-08-16T14:05:54Z",
@@ -683,7 +683,7 @@
       "id": "ISSUE-2206",
       "page": "GitHub issues",
       "status": "Not started",
-      "title": "fix(dataflow): #1548 async lazy-DDL durability fix has a residual window — uncommitted table still invisible to a second connection",
+      "title": "fix(dataflow): #1548 async lazy-DDL durability fix has a residual window \u2014 uncommitted table still invisible to a second connection",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2206",
       "labels": [],
       "created_at": "2026-08-20T18:26:38Z",
@@ -760,7 +760,7 @@
       "id": "ISSUE-2220",
       "page": "GitHub issues",
       "status": "Built-not-walked",
-      "title": "kaizen: #2069's fix covers only the keyless path — an unknown model still routes silently to OpenAI when a key is set (live in published 2.46.0)",
+      "title": "kaizen: #2069's fix covers only the keyless path \u2014 an unknown model still routes silently to OpenAI when a key is set (live in published 2.46.0)",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2220",
       "labels": [
         "security"
@@ -791,22 +791,25 @@
       "created_at": "2026-09-10T15:57:21Z",
       "updated_at": "2026-09-11T12:33:36Z",
       "lane_pack": "trust-verifiers",
-      "disposition": "candidate",
-      "assessment": "Comment corrects the CLI consumer claim. Verify concrete audit-store empty/wipe distinction, resume gate and later audit siblings against actual public callers.",
-      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "disposition": "closed-with-evidence",
+      "assessment": "Closed after104focused acceptance tests and actual EMPTY/resume/health source mutations failed as intended. Both audit stores and populated/wiped poles covered. Audit identifier follow-up025d9c92a landed7278bdb3e.",
+      "evidence_scope": "Runtime and negative controls executed this session; GitHub closure is not owner acceptance.",
       "comment_urls": [
         "https://github.com/terrene-foundation/kailash-py/issues/2221#issuecomment-5634494591"
       ],
       "landed_receipts": [
         "af236e819",
-        "e2a23b8fc"
-      ]
+        "e2a23b8fc",
+        "b4219db03",
+        "7278bdb3e"
+      ],
+      "github_state": "CLOSED"
     },
     {
       "id": "ISSUE-2222",
       "page": "GitHub issues",
       "status": "In progress",
-      "title": "MiddlewareAccessControlManager: all three access-check methods pass kwargs AccessDecision rejects — TypeError on every call (distinct from #2166)",
+      "title": "MiddlewareAccessControlManager: all three access-check methods pass kwargs AccessDecision rejects \u2014 TypeError on every call (distinct from #2166)",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2222",
       "labels": [
         "bug",
@@ -913,7 +916,7 @@
       "id": "ISSUE-2231",
       "page": "GitHub issues",
       "status": "Built-not-walked",
-      "title": "MED: sync REST pagination residuals — auth_* dropped on follow-up pages, single-slot cursor dedup, unmasked exception sink",
+      "title": "MED: sync REST pagination residuals \u2014 auth_* dropped on follow-up pages, single-slot cursor dedup, unmasked exception sink",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2231",
       "labels": [
         "bug"
@@ -952,7 +955,7 @@
       "id": "ISSUE-2233",
       "page": "GitHub issues",
       "status": "Not started",
-      "title": "kaizen.agent.Agent silently swallows audit_log_path into **kwargs — user gets a different audit file than they asked for",
+      "title": "kaizen.agent.Agent silently swallows audit_log_path into **kwargs \u2014 user gets a different audit file than they asked for",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2233",
       "labels": [],
       "created_at": "2026-09-12T11:36:46Z",
@@ -968,7 +971,7 @@
       "id": "ISSUE-2234",
       "page": "GitHub issues",
       "status": "Not started",
-      "title": "worktree-reap.mjs times out on its default path — the forest-safety guard has been failing silently",
+      "title": "worktree-reap.mjs times out on its default path \u2014 the forest-safety guard has been failing silently",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2234",
       "labels": [],
       "created_at": "2026-09-12T11:43:07Z",
@@ -1106,7 +1109,7 @@
       "id": "ISSUE-2245",
       "page": "GitHub issues",
       "status": "Not started",
-      "title": "CycleConfig.iteration_safety_factor reaches no runtime path — the advertised multiplier never applies",
+      "title": "CycleConfig.iteration_safety_factor reaches no runtime path \u2014 the advertised multiplier never applies",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2245",
       "labels": [],
       "created_at": "2026-09-21T07:26:08Z",
@@ -1122,7 +1125,7 @@
       "id": "ISSUE-2246",
       "page": "GitHub issues",
       "status": "Blocked on you",
-      "title": "ExpressionCondition.evaluate() returns True (terminate) on evaluation failure — indistinguishable from a satisfied condition",
+      "title": "ExpressionCondition.evaluate() returns True (terminate) on evaluation failure \u2014 indistinguishable from a satisfied condition",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2246",
       "labels": [],
       "created_at": "2026-09-21T07:26:09Z",
@@ -1138,7 +1141,7 @@
       "id": "ISSUE-2247",
       "page": "GitHub issues",
       "status": "Not started",
-      "title": "Seven documented workflow.connect(..., cycle_config=...) calls raise TypeError — connect() does not accept the argument",
+      "title": "Seven documented workflow.connect(..., cycle_config=...) calls raise TypeError \u2014 connect() does not accept the argument",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2247",
       "labels": [],
       "created_at": "2026-09-21T07:26:10Z",
@@ -1175,7 +1178,7 @@
     {
       "id": "ISSUE-2249",
       "page": "GitHub issues",
-      "status": "Blocked on you",
+      "status": "In progress",
       "title": "L3 agent factory: bind an executable to spawned agents and to termination",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2249",
       "labels": [
@@ -1186,7 +1189,7 @@
       "updated_at": "2026-09-24T14:57:40Z",
       "lane_pack": "kaizen-lifecycle",
       "disposition": "design",
-      "assessment": "Public spawn returns Pending metadata with no executable task. Existing termination changes registry state only. Opt-in owned executable dispatch is proposed; auto-start is a competing breaking design.",
+      "assessment": "Owner approved opt-in owned execution preserving metadata-only spawn. Kaizen specialist implementing bounded factory task ownership and honest stop reporting, with wrapper parity.",
       "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
       "comment_urls": [],
       "landed_receipts": []
@@ -1238,7 +1241,7 @@
       "id": "FOREST-F22",
       "page": "Standing forest",
       "status": "Built-not-walked",
-      "title": "#2238 sites 3–4 and restore follow-up",
+      "title": "#2238 sites 3\u20134 and restore follow-up",
       "assessment": "Landed fcf1ec06b; #2238 closed with code receipt. Exact PACT/audit union: 2713 passed, 15 skipped; independent correctness and adversarial reviews with controls. Branch/worktree drained. Owner acceptance not inferred.",
       "source": ".session-notes.d/esperie.md"
     },
@@ -1263,7 +1266,7 @@
       "page": "Standing forest",
       "status": "Blocked on you",
       "title": "Workstation/process/stash hygiene",
-      "assessment": "Healthy configured hook parity and refreshed metadata pins landed29ce7012b. Installed interpreter still signal11. Explicit D5 deletion question pending; five inherited stashes held.",
+      "assessment": "D5 approved and stale draft deleted after exact match to landed f1fe3d68f message plus ancestry proof. Healthy hooks pass; installed interpreter signal11 remains. Five inherited stashes held.",
       "source": ".session-notes.d/esperie.md"
     },
     {
@@ -1280,15 +1283,15 @@
       "status": "Built-not-walked",
       "title": "#2238 clearance parity",
       "assessment": "Clearance restore and role authority parity landed fcf1ec06b with F22 evidence; no owner acceptance inferred.",
-      "source": "2026-09-25 user handover, sections 5–7; root dispatch mapping"
+      "source": "2026-09-25 user handover, sections 5\u20137; root dispatch mapping"
     },
     {
       "id": "FOREST-F28",
       "page": "Standing forest",
       "status": "In progress",
       "title": "#2248/#2249 confirmation and triage",
-      "assessment": "#2248 public and injected recovery-boundary behavior confirmed, fixed and CLOSED with c1b04c8ae. #2249 metadata-only spawn confirmed; opt-in owned execution design awaits human decision.",
-      "source": "2026-09-25 user handover, sections 5–7; root dispatch mapping"
+      "assessment": "#2248 confirmed, fixed and closed c1b04c8ae. #2249 opt-in owned execution approved and active in its isolated sibling.",
+      "source": "2026-09-25 user handover, sections 5\u20137; root dispatch mapping"
     },
     {
       "id": "FOREST-F29",
@@ -1296,7 +1299,7 @@
       "status": "Built-not-walked",
       "title": "Declared burndown manifest",
       "assessment": "Manifest/source landed d10295cf4 after two review rounds and generator selftest/check. Status refresh tracks later lands; generated counts measure acceptance, not GitHub closure.",
-      "source": "2026-09-25 user handover, sections 5–7; root dispatch mapping"
+      "source": "2026-09-25 user handover, sections 5\u20137; root dispatch mapping"
     },
     {
       "id": "FOREST-F30",
@@ -1304,7 +1307,7 @@
       "status": "In progress",
       "title": "Unlabelled issue triage substrate",
       "assessment": "Labels captured and dispositions proposed; external labeling not performed by this lane.",
-      "source": "2026-09-25 user handover, sections 5–7; root dispatch mapping"
+      "source": "2026-09-25 user handover, sections 5\u20137; root dispatch mapping"
     }
   ]
 }

@@ -1,3 +1,13 @@
+## Current packed lanes — verified continuation
+
+| Lane | Worktree | Active task pack |
+| --- | --- | --- |
+| Promotion | sibling promote-2229 | pact_lane: HTTP lifecycle plus DataFlow cache propagation; promotion_security_review: canonical credential scanning; root: independent reviews, CI parity and pinned gate. Serialize same-tree trestle. |
+| Kaizen owned execution | sibling kaizen-owned-execution | census_review as Kaizen specialist: #2249 approved factory dispatch/stop reporting, task ownership and wrapper parity. Root and promotion specialists provide independent reviews as shards freeze. |
+| Completed | drained | SQLite audit/identifier repair7278bdb3e; PACT and prior Kaizen lanes. Provider tests landed2d3b5bd40, promotion branch retained for open PR and active source repairs. |
+
+All earlier status sections are historical where this checkpoint differs.
+
 ## Current packed lanes — 2026-09-25
 
 | Lane | Tree | Agents/tasks |

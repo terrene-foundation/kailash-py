@@ -1,3 +1,11 @@
+## Latest verified checkpoint — 2026-09-25 continued
+
+Dev through2d3b5bd40 includes reviewed audit/identifier repair7278bdb3e and provider-contract tests25ae7376f. Audit branch/tree drained after clean and zero-unlanded proof. #2221 also closed with104acceptance tests and actual negative source controls; #2238/#2248/#2251 remain closed. Owner acceptance remains separate.
+
+User approved opt-in #2249 execution, owner-loop HTTP reuse with aggregate cap, and URL authority boundaries preserving harmless diagnostics. D5 approved then deleted after exact draft/message match to landed f1fe3d68f and ancestry proof. Five inherited stashes held. EdgeInfrastructure retain-versus-seal decision pending.
+
+Promotion PR2229 remote28602f1a0 remains open; local provider test commit25ae7376f is already in dev. Core/HTTP143tests and independent correctness/security rounds passed; Edge caller repair pending. Shared credential scanner now addresses21 actual known leak xfails. DataFlow inner ListNode cache may ignore outer zero-TTL; deterministic reproduction underway. No main merge, no dev CI or dev PR.
+
 ## Latest decisions and lands — 2026-09-25
 
 D1 approved. Latest CodeQL11587/11588/11594 false-positive dismissals independently verified and applied; earlier superseded list not bulk-dismissed. User excludes advisory #73 type backlog from D1 but every failing test job and required check still gates merge. User chose explicit rejection of unresolved #2251 annotations.
