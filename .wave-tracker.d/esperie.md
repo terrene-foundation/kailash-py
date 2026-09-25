@@ -1,3 +1,21 @@
+## Live gate-repair lanes — CSQ 13 resumed, 2026-09-25
+
+Primary dev published `ca15ac555`. Original promotion, #2249 and coroutine lanes are landed
+and their completed worktrees/local branches removed. This table supersedes older tables.
+
+| Lane | Branch / sibling worktree | Task set | Agent roster | State |
+| --- | --- | --- | --- | --- |
+| Warning fixtures | `fix/promotion-warning-fixtures` / `promotion-warning-fixtures` | JWT/AppKey fixtures, explicit warning contracts, real dead-loop pool test, runtime cleanup, recovered Align lazy import | owned_execution implements; root correctness; security_review independent | focused Core green; Align/control verification and final reviews |
+| Kaizen gate | `fix/promotion-kaizen-gates` / `promotion-kaizen-gates` | audio import isolation, mapped-IP/version parity, embedded custom CIDRs, localhost parse/connect parity | promotion_recovery Kaizen specialist; root correctness; security_review adversarial | repairing actual review findings before fresh two-clean gate |
+| Landed and drained | deleted coroutine branch/tree | EventStore deferred creation, MCP single-execution owned loop preserving caller policy | security_review implemented; owned_execution + root independently reviewed | `b31c191f9` on dev; ZERO-LOSS reap complete |
+| Integration | primary dev | memory temporary paths and cancellation-safe cleanup; CI trust extra; all-ref adjudication and final promotion | root implements/integrates; security_review two final clean memory rounds | `ca15ac555` published; final combined parity still due |
+
+Every agent has an explicit report-back contract. Reuse these agents; do not launch duplicate
+lanes after a context boundary. No live original-session agents are implied by old tables.
+Archive evidence: `workspaces/issue-1720-llm-consolidation/04-validate/csq13-ref-adjudication.json`.
+The five inherited stashes stay held. The remote promotion branch still points to its old
+head pending one consolidated push; no main merge or final CI success is claimed.
+
 ## CSQ 13 recovery — 2026-09-25
 
 Recovered slot-13 thread `01a0d7ea-e2a1-74b3-8af2-2a47dc410525`.

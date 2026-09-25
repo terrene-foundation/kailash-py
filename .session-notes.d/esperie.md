@@ -1,3 +1,31 @@
+## Active landing checkpoint — CSQ 13 resumed, 2026-09-25
+
+**Do next:** finish the two active gate-repair lanes, land each to dev and remove its
+worktree immediately; then run full configured parity/hooks, push PR #2229 once,
+verify required checks AND all failing test jobs on its exact head, and merge under
+already-recorded D1 approval. Advisory #73 is excluded; five inherited stashes stay held.
+
+Dev is published through `ca15ac555`: recovered source consolidated at `71a9347cb`,
+coroutine ownership/replay repair `b31c191f9`, isolated memory fixtures and explicit
+trust gate dependencies `ca15ac555`. Original promotion and #2249 worktrees and local
+branches are removed. The completed coroutine worktree/branch is also removed.
+Only primary plus active warning-fixture and Kaizen-gate siblings remain; see wave tracker.
+
+Actual full-job census found Core tests passing with warnings; infrastructure passing;
+Kaizen blocked on mapped-IP policy drift, recursive audio import mocking, unmanaged
+memory fixture paths, and missing trust extra. These findings are being repaired before
+one consolidated promotion push. Full parity is NOT green yet. Per-commit pytest-check
+is documented as deferred to the full configured remote hook run; other hooks passed.
+
+Unfiltered archive inventory and per-ref evidence are recorded in
+`workspaces/issue-1720-llm-consolidation/04-validate/csq13-ref-adjudication.json`.
+Exact squash-tree matches and superseded work are distinguished from unresolved historical
+artifacts/prototypes. No archive ref/tag has been deleted, and no whole-forest completion
+is claimed. The Align fresh-process lazy-import repair found there is in the active lane.
+
+All earlier checkpoints below are historical wherever this section differs. Standing
+uncompleted directives and forest IDs remain in force; recovery was never merged.
+
 ## CSQ 13 transcript recovered — 2026-09-25
 
 **Landing/drain checkpoint:** #2249 landed as `d3549dee4` / dev merge `0711ddee9`,
