@@ -208,11 +208,15 @@ class TestRuntimeSuccessDetectionIntegration:
         """Set up test fixtures."""
         self.runtime = LocalRuntime()
 
+    def teardown_method(self):
+        self.runtime.close()
+
     def test_runtime_detects_success_from_return_value(self):
         """Test that runtime detects success from return value content."""
         # Create workflow with success node
         workflow = WorkflowBuilder()
-        workflow.add_node(MockSuccessNode, "success_node", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            workflow.add_node(MockSuccessNode, "success_node", {})
         built_workflow = workflow.build()
 
         # Execute workflow
@@ -228,7 +232,8 @@ class TestRuntimeSuccessDetectionIntegration:
         """Test that runtime detects failure from return value content."""
         # Create workflow with failure node
         workflow = WorkflowBuilder()
-        workflow.add_node(MockFailureNode, "failure_node", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            workflow.add_node(MockFailureNode, "failure_node", {})
         built_workflow = workflow.build()
 
         # Execute workflow - this should currently complete but we want it to fail
@@ -242,7 +247,8 @@ class TestRuntimeSuccessDetectionIntegration:
         """Test that runtime still handles traditional exceptions correctly."""
         # Create workflow with exception node (single node, no dependents)
         workflow = WorkflowBuilder()
-        workflow.add_node(MockExceptionNode, "exception_node", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            workflow.add_node(MockExceptionNode, "exception_node", {})
         built_workflow = workflow.build()
 
         # Execute workflow - single node exceptions are stored in results, not propagated
@@ -261,9 +267,10 @@ class TestRuntimeSuccessDetectionIntegration:
         """Test that runtime gracefully handles malformed return values."""
         # Test missing success field
         workflow = WorkflowBuilder()
-        workflow.add_node(
-            MockMalformedNode, "malformed_node", {"mode": "missing_success"}
-        )
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            workflow.add_node(
+                MockMalformedNode, "malformed_node", {"mode": "missing_success"}
+            )
         built_workflow = workflow.build()
 
         with self.runtime:
@@ -273,7 +280,10 @@ class TestRuntimeSuccessDetectionIntegration:
 
         # Test None return
         workflow = WorkflowBuilder()
-        workflow.add_node(MockMalformedNode, "malformed_node", {"mode": "none_return"})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            workflow.add_node(
+                MockMalformedNode, "malformed_node", {"mode": "none_return"}
+            )
         built_workflow = workflow.build()
 
         with self.runtime:
@@ -288,7 +298,8 @@ class TestRuntimeSuccessDetectionIntegration:
 
         # Test with failure node
         workflow = WorkflowBuilder()
-        workflow.add_node(MockFailureNode, "failure_node", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            workflow.add_node(MockFailureNode, "failure_node", {})
         built_workflow = workflow.build()
 
         # Should fail when content-aware mode is enabled
@@ -303,7 +314,8 @@ class TestRuntimeSuccessDetectionIntegration:
 
         # Test with failure node
         workflow = WorkflowBuilder()
-        workflow.add_node(MockFailureNode, "failure_node", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            workflow.add_node(MockFailureNode, "failure_node", {})
         built_workflow = workflow.build()
 
         # Should complete successfully in legacy mode (ignores return value)

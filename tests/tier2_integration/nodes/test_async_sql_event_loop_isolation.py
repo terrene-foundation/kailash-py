@@ -345,51 +345,58 @@ class TestEventLoopPoolCleanup:
 
     @pytest.mark.asyncio
     async def test_cleanup_removes_dead_loop_pools(self):
-        """Test that cleanup removes pools from closed event loops.
+        """Dispose a real SQLite connection only after its owning loop closes."""
+        from kailash.nodes.data.async_sql import (
+            DatabaseConfig,
+            DatabaseType,
+            SQLiteAdapter,
+            _stamp_pool_loop,
+        )
 
-        FR-003: Cleanup should remove pools from closed loops
-
-        EXPECTED: FAIL - cleanup method doesn't exist yet
-        """
-        # Create pools in different event loops
-        loop1_id = id(asyncio.get_running_loop())
-
-        # Simulate pools from closed loops (using fake loop IDs)
-        fake_dead_loop_id = 88888
-        fake_pool_key = f"{fake_dead_loop_id}|postgresql|localhost:5432:db|10|20"
-
-        # Mock _shared_pools with pool from "dead" loop
-        mock_adapter = AsyncMock()
-        AsyncSQLDatabaseNode._shared_pools = {
-            fake_pool_key: (mock_adapter, 0),  # ref_count=0 means no active users
-        }
-
-        try:
-            # Run cleanup (async method returns int)
-            removed_count = await AsyncSQLDatabaseNode._cleanup_closed_loop_pools()
-
-            # Verify cleanup returned count
-            assert isinstance(
-                removed_count, int
-            ), f"Cleanup should return int count, got {type(removed_count)}"
-            assert (
-                removed_count == 1
-            ), f"Should have removed 1 pool, but removed {removed_count}"
-
-            # Verify pool was removed from registry
-            assert (
-                fake_pool_key not in AsyncSQLDatabaseNode._shared_pools
-            ), "Cleanup should have removed pool from dead loop"
-
-        except AttributeError as e:
-            # Expected: method doesn't exist yet
-            pytest.fail(
-                f"_cleanup_closed_loop_pools method doesn't exist yet: {e}. "
-                "This is expected in TDD RED phase."
+        async def connected_adapter():
+            adapter = SQLiteAdapter(
+                DatabaseConfig(type=DatabaseType.SQLITE, database=":memory:")
             )
+            await adapter.connect()
+            connection = await adapter._get_connection()
+            _stamp_pool_loop(adapter)
+            return adapter, connection
+
+        def create_dead_owner():
+            loop = asyncio.new_event_loop()
+            try:
+                adapter, connection = loop.run_until_complete(connected_adapter())
+                return loop, adapter, connection
+            finally:
+                loop.close()
+
+        dead_loop, dead_adapter, dead_connection = await asyncio.to_thread(
+            create_dead_owner
+        )
+        live_adapter = None
+        original_pools = AsyncSQLDatabaseNode._shared_pools
+        try:
+            live_adapter, live_connection = await connected_adapter()
+            dead_key = f"{id(dead_loop)}|sqlite|dead|10|20"
+            live_key = f"{id(asyncio.get_running_loop())}|sqlite|live|10|20"
+            AsyncSQLDatabaseNode._shared_pools = {
+                dead_key: (dead_adapter, 0),
+                live_key: (live_adapter, 0),
+            }
+            removed_count = await AsyncSQLDatabaseNode._cleanup_closed_loop_pools()
+            assert isinstance(removed_count, int)
+            assert removed_count == 1
+            assert dead_key not in AsyncSQLDatabaseNode._shared_pools
+            assert AsyncSQLDatabaseNode._shared_pools[live_key] == (live_adapter, 0)
+            with pytest.raises(ValueError, match="no active connection"):
+                await dead_connection.execute("SELECT 1")
+            async with live_connection.execute("SELECT 1") as cursor:
+                assert (await cursor.fetchone())[0] == 1
         finally:
-            # Clean up test state
-            AsyncSQLDatabaseNode._shared_pools = {}
+            AsyncSQLDatabaseNode._shared_pools = original_pools
+            await dead_adapter.disconnect()
+            if live_adapter is not None:
+                await live_adapter.disconnect()
 
     @pytest.mark.asyncio
     async def test_cleanup_preserves_active_loop_pools(self):

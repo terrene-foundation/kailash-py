@@ -38,7 +38,10 @@ class TestWorkflowContext:
             from kailash.nodes.code.python import PythonCodeNode
 
             python_node = PythonCodeNode(name="test", code="result = {'success': True}")
-            workflow.add_node(python_node, "test", {})
+            with pytest.warns(
+                UserWarning, match=r"^Instance-based API usage detected\."
+            ):
+                workflow.add_node(python_node, "test", {})
 
             context_received = []
 
@@ -67,7 +70,10 @@ class TestWorkflowContext:
             from kailash.nodes.code.python import PythonCodeNode
 
             python_node = PythonCodeNode(name="test", code="result = {'success': True}")
-            workflow.add_node(python_node, "test", {})
+            with pytest.warns(
+                UserWarning, match=r"^Instance-based API usage detected\."
+            ):
+                workflow.add_node(python_node, "test", {})
 
             contexts = []
 
@@ -98,7 +104,10 @@ class TestWorkflowContext:
             from kailash.nodes.code.python import PythonCodeNode
 
             python_node = PythonCodeNode(name="test", code="result = {'success': True}")
-            workflow.add_node(python_node, "test", {})
+            with pytest.warns(
+                UserWarning, match=r"^Instance-based API usage detected\."
+            ):
+                workflow.add_node(python_node, "test", {})
 
             runtime.execute(
                 workflow.build(), parameters={"workflow_context": {"test": "cleanup"}}
@@ -189,7 +198,8 @@ context_value = get_workflow_context('isolation_test', 'default')
 result = {'context_value': context_value}
 """,
         )
-        workflow1.add_node(python_node1, "test", {})
+        with pytest.warns(UserWarning, match=r"^Instance-based API usage detected\."):
+            workflow1.add_node(python_node1, "test", {})
 
         workflow2 = WorkflowBuilder()
         python_node2 = PythonCodeNode(
@@ -200,7 +210,8 @@ context_value = get_workflow_context('isolation_test', 'default')
 result = {'context_value': context_value}
 """,
         )
-        workflow2.add_node(python_node2, "test", {})
+        with pytest.warns(UserWarning, match=r"^Instance-based API usage detected\."):
+            workflow2.add_node(python_node2, "test", {})
 
         # Execute workflows with different contexts
         with runtime1:
