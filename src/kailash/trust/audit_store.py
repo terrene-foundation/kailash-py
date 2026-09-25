@@ -787,14 +787,14 @@ class SqliteAuditStore:
         # quote_identifier(); the constructor-side _validate_identifier
         # is defense-in-depth per MUST Rule 5 so constructing the store
         # with an invalid name raises before any DDL runs.
-        from kailash.db.dialect import (
-            DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
-            _validate_identifier,
-        )
+        from kailash.db.dialect import SQLiteDialect
 
-        _validate_identifier(
-            table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-        )
+        dialect = SQLiteDialect()
+        dialect._validate_identifier(table_name)
+        # Reject uncreatable derived index names during construction, before
+        # initialization or pool access.
+        for suffix in ("actor", "action", "timestamp"):
+            dialect._validate_identifier(f"idx_{table_name}_{suffix}")
         self._pool = pool
         self._table_name = table_name
 

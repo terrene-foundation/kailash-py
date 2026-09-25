@@ -81,6 +81,46 @@ async def store():
 class TestSqliteAuditStoreInit:
     """SqliteAuditStore.initialize must create the table and indices."""
 
+    @pytest.mark.parametrize("length", [64, 114])
+    def test_constructor_uses_bound_sqlite_budget(self, length, caplog, monkeypatch):
+        """Constructor validation knows SQLite; it must not warn as unbound."""
+        from kailash.db import dialect
+
+        monkeypatch.setattr(dialect, "_UNKNOWN_BUDGET_WARNED_SITES", set())
+        name = "a" * length
+        store = SqliteAuditStore(None, table_name=name)
+        assert store._table_name == name
+        assert "identifier.unknown_dialect_budget" not in caplog.text
+        dialect._validate_identifier(
+            name, max_length=dialect.DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+        )
+        assert "identifier.unknown_dialect_budget" in caplog.text
+
+    @pytest.mark.parametrize(
+        "name", ["a" * 115, "a" * 129, "drop table; --", "table\n", None]
+    )
+    def test_constructor_rejects_invalid_sqlite_identifiers(self, name):
+        from kailash.db.dialect import IdentifierError
+
+        with pytest.raises(IdentifierError):
+            SqliteAuditStore(None, table_name=name)
+
+    @pytest.mark.asyncio
+    async def test_longest_derived_index_initializes(self, store):
+        """The longest accepted table name must create every derived index."""
+        name = "a" * 114
+        boundary = SqliteAuditStore(store._pool, table_name=name)
+        await boundary.initialize()
+        async with store._pool.acquire_read() as conn:
+            cursor = await conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name=?",
+                (name,),
+            )
+            names = {row[0] for row in await cursor.fetchall()}
+        assert {
+            f"idx_{name}_{suffix}" for suffix in ("actor", "action", "timestamp")
+        } <= names
+
     @pytest.mark.asyncio
     async def test_table_exists_after_init(self, store: SqliteAuditStore):
         """Table should exist after initialize()."""
