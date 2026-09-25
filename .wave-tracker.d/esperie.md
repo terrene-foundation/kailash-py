@@ -1,3 +1,29 @@
+## CSQ 13 recovery — 2026-09-25
+
+Recovered slot-13 thread `01a0d7ea-e2a1-74b3-8af2-2a47dc410525`.
+Its final user decision approves retaining reusable EdgeInfrastructure pool identities;
+the subsequent turn ended with `usage_limit_exceeded`, before implementation.
+Process census found only this session's Codex PID 61496 and its code-mode helper;
+the PID ancestry control connected the probe to 61496. Prior agents are not live here.
+Existing uncommitted work is preserved in the two sibling worktrees below.
+
+| Lane | Branch / worktree | Task set | Agent roster | Status |
+| --- | --- | --- | --- | --- |
+| Promotion | `promote/2026-09-11-cont30` / sibling `promote-2229` | DataFlow nested cache controls, credential scanning, remaining CI lifecycle repairs | `promotion_recovery` implementing; root correctness/SQLite cleanup; `security_review` independent reviews | Edge published to dev `a98075487`; existing changes closing; new cache/routing follow-ons paused |
+| Owned execution | drained; dev merge `0711ddee9` | #2249 explicit dispatch, executable ownership, stop evidence, both wrapper paths | `owned_execution` now reviews remaining promotion test repairs | 220 tests, discriminating mutations and two final correctness/security rounds passed; issue closed; tree removed ZERO-LOSS and branch deleted |
+
+User reiterated landing/draining priority. Fresh fetch/prune and UNFILTERED local/remote
+inventory found only dev/main, the two named lanes, and the open promotion remote.
+`git cherry origin/dev promote/2026-09-11-cont30` reports only `- dbb833e70`:
+its Edge patch is already published as `a98075487`. No other committed lane content
+is absent from dev. Reaper reports three KEEP trees: primary plus two dirty active lanes;
+zero completed clean trees are being retained. After #2249 landing, the owned tree was
+removed and its branch deleted: two trees now remain (dev + active promotion).
+Five inherited stashes stay held.
+
+Promotion #2229 remains authorized only after final-head required checks and failing test
+jobs pass. Advisory type backlog #73 remains excluded by the user's recorded decision.
+
 ## Current packed lanes — verified continuation
 
 | Lane | Worktree | Active task pack |

@@ -1,3 +1,42 @@
+## CSQ 13 transcript recovered — 2026-09-25
+
+**Landing/drain checkpoint:** #2249 landed as `d3549dee4` / dev merge `0711ddee9`,
+issue closed with receipt, owned-execution worktree removed ZERO-LOSS and branch deleted.
+Edge `a98075487`, SQLite lifecycle `fc93ee8ff`, scanner `d02980968`, nested cache
+controls `b91e8d177`, and async migration cleanup `d2d8d1f34` are on dev.
+Only primary dev and the dirty promotion worktree remain. Finish existing test repairs,
+integrate dev, run the pinned promotion gate, and drain promotion after completion.
+
+**Open review follow-ons (no implementation started; paused to finish landing):**
+Express `read/list/find_one` accept `use_primary` but their AST has no body reference;
+the replica-routing connection-manager helpers have no source callers. Warm outer-cache
+returns precede `_trust_check_read`, and `_cache_get` scopes by tenant without agent or
+clearance. These are source-level concerns, not runtime-confirmed security verdicts.
+They remain open and are NOT covered by the TTL-forwarding shard's clean review.
+
+Resume source is slot-13 Codex thread `01a0d7ea-e2a1-74b3-8af2-2a47dc410525`.
+The user's final answer at 12:53:14 UTC was **"Retain reusable pool identities
+(recommended)"** for EdgeInfrastructure cleanup. This supersedes the pending-decision
+statements below. The following turn ended `usage_limit_exceeded` before acting.
+
+The approved work is resumed in the preserved promotion and owned-execution worktrees.
+See the CSQ 13 recovery section of `.wave-tracker.d/esperie.md` for current ownership.
+Promotion #2229 remains approved after exact-head checks; #2249 opt-in owned execution,
+HTTP reuse/lifecycle wiring, and harmless URL diagnostics are all already approved.
+The five inherited stashes remain held. No new approval is needed for these decisions.
+
+Hook repair (CSQ 13 recovery): reinstalling pre-commit with the project
+venv repaired the launcher; the cached Black hook still exited `-11` until its
+single environment was rebuilt with uv-managed Python 3.13.7. The exact two-file
+Black hook invocation then passed without changing source/config. Old environment
+is preserved as `py_env-python3.csq13-backup-20260925` within its existing cache.
+The interrupted hook's saved patch was restored with `git apply --check` then
+`git apply`; scanner hashes and the complete dirty inventory matched afterward.
+Full hook-set verification via trestle remains due before the promotion push.
+Edge scoped Black, Ruff, other applicable
+hooks, real-file tests and two correctness/security rounds passed; its commit
+records the temporary hook bypass. Never run auto-stashing hooks during lane edits.
+
 ## Latest verified checkpoint — 2026-09-25 continued
 
 Dev through2d3b5bd40 includes reviewed audit/identifier repair7278bdb3e and provider-contract tests25ae7376f. Audit branch/tree drained after clean and zero-unlanded proof. #2221 also closed with104acceptance tests and actual negative source controls; #2238/#2248/#2251 remain closed. Owner acceptance remains separate.
