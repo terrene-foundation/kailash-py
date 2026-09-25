@@ -34,6 +34,8 @@ class SQLiteStorage(StorageBackend):
         import os
         import sqlite3
 
+        self._closed = True
+        self._lock = threading.Lock()
         if db_path is None:
             db_path = os.path.expanduser("~/.kailash/tracking/tracking.db")
         elif db_path.startswith("sqlite://"):
@@ -47,11 +49,15 @@ class SQLiteStorage(StorageBackend):
         self.db_path = db_path
         # check_same_thread=False for cross-thread access (with locking)
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
-        self._lock = threading.Lock()
+        self._closed = False
 
         # Enable optimizations
-        self._enable_optimizations()
-        self._initialize_schema()
+        try:
+            self._enable_optimizations()
+            self._initialize_schema()
+        except BaseException:
+            self.close()
+            raise
 
     def _enable_optimizations(self) -> None:
         """Enable WAL mode and optimal SQLite pragmas."""
@@ -886,8 +892,9 @@ class SQLiteStorage(StorageBackend):
     def close(self) -> None:
         """Close connection cleanly."""
         with self._lock:
-            if hasattr(self, "conn"):
+            if not self._closed:
                 self.conn.close()
+                self._closed = True
 
     def __enter__(self):
         """Context manager entry."""
@@ -913,7 +920,7 @@ class SQLiteStorage(StorageBackend):
         # The sqlite3 connection's own C-level deallocator closes the database
         # handle once ``self.conn`` becomes unreachable, so no descriptor
         # leaks; deterministic cleanup stays with close()/__exit__.
-        if getattr(self, "conn", None) is not None:
+        if not getattr(self, "_closed", True):
             _warn(self, "Call close() or use 'with SQLiteStorage(...) as store:'.")
 
     @staticmethod
