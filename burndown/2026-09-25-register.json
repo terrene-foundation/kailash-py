@@ -1,0 +1,1293 @@
+{
+  "_note": "Frozen session baseline from GitHub open-issue set captured before work, plus standing forest. F27–F30 supplied by root handover mapping. Agent triage is not owner acceptance.",
+  "_generated": "2026-09-25",
+  "_authority": "agent",
+  "_id_convention": "ISSUE-<GitHub number> or FOREST-F<standing ledger number>",
+  "items": [
+    {
+      "id": "ISSUE-2000",
+      "page": "GitHub issues",
+      "status": "Built-not-walked",
+      "title": "Core: PythonCodeNode first execution costs ~9-11s — security.py eagerly imports torch/sklearn, failing nexus e2e test_concurrent_requests 3/3",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2000",
+      "labels": [],
+      "created_at": "2026-08-04T15:06:26Z",
+      "updated_at": "2026-09-11T11:06:14Z",
+      "lane_pack": "core-lifecycle",
+      "disposition": "candidate",
+      "assessment": "Cold-start fix receipts include security review repairs after lazy proxy escape. Verify fresh-process imports/performance and unchanged sandbox verdicts, not warm-run timing.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2000#issuecomment-5633505547"
+      ],
+      "landed_receipts": [
+        "39dae98e5",
+        "726bcf8d7",
+        "593d103e6"
+      ]
+    },
+    {
+      "id": "ISSUE-2010",
+      "page": "GitHub issues",
+      "status": "Built-not-walked",
+      "title": "kaizen: stale E2E passes description= to BaseAgent.__init__, which does not accept it",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2010",
+      "labels": [],
+      "created_at": "2026-08-08T14:33:10Z",
+      "updated_at": "2026-08-08T14:33:10Z",
+      "lane_pack": "kaizen-provider",
+      "disposition": "candidate",
+      "assessment": "Issue stale-test description kwarg was addressed by BaseAgent support 88d0f4315 and environment-driven E2E setup e73c76d7a; execute the real E2E before closure.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": [
+        "88d0f4315",
+        "e73c76d7a"
+      ]
+    },
+    {
+      "id": "ISSUE-2039",
+      "page": "GitHub issues",
+      "status": "Not started",
+      "title": "chore: isort mode disagreement (--files vs --all-files) — cause UNKNOWN, three hypotheses excluded; src_paths half closed by 2cf40a17b",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2039",
+      "labels": [],
+      "created_at": "2026-08-10T11:30:36Z",
+      "updated_at": "2026-08-12T03:00:11Z",
+      "lane_pack": "tooling-isort",
+      "disposition": "confirm",
+      "assessment": "Latest comment separates resolved src_paths from unresolved mode disagreement; earlier version-skew and batch-composition hypotheses were refuted. Reproduce current hook modes before diagnosis.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2039#issuecomment-5241005339",
+        "https://github.com/terrene-foundation/kailash-py/issues/2039#issuecomment-5241025217",
+        "https://github.com/terrene-foundation/kailash-py/issues/2039#issuecomment-5241066229",
+        "https://github.com/terrene-foundation/kailash-py/issues/2039#issuecomment-5241071887",
+        "https://github.com/terrene-foundation/kailash-py/issues/2039#issuecomment-5241752599",
+        "https://github.com/terrene-foundation/kailash-py/issues/2039#issuecomment-5261689476"
+      ],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2044",
+      "page": "GitHub issues",
+      "status": "Not started",
+      "title": "codeql: py/clear-text-logging-sensitive-data persists at 3 redacted sites — the query does not model fingerprint_secret as a sanitizer",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2044",
+      "labels": [],
+      "created_at": "2026-08-10T12:43:55Z",
+      "updated_at": "2026-08-10T12:43:55Z",
+      "lane_pack": "codeql-disposition",
+      "disposition": "confirm",
+      "assessment": "Issue describes taint past fingerprint helpers; #2171 changed the Nexus IP property. Reconcile current sinks and alert states instead of inheriting one-way-hash wording.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2052",
+      "page": "GitHub issues",
+      "status": "Not started",
+      "title": "fix(dataflow): schema-introspected column defaults are bound as literal SQL text on CREATE",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2052",
+      "labels": [],
+      "created_at": "2026-08-10T13:51:10Z",
+      "updated_at": "2026-08-10T13:51:10Z",
+      "lane_pack": "dataflow-defaults",
+      "disposition": "execute",
+      "assessment": "Real SQLite example persists SQL expressions as Python literals. Preserve database-managed defaults by omission, with quoted literal and computed timestamp controls.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2056",
+      "page": "GitHub issues",
+      "status": "Built-not-walked",
+      "title": "Nexus MCP resources fail to register when official FastMCP is importable (URI template mismatch)",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2056",
+      "labels": [],
+      "created_at": "2026-08-10T14:31:02Z",
+      "updated_at": "2026-09-11T11:46:20Z",
+      "lane_pack": "mcp-registration",
+      "disposition": "candidate",
+      "assessment": "URI template repair unlocked credential disclosure; second comment records a54c390bc guard. Verify resource registration AND redaction under actual FastMCP.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2056#issuecomment-5633722952",
+        "https://github.com/terrene-foundation/kailash-py/issues/2056#issuecomment-5633944896"
+      ],
+      "landed_receipts": [
+        "757e18578",
+        "a54c390bc"
+      ]
+    },
+    {
+      "id": "ISSUE-2075",
+      "page": "GitHub issues",
+      "status": "Built-not-walked",
+      "title": "DataFlow pool leak on auto_migrate='warn' DDL-failure path: pool_count()=9 exceeds cap of 5",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2075",
+      "labels": [
+        "bug"
+      ],
+      "created_at": "2026-08-11T10:09:35Z",
+      "updated_at": "2026-09-11T10:54:08Z",
+      "lane_pack": "dataflow-pools",
+      "disposition": "candidate",
+      "assessment": "Comment corrects xfail strictness and original pool assumptions; ab539381b repairs test discrimination after registry change. Real PostgreSQL verification required.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2075#issuecomment-5633381891"
+      ],
+      "landed_receipts": [
+        "04b68f2c8",
+        "ab539381b"
+      ]
+    },
+    {
+      "id": "ISSUE-2086",
+      "page": "GitHub issues",
+      "status": "In progress",
+      "title": "MCPMixin.expose_as_mcp_server cannot register any auto-generated tool when standalone fastmcp is importable",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2086",
+      "labels": [
+        "bug"
+      ],
+      "created_at": "2026-08-11T14:46:07Z",
+      "updated_at": "2026-08-12T11:13:16Z",
+      "lane_pack": "mcp-registration",
+      "disposition": "partial",
+      "assessment": "Body and comment name kaizen and Nexus kwargs incompatibility. 19e1007df makes zero exposed tools loud; it does not alone prove generated tools register under both backends.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2086#issuecomment-5265929500"
+      ],
+      "landed_receipts": [
+        "19e1007df"
+      ]
+    },
+    {
+      "id": "ISSUE-2107",
+      "page": "GitHub issues",
+      "status": "In progress",
+      "title": "kailash: ten __del__ finalizers call close() inside try/except Exception: pass (logging-lock deadlock class)",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2107",
+      "labels": [
+        "bug"
+      ],
+      "created_at": "2026-08-12T04:48:30Z",
+      "updated_at": "2026-09-11T10:27:22Z",
+      "lane_pack": "core-lifecycle",
+      "disposition": "partial",
+      "assessment": "AST issue predicate is close inside swallowed finalizer exceptions. Landed finalizer fixes need absolute-state sweep plus explicit-close positive control. The cited comment leaves two Kaizen sites and five additional sites in its section 3 open. Reconcile every named residual against subsequent landed fixes before closure; historical comment scope is not a current runtime verdict.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2107#issuecomment-5633080640"
+      ],
+      "landed_receipts": [
+        "769d75100"
+      ],
+      "reported_residuals": "The cited comment leaves two Kaizen sites and five additional sites in its section 3 open. Reconcile every named residual against subsequent landed fixes before closure; historical comment scope is not a current runtime verdict."
+    },
+    {
+      "id": "ISSUE-2109",
+      "page": "GitHub issues",
+      "status": "Built-not-walked",
+      "title": "MEDIUM: the audit trail drops records under load and corrupts under concurrency (durability, from #2084)",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2109",
+      "labels": [],
+      "created_at": "2026-08-12T09:07:19Z",
+      "updated_at": "2026-08-12T09:07:19Z",
+      "lane_pack": "kaizen-audit",
+      "disposition": "candidate",
+      "assessment": "Hook timeout, write concurrency and lifecycle durability have landed receipts. Verify failure propagation and real concurrent records, not mere file existence.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": [
+        "1b2e091b2",
+        "72ab08367"
+      ]
+    },
+    {
+      "id": "ISSUE-2110",
+      "page": "GitHub issues",
+      "status": "Built-not-walked",
+      "title": "MEDIUM: the audit trail is unbounded, unrotated, and lands relative to CWD (from #2084)",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2110",
+      "labels": [],
+      "created_at": "2026-08-12T09:07:38Z",
+      "updated_at": "2026-08-12T09:07:38Z",
+      "lane_pack": "kaizen-audit",
+      "disposition": "candidate",
+      "assessment": "Retention/location and follow-up doors have landed receipts; verify rotation bounds, default path and load-safe querying against public audit path.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": [
+        "54a223877",
+        "72ab08367"
+      ]
+    },
+    {
+      "id": "ISSUE-2116",
+      "page": "GitHub issues",
+      "status": "Not started",
+      "title": "PR #2098 follow-ups: assertion precision, type-confusion branch, and two silently-ignored inputs",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2116",
+      "labels": [
+        "area/quality",
+        "type/bug"
+      ],
+      "created_at": "2026-08-12T11:11:49Z",
+      "updated_at": "2026-08-12T11:11:49Z",
+      "lane_pack": "kaizen-crypto",
+      "disposition": "execute",
+      "assessment": "Issue tracks assertion precision, typed failures and accepted-but-unused inputs. Sweep both MCP/core sibling warning tests and preserve their negative controls.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2117",
+      "page": "GitHub issues",
+      "status": "Not started",
+      "title": "CheckpointEncryptor.hash_key_for_verification is an unsalted SHA-256 over a fixed-salt KDF output",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2117",
+      "labels": [
+        "type/bug",
+        "security"
+      ],
+      "created_at": "2026-08-12T11:12:08Z",
+      "updated_at": "2026-08-12T11:12:08Z",
+      "lane_pack": "kaizen-crypto",
+      "disposition": "execute",
+      "assessment": "Issue ties verification hash to fixed-salt derivation; trace actual persisted consumers and compatibility before implementing a per-record derivation/verification format.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2127",
+      "page": "GitHub issues",
+      "status": "Not started",
+      "title": "codeql: defer py/clear-text-logging-sensitive-data — mfa_config name heuristic reaches the MFA opt-out WARN through a **kwargs splat",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2127",
+      "labels": [
+        "security"
+      ],
+      "created_at": "2026-08-14T11:43:10Z",
+      "updated_at": "2026-08-14T11:43:10Z",
+      "lane_pack": "codeql-disposition",
+      "disposition": "confirm",
+      "assessment": "False-positive MFA options-name heuristic has runtime proof in issue; verify current alert state and formal disposition rather than changing the opt-out warning.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2135",
+      "page": "GitHub issues",
+      "status": "Not started",
+      "title": "kailash-align has no GPU-hardware test coverage — test-gpu job removed in #2076 until real tests exist",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2135",
+      "labels": [
+        "bug"
+      ],
+      "created_at": "2026-08-15T11:26:30Z",
+      "updated_at": "2026-08-15T11:26:30Z",
+      "lane_pack": "align-gpu",
+      "disposition": "execute",
+      "assessment": "No hardware-dependent GPU test existed when CI job was removed. Author real hardware coverage and arrange runnable hardware before claiming coverage.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2138",
+      "page": "GitHub issues",
+      "status": "Blocked on you",
+      "title": "RotatingCredentialNode drives CredentialManagerNode through four operations that do not exist — rotation never fires",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2138",
+      "labels": [],
+      "created_at": "2026-08-15T12:06:11Z",
+      "updated_at": "2026-08-15T12:06:11Z",
+      "lane_pack": "core-credentials",
+      "disposition": "design",
+      "assessment": "CredentialManager is fetch-only while rotation assumes writable store/delete/validate operations. Choose backend or deprecation; shard atomic promotion, rollback and overlap invariants.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2141",
+      "page": "GitHub issues",
+      "status": "Blocked on you",
+      "title": "kailash-ml: dashboard serves an unauthenticated DELETE /api/runs/{run_id}, and --auth unlocks a 0.0.0.0 bind while installing nothing",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2141",
+      "labels": [
+        "security"
+      ],
+      "created_at": "2026-08-15T12:19:06Z",
+      "updated_at": "2026-08-18T05:03:29Z",
+      "lane_pack": "ml-dashboard",
+      "disposition": "design",
+      "assessment": "Latest comment explicitly holds for --auth semantics: environment credential versus policy URL, dependency floor and direct wrapper parity. Fixing one DELETE route would leave the misleading control.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2141#issuecomment-5323843023"
+      ],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2142",
+      "page": "GitHub issues",
+      "status": "Not started",
+      "title": "kailash-kaizen: two un-gated HTTP surfaces (MetricsEndpoint binds 0.0.0.0; monitoring dashboard app + websocket serve anonymously)",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2142",
+      "labels": [
+        "security"
+      ],
+      "created_at": "2026-08-15T12:19:38Z",
+      "updated_at": "2026-08-15T12:19:38Z",
+      "lane_pack": "kaizen-http",
+      "disposition": "execute",
+      "assessment": "Body measures anonymous metrics/dashboard/websocket operational data. Apply shared authentication/bind contract across both surfaces and exercise authenticated/anonymous routes.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2146",
+      "page": "GitHub issues",
+      "status": "Not started",
+      "title": "codeql: defer py/weak-sensitive-data-hashing — SHA-256 over CSPRNG-generated API keys in api_keys.py",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2146",
+      "labels": [],
+      "created_at": "2026-08-15T12:37:15Z",
+      "updated_at": "2026-08-15T13:45:22Z",
+      "lane_pack": "codeql-disposition",
+      "disposition": "confirm",
+      "assessment": "Comments refute HMAC, local helper and inline-comment suppression proposals. Read live alert state and approval record; do not re-run discredited fixes.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2146#issuecomment-5302400917",
+        "https://github.com/terrene-foundation/kailash-py/issues/2146#issuecomment-5302508295"
+      ],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2153",
+      "page": "GitHub issues",
+      "status": "Blocked on you",
+      "title": "kaizen SSRF guard permits CGNAT (100.64.0.0/10) while nexus blocks it — decide the posture",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2153",
+      "labels": [
+        "bug",
+        "security"
+      ],
+      "created_at": "2026-08-15T13:10:18Z",
+      "updated_at": "2026-08-15T13:10:18Z",
+      "lane_pack": "kaizen-egress",
+      "disposition": "design",
+      "assessment": "Body explicitly weighs CGNAT block, preserve, or block with opt-out. Choose network policy and compatibility behavior; do not label this routine refactoring.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2158",
+      "page": "GitHub issues",
+      "status": "Not started",
+      "title": "A bare `git stash -u` / `git stash pop` pair can pop ANOTHER session's stash when the tree is clean",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2158",
+      "labels": [
+        "bug"
+      ],
+      "created_at": "2026-08-15T14:04:59Z",
+      "updated_at": "2026-08-15T14:04:59Z",
+      "lane_pack": "coc-artifacts",
+      "disposition": "route",
+      "assessment": "Git stash/pop coordination rule is a COC artifact issue. Existing rules prohibit shared stashes; reconcile durable proposal/distribution rather than editing synced rules here.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2166",
+      "page": "GitHub issues",
+      "status": "Built-not-walked",
+      "title": "MiddlewareAccessControlManager.check_session_access can never succeed — PermissionCheckNode declares none of the kwargs it passes",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2166",
+      "labels": [],
+      "created_at": "2026-08-16T12:24:53Z",
+      "updated_at": "2026-08-16T12:24:53Z",
+      "lane_pack": "core-auth",
+      "disposition": "candidate",
+      "assessment": "PermissionCheckNode received unsupported action/resource_type/user_context and lacked operation. Verify repaired session authorization along with #2222, positive and deny controls.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": [
+        "ebb02b45c"
+      ]
+    },
+    {
+      "id": "ISSUE-2168",
+      "page": "GitHub issues",
+      "status": "In progress",
+      "title": "Design: check_url performs a live DNS lookup during Endpoint construction",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2168",
+      "labels": [],
+      "created_at": "2026-08-16T13:03:55Z",
+      "updated_at": "2026-09-12T12:31:55Z",
+      "lane_pack": "kaizen-egress",
+      "disposition": "partial",
+      "assessment": "Comment explicitly records Decision: option 3 and 994631726. Reverify offline construction plus connect-time DNS enforcement; no new design decision needed for that disposition. Option 3 is already decided and implemented. The latest comment separately leaves option 4 DNS check-to-use address pinning open, reports local-model loopback refusal (also #2243), and names a missing SafeDnsResolver egress-audit test. Preserve and reconcile all three residuals before closure.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2168#issuecomment-5307852268",
+        "https://github.com/terrene-foundation/kailash-py/issues/2168#issuecomment-5645899650"
+      ],
+      "landed_receipts": [
+        "994631726"
+      ],
+      "reported_residuals": "Option 3 is already decided and implemented. The latest comment separately leaves option 4 DNS check-to-use address pinning open, reports local-model loopback refusal (also #2243), and names a missing SafeDnsResolver egress-audit test. Preserve and reconcile all three residuals before closure."
+    },
+    {
+      "id": "ISSUE-2170",
+      "page": "GitHub issues",
+      "status": "In progress",
+      "title": "kaizen/llm/url_safety.py documents its URL tag as \"non-reversible\" when it is not (Rule 3e)",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2170",
+      "labels": [],
+      "created_at": "2026-08-16T13:28:00Z",
+      "updated_at": "2026-09-12T11:52:12Z",
+      "lane_pack": "core-sanitization",
+      "disposition": "partial",
+      "assessment": "Owner accepted unkeyed correlation on this sink; later comment records doc correction 49c385832. Verify source-cited claims, not renewed approval for already-decided posture. The latest comment leaves wording in src/kailash/delegate/dispatch.py, src/kailash/db/dialect.py, packages/kailash-kaizen/src/kaizen/core/agents.py and packages/kailash-dataflow/src/dataflow/classification/event_payload.py unresolved. It also names a COC rule wording change requiring durable routing. Reconcile these attributed residuals; accepted correlation posture does not close the sibling wording scope.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2170#issuecomment-5307832207",
+        "https://github.com/terrene-foundation/kailash-py/issues/2170#issuecomment-5307867367",
+        "https://github.com/terrene-foundation/kailash-py/issues/2170#issuecomment-5308079888",
+        "https://github.com/terrene-foundation/kailash-py/issues/2170#issuecomment-5308095797",
+        "https://github.com/terrene-foundation/kailash-py/issues/2170#issuecomment-5308104806",
+        "https://github.com/terrene-foundation/kailash-py/issues/2170#issuecomment-5317033865",
+        "https://github.com/terrene-foundation/kailash-py/issues/2170#issuecomment-5645710081"
+      ],
+      "landed_receipts": [
+        "49c385832"
+      ],
+      "reported_residuals": "The latest comment leaves wording in src/kailash/delegate/dispatch.py, src/kailash/db/dialect.py, packages/kailash-kaizen/src/kaizen/core/agents.py and packages/kailash-dataflow/src/dataflow/classification/event_payload.py unresolved. It also names a COC rule wording change requiring durable routing. Reconcile these attributed residuals; accepted correlation posture does not close the sibling wording scope."
+    },
+    {
+      "id": "ISSUE-2171",
+      "page": "GitHub issues",
+      "status": "Built-not-walked",
+      "title": "Nexus rate-limit middleware fingerprints a client IP with an unkeyed hash — the privacy it claims does not hold",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2171",
+      "labels": [],
+      "created_at": "2026-08-16T13:28:26Z",
+      "updated_at": "2026-09-12T11:52:44Z",
+      "lane_pack": "nexus-http",
+      "disposition": "candidate",
+      "assessment": "Keyed rate-limit tag and complete fingerprint callsite review have receipts. Verify keying where promised and honest correlation-only docs elsewhere.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2171#issuecomment-5307832276",
+        "https://github.com/terrene-foundation/kailash-py/issues/2171#issuecomment-5633728214",
+        "https://github.com/terrene-foundation/kailash-py/issues/2171#issuecomment-5645712530"
+      ],
+      "landed_receipts": [
+        "757e18578",
+        "6461474e1"
+      ]
+    },
+    {
+      "id": "ISSUE-2172",
+      "page": "GitHub issues",
+      "status": "In progress",
+      "title": "trust/constraints/commerce.py:150 interpolates a caller-supplied beneficiary id into a log line unsanitized",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2172",
+      "labels": [],
+      "created_at": "2026-08-16T13:28:45Z",
+      "updated_at": "2026-09-12T11:55:44Z",
+      "lane_pack": "core-sanitization",
+      "disposition": "partial",
+      "assessment": "Comment supplies 49ec15d71 fix plus regression in 49c385832 and corrects payload claims. Verify bounded single-record logging with structured and long caller values. The cited comment separately reports attribution_required returning satisfied=True without a chain and leaves alert 11436 disposition unaddressed. Reconcile those residuals before closure; the logging repair receipt alone does not establish authorization semantics or scanner disposition.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2172#issuecomment-5645726336"
+      ],
+      "landed_receipts": [
+        "49ec15d71"
+      ],
+      "reported_residuals": "The cited comment separately reports attribution_required returning satisfied=True without a chain and leaves alert 11436 disposition unaddressed. Reconcile those residuals before closure; the logging repair receipt alone does not establish authorization semantics or scanner disposition."
+    },
+    {
+      "id": "ISSUE-2173",
+      "page": "GitHub issues",
+      "status": "In progress",
+      "title": "security.py sanitize_input: does context=\"python_exec\" output reach an HTML sink? (CodeQL 131-134 bad-tag-filter)",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2173",
+      "labels": [],
+      "created_at": "2026-08-16T13:29:09Z",
+      "updated_at": "2026-09-12T11:30:20Z",
+      "lane_pack": "core-sanitization",
+      "disposition": "partial",
+      "assessment": "Comment answers python_exec HTML-sink question NO; subsequent generic stripping repair and pass-through regression have receipts. Verify both contracts rather than suppress scanner. The cited comment leaves javascript: single-pass reassembly (held for a human call) and the security.py audit-log path that stringifies pre-sanitization values open, and separately dispositions alerts 133/134 as runtime-safe rather than fixed. Reconcile the complete Reported, deliberately NOT fixed section and subsequent receipts before closure; do not infer closure from the python_exec answer.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2173#issuecomment-5645610474"
+      ],
+      "landed_receipts": [
+        "5b2be8f76",
+        "f11368d58"
+      ],
+      "reported_residuals": "The cited comment leaves javascript: single-pass reassembly (held for a human call) and the security.py audit-log path that stringifies pre-sanitization values open, and separately dispositions alerts 133/134 as runtime-safe rather than fixed. Reconcile the complete Reported, deliberately NOT fixed section and subsequent receipts before closure; do not infer closure from the python_exec answer."
+    },
+    {
+      "id": "ISSUE-2178",
+      "page": "GitHub issues",
+      "status": "Not started",
+      "title": "codeql: defer py/clear-text-logging-sensitive-data — http.py masked-log sites (PR #2176)",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2178",
+      "labels": [],
+      "created_at": "2026-08-16T13:53:33Z",
+      "updated_at": "2026-08-16T14:06:36Z",
+      "lane_pack": "codeql-disposition",
+      "disposition": "confirm",
+      "assessment": "Masked-log taint findings need live alert-state and runtime masking evidence; comment says release-specialist condition was missing then. Do not infer present acceptance from historical proof.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2178#issuecomment-5307832095"
+      ],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2180",
+      "page": "GitHub issues",
+      "status": "Not started",
+      "title": "CI: kailash-kaizen tests/integration/ (131 files) is invoked by no workflow — the #2074 bug class, third instance",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2180",
+      "labels": [],
+      "created_at": "2026-08-16T14:04:11Z",
+      "updated_at": "2026-08-16T14:04:11Z",
+      "lane_pack": "ci-integration",
+      "disposition": "execute",
+      "assessment": "Body distinguishes paths trigger from pytest targets and marker exclusion. Wire actual integration execution without adding dev to workflow triggers.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2181",
+      "page": "GitHub issues",
+      "status": "Not started",
+      "title": "codeql: defer 11474 / 11484 / 11485 — three FALSE POSITIVES from the open-HIGH triage (url_credentials, gateway/security)",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2181",
+      "labels": [],
+      "created_at": "2026-08-16T14:05:54Z",
+      "updated_at": "2026-08-16T14:05:54Z",
+      "lane_pack": "codeql-disposition",
+      "disposition": "confirm",
+      "assessment": "Issue is false-positive ceremony, not code repair. Re-read actual alert IDs/current states and signoff; #2170 records renumbering 11474 to 11556.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2189",
+      "page": "GitHub issues",
+      "status": "In progress",
+      "title": "Defect class worth sweeping for: an absence rendered as a success",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2189",
+      "labels": [],
+      "created_at": "2026-08-17T14:18:05Z",
+      "updated_at": "2026-09-12T12:35:28Z",
+      "lane_pack": "trust-verifiers",
+      "disposition": "partial",
+      "assessment": "Umbrella class sweep has receipts; latest comment adds audit siblings, while #2248 is a newer instance. Close only with explicit bounded sweep scope, never universal absence claims.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2189#issuecomment-5323707959",
+        "https://github.com/terrene-foundation/kailash-py/issues/2189#issuecomment-5621589002",
+        "https://github.com/terrene-foundation/kailash-py/issues/2189#issuecomment-5645917247"
+      ],
+      "landed_receipts": [
+        "e2a23b8fc"
+      ]
+    },
+    {
+      "id": "ISSUE-2194",
+      "page": "GitHub issues",
+      "status": "Blocked on you",
+      "title": "Governance API actor fields are caller-asserted: granted_by / created_by come from the request body, and there is no per-principal identity to derive them from",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2194",
+      "labels": [],
+      "created_at": "2026-08-18T04:26:21Z",
+      "updated_at": "2026-09-12T12:17:11Z",
+      "lane_pack": "pact-identity",
+      "disposition": "design",
+      "assessment": "Latest comment explicitly says stay OPEN: actor assertions are now labeled, not authenticated. Choose per-principal tokens or authorized assertions; scope separation belongs to the same decision.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2194#issuecomment-5645828540"
+      ],
+      "landed_receipts": [
+        "386e2a77e"
+      ]
+    },
+    {
+      "id": "ISSUE-2199",
+      "page": "GitHub issues",
+      "status": "Built-not-walked",
+      "title": "loom Gate-2 delivers the CLI emitter's STAGING layout verbatim: codex/ + gemini/ land at repo root instead of .codex/ + .gemini/",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2199",
+      "labels": [],
+      "created_at": "2026-08-19T13:49:47Z",
+      "updated_at": "2026-08-19T14:02:58Z",
+      "lane_pack": "coc-artifacts",
+      "disposition": "candidate",
+      "assessment": "Staging layout correction and regression receipts exist. Verify installed-path output and durable distribution provenance; local synced edit alone is not durable closure.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2199#issuecomment-5343236997"
+      ],
+      "landed_receipts": [
+        "f7783de0a",
+        "b7f3be2ca"
+      ]
+    },
+    {
+      "id": "ISSUE-2203",
+      "page": "GitHub issues",
+      "status": "Blocked on you",
+      "title": "MCP and A2A: both protocol surfaces are pinned to superseded spec revisions; official conformance suites now exist",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2203",
+      "labels": [],
+      "created_at": "2026-08-20T15:41:23Z",
+      "updated_at": "2026-09-12T11:59:04Z",
+      "lane_pack": "mcp-protocol",
+      "disposition": "design",
+      "assessment": "Latest substantive comment says A2A W1B was reverted and is re-landable only with caller ownership; W1C and MCP modernization remain. Confirm revision targets and shard plan.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2203#issuecomment-5363864384",
+        "https://github.com/terrene-foundation/kailash-py/issues/2203#issuecomment-5613952429",
+        "https://github.com/terrene-foundation/kailash-py/issues/2203#issuecomment-5614432291",
+        "https://github.com/terrene-foundation/kailash-py/issues/2203#issuecomment-5645741233"
+      ],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2206",
+      "page": "GitHub issues",
+      "status": "Not started",
+      "title": "fix(dataflow): #1548 async lazy-DDL durability fix has a residual window — uncommitted table still invisible to a second connection",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2206",
+      "labels": [],
+      "created_at": "2026-08-20T18:26:38Z",
+      "updated_at": "2026-08-20T18:26:38Z",
+      "lane_pack": "dataflow-ddl",
+      "disposition": "confirm",
+      "assessment": "Later b70c4cc32 says the proposed patch is defense in depth, not a reproduction of the CI window. Reproduce the two-connection PostgreSQL lazy-DDL race before claiming repair.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": [
+        "620f6b9c5",
+        "b70c4cc32"
+      ]
+    },
+    {
+      "id": "ISSUE-2210",
+      "page": "GitHub issues",
+      "status": "Built-not-walked",
+      "title": "db.express.bulk_upsert fails at exactly 1000 rows on SQLite (undocumented limit, no auto-chunking)",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2210",
+      "labels": [],
+      "created_at": "2026-08-30T03:26:01Z",
+      "updated_at": "2026-08-30T03:26:01Z",
+      "lane_pack": "dataflow-express",
+      "disposition": "candidate",
+      "assessment": "SQLite expression-depth cliff depends on rows, not columns. Verify dialect capacity chunking and partial-write reporting with real database state.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": [
+        "f577f3b49",
+        "8e7a457eb"
+      ]
+    },
+    {
+      "id": "ISSUE-2211",
+      "page": "GitHub issues",
+      "status": "Built-not-walked",
+      "title": "_get_or_create_async_sql_node evicts the cached AsyncSQLDatabaseNode on event-loop change without closing it",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2211",
+      "labels": [],
+      "created_at": "2026-08-30T03:26:03Z",
+      "updated_at": "2026-09-11T10:54:29Z",
+      "lane_pack": "dataflow-pools",
+      "disposition": "candidate",
+      "assessment": "Loop-change observation records discarded nodes without cleanup; later registry fix includes live-loop ownership and stamp-race review. Re-run real pool lifecycle tests.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2211#issuecomment-5633385421"
+      ],
+      "landed_receipts": [
+        "04b68f2c8",
+        "f658eaca2"
+      ]
+    },
+    {
+      "id": "ISSUE-2212",
+      "page": "GitHub issues",
+      "status": "Built-not-walked",
+      "title": "AsyncSingleShotStrategy calls its own @deprecated pre_execute/post_execute on every run, with no supported opt-out",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2212",
+      "labels": [],
+      "created_at": "2026-08-30T03:26:04Z",
+      "updated_at": "2026-08-30T03:26:04Z",
+      "lane_pack": "kaizen-strategies",
+      "disposition": "candidate",
+      "assessment": "Default execution internally called deprecated hooks. Verify warning-free default plus compatible overridden-hook behavior.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": [
+        "9cd2c0ca9"
+      ]
+    },
+    {
+      "id": "ISSUE-2220",
+      "page": "GitHub issues",
+      "status": "Built-not-walked",
+      "title": "kaizen: #2069's fix covers only the keyless path — an unknown model still routes silently to OpenAI when a key is set (live in published 2.46.0)",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2220",
+      "labels": [
+        "security"
+      ],
+      "created_at": "2026-09-10T15:51:14Z",
+      "updated_at": "2026-09-11T11:03:08Z",
+      "lane_pack": "kaizen-provider",
+      "disposition": "candidate",
+      "assessment": "Initial AgentConfig fix had sibling entry-point and explicit-provider residuals. Verify credential-independent unknown-model refusal across the expanded caller set.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2220#issuecomment-5633474480"
+      ],
+      "landed_receipts": [
+        "0037373f7",
+        "c6880f117"
+      ]
+    },
+    {
+      "id": "ISSUE-2221",
+      "page": "GitHub issues",
+      "status": "Built-not-walked",
+      "title": "#2189 residuals: verify_chain() passes a WIPED audit store, and a resume gate is vacuously True",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2221",
+      "labels": [
+        "security"
+      ],
+      "created_at": "2026-09-10T15:57:21Z",
+      "updated_at": "2026-09-11T12:33:36Z",
+      "lane_pack": "trust-verifiers",
+      "disposition": "candidate",
+      "assessment": "Comment corrects the CLI consumer claim. Verify concrete audit-store empty/wipe distinction, resume gate and later audit siblings against actual public callers.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2221#issuecomment-5634494591"
+      ],
+      "landed_receipts": [
+        "af236e819",
+        "e2a23b8fc"
+      ]
+    },
+    {
+      "id": "ISSUE-2222",
+      "page": "GitHub issues",
+      "status": "In progress",
+      "title": "MiddlewareAccessControlManager: all three access-check methods pass kwargs AccessDecision rejects — TypeError on every call (distinct from #2166)",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2222",
+      "labels": [
+        "bug",
+        "security"
+      ],
+      "created_at": "2026-09-10T16:28:46Z",
+      "updated_at": "2026-09-11T09:47:04Z",
+      "lane_pack": "core-auth",
+      "disposition": "partial",
+      "assessment": "Comment corrects the construction-site set and ABAC behavior. Verify all AccessDecision constructions, audit call and unknown-resource default-deny path, not only title methods. The cited comment deliberately leaves acceptance criterion 2 (public decision shape) open and reports get_user_permissions missing on both managers, with check_api_access deny-only and get_user_effective_permissions empty. Reconcile this with #2166 and later code before closure; construction repair alone is partial.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2222#issuecomment-5632627900"
+      ],
+      "landed_receipts": [
+        "ebb02b45c"
+      ],
+      "reported_residuals": "The cited comment deliberately leaves acceptance criterion 2 (public decision shape) open and reports get_user_permissions missing on both managers, with check_api_access deny-only and get_user_effective_permissions empty. Reconcile this with #2166 and later code before closure; construction repair alone is partial."
+    },
+    {
+      "id": "ISSUE-2225",
+      "page": "GitHub issues",
+      "status": "Blocked on you",
+      "title": "DelegationRecord.capabilities_delegated advertises capabilities every enforcement surface denies (raw allowlist, un-intersected, blocked-unsubtracted)",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2225",
+      "labels": [
+        "security"
+      ],
+      "created_at": "2026-09-10T17:07:26Z",
+      "updated_at": "2026-09-10T17:07:26Z",
+      "lane_pack": "pact-tightening",
+      "disposition": "design",
+      "assessment": "Headline is delegation capability accuracy; residual A is blocklist monotonicity in the same body. Separate both scopes and signed-envelope round-trip residual before authorizing design.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2226",
+      "page": "GitHub issues",
+      "status": "Built-not-walked",
+      "title": "GovernanceEngine hands out LIVE mutable internals: a read-only caller can escalate its own envelope permanently",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2226",
+      "labels": [],
+      "created_at": "2026-09-10T18:28:40Z",
+      "updated_at": "2026-09-11T10:17:32Z",
+      "lane_pack": "pact-tightening",
+      "disposition": "candidate",
+      "assessment": "Read-only getters formerly leaked live lists. Confirm snapshot/immutable returns across getters and callback/workflow-node handles; issue comment corrects the list_roles premise.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2226#issuecomment-5632974582"
+      ],
+      "landed_receipts": [
+        "09cb4d736",
+        "e58678367"
+      ]
+    },
+    {
+      "id": "ISSUE-2227",
+      "page": "GitHub issues",
+      "status": "In progress",
+      "title": "Two public routes reach the raw agent/engine without touching any governance proxy (L3GovernedAgent.innermost, PactEngine.governance_callback)",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2227",
+      "labels": [],
+      "created_at": "2026-09-10T18:28:58Z",
+      "updated_at": "2026-09-12T12:04:18Z",
+      "lane_pack": "kaizen-containment",
+      "disposition": "partial",
+      "assessment": "Routes A/B/C have landed receipts; final comment expressly leaves Route D (Delegate.loop) open, now tracked by #2236. Reconcile parent issue scope before closure.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2227#issuecomment-5633556398",
+        "https://github.com/terrene-foundation/kailash-py/issues/2227#issuecomment-5645692104",
+        "https://github.com/terrene-foundation/kailash-py/issues/2227#issuecomment-5645765810"
+      ],
+      "landed_receipts": [
+        "09cb4d736",
+        "a02d01217"
+      ]
+    },
+    {
+      "id": "ISSUE-2230",
+      "page": "GitHub issues",
+      "status": "Built-not-walked",
+      "title": "HIGH: RESTClientNode.async_run returns data=None on every call; AsyncRESTClientNode cannot be constructed at all",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2230",
+      "labels": [
+        "bug"
+      ],
+      "created_at": "2026-09-12T05:07:28Z",
+      "updated_at": "2026-09-12T05:07:28Z",
+      "lane_pack": "core-http",
+      "disposition": "candidate",
+      "assessment": "Verify real HTTPResponse shape, AsyncRESTClientNode construction, asynchronous pagination and origin guard together; shape repair alone makes unsafe link traversal reachable.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": [
+        "416a6951e",
+        "fb9fabe77"
+      ]
+    },
+    {
+      "id": "ISSUE-2231",
+      "page": "GitHub issues",
+      "status": "Built-not-walked",
+      "title": "MED: sync REST pagination residuals — auth_* dropped on follow-up pages, single-slot cursor dedup, unmasked exception sink",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2231",
+      "labels": [
+        "bug"
+      ],
+      "created_at": "2026-09-12T05:07:58Z",
+      "updated_at": "2026-09-12T05:07:58Z",
+      "lane_pack": "core-http",
+      "disposition": "candidate",
+      "assessment": "Verify every residual: auth/config propagation, multi-step cursor cycle, masked exceptions, silent swallow, aliasing and params assertions.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": [
+        "416a6951e",
+        "81acadbee"
+      ]
+    },
+    {
+      "id": "ISSUE-2232",
+      "page": "GitHub issues",
+      "status": "Blocked on you",
+      "title": "REST pagination guard: two residuals the adversarial review left open (DNS rebinding, parser differential)",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2232",
+      "labels": [
+        "bug"
+      ],
+      "created_at": "2026-09-12T08:38:05Z",
+      "updated_at": "2026-09-12T08:38:05Z",
+      "lane_pack": "core-http",
+      "disposition": "design",
+      "assessment": "Transport DNS pinning is a design choice; parser differential harness can run independently. Body explicitly scopes lexical bypass examples to allowlisted origins and leaves runtime differential unverified.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2233",
+      "page": "GitHub issues",
+      "status": "Not started",
+      "title": "kaizen.agent.Agent silently swallows audit_log_path into **kwargs — user gets a different audit file than they asked for",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2233",
+      "labels": [],
+      "created_at": "2026-09-12T11:36:46Z",
+      "updated_at": "2026-09-12T11:36:46Z",
+      "lane_pack": "kaizen-audit",
+      "disposition": "execute",
+      "assessment": "Deprecated kaizen.agent.Agent swallows audit_log_path, unlike canonical Agent. Honor or reject declared config kwargs; assert actual audit location.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2234",
+      "page": "GitHub issues",
+      "status": "Not started",
+      "title": "worktree-reap.mjs times out on its default path — the forest-safety guard has been failing silently",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2234",
+      "labels": [],
+      "created_at": "2026-09-12T11:43:07Z",
+      "updated_at": "2026-09-12T11:43:07Z",
+      "lane_pack": "coc-artifacts",
+      "disposition": "route",
+      "assessment": "Body concerns synced worktree-reap and its hook timeout. Prepare durable artifact proposal; no local generator/hook patch and no cross-repo action in this lane.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2235",
+      "page": "GitHub issues",
+      "status": "Blocked on you",
+      "title": "ParallelBatchStrategy is a stub: execute/execute_batch ignore the agent and return fabricated text",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2235",
+      "labels": [],
+      "created_at": "2026-09-12T12:00:07Z",
+      "updated_at": "2026-09-12T12:00:07Z",
+      "lane_pack": "kaizen-batch",
+      "disposition": "design",
+      "assessment": "Choose per-item execution seam: composed default strategy, injected strategy, or agent execution API. Calling the configured batch strategy recursively is unsafe; real-provider acceptance remains required.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2236",
+      "page": "GitHub issues",
+      "status": "Blocked on you",
+      "title": "Delegate: the documented entry point Delegate.run never consults the ConstraintEnvelope, and Delegate.loop reaches LLM egress",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2236",
+      "labels": [],
+      "created_at": "2026-09-12T13:04:15Z",
+      "updated_at": "2026-09-12T13:04:15Z",
+      "lane_pack": "kaizen-containment",
+      "disposition": "design",
+      "assessment": "Public Delegate.run/run_sync bypass the governed loop and Delegate.loop exposes AgentLoop. Decide governance coverage and compatibility/deprecation contract before changing public semantics.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2237",
+      "page": "GitHub issues",
+      "status": "Not started",
+      "title": "_ProtectedInnerProxy allowlists 'config', handing a live mutable raw-agent object across the containment boundary",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2237",
+      "labels": [],
+      "created_at": "2026-09-12T13:04:33Z",
+      "updated_at": "2026-09-12T13:04:33Z",
+      "lane_pack": "kaizen-containment",
+      "disposition": "execute",
+      "assessment": "Issue demonstrates config identity aliasing and mutation. Freeze/copy the returned configuration and sweep every allowlisted mutable return; runnable-only checks are insufficient.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2238",
+      "page": "GitHub issues",
+      "status": "In progress",
+      "title": "PactEngine: an unresolvable parent/definer identifier SKIPS the monotonic-tightening gate instead of failing closed (2 live sites)",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2238",
+      "labels": [
+        "bug",
+        "security"
+      ],
+      "created_at": "2026-09-13T07:43:29Z",
+      "updated_at": "2026-09-13T10:12:03Z",
+      "lane_pack": "pact-tightening",
+      "disposition": "active",
+      "assessment": "Sites 3–4 and restore fix await landing from fix/2238-sites34; clearance parity remains in the active PACT lane.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [
+        "https://github.com/terrene-foundation/kailash-py/issues/2238#issuecomment-5652637151"
+      ],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2242",
+      "page": "GitHub issues",
+      "status": "Not started",
+      "title": "DataFlow: Express string `order_by` silently discarded (2.20.1 and 2.12.0), and the #1051 teardown fix reached only one of two identical cursor shims",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2242",
+      "labels": [],
+      "created_at": "2026-09-16T06:22:50Z",
+      "updated_at": "2026-09-16T06:22:50Z",
+      "lane_pack": "dataflow-express",
+      "disposition": "execute",
+      "assessment": "Independent sites: advertised string order_by is JSON-parsed and discarded; cursor teardown fix must cover both shims. Pin public sorting and teardown behavior.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2243",
+      "page": "GitHub issues",
+      "status": "Not started",
+      "title": "kaizen.llm: SafeDnsResolver refuses loopback, so ollama_preset (localhost:11434) is unusable (2.45.0, 2.46.1)",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2243",
+      "labels": [],
+      "created_at": "2026-09-16T23:33:14Z",
+      "updated_at": "2026-09-16T23:33:14Z",
+      "lane_pack": "kaizen-egress",
+      "disposition": "execute",
+      "assessment": "Report drives ollama_preset through the public client and sees loopback/private_ipv4 refusal. Preserve SSRF controls while honoring explicitly configured local endpoints.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2244",
+      "page": "GitHub issues",
+      "status": "Not started",
+      "title": "Nexus binds 0.0.0.0 unconditionally; no bind-host option (loopback-only deployments are network-exposed)",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2244",
+      "labels": [],
+      "created_at": "2026-09-20T00:23:44Z",
+      "updated_at": "2026-09-20T00:23:44Z",
+      "lane_pack": "nexus-http",
+      "disposition": "execute",
+      "assessment": "Add configurable bind host across HTTP and WebSocket. A changed default requires an explicit compatibility decision; configurable loopback does not depend on that decision.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2245",
+      "page": "GitHub issues",
+      "status": "Not started",
+      "title": "CycleConfig.iteration_safety_factor reaches no runtime path — the advertised multiplier never applies",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2245",
+      "labels": [],
+      "created_at": "2026-09-21T07:26:08Z",
+      "updated_at": "2026-09-21T07:26:08Z",
+      "lane_pack": "core-cycles",
+      "disposition": "execute",
+      "assessment": "Field is serialized and get_effective_max_iterations computes it, but report names no caller. Trace runtime integration and test effective bound; do not silently delete the public field.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2246",
+      "page": "GitHub issues",
+      "status": "Blocked on you",
+      "title": "ExpressionCondition.evaluate() returns True (terminate) on evaluation failure — indistinguishable from a satisfied condition",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2246",
+      "labels": [],
+      "created_at": "2026-09-21T07:26:09Z",
+      "updated_at": "2026-09-21T07:26:09Z",
+      "lane_pack": "core-cycles",
+      "disposition": "design",
+      "assessment": "Body says termination on exception is deliberate and defensible. Choose an outcome representation that distinguishes error from convergence without weakening safe termination.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2247",
+      "page": "GitHub issues",
+      "status": "Not started",
+      "title": "Seven documented workflow.connect(..., cycle_config=...) calls raise TypeError — connect() does not accept the argument",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2247",
+      "labels": [],
+      "created_at": "2026-09-21T07:26:10Z",
+      "updated_at": "2026-09-21T07:26:10Z",
+      "lane_pack": "core-cycles",
+      "disposition": "execute",
+      "assessment": "Examples pass cycle_config to connect despite its quoted signature omitting it. Repair examples against the supported cycle API and execute them.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2248",
+      "page": "GitHub issues",
+      "status": "Not started",
+      "title": "PlanMonitor: empty plan reports success; no-op modification is recorded as applied",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2248",
+      "labels": [],
+      "created_at": "2026-09-24T14:57:21Z",
+      "updated_at": "2026-09-24T14:57:21Z",
+      "lane_pack": "kaizen-lifecycle",
+      "disposition": "confirm",
+      "assessment": "Source-only report: verify empty-plan completion and no-op modification through public run_plan, with real success controls and idempotent removal preserved.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2249",
+      "page": "GitHub issues",
+      "status": "Blocked on you",
+      "title": "L3 agent factory: bind an executable to spawned agents and to termination",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2249",
+      "labels": [],
+      "created_at": "2026-09-24T14:57:40Z",
+      "updated_at": "2026-09-24T14:57:40Z",
+      "lane_pack": "kaizen-lifecycle",
+      "disposition": "design",
+      "assessment": "Capability proposal, explicitly not a spec violation. Approve executable ownership/cancellation contract after public-path probes distinguish metadata termination from stopped work.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2250",
+      "page": "GitHub issues",
+      "status": "Blocked on you",
+      "title": "MCP: agree an interoperable wire contract for tool refusals, tool failures and overload (JSON-RPC codes, `data.reason`, `isError`, retry/replay)",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2250",
+      "labels": [],
+      "created_at": "2026-09-25T04:23:08Z",
+      "updated_at": "2026-09-25T04:23:08Z",
+      "lane_pack": "mcp-protocol",
+      "disposition": "design",
+      "assessment": "Choose refusal code/token vocabulary, overload hints and gated-method scope. The body explicitly calls these open questions; protocol versions also need confirmation.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "ISSUE-2251",
+      "page": "GitHub issues",
+      "status": "Not started",
+      "title": "TypeIntrospector: nested TypedDict fields become {\"type\":\"string\"} under `from __future__ import annotations`",
+      "url": "https://github.com/terrene-foundation/kailash-py/issues/2251",
+      "labels": [],
+      "created_at": "2026-09-25T06:26:09Z",
+      "updated_at": "2026-09-25T06:26:09Z",
+      "lane_pack": "kaizen-types",
+      "disposition": "execute",
+      "assessment": "Resolve nested TypedDict annotations; cover schema, validation and strict-mode paths. Body gives array/bool positive and wrong-type negative examples.",
+      "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
+      "comment_urls": [],
+      "landed_receipts": []
+    },
+    {
+      "id": "FOREST-F21",
+      "page": "Standing forest",
+      "status": "In progress",
+      "title": "Promotion and package release backlog",
+      "assessment": "D1 promotion approved; package publication remains separately gated.",
+      "source": ".session-notes.d/esperie.md"
+    },
+    {
+      "id": "FOREST-F22",
+      "page": "Standing forest",
+      "status": "In progress",
+      "title": "#2238 sites 3–4 and restore follow-up",
+      "assessment": "Active PACT lane verifies the existing branch before root landing.",
+      "source": ".session-notes.d/esperie.md"
+    },
+    {
+      "id": "FOREST-F23",
+      "page": "Standing forest",
+      "status": "Blocked on you",
+      "title": "#2225 blocklist design and headline reconciliation",
+      "assessment": "Body contains residual A but headline is delegation capability accuracy; design unresolved.",
+      "source": ".session-notes.d/esperie.md"
+    },
+    {
+      "id": "FOREST-F24",
+      "page": "Standing forest",
+      "status": "In progress",
+      "title": "Rejected recovery branch disposition",
+      "assessment": "User ordered root to record rejected shape in #2225 then delete; never merge.",
+      "source": ".session-notes.d/esperie.md"
+    },
+    {
+      "id": "FOREST-F25",
+      "page": "Standing forest",
+      "status": "Blocked on you",
+      "title": "Workstation/process/stash hygiene",
+      "assessment": "Inherited human gate on process termination and stash deletion remains.",
+      "source": ".session-notes.d/esperie.md"
+    },
+    {
+      "id": "FOREST-F26",
+      "page": "Standing forest",
+      "status": "In progress",
+      "title": "Open issue burndown",
+      "assessment": "Represented in detail by ISSUE rows; this is the coordination obligation, not another issue.",
+      "source": ".session-notes.d/esperie.md"
+    },
+    {
+      "id": "FOREST-F27",
+      "page": "Standing forest",
+      "status": "In progress",
+      "title": "#2238 clearance parity",
+      "assessment": "Assigned to active PACT lane; no acceptance claimed.",
+      "source": "2026-09-25 user handover, sections 5–7; root dispatch mapping"
+    },
+    {
+      "id": "FOREST-F28",
+      "page": "Standing forest",
+      "status": "In progress",
+      "title": "#2248/#2249 confirmation and triage",
+      "assessment": "Census read source-only report; public runtime confirmation still owed.",
+      "source": "2026-09-25 user handover, sections 5–7; root dispatch mapping"
+    },
+    {
+      "id": "FOREST-F29",
+      "page": "Standing forest",
+      "status": "In progress",
+      "title": "Declared burndown manifest",
+      "assessment": "This lane authors committed register; generator verification and review still owed.",
+      "source": "2026-09-25 user handover, sections 5–7; root dispatch mapping"
+    },
+    {
+      "id": "FOREST-F30",
+      "page": "Standing forest",
+      "status": "In progress",
+      "title": "Unlabelled issue triage substrate",
+      "assessment": "Labels captured and dispositions proposed; external labeling not performed by this lane.",
+      "source": "2026-09-25 user handover, sections 5–7; root dispatch mapping"
+    }
+  ]
+}
