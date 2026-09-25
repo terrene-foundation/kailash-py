@@ -170,7 +170,7 @@
     {
       "id": "ISSUE-2107",
       "page": "GitHub issues",
-      "status": "Built-not-walked",
+      "status": "In progress",
       "title": "kailash: ten __del__ finalizers call close() inside try/except Exception: pass (logging-lock deadlock class)",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2107",
       "labels": [
@@ -179,15 +179,16 @@
       "created_at": "2026-08-12T04:48:30Z",
       "updated_at": "2026-09-11T10:27:22Z",
       "lane_pack": "core-lifecycle",
-      "disposition": "candidate",
-      "assessment": "AST issue predicate is close inside swallowed finalizer exceptions. Landed finalizer fixes need absolute-state sweep plus explicit-close positive control.",
+      "disposition": "partial",
+      "assessment": "AST issue predicate is close inside swallowed finalizer exceptions. Landed finalizer fixes need absolute-state sweep plus explicit-close positive control. The cited comment leaves two Kaizen sites and five additional sites in its section 3 open. Reconcile every named residual against subsequent landed fixes before closure; historical comment scope is not a current runtime verdict.",
       "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
       "comment_urls": [
         "https://github.com/terrene-foundation/kailash-py/issues/2107#issuecomment-5633080640"
       ],
       "landed_receipts": [
         "769d75100"
-      ]
+      ],
+      "reported_residuals": "The cited comment leaves two Kaizen sites and five additional sites in its section 3 open. Reconcile every named residual against subsequent landed fixes before closure; historical comment scope is not a current runtime verdict."
     },
     {
       "id": "ISSUE-2109",
@@ -432,15 +433,15 @@
     {
       "id": "ISSUE-2168",
       "page": "GitHub issues",
-      "status": "Built-not-walked",
+      "status": "In progress",
       "title": "Design: check_url performs a live DNS lookup during Endpoint construction",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2168",
       "labels": [],
       "created_at": "2026-08-16T13:03:55Z",
       "updated_at": "2026-09-12T12:31:55Z",
       "lane_pack": "kaizen-egress",
-      "disposition": "candidate",
-      "assessment": "Comment explicitly records Decision: option 3 and 994631726. Reverify offline construction plus connect-time DNS enforcement; no new design decision needed for that disposition.",
+      "disposition": "partial",
+      "assessment": "Comment explicitly records Decision: option 3 and 994631726. Reverify offline construction plus connect-time DNS enforcement; no new design decision needed for that disposition. Option 3 is already decided and implemented. The latest comment separately leaves option 4 DNS check-to-use address pinning open, reports local-model loopback refusal (also #2243), and names a missing SafeDnsResolver egress-audit test. Preserve and reconcile all three residuals before closure.",
       "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
       "comment_urls": [
         "https://github.com/terrene-foundation/kailash-py/issues/2168#issuecomment-5307852268",
@@ -448,20 +449,21 @@
       ],
       "landed_receipts": [
         "994631726"
-      ]
+      ],
+      "reported_residuals": "Option 3 is already decided and implemented. The latest comment separately leaves option 4 DNS check-to-use address pinning open, reports local-model loopback refusal (also #2243), and names a missing SafeDnsResolver egress-audit test. Preserve and reconcile all three residuals before closure."
     },
     {
       "id": "ISSUE-2170",
       "page": "GitHub issues",
-      "status": "Built-not-walked",
+      "status": "In progress",
       "title": "kaizen/llm/url_safety.py documents its URL tag as \"non-reversible\" when it is not (Rule 3e)",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2170",
       "labels": [],
       "created_at": "2026-08-16T13:28:00Z",
       "updated_at": "2026-09-12T11:52:12Z",
       "lane_pack": "core-sanitization",
-      "disposition": "candidate",
-      "assessment": "Owner accepted unkeyed correlation on this sink; later comment records doc correction 49c385832. Verify source-cited claims, not renewed approval for already-decided posture.",
+      "disposition": "partial",
+      "assessment": "Owner accepted unkeyed correlation on this sink; later comment records doc correction 49c385832. Verify source-cited claims, not renewed approval for already-decided posture. The latest comment leaves wording in src/kailash/delegate/dispatch.py, src/kailash/db/dialect.py, packages/kailash-kaizen/src/kaizen/core/agents.py and packages/kailash-dataflow/src/dataflow/classification/event_payload.py unresolved. It also names a COC rule wording change requiring durable routing. Reconcile these attributed residuals; accepted correlation posture does not close the sibling wording scope.",
       "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
       "comment_urls": [
         "https://github.com/terrene-foundation/kailash-py/issues/2170#issuecomment-5307832207",
@@ -474,7 +476,8 @@
       ],
       "landed_receipts": [
         "49c385832"
-      ]
+      ],
+      "reported_residuals": "The latest comment leaves wording in src/kailash/delegate/dispatch.py, src/kailash/db/dialect.py, packages/kailash-kaizen/src/kaizen/core/agents.py and packages/kailash-dataflow/src/dataflow/classification/event_payload.py unresolved. It also names a COC rule wording change requiring durable routing. Reconcile these attributed residuals; accepted correlation posture does not close the sibling wording scope."
     },
     {
       "id": "ISSUE-2171",
@@ -502,35 +505,36 @@
     {
       "id": "ISSUE-2172",
       "page": "GitHub issues",
-      "status": "Built-not-walked",
+      "status": "In progress",
       "title": "trust/constraints/commerce.py:150 interpolates a caller-supplied beneficiary id into a log line unsanitized",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2172",
       "labels": [],
       "created_at": "2026-08-16T13:28:45Z",
       "updated_at": "2026-09-12T11:55:44Z",
       "lane_pack": "core-sanitization",
-      "disposition": "candidate",
-      "assessment": "Comment supplies 49ec15d71 fix plus regression in 49c385832 and corrects payload claims. Verify bounded single-record logging with structured and long caller values.",
+      "disposition": "partial",
+      "assessment": "Comment supplies 49ec15d71 fix plus regression in 49c385832 and corrects payload claims. Verify bounded single-record logging with structured and long caller values. The cited comment separately reports attribution_required returning satisfied=True without a chain and leaves alert 11436 disposition unaddressed. Reconcile those residuals before closure; the logging repair receipt alone does not establish authorization semantics or scanner disposition.",
       "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
       "comment_urls": [
         "https://github.com/terrene-foundation/kailash-py/issues/2172#issuecomment-5645726336"
       ],
       "landed_receipts": [
         "49ec15d71"
-      ]
+      ],
+      "reported_residuals": "The cited comment separately reports attribution_required returning satisfied=True without a chain and leaves alert 11436 disposition unaddressed. Reconcile those residuals before closure; the logging repair receipt alone does not establish authorization semantics or scanner disposition."
     },
     {
       "id": "ISSUE-2173",
       "page": "GitHub issues",
-      "status": "Built-not-walked",
+      "status": "In progress",
       "title": "security.py sanitize_input: does context=\"python_exec\" output reach an HTML sink? (CodeQL 131-134 bad-tag-filter)",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2173",
       "labels": [],
       "created_at": "2026-08-16T13:29:09Z",
       "updated_at": "2026-09-12T11:30:20Z",
       "lane_pack": "core-sanitization",
-      "disposition": "candidate",
-      "assessment": "Comment answers python_exec HTML-sink question NO; subsequent generic stripping repair and pass-through regression have receipts. Verify both contracts rather than suppress scanner.",
+      "disposition": "partial",
+      "assessment": "Comment answers python_exec HTML-sink question NO; subsequent generic stripping repair and pass-through regression have receipts. Verify both contracts rather than suppress scanner. The cited comment leaves javascript: single-pass reassembly and further reported residuals open, and separately dispositions alerts 133/134 as runtime-safe rather than fixed. Reconcile the complete Reported, deliberately NOT fixed section and subsequent receipts before closure; do not infer closure from the python_exec answer.",
       "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
       "comment_urls": [
         "https://github.com/terrene-foundation/kailash-py/issues/2173#issuecomment-5645610474"
@@ -538,7 +542,8 @@
       "landed_receipts": [
         "5b2be8f76",
         "f11368d58"
-      ]
+      ],
+      "reported_residuals": "The cited comment leaves javascript: single-pass reassembly and further reported residuals open, and separately dispositions alerts 133/134 as runtime-safe rather than fixed. Reconcile the complete Reported, deliberately NOT fixed section and subsequent receipts before closure; do not infer closure from the python_exec answer."
     },
     {
       "id": "ISSUE-2178",
@@ -800,7 +805,7 @@
     {
       "id": "ISSUE-2222",
       "page": "GitHub issues",
-      "status": "Built-not-walked",
+      "status": "In progress",
       "title": "MiddlewareAccessControlManager: all three access-check methods pass kwargs AccessDecision rejects — TypeError on every call (distinct from #2166)",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2222",
       "labels": [
@@ -810,15 +815,16 @@
       "created_at": "2026-09-10T16:28:46Z",
       "updated_at": "2026-09-11T09:47:04Z",
       "lane_pack": "core-auth",
-      "disposition": "candidate",
-      "assessment": "Comment corrects the construction-site set and ABAC behavior. Verify all AccessDecision constructions, audit call and unknown-resource default-deny path, not only title methods.",
+      "disposition": "partial",
+      "assessment": "Comment corrects the construction-site set and ABAC behavior. Verify all AccessDecision constructions, audit call and unknown-resource default-deny path, not only title methods. The cited comment deliberately leaves acceptance criterion 2 (public decision shape) open and reports get_user_permissions missing on both managers, with check_api_access deny-only and get_user_effective_permissions empty. Reconcile this with #2166 and later code before closure; construction repair alone is partial.",
       "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
       "comment_urls": [
         "https://github.com/terrene-foundation/kailash-py/issues/2222#issuecomment-5632627900"
       ],
       "landed_receipts": [
         "ebb02b45c"
-      ]
+      ],
+      "reported_residuals": "The cited comment deliberately leaves acceptance criterion 2 (public decision shape) open and reports get_user_permissions missing on both managers, with check_api_access deny-only and get_user_effective_permissions empty. Reconcile this with #2166 and later code before closure; construction repair alone is partial."
     },
     {
       "id": "ISSUE-2225",
