@@ -35,10 +35,10 @@ asserted, plus the new warning and validation behaviour.
 from __future__ import annotations
 
 import logging
-import os
-import tempfile
+from contextlib import AsyncExitStack
 
 import pytest
+import pytest_asyncio
 
 from kaizen.memory import enterprise as enterprise_module
 from kaizen.memory.enterprise import GLOBAL_SCOPE, EnterpriseMemorySystem
@@ -52,18 +52,34 @@ def _reset_one_time_warning(monkeypatch):
     monkeypatch.setattr(enterprise_module, "_GLOBAL_SCOPE_WARN_EMITTED", False)
 
 
+@pytest_asyncio.fixture
+async def memory_factory(tmp_path):
+    systems = []
+    cleanup = AsyncExitStack()
+
+    def create(*, multi_tenant_enabled=True):
+        storage = tmp_path / f"memory-{len(systems)}"
+        system = EnterpriseMemorySystem(
+            {
+                "hot_max_size": 100,
+                "warm_storage_path": str(storage / "warm.db"),
+                "cold_storage_path": str(storage / "cold"),
+                "monitoring_enabled": False,
+                "multi_tenant_enabled": multi_tenant_enabled,
+            }
+        )
+        systems.append(system)
+        cleanup.push_async_callback(system.cold_tier.close)
+        cleanup.push_async_callback(system.warm_tier.close)
+        return system
+
+    async with cleanup:
+        yield create
+
+
 @pytest.fixture
-def memory_system():
-    temp_dir = tempfile.mkdtemp()
-    return EnterpriseMemorySystem(
-        {
-            "hot_max_size": 100,
-            "warm_storage_path": os.path.join(temp_dir, "warm.db"),
-            "cold_storage_path": os.path.join(temp_dir, "cold"),
-            "monitoring_enabled": False,
-            "multi_tenant_enabled": True,
-        }
-    )
+def memory_system(memory_factory):
+    return memory_factory()
 
 
 # ---------------------------------------------------------------------------
@@ -229,7 +245,9 @@ async def test_global_scope_warning_names_the_scope_and_the_wiring(
 
 
 @pytest.mark.asyncio
-async def test_global_scope_warning_leaks_no_identifier(memory_system, caplog):
+async def test_global_scope_warning_leaks_no_identifier(
+    memory_system, memory_factory, caplog
+):
     """rules/security.md § No secrets in logs: no tenant/key identifiers."""
     memory_system.set_tenant_context("acme-corp-tenant-7")
     memory_system.clear_tenant_context()
@@ -237,7 +255,7 @@ async def test_global_scope_warning_leaks_no_identifier(memory_system, caplog):
     with caplog.at_level(logging.WARNING, logger=enterprise_module.__name__):
         # Re-arm: clear_tenant_context() is a deliberate declaration, so force
         # the accidental path on a fresh instance instead.
-        fresh = EnterpriseMemorySystem({"multi_tenant_enabled": True})
+        fresh = memory_factory()
         await fresh.put("customer-ssn-record", "v")
 
     message = next(r.message for r in caplog.records if "GLOBAL namespace" in r.message)
@@ -256,8 +274,8 @@ async def test_no_warning_when_tenant_scope_is_supplied(memory_system, caplog):
 
 
 @pytest.mark.asyncio
-async def test_no_warning_when_multi_tenancy_is_disabled(caplog):
-    single = EnterpriseMemorySystem({"multi_tenant_enabled": False})
+async def test_no_warning_when_multi_tenancy_is_disabled(memory_factory, caplog):
+    single = memory_factory(multi_tenant_enabled=False)
 
     with caplog.at_level(logging.WARNING, logger=enterprise_module.__name__):
         await single.put("k", "v")
