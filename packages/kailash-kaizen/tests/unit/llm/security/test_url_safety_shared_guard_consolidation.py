@@ -37,13 +37,15 @@ Differential evidence, 41 probes, pre- vs post-consolidation:
        'not-a-url'            reject:malformed_url -> reject:scheme
     WIDENING (reject->ALLOW, security regressions): 0
 
-Four FURTHER reason-code moves arrived with the IMDS-wrapper fix this branch
-rebased onto (#2136), measured the same way — all still REJECT, widening 0:
+The shared IMDS-wrapper policy (#2136), with embedded-address precedence
+across Python patch versions, produces these reason-code moves. All still
+REJECT. Source: src/kailash/utils/network_guard.py:264-284 and
+src/kailash/utils/network_guard.py:584-589.
 
     https://[64:ff9b::169.254.169.254]/  reject:ipv4_mapped -> reject:metadata_service
     https://[::ffff:0:a9fe:a9fe]/        reject:ipv4_mapped -> reject:metadata_service
     https://[64:ff9b::a9fe:a9fe]/        reject:ipv4_mapped -> reject:metadata_service
-    https://[::ffff:169.254.169.254]/    reject:ipv4_mapped -> reject:link_local
+    https://[::ffff:169.254.169.254]/    reject:ipv4_mapped -> reject:metadata_service
 
 All seven are reason-code reclassification; every accept/reject verdict is
 unchanged and nothing was widened. The scheme-before-host ordering makes
@@ -210,7 +212,7 @@ def test_public_addresses_are_not_over_blocked(url):
         ("https://[64:ff9b::169.254.169.254]/", "metadata_service"),
         ("https://[::ffff:0:a9fe:a9fe]/", "metadata_service"),
         ("https://[64:ff9b::a9fe:a9fe]/", "metadata_service"),
-        ("https://[::ffff:169.254.169.254]/", "link_local"),
+        ("https://[::ffff:169.254.169.254]/", "metadata_service"),
     ],
 )
 def test_ipv6_wrapped_metadata_is_refused_with_the_precise_reason(url, reason):
@@ -220,9 +222,103 @@ def test_ipv6_wrapped_metadata_is_refused_with_the_precise_reason(url, reason):
     ran unconditionally), but under the generic `ipv4_mapped` bucket. Pinning
     the sharper reason keeps the forensic split from silently regressing --
     and demonstrates the consolidation's payoff: the fix landed once in core
-    and all three consumers got it.
+    and all three consumers got it. Mapped IMDS now reports metadata_service
+    consistently, including Python versions whose wrapper is_link_local flag
+    used to win before the embedded metadata address was inspected.
     """
     assert _verdict(url) == f"reject:{reason}"
+
+
+@pytest.mark.parametrize("wrapper_reserved", [False, True])
+@pytest.mark.parametrize(
+    "addr,expected",
+    [
+        ("::ffff:8.8.8.8", "ALLOW"),
+        ("::ffff:10.0.0.1", "reject:ipv4_mapped"),
+        ("::ffff:127.0.0.1", "reject:ipv4_mapped"),
+        ("::ffff:224.0.0.1", "reject:ipv4_mapped"),
+        ("::ffff:0:8.8.8.8", "reject:ipv4_mapped"),
+        ("64:ff9b::8.8.8.8", "reject:ipv4_mapped"),
+    ],
+)
+def test_mapped_policy_does_not_depend_on_wrapper_reserved_flag(
+    monkeypatch, addr, expected, wrapper_reserved
+):
+    from kaizen.llm.http_client import SafeDnsResolver
+
+    monkeypatch.setattr(
+        ipaddress.IPv6Address, "is_reserved", property(lambda ip: wrapper_reserved)
+    )
+    assert _verdict(f"https://[{addr}]/") == expected
+    if expected == "ALLOW":
+        SafeDnsResolver().check_host(addr)
+    else:
+        with pytest.raises(InvalidEndpoint) as exc:
+            SafeDnsResolver().check_host(addr)
+        assert f"reject:{exc.value.reason}" == expected
+
+
+@pytest.mark.parametrize("wrapper_link_local", [False, True])
+@pytest.mark.parametrize(
+    "addr,reason",
+    [
+        ("::ffff:169.254.169.254", "metadata_service"),
+        ("::ffff:169.254.1.2", "link_local"),
+    ],
+)
+def test_embedded_metadata_bucket_precedes_wrapper_link_local_flag(
+    monkeypatch, addr, reason, wrapper_link_local
+):
+    from kaizen.llm.http_client import SafeDnsResolver
+
+    monkeypatch.setattr(
+        ipaddress.IPv6Address, "is_link_local", property(lambda ip: wrapper_link_local)
+    )
+    assert _verdict(f"https://[{addr}]/") == f"reject:{reason}"
+    with pytest.raises(InvalidEndpoint) as exc:
+        SafeDnsResolver().check_host(addr)
+    assert exc.value.reason == reason
+
+
+@pytest.mark.parametrize(
+    "addr,reason",
+    [
+        ("8.8.8.8", "private_ipv4"),
+        ("::ffff:8.8.8.8", "ipv4_mapped"),
+        ("::ffff:0:8.8.8.8", "ipv4_mapped"),
+        ("64:ff9b::8.8.8.8", "ipv4_mapped"),
+    ],
+)
+def test_corporate_ipv4_network_cannot_be_bypassed_by_ipv6_wrapper(addr, reason):
+    url = f"https://[{addr}]/" if ":" in addr else f"https://{addr}/"
+    # Permissive private-address policy still honors the caller's narrower CIDR.
+    with pytest.raises(network_guard.BlockedDestinationError) as exc:
+        network_guard.check_url(
+            url,
+            resolve_dns=False,
+            allow_private=True,
+            blocked_networks=[ipaddress.ip_network("8.8.8.0/24")],
+        )
+    assert exc.value.reason == reason
+    network_guard.check_url(
+        url,
+        resolve_dns=False,
+        allow_private=True,
+        blocked_networks=[ipaddress.ip_network("8.8.4.0/24")],
+    )
+
+
+def test_public_mapped_address_honors_native_ipv6_and_embedded_ipv4_cidrs():
+    url = "https://[::ffff:8.8.8.8]/"
+    for cidr in ("::ffff:0:0/96", "8.8.8.0/24"):
+        with pytest.raises(network_guard.BlockedDestinationError) as exc:
+            network_guard.check_url(
+                url, resolve_dns=False, blocked_networks=[ipaddress.ip_network(cidr)]
+            )
+        assert exc.value.reason == "ipv4_mapped"
+    network_guard.check_url(
+        url, resolve_dns=False, blocked_networks=[ipaddress.ip_network("2001:db8::/32")]
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -282,15 +282,12 @@ class TestAudioFieldDurationExtraction:
 
         mock_pydub = MagicMock()
         mock_pydub.AudioSegment = MockAudioSegment
-        sys.modules["pydub"] = mock_pydub
+        monkeypatch.setitem(sys.modules, "pydub", mock_pydub)
 
         field = AudioField()
         field.load(audio_path)
 
         assert field._duration_sec == 5.0
-
-        # Cleanup
-        del sys.modules["pydub"]
 
     def test_audio_field_duration_extraction_fallback(self, tmp_path, monkeypatch):
         """Test duration extraction fallback when pydub not available."""
@@ -302,32 +299,28 @@ class TestAudioFieldDurationExtraction:
             f.write(audio_data)
 
         # Mock pydub import to fail
+        import builtins
         import sys
+
+        original_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):
             if name == "pydub":
                 raise ImportError("No module named 'pydub'")
-            import builtins
+            return original_import(name, *args, **kwargs)
 
-            return builtins.__import__(name, *args, **kwargs)
-
-        # Ensure pydub is not in sys.modules for this test
-        pydub_backup = sys.modules.pop("pydub", None)
-
-        try:
-            monkeypatch.setattr("builtins.__import__", mock_import)
+        # Restore the importer before pytest inspects any assertion failure.
+        with monkeypatch.context() as scoped:
+            scoped.delitem(sys.modules, "pydub", raising=False)
+            scoped.setattr(builtins, "__import__", mock_import)
 
             field = AudioField()
             field.load(audio_path)
 
-            # Fallback should estimate duration
-            assert field._duration_sec > 0
-        finally:
-            # Restore pydub if it was there
-            if pydub_backup:
-                sys.modules["pydub"] = pydub_backup
+        # Fallback should estimate duration.
+        assert field._duration_sec > 0
 
-    def test_audio_field_duration_validation(self, tmp_path):
+    def test_audio_field_duration_validation(self, tmp_path, monkeypatch):
         """Test duration validation against max_duration_sec."""
         audio_path = tmp_path / "test.mp3"
 
@@ -342,15 +335,12 @@ class TestAudioFieldDurationExtraction:
         # Ensure pydub not available for predictable fallback
         import sys
 
-        if "pydub" in sys.modules:
-            del sys.modules["pydub"]
+        monkeypatch.setitem(sys.modules, "pydub", None)
 
         field.load(audio_path)
 
-        # Should fail validation if duration exceeds limit
-        # (depends on fallback calculation)
-        # For now, just check duration was set
-        assert field._duration_sec > 0
+        assert field._duration_sec > field.max_duration_sec
+        assert field.validate() is False
 
 
 class TestAudioFieldValidation:
@@ -410,16 +400,13 @@ class TestAudioFieldValidation:
 
         mock_pydub = MagicMock()
         mock_pydub.AudioSegment = MockAudioSegment
-        sys.modules["pydub"] = mock_pydub
+        monkeypatch.setitem(sys.modules, "pydub", mock_pydub)
 
         # Load with short max duration
         field = AudioField(max_duration_sec=600.0)  # 10 minutes
         field.load(audio_path)
 
         assert field.validate() is False
-
-        # Cleanup
-        del sys.modules["pydub"]
 
 
 class TestAudioFieldSizeLimits:

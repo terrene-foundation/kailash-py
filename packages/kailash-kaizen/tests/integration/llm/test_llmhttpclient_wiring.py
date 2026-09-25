@@ -16,11 +16,9 @@ the resolver's own logic but not that the framework uses it.
 
 from __future__ import annotations
 
-import socket
-
 import pytest
 
-from kaizen.llm.http_client import LlmHttpClient, SafeDnsResolver, _SafeHttpTransport
+from kaizen.llm.http_client import LlmHttpClient, _SafeHttpTransport
 
 
 @pytest.mark.integration
@@ -54,30 +52,27 @@ def test_llmhttpclient_installs_safe_dns_resolver_structurally() -> None:
 
 
 @pytest.mark.integration
-def test_llmhttpclient_rejects_private_ip_at_resolve_time(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.asyncio
+async def test_llmhttpclient_localhost_request_keeps_literal_loopback_blocked(
+    httpserver,
 ) -> None:
-    """End-to-end: a client pointed at a hostname resolving to a private IP
-    fails at resolve time, NOT at a later TCP timeout.
+    """The local-provider carve-out reaches a real server only by its label."""
+    from urllib.parse import urlparse
 
-    The fast-fail is load-bearing: a slow TCP timeout is a DoS vector if
-    attackers can enumerate private IPs through timing. Resolve-time
-    rejection converts the attack surface into a bounded constant.
-    """
+    from kaizen.llm.url_safety import InvalidEndpoint, check_url
 
-    # Simulate DNS returning RFC 1918 for a public-looking hostname.
-    def fake_getaddrinfo(host, port, *args, **kwargs):
-        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.5", 80))]
-
-    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
-
-    resolver = SafeDnsResolver()
-    # Direct resolver call proves the fast-fail at the structural layer.
-    from kaizen.llm.url_safety import InvalidEndpoint
-
-    with pytest.raises(InvalidEndpoint) as exc_info:
-        resolver.check_host("intranet.example.com")
-    assert exc_info.value.reason == "private_ipv4"
+    httpserver.expect_request("/health").respond_with_data("ready")
+    port = urlparse(httpserver.url_for("/health")).port
+    url = f"http://localhost:{port}/health"
+    check_url(url)
+    async with LlmHttpClient(timeout=5.0) as client:
+        with pytest.raises(InvalidEndpoint) as exc_info:
+            await client.get(f"http://127.0.0.1:{port}/health")
+        assert exc_info.value.reason == "loopback"
+        response = await client.get(url)
+        assert response.status_code == 200
+        assert response.text == "ready"
+    httpserver.check_assertions()
 
 
 @pytest.mark.integration
