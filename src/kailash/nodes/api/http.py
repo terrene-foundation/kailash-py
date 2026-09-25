@@ -214,7 +214,7 @@ _async_http_session_pool = AsyncResourcePool(
     factory=lambda: aiohttp.ClientSession(cookie_jar=aiohttp.DummyCookieJar()),
     max_size=20,
     timeout=30.0,
-    cleanup=lambda session: asyncio.create_task(session.close()),
+    cleanup=lambda session: session.close(),
 )
 
 
@@ -1344,12 +1344,20 @@ class AsyncHTTPRequestNode(AsyncNode):
 
     async def __aenter__(self):
         """Context manager support for 'async with' statements."""
-        if self._session is None:
-            self._session = aiohttp.ClientSession()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Clean up session when exiting context."""
-        if self._session is not None:
-            await self._session.close()
+    async def cleanup(self):
+        """Release this event loop's HTTP sessions before the owner closes it.
+
+        Active requests keep their sessions until they return their leases.
+        Runtime node cleanup and direct-call context managers share this path.
+        """
+        await _async_http_session_pool.cleanup_all()
+        session = getattr(self, "_session", None)
+        if session is not None:
+            await session.close()
             self._session = None
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Close owner-loop resources when exiting the context."""
+        await self.cleanup()

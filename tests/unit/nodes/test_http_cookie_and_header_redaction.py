@@ -157,28 +157,10 @@ def origin():
 
 @pytest.fixture
 async def fresh_async_pool():
-    """Rebind the process-global async pool to THIS test's event loop.
-
-    PRE-EXISTING, NOT INTRODUCED HERE and deliberately not fixed from this
-    region: ``_async_http_session_pool`` is a module-level ``AsyncResourcePool``
-    holding ``asyncio.Lock``/``Semaphore`` and pooled ``ClientSession`` objects
-    that bind to the first loop that touches them. A second test with its own
-    loop reuses them and raises ``RuntimeError: Event loop is closed`` from
-    inside ``async_run``. Reported to the lane rather than repaired, because the
-    fix belongs in ``utils/resource_manager.py``.
-    """
-    pool = _async_http_session_pool
-    pool._pool.clear()
-    pool._in_use.clear()
-    pool._created_count = 0
-    pool._lock = asyncio.Lock()
-    pool._semaphore = asyncio.Semaphore(pool._max_size)
+    """Use public owner-loop cleanup; never reset pool implementation state."""
+    await _async_http_session_pool.cleanup_all()
     yield
-    for session in list(pool._pool):
-        await session.close()
-    pool._pool.clear()
-    pool._in_use.clear()
-    pool._created_count = 0
+    await _async_http_session_pool.cleanup_all()
 
 
 # --------------------------------------------------------------------------
