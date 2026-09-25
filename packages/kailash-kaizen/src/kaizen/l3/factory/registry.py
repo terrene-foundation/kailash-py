@@ -12,9 +12,15 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import deque
+from collections.abc import Callable
 
 from kaizen.l3.factory.errors import InstanceNotFound, RegistryError
-from kaizen.l3.factory.instance import AgentInstance, AgentLifecycleState
+from kaizen.l3.factory.execution import OwnedExecution
+from kaizen.l3.factory.instance import (
+    AgentInstance,
+    AgentLifecycleState,
+    TerminationReason,
+)
 
 __all__ = ["AgentInstanceRegistry"]
 
@@ -37,6 +43,14 @@ class AgentInstanceRegistry:
         self._instances: dict[str, AgentInstance] = {}
         self._children: dict[str, list[str]] = {}
         self._by_spec: dict[str, list[str]] = {}
+        # Ownership belongs to the shared registry, including factories that
+        # share it. Metadata-only instances retain the legacy mutation API.
+        self._owned_executions: dict[str, OwnedExecution] = {}
+        self._terminal_cleanup: dict[str, Callable[[str], None]] = {}
+        self._lifecycle_lock = asyncio.Lock()
+        self._terminating_instances: set[str] = set()
+        self._termination_groups: dict[str, list[AgentInstance]] = {}
+        self._termination_reasons: dict[str, TerminationReason] = {}
 
     async def register(self, instance: AgentInstance) -> None:
         """Register a new instance. Fails if instance_id already exists.
@@ -91,13 +105,36 @@ class AgentInstanceRegistry:
                 raise InstanceNotFound(instance_id)
 
             instance = self._instances[instance_id]
+            execution = self._owned_executions.get(instance_id)
+            if execution is not None and not execution.snapshot().local_stopped:
+                raise RegistryError(
+                    "Cannot deregister an instance with live owned execution"
+                )
+            descendants = deque(self._children.get(instance_id, ()))
+            while descendants:
+                child_id = descendants.popleft()
+                child_execution = self._owned_executions.get(child_id)
+                if (
+                    child_execution is not None
+                    and not child_execution.snapshot().local_stopped
+                ):
+                    raise RegistryError(
+                        "Cannot deregister an ancestor of live owned execution"
+                    )
+                descendants.extend(self._children.get(child_id, ()))
             if not instance.is_terminal:
                 raise RegistryError(
                     f"Cannot deregister instance '{instance_id}': "
                     f"not in a terminal state (current: {instance.state.name})"
                 )
 
+            # A stopped task's scheduled done callback may not have run yet.
+            # Release resources before discarding its cleanup ownership; on a
+            # cleanup error, propagate and leave every registry entry intact.
+            self._cleanup_terminal(instance_id)
             del self._instances[instance_id]
+            self._owned_executions.pop(instance_id, None)
+            self._terminal_cleanup.pop(instance_id, None)
 
             # Remove from children index
             if instance.parent_id is not None:
@@ -234,4 +271,22 @@ class AgentInstanceRegistry:
         async with self._lock:
             if instance_id not in self._instances:
                 raise InstanceNotFound(instance_id)
+            execution = self._owned_executions.get(instance_id)
+            if execution is not None and (
+                not execution._started
+                or new_state.is_terminal
+                or instance_id in self._terminating_instances
+            ):
+                raise ValueError(
+                    "Owned execution controls terminal lifecycle transitions"
+                )
             self._instances[instance_id].transition_to(new_state)
+            if new_state.is_terminal:
+                self._cleanup_terminal(instance_id)
+
+    def _cleanup_terminal(self, instance_id: str) -> None:
+        """Release the originating factory's integration state exactly once."""
+        cleanup = self._terminal_cleanup.get(instance_id)
+        if cleanup is not None:
+            cleanup(instance_id)
+            self._terminal_cleanup.pop(instance_id, None)
