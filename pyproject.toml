@@ -77,7 +77,12 @@ http-client = [
 ]
 
 # Database extras — install ONLY the driver(s) your app uses.
-db-postgres = ["sqlalchemy>=2.0.0", "asyncpg>=0.30.0"]
+db-postgres = [
+    "sqlalchemy>=2.0.0",
+    "asyncpg>=0.30.0",
+    "psycopg2-binary>=2.9",  # SQLAlchemy 2.0 default sync driver
+    "psycopg[binary]>=3.2",  # SQLAlchemy 2.1 default sync driver
+]
 db-mysql    = ["sqlalchemy>=2.0.0", "aiomysql>=0.2.0"]
 db-sqlite   = ["sqlalchemy>=2.0.0", "aiosqlite>=0.19.0"]
 

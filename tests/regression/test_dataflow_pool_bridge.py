@@ -217,7 +217,9 @@ def test_failed_ddl_does_not_leak_pools_under_saturation(pg_dsn, id_base):
         # tree, `_disposal_barrier` was entered 0 times and `pool_count()` was
         # 0 with the #2075 fix both enabled and disabled. A pool-leak test that
         # never opens a pool is vacuous by construction.
-        await db.express.list("DpiD2Child", limit=1)
+        # A shared Redis cache hit opens no pool. Disable caching for this
+        # instrument so every worker reaches the database on its own loop.
+        await db.express.list("DpiD2Child", limit=1, cache_ttl=0)
         adapters = _retain_pool_adapters_for_this_loop()
 
         # Issue #759 (DPI-A): Pre-record a synthetic DDL failure on this
@@ -333,7 +335,9 @@ def test_failed_ddl_with_warn_mode_still_bounded(pg_dsn, id_base):
         # Open a REAL pool on this loop first (see the fail-fast sibling and
         # the module docstring): the registry cannot be under pressure from an
         # instance that never connected.
-        await db.express.list("DpiD2WarnChild", limit=1)
+        # Match the fail-fast sibling: a cached result proves nothing about
+        # connection registration or cleanup on this worker's event loop.
+        await db.express.list("DpiD2WarnChild", limit=1, cache_ttl=0)
         adapters = _retain_pool_adapters_for_this_loop()
 
         # Force the DDL-FAILURE state this test is named for. Same technique
