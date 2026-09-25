@@ -534,7 +534,7 @@
       "updated_at": "2026-09-12T11:30:20Z",
       "lane_pack": "core-sanitization",
       "disposition": "partial",
-      "assessment": "Comment answers python_exec HTML-sink question NO; subsequent generic stripping repair and pass-through regression have receipts. Verify both contracts rather than suppress scanner. The cited comment leaves javascript: single-pass reassembly and further reported residuals open, and separately dispositions alerts 133/134 as runtime-safe rather than fixed. Reconcile the complete Reported, deliberately NOT fixed section and subsequent receipts before closure; do not infer closure from the python_exec answer.",
+      "assessment": "Comment answers python_exec HTML-sink question NO; subsequent generic stripping repair and pass-through regression have receipts. Verify both contracts rather than suppress scanner. The cited comment leaves javascript: single-pass reassembly (held for a human call) and the security.py audit-log path that stringifies pre-sanitization values open, and separately dispositions alerts 133/134 as runtime-safe rather than fixed. Reconcile the complete Reported, deliberately NOT fixed section and subsequent receipts before closure; do not infer closure from the python_exec answer.",
       "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
       "comment_urls": [
         "https://github.com/terrene-foundation/kailash-py/issues/2173#issuecomment-5645610474"
@@ -543,7 +543,7 @@
         "5b2be8f76",
         "f11368d58"
       ],
-      "reported_residuals": "The cited comment leaves javascript: single-pass reassembly and further reported residuals open, and separately dispositions alerts 133/134 as runtime-safe rather than fixed. Reconcile the complete Reported, deliberately NOT fixed section and subsequent receipts before closure; do not infer closure from the python_exec answer."
+      "reported_residuals": "The cited comment leaves javascript: single-pass reassembly (held for a human call) and the security.py audit-log path that stringifies pre-sanitization values open, and separately dispositions alerts 133/134 as runtime-safe rather than fixed. Reconcile the complete Reported, deliberately NOT fixed section and subsequent receipts before closure; do not infer closure from the python_exec answer."
     },
     {
       "id": "ISSUE-2178",
