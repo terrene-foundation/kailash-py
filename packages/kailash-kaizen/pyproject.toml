@@ -264,20 +264,6 @@ Documentation = "https://docs.kailash.com/kaizen"
 Repository = "https://github.com/terrene-foundation/kailash-py"
 Issues = "https://github.com/terrene-foundation/kailash-py/issues"
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-markers = [
-    "unit: Unit tests (fast, isolated)",
-    "integration: Integration tests (real services)",
-    "e2e: End-to-end tests (complete flows)",
-    "requires_azure: Tests requiring Azure AI Foundry credentials",
-    "requires_docker: Tests requiring Docker Model Runner",
-    "requires_google: Tests requiring Google Gemini credentials",
-    "regression: Regression tests for fixed bugs",
-    "benchmark: Performance benchmark tests (pytest-benchmark)",
-]
-asyncio_mode = "auto"
-
 [tool.coverage.run]
 source = ["src"]
 omit = ["tests/*", "examples/*"]
