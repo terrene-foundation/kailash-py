@@ -18,27 +18,31 @@ from kailash.workflow.builder import WorkflowBuilder
 class TestLocalRuntimeConnectionValidation:
     """Unit tests for LocalRuntime connection validation."""
 
-    def test_runtime_accepts_connection_validation_parameter(self):
+    def test_runtime_accepts_connection_validation_parameter(self, request):
         """LocalRuntime should accept connection_validation parameter."""
         # Test default value
         runtime = LocalRuntime()
+        request.addfinalizer(runtime.close)
         assert hasattr(runtime, "connection_validation")
         assert runtime.connection_validation == "warn"  # Default
 
         # Test explicit values
         runtime_off = LocalRuntime(connection_validation="off")
+        request.addfinalizer(runtime_off.close)
         assert runtime_off.connection_validation == "off"
 
         runtime_strict = LocalRuntime(connection_validation="strict")
+        request.addfinalizer(runtime_strict.close)
         assert runtime_strict.connection_validation == "strict"
 
         # Test invalid value
         with pytest.raises(ValueError):
             LocalRuntime(connection_validation="invalid")
 
-    def test_prepare_node_inputs_calls_validate_inputs(self):
+    def test_prepare_node_inputs_calls_validate_inputs(self, request):
         """_prepare_node_inputs should call node.validate_inputs() when enabled."""
         runtime = LocalRuntime(connection_validation="strict")
+        request.addfinalizer(runtime.close)
 
         # Mock node with validate_inputs method
         mock_node = Mock(spec=Node)
@@ -64,7 +68,7 @@ class TestLocalRuntimeConnectionValidation:
         mock_node.validate_inputs.assert_called_once()
         assert inputs == {"validated": True}
 
-    def test_validation_modes_behavior(self):
+    def test_validation_modes_behavior(self, request):
         """Test different validation modes handle errors correctly."""
         # Mock node that raises validation error
         mock_node = Mock(spec=Node)
@@ -82,6 +86,7 @@ class TestLocalRuntimeConnectionValidation:
 
         # Test "off" mode - should not validate
         runtime_off = LocalRuntime(connection_validation="off")
+        request.addfinalizer(runtime_off.close)
         mock_node.validate_inputs.reset_mock()
         inputs = runtime_off._prepare_node_inputs(
             workflow, "test_node", mock_node, {}, {"test_node": {"param": "value"}}
@@ -90,6 +95,7 @@ class TestLocalRuntimeConnectionValidation:
 
         # Test "warn" mode - should log warning and continue
         runtime_warn = LocalRuntime(connection_validation="warn")
+        request.addfinalizer(runtime_warn.close)
         with patch.object(runtime_warn.logger, "warning") as mock_warning:
             inputs = runtime_warn._prepare_node_inputs(
                 workflow, "test_node", mock_node, {}, {"test_node": {"param": "value"}}
@@ -99,6 +105,7 @@ class TestLocalRuntimeConnectionValidation:
 
         # Test "strict" mode - should raise error
         runtime_strict = LocalRuntime(connection_validation="strict")
+        request.addfinalizer(runtime_strict.close)
         from kailash.sdk_exceptions import WorkflowExecutionError
 
         with pytest.raises(WorkflowExecutionError, match="Connection Validation Error"):
@@ -106,9 +113,10 @@ class TestLocalRuntimeConnectionValidation:
                 workflow, "test_node", mock_node, {}, {"test_node": {"param": "value"}}
             )
 
-    def test_connection_parameters_are_validated(self):
+    def test_connection_parameters_are_validated(self, request):
         """Parameters from connections should be validated."""
         runtime = LocalRuntime(connection_validation="strict")
+        request.addfinalizer(runtime.close)
 
         # Mock source node output
         node_outputs = {"source_node": {"data": {"count": "not_a_number"}}}
@@ -143,9 +151,10 @@ class TestLocalRuntimeConnectionValidation:
                 workflow, "target_node", mock_node, node_outputs, {}
             )
 
-    def test_mixed_parameter_sources(self):
+    def test_mixed_parameter_sources(self, request):
         """Test validation with mixed direct and connection parameters."""
         runtime = LocalRuntime(connection_validation="strict")
+        request.addfinalizer(runtime.close)
 
         # Mock node with multiple parameters
         mock_node = Mock(spec=Node)
@@ -190,9 +199,10 @@ class TestLocalRuntimeConnectionValidation:
         assert "param2" in call_args  # From direct parameters
         assert inputs == validated_result
 
-    def test_validation_performance_caching(self):
+    def test_validation_performance_caching(self, request):
         """Validation results should be cached for performance."""
         runtime = LocalRuntime(connection_validation="strict")
+        request.addfinalizer(runtime.close)
 
         # Mock node with expensive validation
         call_count = 0
@@ -222,8 +232,10 @@ class TestLocalRuntimeConnectionValidation:
             def run(self, **kwargs):
                 return {"output": kwargs.get("input", "default")}
 
-        workflow.add_node(SimpleNode, "node1", {})
-        workflow.add_node(SimpleNode, "node2", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            workflow.add_node(SimpleNode, "node1", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            workflow.add_node(SimpleNode, "node2", {})
         workflow.add_connection("node1", "output", "node2", "input")
 
         # Should work with default settings
