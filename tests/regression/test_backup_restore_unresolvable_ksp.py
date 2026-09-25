@@ -33,10 +33,7 @@ is used only for verification), so an address that resolved when the backup was
 written need not resolve in the org being restored into.  The KSP leg now takes
 the same route as the bridge leg.
 
-Stated scope: the clearance leg has the SAME latent shape and is deliberately
-NOT changed here -- ``grant_clearance`` resolves fail-closed on the base commit
-already, so that hazard predates this work and is reported rather than folded
-into this fix.
+The clearance sibling is covered by ``test_backup_restore_clearance.py``.
 """
 
 from __future__ import annotations

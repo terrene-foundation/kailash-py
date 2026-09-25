@@ -2408,7 +2408,8 @@ class GovernanceEngine:
 
         Accepts both D/T/R positional addresses (e.g., "D1-R1") and config
         role IDs (e.g., "r-president"). The address is resolved to its
-        canonical positional form before any store operations.
+        canonical positional form before any store operations. The clearance
+        record must name the same role; matching config aliases are normalized.
 
         FSM validation is enforced for "living" states (PENDING, ACTIVE,
         SUSPENDED). Terminal states (REVOKED, EXPIRED) and missing records
@@ -2430,6 +2431,16 @@ class GovernanceEngine:
         }
         with self._lock:
             role_address = self._resolve_role_address(role_address)
+            clearance_address = self._resolve_role_address(clearance.role_address)
+            if clearance_address != role_address:
+                raise PactError(
+                    "Clearance record must name the role receiving the grant",
+                    details={
+                        "role_address": role_address,
+                        "clearance_role_address": clearance.role_address,
+                    },
+                )
+            clearance = replace(clearance, role_address=role_address)
             existing = self._clearance_store.get_clearance(role_address)
             if (
                 existing is not None
@@ -2444,6 +2455,24 @@ class GovernanceEngine:
             # cached envelopes so next computation uses fresh state.
             self._cascade_invalidate(role_address)
 
+        self._emit_clearance_granted(role_address, clearance)
+
+    def _restore_clearance(self, clearance: RoleClearance) -> None:
+        """Restore trusted admin backup state without authorizing a new grant.
+
+        A historical role may no longer exist in this org, and restoring a
+        vetting snapshot is not a live FSM transition. Keep the stored address,
+        cache invalidation, and grant audit/observation emissions intact.
+        """
+        with self._lock:
+            self._clearance_store.grant_clearance(clearance)
+            self._cascade_invalidate(clearance.role_address)
+        self._emit_clearance_granted(clearance.role_address, clearance)
+
+    def _emit_clearance_granted(
+        self, role_address: str, clearance: RoleClearance
+    ) -> None:
+        """Publish the shared audit, observation, and EATP grant records."""
         self._emit_audit(
             PactAuditAction.CLEARANCE_GRANTED.value,
             create_pact_audit_details(
@@ -3408,9 +3437,7 @@ class GovernanceEngine:
             resolved_envelope = replace(envelope, target_role_address=target_address)
 
             # Check if this is a new or modified envelope
-            is_new = (
-                self._envelope_store.get_role_envelope(target_address) is None
-            )
+            is_new = self._envelope_store.get_role_envelope(target_address) is None
 
             # Validate monotonic tightening: child cannot be wider than parent.
             # Computed from the RESOLVED address: a config role ID ("r-cfo")

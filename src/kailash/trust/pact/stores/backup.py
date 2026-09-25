@@ -232,7 +232,9 @@ def restore_governance_store(engine: Any, path: str) -> None:
     except OSError:
         raise
 
-    # Restore clearances via public API for audit trail
+    # Restore historical clearance state, not a new live grant. The private
+    # engine helper preserves the lock, cache invalidation and audit trail
+    # without rejecting roles removed since backup or replaying a vetting FSM.
     for clr_data in data.get("clearances", []):
         review_at = None
         if clr_data.get("review_at") is not None:
@@ -247,7 +249,7 @@ def restore_governance_store(engine: Any, path: str) -> None:
             review_at=review_at,
             nda_signed=clr_data.get("nda_signed", False),
         )
-        engine.grant_clearance(clr_data["role_address"], clearance)
+        engine._restore_clearance(clearance)
 
     # Restore envelopes via public API (includes monotonic tightening validation)
     for env_data in data.get("envelopes", []):
