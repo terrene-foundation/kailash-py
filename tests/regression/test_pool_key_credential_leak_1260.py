@@ -19,6 +19,7 @@ source-grep tests break on refactor to a shared helper.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 import pytest
@@ -178,16 +179,32 @@ class TestReturnValueSurfaceRedaction:
     """Diagnostic RETURN surfaces never expose the raw credential-bearing key."""
 
     @pytest.mark.asyncio
-    async def test_get_pool_metrics_redacts_key(self):
-        from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
+    @pytest.mark.parametrize("prior_loop_lock", [False, True])
+    async def test_get_pool_metrics_redacts_key(self, monkeypatch, prior_loop_lock):
+        from kailash.nodes.data.async_sql import _POOL_LOOP_ATTR, AsyncSQLDatabaseNode
 
-        loop_id = 999_000_222
+        loop = asyncio.get_running_loop()
+        loop_id = id(loop)
+        # Exercise both fresh and cross-loop metrics readers deterministically;
+        # the latter formerly made this test depend on suite execution order.
+        monkeypatch.setattr(AsyncSQLDatabaseNode, "_pool_lock", asyncio.Lock())
+        monkeypatch.setattr(
+            AsyncSQLDatabaseNode,
+            "_pool_lock_loop_id",
+            -1 if prior_loop_lock else loop_id,
+            raising=False,
+        )
         key = f"{loop_id}|postgresql|postgresql://admin:{SECRET}@db.internal:5432/kailash|5|20"
 
         class _StubAdapter:
             _pool = None
 
-        AsyncSQLDatabaseNode._shared_pools[key] = (_StubAdapter(), 1)  # type: ignore[assignment]
+        adapter = _StubAdapter()
+        # Match a registered, live pool. An unstamped fixture is eligible for
+        # disposal when the metrics call switches event-loop locks (#2211),
+        # which tests cleanup instead of the redaction surface under test.
+        setattr(adapter, _POOL_LOOP_ATTR, loop)
+        AsyncSQLDatabaseNode._shared_pools[key] = (adapter, 1)  # type: ignore[assignment]
         try:
             metrics = await AsyncSQLDatabaseNode.get_pool_metrics()
         finally:
