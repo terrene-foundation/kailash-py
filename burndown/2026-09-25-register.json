@@ -1031,7 +1031,7 @@
     {
       "id": "ISSUE-2238",
       "page": "GitHub issues",
-      "status": "In progress",
+      "status": "Built-not-walked",
       "title": "PactEngine: an unresolvable parent/definer identifier SKIPS the monotonic-tightening gate instead of failing closed (2 live sites)",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2238",
       "labels": [
@@ -1042,12 +1042,17 @@
       "updated_at": "2026-09-13T10:12:03Z",
       "lane_pack": "pact-tightening",
       "disposition": "active",
-      "assessment": "Sites 3–4 and restore fix await landing from fix/2238-sites34; clearance parity remains in the active PACT lane.",
+      "assessment": "GitHub CLOSED with fcf1ec06b code receipt after role, identity, clearance, restore parity reviews and 2713 passed / 15 skipped exact union. Owner acceptance remains unclaimed.",
       "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
       "comment_urls": [
         "https://github.com/terrene-foundation/kailash-py/issues/2238#issuecomment-5652637151"
       ],
-      "landed_receipts": []
+      "landed_receipts": [
+        "fcf1ec06b",
+        "af2009163",
+        "d902d412a"
+      ],
+      "observed_github_state": "CLOSED"
     },
     {
       "id": "ISSUE-2242",
@@ -1148,15 +1153,18 @@
     {
       "id": "ISSUE-2248",
       "page": "GitHub issues",
-      "status": "Not started",
+      "status": "In progress",
       "title": "PlanMonitor: empty plan reports success; no-op modification is recorded as applied",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2248",
-      "labels": [],
+      "labels": [
+        "bug",
+        "needs-review"
+      ],
       "created_at": "2026-09-24T14:57:21Z",
       "updated_at": "2026-09-24T14:57:21Z",
       "lane_pack": "kaizen-lifecycle",
       "disposition": "confirm",
-      "assessment": "Source-only report: verify empty-plan completion and no-op modification through public run_plan, with real success controls and idempotent removal preserved.",
+      "assessment": "Runtime empty-plan public path reports completed without callbacks; internal malformed modification boundary records no-op applied. Built-in Recomposer rejects malformed payload; do not generalize reachability. Fix lane active.",
       "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
       "comment_urls": [],
       "landed_receipts": []
@@ -1167,12 +1175,15 @@
       "status": "Blocked on you",
       "title": "L3 agent factory: bind an executable to spawned agents and to termination",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2249",
-      "labels": [],
+      "labels": [
+        "enhancement",
+        "needs-review"
+      ],
       "created_at": "2026-09-24T14:57:40Z",
       "updated_at": "2026-09-24T14:57:40Z",
       "lane_pack": "kaizen-lifecycle",
       "disposition": "design",
-      "assessment": "Capability proposal, explicitly not a spec violation. Approve executable ownership/cancellation contract after public-path probes distinguish metadata termination from stopped work.",
+      "assessment": "Public spawn returns Pending metadata with no executable task. Existing termination changes registry state only. Opt-in owned executable dispatch is proposed; auto-start is a competing breaking design.",
       "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
       "comment_urls": [],
       "landed_receipts": []
@@ -1196,7 +1207,7 @@
     {
       "id": "ISSUE-2251",
       "page": "GitHub issues",
-      "status": "Not started",
+      "status": "In progress",
       "title": "TypeIntrospector: nested TypedDict fields become {\"type\":\"string\"} under `from __future__ import annotations`",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2251",
       "labels": [],
@@ -1204,7 +1215,7 @@
       "updated_at": "2026-09-25T06:26:09Z",
       "lane_pack": "kaizen-types",
       "disposition": "execute",
-      "assessment": "Resolve nested TypedDict annotations; cover schema, validation and strict-mode paths. Body gives array/bool positive and wrong-type negative examples.",
+      "assessment": "Resolved future-annotation TypedDict defects reproduced; shared resolution, wrapper/recursive/native union parity repairs under independent review. Unknown-name fallback policy pending human answer.",
       "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
       "comment_urls": [],
       "landed_receipts": []
@@ -1220,9 +1231,9 @@
     {
       "id": "FOREST-F22",
       "page": "Standing forest",
-      "status": "In progress",
+      "status": "Built-not-walked",
       "title": "#2238 sites 3–4 and restore follow-up",
-      "assessment": "Active PACT lane verifies the existing branch before root landing.",
+      "assessment": "Landed fcf1ec06b; #2238 closed with code receipt. Exact PACT/audit union: 2713 passed, 15 skipped; independent correctness and adversarial reviews with controls. Branch/worktree drained. Owner acceptance not inferred.",
       "source": ".session-notes.d/esperie.md"
     },
     {
@@ -1236,9 +1247,9 @@
     {
       "id": "FOREST-F24",
       "page": "Standing forest",
-      "status": "In progress",
+      "status": "Built-not-walked",
       "title": "Rejected recovery branch disposition",
-      "assessment": "User ordered root to record rejected shape in #2225 then delete; never merge.",
+      "assessment": "Rejected shape reproduced and recorded in #2225 comment 5830857222; local and remote recovery refs deleted, never merged. Residual A design remains F23.",
       "source": ".session-notes.d/esperie.md"
     },
     {
@@ -1246,7 +1257,7 @@
       "page": "Standing forest",
       "status": "Blocked on you",
       "title": "Workstation/process/stash hygiene",
-      "assessment": "Inherited human gate on process termination and stash deletion remains.",
+      "assessment": "Healthy-interpreter configured hook parity passed; installed pyenv hook still signal11. Pinned hook metadata update validation underway. Stray draft and five inherited stashes held.",
       "source": ".session-notes.d/esperie.md"
     },
     {
@@ -1260,9 +1271,9 @@
     {
       "id": "FOREST-F27",
       "page": "Standing forest",
-      "status": "In progress",
+      "status": "Built-not-walked",
       "title": "#2238 clearance parity",
-      "assessment": "Assigned to active PACT lane; no acceptance claimed.",
+      "assessment": "Clearance restore and role authority parity landed fcf1ec06b with F22 evidence; no owner acceptance inferred.",
       "source": "2026-09-25 user handover, sections 5–7; root dispatch mapping"
     },
     {
@@ -1270,15 +1281,15 @@
       "page": "Standing forest",
       "status": "In progress",
       "title": "#2248/#2249 confirmation and triage",
-      "assessment": "Census read source-only report; public runtime confirmation still owed.",
+      "assessment": "Public #2248 empty plan confirmed; malformed modification proven at internal boundary, not built-in Recomposer reachability. #2249 metadata-only spawn confirmed; executable binding is a design addition pending approval. Both issues labelled.",
       "source": "2026-09-25 user handover, sections 5–7; root dispatch mapping"
     },
     {
       "id": "FOREST-F29",
       "page": "Standing forest",
-      "status": "In progress",
+      "status": "Built-not-walked",
       "title": "Declared burndown manifest",
-      "assessment": "This lane authors committed register; generator verification and review still owed.",
+      "assessment": "Manifest/source landed d10295cf4 after two review rounds and generator selftest/check. Status refresh tracks later lands; generated counts measure acceptance, not GitHub closure.",
       "source": "2026-09-25 user handover, sections 5–7; root dispatch mapping"
     },
     {
