@@ -1398,6 +1398,12 @@ class DataFlowExpress:
                             int(current_limit), plan.row_limit
                         )
                 node = self._create_node(model, "List")
+                # Express and ListNode have independent caches. The caller's
+                # policy must govern both, including a warm inner cache.
+                effective_params["enable_cache"] = (
+                    self._cache_enabled and effective_ttl > 0
+                )
+                effective_params["cache_ttl"] = effective_ttl
                 result = await node.async_run(**effective_params)
             except Exception as exc:
                 await self._trust_record_failure(
@@ -1516,6 +1522,12 @@ class DataFlowExpress:
                     merged_filter.update(plan.additional_filters)
                     effective_params["filter"] = merged_filter
                 node = self._create_node(model, "List")
+                # Express and ListNode have independent caches. The caller's
+                # policy must govern both, including a warm inner cache.
+                effective_params["enable_cache"] = (
+                    self._cache_enabled and effective_ttl > 0
+                )
+                effective_params["cache_ttl"] = effective_ttl
                 result = await node.async_run(**effective_params)
             except Exception as exc:
                 await self._trust_record_failure(
