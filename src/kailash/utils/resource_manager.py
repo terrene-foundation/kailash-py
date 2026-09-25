@@ -5,6 +5,7 @@ management across the SDK, ensuring proper cleanup and preventing memory leaks.
 """
 
 import asyncio
+import inspect
 import logging
 import threading
 import weakref
@@ -16,6 +17,38 @@ from typing import Any, Callable, Dict, Generic, Optional, Set, TypeVar
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+
+
+async def _await_cleanup(awaitable):
+    """Finish cleanup despite repeated caller cancellation, then propagate it."""
+    task = asyncio.ensure_future(awaitable)
+    cancelled = False
+    while not task.done():
+        completed = asyncio.get_running_loop().create_future()
+
+        def finished(_task, completed=completed):
+            if not completed.done():
+                completed.set_result(None)
+
+        task.add_done_callback(finished)
+        try:
+            # Cancellation affects only this completion notification, never the
+            # resource cleanup task. Its exception is retrieved exactly once.
+            await completed
+        except asyncio.CancelledError:
+            cancelled = True
+        finally:
+            task.remove_done_callback(finished)
+    try:
+        result = task.result()
+    except Exception as exc:
+        if cancelled:
+            logger.error("Error cleaning up cancelled resource: %s", exc)
+            raise asyncio.CancelledError from exc
+        raise
+    if cancelled:
+        raise asyncio.CancelledError
+    return result
 
 
 class ResourcePool(Generic[T]):
@@ -46,7 +79,8 @@ class ResourcePool(Generic[T]):
         self._cleanup = cleanup
 
         self._pool: list[T] = []
-        self._in_use: Set[T] = set()
+        self._in_use: Dict[int, T] = {}
+        self._retired: Set[int] = set()
         self._lock = threading.Lock()
         self._semaphore = threading.Semaphore(max_size)
         self._created_count = 0
@@ -78,43 +112,56 @@ class ResourcePool(Generic[T]):
                     else:
                         raise RuntimeError("Pool exhausted")
 
-                self._in_use.add(resource)
+                self._in_use[id(resource)] = resource
 
             yield resource
 
         finally:
             if resource is not None:
                 with self._lock:
-                    self._in_use.discard(resource)
-                    self._pool.append(resource)
+                    self._in_use.pop(id(resource), None)
+                    if id(resource) in self._retired:
+                        self._retired.discard(id(resource))
+                        self._dispose(resource)
+                    else:
+                        self._pool.append(resource)
             self._semaphore.release()
 
+    def _dispose(self, resource):
+        try:
+            if self._cleanup:
+                self._cleanup(resource)
+        except Exception as exc:
+            logger.error("Error cleaning up resource: %s", exc)
+        finally:
+            self._created_count -= 1
+
     def cleanup_all(self):
-        """Clean up all resources in the pool."""
+        """Close idle resources and retire active leases when returned."""
         with self._lock:
-            # Clean up pooled resources
+            self._retired.update(self._in_use)
             for resource in self._pool:
-                if self._cleanup:
-                    try:
-                        self._cleanup(resource)
-                    except Exception as e:
-                        logger.error(f"Error cleaning up resource: {e}")
-
-            # Clean up in-use resources (best effort)
-            for resource in self._in_use:
-                if self._cleanup:
-                    try:
-                        self._cleanup(resource)
-                    except Exception as e:
-                        logger.error(f"Error cleaning up in-use resource: {e}")
-
+                self._dispose(resource)
             self._pool.clear()
-            self._in_use.clear()
-            self._created_count = 0
+
+
+class _AsyncPoolState:
+    """Resources belonging to one event loop; guarded by the pool mutex."""
+
+    def __init__(self):
+        self.idle = []
+        self.borrowed = {}
+        self.retired = set()
+        self.generation = 0
+        self.creating = 0
 
 
 class AsyncResourcePool(Generic[T]):
-    """Async version of ResourcePool for async resources."""
+    """Reuse async resources only on their owning loop, with one aggregate cap.
+
+    Owners must await ``cleanup_all()`` before closing their event loop. Cleanup
+    affects that loop only; borrowed resources remain usable until lease return.
+    """
 
     def __init__(
         self,
@@ -123,96 +170,152 @@ class AsyncResourcePool(Generic[T]):
         timeout: float = 30.0,
         cleanup: Optional[Callable[[T], Any]] = None,
     ):
-        """Initialize the async resource pool.
-
-        Args:
-            factory: Async function to create new resources
-            max_size: Maximum pool size
-            timeout: Timeout for acquiring resources
-            cleanup: Optional async cleanup function
-        """
+        """Initialize a pool with a maximum resource count across all loops."""
+        if max_size < 1:
+            raise ValueError("max_size must be positive")
         self._factory = factory
         self._max_size = max_size
         self._timeout = timeout
         self._cleanup = cleanup
-
-        self._pool: list[T] = []
-        self._in_use: Set[T] = set()
-        self._lock = asyncio.Lock()
-        self._semaphore = asyncio.Semaphore(max_size)
+        self._states = {}
+        self._mutex = threading.Lock()
+        self._waiters = set()
         self._created_count = 0
+
+    def _state(self, loop):
+        return self._states.setdefault(loop, _AsyncPoolState())
+
+    def _prune(self, loop, state):
+        if not state.idle and not state.borrowed and not state.creating:
+            if self._states.get(loop) is state:
+                del self._states[loop]
+
+    @property
+    def _pool(self):
+        with self._mutex:
+            return self._state(asyncio.get_running_loop()).idle
+
+    @property
+    def _in_use(self):
+        with self._mutex:
+            return self._state(asyncio.get_running_loop()).borrowed
+
+    @staticmethod
+    def _wake(waiter):
+        if not waiter.done():
+            waiter.set_result(None)
+
+    def _notify(self):
+        # Called under the mutex. Futures belong to their respective loops.
+        for waiter in self._waiters:
+            loop = waiter.get_loop()
+            if not loop.is_closed():
+                try:
+                    loop.call_soon_threadsafe(self._wake, waiter)
+                except RuntimeError:
+                    logger.debug("Resource waiter loop closed during notification")
+
+    async def _dispose(self, resource):
+        try:
+            if self._cleanup:
+                result = self._cleanup(resource)
+                if inspect.isawaitable(result):
+                    await _await_cleanup(result)
+        except Exception as exc:
+            logger.error("Error cleaning up resource: %s", exc)
+        finally:
+            with self._mutex:
+                self._created_count -= 1
+                self._notify()
 
     @asynccontextmanager
     async def acquire(self):
-        """Acquire a resource from the pool asynchronously.
-
-        Yields:
-            Resource instance
-
-        Raises:
-            TimeoutError: If resource cannot be acquired within timeout
-        """
+        """Acquire on the current loop, timing out if aggregate capacity is full."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self._timeout
+        while True:
+            with self._mutex:
+                state = self._state(loop)
+                generation = state.generation
+                if state.idle:
+                    resource = state.idle.pop()
+                    state.borrowed[id(resource)] = resource
+                    create = False
+                    break
+                if self._created_count < self._max_size:
+                    self._created_count += 1
+                    state.creating += 1
+                    create = True
+                    break
+                waiter = loop.create_future()
+                self._waiters.add(waiter)
+            try:
+                await asyncio.wait_for(waiter, max(0, deadline - loop.time()))
+            except asyncio.TimeoutError:
+                raise TimeoutError(
+                    f"Failed to acquire resource within {self._timeout}s"
+                ) from None
+            finally:
+                with self._mutex:
+                    self._waiters.discard(waiter)
+                    self._prune(loop, state)
+        if create:
+            try:
+                resource = self._factory()
+                if inspect.isawaitable(resource):
+                    resource = await resource
+            except BaseException:
+                with self._mutex:
+                    self._created_count -= 1
+                    state.creating -= 1
+                    self._prune(loop, state)
+                    self._notify()
+                raise
+            with self._mutex:
+                state.creating -= 1
+                state.borrowed[id(resource)] = resource
+                if state.generation != generation:
+                    state.retired.add(id(resource))
         try:
-            await asyncio.wait_for(self._semaphore.acquire(), timeout=self._timeout)
-        except asyncio.TimeoutError:
-            raise TimeoutError(f"Failed to acquire resource within {self._timeout}s")
-
-        resource = None
-        try:
-            async with self._lock:
-                # Try to get from pool
-                if self._pool:
-                    resource = self._pool.pop()
-                else:
-                    # Create new resource if under limit
-                    if self._created_count < self._max_size:
-                        if asyncio.iscoroutinefunction(self._factory):
-                            resource = await self._factory()
-                        else:
-                            resource = self._factory()
-                        self._created_count += 1
-                    else:
-                        raise RuntimeError("Pool exhausted")
-
-                self._in_use.add(resource)
-
             yield resource
-
         finally:
-            if resource is not None:
-                async with self._lock:
-                    self._in_use.discard(resource)
-                    self._pool.append(resource)
-            self._semaphore.release()
+            with self._mutex:
+                state.borrowed.pop(id(resource), None)
+                retire = id(resource) in state.retired
+                state.retired.discard(id(resource))
+                if not retire:
+                    state.idle.append(resource)
+                self._notify()
+            if retire:
+                try:
+                    await self._dispose(resource)
+                finally:
+                    with self._mutex:
+                        self._prune(loop, state)
 
     async def cleanup_all(self):
-        """Clean up all resources in the pool asynchronously."""
-        async with self._lock:
-            # Clean up pooled resources
-            for resource in self._pool:
-                if self._cleanup:
-                    try:
-                        if asyncio.iscoroutinefunction(self._cleanup):
-                            await self._cleanup(resource)
-                        else:
-                            self._cleanup(resource)
-                    except Exception as e:
-                        logger.error(f"Error cleaning up resource: {e}")
+        """Close current-loop idle resources; retire its outstanding leases.
 
-            # Clean up in-use resources (best effort)
-            for resource in self._in_use:
-                if self._cleanup:
-                    try:
-                        if asyncio.iscoroutinefunction(self._cleanup):
-                            await self._cleanup(resource)
-                        else:
-                            self._cleanup(resource)
-                    except Exception as e:
-                        logger.error(f"Error cleaning up in-use resource: {e}")
-
-            self._pool.clear()
-            self._in_use.clear()
-            self._created_count = 0
+        Resources borrowed by another caller are closed when returned, never
+        while that caller is using them. Other event loops are untouched.
+        """
+        loop = asyncio.get_running_loop()
+        with self._mutex:
+            state = self._states.get(loop)
+            if state is None:
+                return
+            state.generation += 1
+            state.retired.update(state.borrowed)
+            idle, state.idle = state.idle, []
+        try:
+            if idle:
+                closing = asyncio.gather(
+                    *(self._dispose(resource) for resource in idle)
+                )
+                await _await_cleanup(closing)
+        finally:
+            with self._mutex:
+                self._prune(loop, state)
 
 
 class ResourceTracker:
@@ -342,10 +445,9 @@ async def async_managed_resource(
     finally:
         if cleanup:
             try:
-                if asyncio.iscoroutinefunction(cleanup):
-                    await cleanup(resource)
-                else:
-                    cleanup(resource)
+                result = cleanup(resource)
+                if inspect.isawaitable(result):
+                    await _await_cleanup(result)
             except Exception as e:
                 logger.error(f"Error cleaning up {resource_type}: {e}")
 

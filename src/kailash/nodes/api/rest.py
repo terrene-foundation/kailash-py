@@ -1946,6 +1946,12 @@ class RESTClientNode(Node):
             hop_url = decision["url"]
             result = self.http_node.execute(**call)
 
+    async def cleanup(self):
+        """Release async transport resources before their owner loop closes."""
+        transport = getattr(self, "_async_http_node", None)
+        if transport is not None:
+            await transport.cleanup()
+
     def _build_async_result(
         self, http_result: dict[str, Any], url: str, method: str
     ) -> dict[str, Any]:
@@ -2407,6 +2413,11 @@ class AsyncRESTClientNode(AsyncNode):
         super().__init__(**kwargs)
         self.http_node = AsyncHTTPRequestNode(**kwargs)
         self.rest_node = RESTClientNode(**kwargs)
+
+    async def cleanup(self):
+        """Release both transport delegates on their owning event loop."""
+        await self.http_node.cleanup()
+        await self.rest_node.cleanup()
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         """Define the parameters this node accepts.
