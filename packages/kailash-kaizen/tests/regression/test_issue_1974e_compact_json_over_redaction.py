@@ -321,9 +321,9 @@ class TestRealCredentialsStillRedacted:
         reverted twice on the sibling rules.
         """
         pat = "https://" + "ghp0abcdef1234567890" + _AT + "github.example.com/o/r"
-        assert _URL_WITH_USERINFO_ONLY.search(pat), (
-            "the bare-token-in-userinfo rule stopped matching its own shape"
-        )
+        assert _URL_WITH_USERINFO_ONLY.search(
+            pat
+        ), "the bare-token-in-userinfo rule stopped matching its own shape"
         quoted = "https://tok" + _Q + "en1234567890" + _AT + "github.example.com/o/r"
         assert _URL_WITH_USERINFO_ONLY.search(quoted), (
             "a bare token containing a quote is no longer claimed — that is the "

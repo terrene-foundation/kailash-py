@@ -1,7 +1,6 @@
 ## Active landing checkpoint — CSQ 13 resumed, 2026-09-25
 
-**Do next:** finish and drain the watchdog fixture lane exposed by the actual full
-Core gate, then run final configured parity/hooks, push PR #2229
+**Do next:** run the final exact Core gate and complete configured hooks, push PR #2229
 once, verify required checks AND all failing test jobs on its exact head, and merge
 under already-recorded D1 approval. Advisory #73 is excluded; five inherited stashes stay held.
 Re-check: `gh pr view 2229 --json state,headRefOid` — OPEN means promotion remains due.
@@ -15,9 +14,14 @@ review of their union and final actual workflow/hook runs remain open.
 
 Actual integrated census at `b796ffe08`: Core unit 5368 pass / one watchdog failure;
 Core integration 2607 pass; infrastructure 27 + 22 pass; Kaizen LLM 1822 pass.
-Expanded Kaizen, regression and hooks remain pending. Warning-instrument repairs
+Expanded Kaizen 8387 pass, regression 1965 pass, authorization parity 43 pass,
+agents 818 pass. Skipped paths are not verified. Full hooks found one formatting-only
+delta; the final hooks must rerun after that correction. Watchdog `772f12c64` is landed
+(merge `03efa7c48`) with 13 strict tests, discriminating threshold/callback controls,
+two independent clean rounds, and its completed sibling/branch removed.
+Warning-instrument repairs
 `0f126ca02` and `1df572866` are published. Ignored duplicate pytest configuration is
-being removed with actual old/new pytest9 controls; active pytest.ini settings stay intact.
+landed as `658d97de4` with actual old/new pytest9 controls; active pytest.ini settings stay intact.
 
 Focused results: 37 coroutine tests, 22 memory tests, 118 Core fixtures plus one fresh
 Align import test, and 277 network/audio tests passed with negative controls. These

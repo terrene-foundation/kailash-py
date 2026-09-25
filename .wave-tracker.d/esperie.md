@@ -1,13 +1,12 @@
 ## Integrated promotion gate — CSQ 13 resumed, 2026-09-25
 
-Prior implementation lanes are landed and drained. The actual full gate exposed a
-watchdog fixture scheduling assumption; one bounded sibling is active for that repair.
-Drain it immediately after review and publication, then validate the final delta.
+All implementation lanes are landed and drained, including watchdog `772f12c64`
+(dev merge `03efa7c48`). Only the primary checkout remains. Validate the final
+test/configuration/formatting delta before the one consolidated promotion push.
 
 | Lane | Task set | Agent roster | State |
 | --- | --- | --- | --- |
-| Watchdog fixture | `fix/promotion-watchdog-fixtures` / sibling `promotion-watchdog-fixtures`; callback synchronization and threshold discrimination | owned_execution implements; root + security_review independent | 11 focused tests pass; root review strengthening threshold control |
-| Final parity | Actual Core, infrastructure, Kaizen and full configured hooks; serial one remote mirror | promotion_recovery | prepared from current workflow including root trust extra; awaits final freeze |
+| Final parity | Actual Core, infrastructure, Kaizen and full configured hooks; serial one remote mirror | promotion_recovery | Kaizen and infrastructure complete; final Core rerun and complete hooks pending |
 | Holistic correctness | Union since `71a9347cb`; absolute caller/assertion/lifecycle sweeps | owned_execution | reviewing integrated final source |
 | Holistic security | Refute cross-shard interactions; mapped CIDRs, ownership, warning scopes | security_review | reviewing integrated final source |
 | Integration / all refs | Publish dev, reap completed siblings, pinned promotion checks and approved merge; archive adjudication | root | warning merge `8fe71c879`, network source `9eaa4d4ee` |
