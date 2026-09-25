@@ -251,7 +251,8 @@ def restore_governance_store(engine: Any, path: str) -> None:
         )
         engine._restore_clearance(clearance)
 
-    # Restore envelopes via public API (includes monotonic tightening validation)
+    # Preserve historical targets while retaining definer authorization and
+    # monotonic tightening. Current decision APIs reject absent role identities.
     for env_data in data.get("envelopes", []):
         envelope_config = ConstraintEnvelopeConfig.model_validate(env_data["envelope"])
         role_envelope = RoleEnvelope(
@@ -263,7 +264,7 @@ def restore_governance_store(engine: Any, path: str) -> None:
             created_at=datetime.fromisoformat(env_data["created_at"]),
             modified_at=datetime.fromisoformat(env_data["modified_at"]),
         )
-        engine.set_role_envelope(role_envelope)
+        engine._restore_role_envelope(role_envelope)
 
     # Restore KSPs directly to store -- bypass the creation gate, for the same
     # reason the bridge leg below does (issue #2238). Restoring is a PRIVILEGED

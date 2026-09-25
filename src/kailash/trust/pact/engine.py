@@ -547,8 +547,7 @@ class GovernanceEngine:
                         return AccessDecision(
                             allowed=False,
                             reason=(
-                                f"Pre-retrieval filter denied: "
-                                f"{filter_decision.reason}"
+                                f"Pre-retrieval filter denied: {filter_decision.reason}"
                             ),
                             step_failed=0,
                             audit_details={
@@ -777,6 +776,25 @@ class GovernanceEngine:
         Returns:
             A GovernanceVerdict with the decision.
         """
+        role_node = self._compiled_org.get_role_node(role_address)
+        if role_node is None or role_node.address != role_address:
+            details = {
+                "role_address": role_address,
+                "action": action,
+                "level": "blocked",
+                "detail": "missing_role",
+            }
+            self._emit_audit_unlocked("verify_action", details)
+            return GovernanceVerdict(
+                level="blocked",
+                reason=f"No role exists at address '{role_address}' -- fail-closed",
+                role_address=role_address,
+                action=action,
+                effective_envelope_snapshot=None,
+                audit_details=details,
+                access_decision=None,
+                timestamp=now,
+            )
         # Step 0: Vacancy check (PACT Section 5.5) -- BEFORE envelope checks.
         # If the role or any ancestor is vacant without a valid acting occupant
         # designation, all actions are blocked (auto-suspended).
@@ -2093,8 +2111,7 @@ class GovernanceEngine:
                     return GovernanceVerdict(
                         level="blocked",
                         reason=(
-                            f"Cannot resume plan '{plan_id}': "
-                            f"unmet conditions: {unmet}"
+                            f"Cannot resume plan '{plan_id}': unmet conditions: {unmet}"
                         ),
                         role_address=suspension.role_address,
                         action="resume_plan",
@@ -2327,6 +2344,7 @@ class GovernanceEngine:
         """
         with self._lock:
             # Compute effective envelope
+            role_address = self._resolve_role_address(role_address)
             effective_env = self._compute_envelope_locked(role_address)
 
             # Get clearance if it exists
@@ -2379,14 +2397,11 @@ class GovernanceEngine:
             The canonical positional address string.
 
         Raises:
-            PactError: If the identifier cannot be resolved to any node.
+            PactError: If the identifier cannot be resolved to a role node.
         """
-        # Try exact address lookup first (O(1))
-        if role_address in self._compiled_org.nodes:
-            return role_address
-
-        # Fallback: search by config role_id (O(n) over nodes)
-        node = self._compiled_org.get_node_by_role_id(role_address)
+        node = self._compiled_org.get_role_node(role_address)
+        if node is None:
+            node = self._compiled_org.get_node_by_role_id(role_address)
         if node is not None:
             return node.address
 
@@ -2654,7 +2669,7 @@ class GovernanceEngine:
         """
         with self._lock:
             # RED TEAM FIX R2: validate address exists in org
-            if role_address not in self._compiled_org.nodes:
+            if self._compiled_org.get_role_node(role_address) is None:
                 raise PactError(
                     f"Cannot register bridge consent: address '{role_address}' "
                     f"does not exist in the compiled organization",
@@ -2678,7 +2693,7 @@ class GovernanceEngine:
         """Register a role as the designated compliance approver for bridges."""
         with self._lock:
             # RED TEAM FIX R2: validate address exists in org
-            if role_address not in self._compiled_org.nodes:
+            if self._compiled_org.get_role_node(role_address) is None:
                 raise PactError(
                     f"Cannot register compliance role: address '{role_address}' "
                     f"does not exist in the compiled organization",
@@ -2776,7 +2791,7 @@ class GovernanceEngine:
             # cannot be shown to come from a non-vacant role, so it is refused
             # rather than trusted. Same precedent as register_compliance_role,
             # which already refuses an address that is not in the org.
-            approver_node = self._compiled_org.nodes.get(approver_address)
+            approver_node = self._compiled_org.get_role_node(approver_address)
             if approver_node is None:
                 raise PactError(
                     f"Bridge approval requires an approver that exists in the "
@@ -2923,8 +2938,13 @@ class GovernanceEngine:
                 )
 
             # Vacancy check: vacant roles cannot reject bridges
-            rejector_node = self._compiled_org.nodes.get(rejector_address)
-            if rejector_node is not None and rejector_node.is_vacant:
+            rejector_node = self._compiled_org.get_role_node(rejector_address)
+            if rejector_node is None:
+                raise PactError(
+                    f"Bridge rejection requires a role in the organization: '{rejector_address}'",
+                    details={"rejector_address": rejector_address},
+                )
+            if rejector_node.is_vacant:
                 raise PactError(
                     f"Bridge rejection cannot be given by vacant role '{rejector_address}'",
                     details={
@@ -3364,6 +3384,16 @@ class GovernanceEngine:
             MonotonicTighteningError: If the envelope is wider than the
                 defining role's effective envelope.
         """
+        self._set_role_envelope(envelope)
+
+    def _restore_role_envelope(self, envelope: RoleEnvelope) -> None:
+        """Restore an admin snapshot, retaining definer and tightening checks."""
+        self._set_role_envelope(envelope, restore_missing_target=True)
+
+    def _set_role_envelope(
+        self, envelope: RoleEnvelope, *, restore_missing_target: bool = False
+    ) -> None:
+        """Persist an envelope after shared authorization and tightening checks."""
         with self._lock:
             # SECURITY: resolve the defining role BEFORE trusting it. The
             # monotonic-tightening gate below is skipped when the defining
@@ -3411,9 +3441,19 @@ class GovernanceEngine:
             # Parity: yaml_resolvers.resolve_envelope resolves spec.target the
             # same way before a RoleEnvelope is ever constructed.
             try:
-                target_address = self._resolve_role_address(
-                    envelope.target_role_address
-                )
+                if (
+                    restore_missing_target
+                    and envelope.target_role_address not in self._compiled_org.nodes
+                ):
+                    # Historical targets stay inert: decision APIs require a
+                    # current ROLE node. Existing units are never exempted.
+                    target_address = str(Address.parse(envelope.target_role_address))
+                    if target_address != envelope.target_role_address:
+                        raise PactError("Historical target must be a canonical address")
+                else:
+                    target_address = self._resolve_role_address(
+                        envelope.target_role_address
+                    )
             except PactError as exc:
                 raise PactError(
                     f"Cannot set role envelope '{envelope.id}': target role "
@@ -3694,7 +3734,7 @@ class GovernanceEngine:
 
         with self._lock:
             # Validate the vacant role exists and is actually vacant
-            node = self._compiled_org.nodes.get(vacant_role)
+            node = self._compiled_org.get_role_node(vacant_role)
             if node is None:
                 raise PactError(
                     f"Vacant role address '{vacant_role}' not found in org",
@@ -3707,7 +3747,7 @@ class GovernanceEngine:
                 )
 
             # Validate the acting role exists
-            acting_node = self._compiled_org.nodes.get(acting_role)
+            acting_node = self._compiled_org.get_role_node(acting_role)
             if acting_node is None:
                 raise PactError(
                     f"Acting role address '{acting_role}' not found in org",
@@ -3715,7 +3755,7 @@ class GovernanceEngine:
                 )
 
             # Validate the designating role exists
-            designator_node = self._compiled_org.nodes.get(designated_by)
+            designator_node = self._compiled_org.get_role_node(designated_by)
             if designator_node is None:
                 raise PactError(
                     f"Designating role address '{designated_by}' not found in org",
