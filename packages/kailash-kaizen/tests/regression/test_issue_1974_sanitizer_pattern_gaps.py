@@ -338,29 +338,22 @@ def test_documented_posture_still_holds_for_true_long_runs() -> None:
     [
         (
             "GET http://host.example.com:8080/@handle returned 404",
-            "GET http://[REDACTED]:[REDACTED]@handle returned 404",
+            "GET http://host.example.com:8080/@handle returned 404",
         ),
         (
             "GET https://api.example.com/s?q=name:foo@bar.com failed",
-            "GET https://[REDACTED]:[REDACTED]@bar.com failed",
+            "GET https://api.example.com/s?q=name:foo@bar.com failed",
         ),
     ],
     ids=["at-sign-in-path", "at-sign-in-query"],
 )
-def test_known_over_redaction_shapes_are_unchanged_from_before(
+def test_url_authority_boundaries_preserve_path_and_query_diagnostics(
     text: str, expected: str
 ) -> None:
-    """A credential-free URL carrying BOTH a ':' and a later '@' over-redacts.
+    """Only authority userinfo is credential data; path/query prose is preserved.
 
-    Pinned deliberately. This is NOT introduced by the #1974 scheme broadening:
-    the pre-#1974 pattern ``(https?://)[^@\\s]+:[^@\\s]+@`` produces byte-identical
-    output on both vectors, because ``8080/`` and ``com/s?q=name`` satisfy a
-    ``[^@\\s]+`` userinfo just as they satisfy ``[^\\s]*``. Narrowing the userinfo
-    class back to ``[^@\\s]`` would therefore NOT fix these while it WOULD
-    re-open the ``redis://:pass@`` and ``user:p@ssw0rd@host`` leaks above.
-
-    Pinning the exact strings means any future attempt to widen the userinfo
-    match further shows up here as a diff rather than silently.
+    The canonical authority scanner stops at /, ? and #. Existing raw-@ and
+    empty-username credential controls above still require full redaction.
     """
     out = sanitize_provider_error(RuntimeError(text), "test")
     assert out == f"test error (RuntimeError): {expected}", out

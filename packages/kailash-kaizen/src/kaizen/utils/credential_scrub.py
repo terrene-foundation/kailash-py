@@ -40,8 +40,12 @@ fix. Per ``rules/security.md`` § Credential Decode Helpers, every scrub site
 routes through ONE implementation — per-module copies are BLOCKED because
 drift between them is guaranteed, not hypothetical.
 
-REGEX SAFETY CONTRACT (read before touching ANY pattern below)
+URL COMPATIBILITY PATTERNS AND GENERIC REGEX SAFETY
 --------------------------------------------------------------
+Provider redaction now uses the canonical core URL scanner and JSON token
+segmentation. The three URL regex constants remain exported for existing
+pattern-level consumers; they no longer execute in scrub_credentials.
+Their historical ordering and complexity notes follow for compatibility.
 The three URL rules are ORDER-DEPENDENT and each is LINEAR for DoS reasons
 documented inline at that rule — but by two DIFFERENT mechanisms, and the
 distinction matters if you add a rule. ``_URL_WITH_AUTH`` is BOUNDED
@@ -77,6 +81,8 @@ from __future__ import annotations
 
 import re
 from typing import Final, List
+
+from kailash.utils.url_credentials import is_sensitive_query_key, mask_error_text
 
 __all__ = [
     "scrub_credentials",
@@ -318,14 +324,27 @@ _VENDOR_QUALIFIED_KEY: Final[str] = (
     r"(?:" + _PROVIDER_NAME_ALTERNATION + r")[-_]?(?:api[-_]?)?(?:key|token)"
 )
 
-_CREDENTIAL_KEY_NAMES: Final[str] = (
-    r"[\"']?(?i:" + _VENDOR_QUALIFIED_KEY + r"|"
+_CREDENTIAL_KEY_STEM: Final[str] = (
+    r"(?i:" + _VENDOR_QUALIFIED_KEY + r"|"
     r"passwd|password|passphrase|pwd|secret[-_]?key|secret|"
     r"api[-_]?key|apikey|"
     r"access[-_]?token|refresh[-_]?token|id[-_]?token|"
     r"client[-_]?secret|auth[-_]?token|private[-_]?key|"
-    r"session[-_]?key|encryption[-_]?key)[\"']?\s*[=:]\s*[\"']?"
+    r"session[-_]?key|encryption[-_]?key)"
 )
+_CREDENTIAL_KEY_NAMES: Final[str] = (
+    r"[\"']?" + _CREDENTIAL_KEY_STEM + r"[\"']?\s*[=:]\s*[\"']?"
+)
+_CREDENTIAL_JSON_KEY = re.compile(_CREDENTIAL_KEY_STEM, re.ASCII)
+
+
+def _is_sensitive_credential_key(key: str) -> bool:
+    return (
+        is_sensitive_query_key(key)
+        or _CREDENTIAL_JSON_KEY.fullmatch(key) is not None
+        or key.lower() in {"authorization", "proxy-authorization"}
+    )
+
 
 #: ``password=<secret-shaped value>`` — safe under BOTH presets, because the
 #: key announces a secret AND the value looks like one. "Looks like one" is
@@ -600,7 +619,14 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
     # "=" is in the class because base64 bearer tokens carry "=" padding; the
     # prior class stopped before it and left the padding dangling. The class is
     # disjoint from the preceding ``\s`` run, so the pattern stays linear.
-    re.compile(r"Bearer\s+[a-zA-Z0-9._\-=]+", re.ASCII),
+    re.compile(r"(?i:Bearer)\s+[a-zA-Z0-9._~+/\-=]+", re.ASCII),
+    # Explicit authentication headers announce even an all-letter base64
+    # credential; no digit/padding heuristic is sound in this context.
+    re.compile(
+        r"[\"']?(?i:\b(?:proxy-)?authorization)[\"']?\s*[=:]\s*[\"']?"
+        r"(?i:Basic)\s+[A-Za-z0-9+/]+={0,2}",
+        re.ASCII,
+    ),
     # HTTP Basic auth. The sibling of the ``Bearer`` rule directly above, and
     # its absence was a plain omission rather than a decision: a
     # ``Authorization: Basic dXNlcjpwYXNzd29yZA==`` header echoed into an error
@@ -948,11 +974,19 @@ _OPAQUE_SHAPE_PATTERNS: Final[frozenset] = frozenset(
 # complexity-class regression versus the plain class (1.1x). Absolute cost is
 # ~5x higher in microseconds, on an error path. The `{0,256}` DoS bound above
 # is unchanged and still does the load-bearing work.
+# Current authority contract: /, ? and # terminate userinfo. These delimiters
+# prevent a path or a following URL from being consumed as a credential and
+# bound repeated-scheme failure scans. Reserved characters in valid userinfo
+# must be percent-encoded. Earlier attack-history comments below describe the
+# previous unfenced rules; the executable rules all enforce this boundary.
+# URL parsers discard LF, CR and TAB; error text may still carry them inside
+# userinfo. Scrub before flattening, retaining ordinary-space boundaries and
+# the existing bounds / deterministic colon split to avoid new backtracking.
 _URL_WITH_AUTH = re.compile(
     r"([A-Za-z][A-Za-z0-9+.-]{0,31}://)"
-    r'(?:(?!"[,}\]:])[^\s]){0,256}'
+    r'(?:(?!"[,}\]:])[^/?#\f\v ]){0,256}'
     r":"
-    r'(?:(?!"[,}\]:])[^\s]){0,256}'
+    r'(?:(?!"[,}\]:])[^/?#\f\v ]){0,256}'
     r"@",
     re.ASCII,
 )
@@ -992,9 +1026,9 @@ _URL_WITH_AUTH = re.compile(
 # exclusion; a future edit that relaxes either one re-opens the whole class.
 _URL_WITH_AUTH_OVERFLOW = re.compile(
     r"([A-Za-z][A-Za-z0-9+.-]{0,31}://)"
-    r'(?:(?!"[,}\]:])[^\s@:])*'
+    r'(?:(?!"[,}\]:])[^/?#\f\v @:])*'
     r":"
-    r'(?:(?!"[,}\]:])[^\s@])*'
+    r'(?:(?!"[,}\]:])[^/?#\f\v @])*'
     r"@",
     re.ASCII,
 )
@@ -1058,7 +1092,7 @@ _URL_WITH_AUTH_OVERFLOW = re.compile(
 # `https://tok"en...@host`; the plain exclusion fences the crossings but drops
 # that token entirely.
 _URL_WITH_USERINFO_ONLY = re.compile(
-    r'([A-Za-z][A-Za-z0-9+.-]{0,31}://)(?:(?!"[,}\]:])[^\s@:/])+@', re.ASCII
+    r'([A-Za-z][A-Za-z0-9+.-]{0,31}://)(?:(?!"[,}\]:])[^/?#\f\v @:/])+@', re.ASCII
 )
 
 # ---------------------------------------------------------------------------
@@ -1225,86 +1259,29 @@ def scrub_credentials(
             "ordering contract in scrub_credentials()"
         )
 
-    sanitized = text
+    # Recognize complete URL credentials before generic token patterns can
+    # consume a long username and erase its scheme. Process only the gaps with
+    # the other rules, so replacement markers are literal and never re-scrubbed.
+    def _scrub_fragment(fragment: str) -> str:
+        for pattern in _CREDENTIAL_PATTERNS:
+            if not redact_opaque_tokens and pattern in _OPAQUE_SHAPE_PATTERNS:
+                continue
+            fragment = pattern.sub(lambda _match: placeholder, fragment)
+        if redact_paths:
+            fragment = _AZURE_OPENAI_ENDPOINT.sub(
+                lambda _match: f"https://{placeholder}.openai.azure.com", fragment
+            )
+            for pattern in _INTERNAL_PATH_PATTERNS:
+                fragment = pattern.sub(_PATH_PLACEHOLDER, fragment)
+        return fragment
 
-    # EVERY substitution below passes a CALLABLE, never a replacement-template
-    # STRING, and that is a correctness requirement rather than a style.
-    #
-    # ``re.sub``'s string replacement is a TEMPLATE: it expands ``\1``,
-    # ``\g<0>`` and ``\g<name>`` inside it. ``placeholder`` is CALLER-SUPPLIED
-    # and was being interpolated straight into that template, so a placeholder
-    # of ``\g<0>`` replaced every matched credential WITH ITSELF — a scrubber
-    # that returns its own input, reporting success. The guard above rejected
-    # ``@``, ``://``, whitespace and the fence trigger, none of which is a
-    # backslash, so the value sailed through.
-    #
-    # Not hypothetical: ``core/autonomy/hooks/security/redaction.py`` passes an
-    # operator-settable ``RedactionConfig.redaction_marker`` here, documented
-    # with a ``redaction_marker="***"`` example — i.e. reachable from public
-    # config.
-    #
-    # A callable's return value is used LITERALLY (no expansion), so the
-    # placeholder can no longer be interpreted as syntax at all. The two
-    # backreference-bearing replacements below rebuild ``\1`` from
-    # ``match.group(1)`` instead, keeping the scheme prefix exactly as the
-    # template did.
-    # ``_match`` is REQUIRED and deliberately UNUSED: ``re.sub`` calls its
-    # replacement with the match object, and this replacement is a CONSTANT by
-    # design — ignoring the match is exactly what makes the placeholder
-    # non-expanding. Underscore-prefixed to record that, not an oversight;
-    # removing the parameter breaks the ``re.sub`` callable contract.
-    def _literal(_match: re.Match) -> str:
-        return placeholder
-
-    # Vendor-prefixed / shape-anchored credentials first.
-    #
-    # The gate SKIPS entries in place rather than iterating a filtered list
-    # built elsewhere, because the apply ORDER of this list is load-bearing and
-    # a second list is a second thing to keep in order. With
-    # ``redact_opaque_tokens=True`` the sequence of substitutions is identical
-    # to the pre-flag function, element for element.
-    for pattern in _CREDENTIAL_PATTERNS:
-        if not redact_opaque_tokens and pattern in _OPAQUE_SHAPE_PATTERNS:
-            continue
-        sanitized = pattern.sub(_literal, sanitized)
-
-    # URL-embedded credentials. The bounded rule runs FIRST because it
-    # is the one that handles a literal `@` inside the userinfo; the overflow
-    # companion then claims any userinfo too long for that rule's DoS bound.
-    def _userpass_replacement(match: re.Match) -> str:
-        # group(1) is the scheme (`postgresql://`), preserved verbatim — the
-        # literal equivalent of the old `\1` template, without the expansion.
-        return f"{match.group(1)}{placeholder}:{placeholder}@"
-
-    sanitized = _URL_WITH_AUTH.sub(_userpass_replacement, sanitized)
-    sanitized = _URL_WITH_AUTH_OVERFLOW.sub(_userpass_replacement, sanitized)
-
-    # Runs LAST: the two user:pass rules above have already rewritten their
-    # matches to `scheme://<placeholder>:<placeholder>@`, which contains a `:`
-    # and so is not re-matched by this no-colon rule. Ordering therefore keeps
-    # the user/pass shape visible where one existed, and only collapses
-    # userinfo that genuinely had no password half.
-    def _userinfo_only_replacement(match: re.Match) -> str:
-        return f"{match.group(1)}{placeholder}@"
-
-    sanitized = _URL_WITH_USERINFO_ONLY.sub(_userinfo_only_replacement, sanitized)
-
-    # INTERNAL-LOCATION rules. Both are gated together by ``redact_paths``;
-    # with the flag on, the order and effect are identical to the pre-flag
-    # function.
-    if redact_paths:
-        # Redact the resource name in Azure OpenAI endpoints (keep the suffix).
-        # ``_m`` is the same deliberate non-use as ``_literal`` above: the
-        # replacement is constant, so the match object is ignored on purpose.
-        sanitized = _AZURE_OPENAI_ENDPOINT.sub(
-            lambda _m: f"https://{placeholder}.openai.azure.com", sanitized
-        )
-
-        # Replace internal file paths.
-        for pattern in _INTERNAL_PATH_PATTERNS:
-            sanitized = pattern.sub(_PATH_PLACEHOLDER, sanitized)
-
-    return sanitized
+    return mask_error_text(
+        text,
+        placeholder=placeholder,
+        preserve_userinfo_shape=True,
+        sensitive_key=_is_sensitive_credential_key,
+        transform_unmasked=_scrub_fragment,
+    )
 
 
 def scrub_local_error(value: object, *, placeholder: str = DEFAULT_PLACEHOLDER) -> str:
