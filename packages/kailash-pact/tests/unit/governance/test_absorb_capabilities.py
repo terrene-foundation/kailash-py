@@ -71,14 +71,29 @@ def engine() -> PactEngine:
 # ---------------------------------------------------------------------------
 
 
-def test_verify_audit_chain_empty_returns_valid(engine: PactEngine) -> None:
-    """An empty / absent chain verifies as valid with zero anchors."""
+def test_verify_audit_chain_empty_is_unverifiable(engine: PactEngine) -> None:
+    """An absent audit trail cannot establish integrity (#2221)."""
     result = asyncio.run(engine.verify_audit_chain())
     assert isinstance(result, ChainVerificationResult)
-    assert result.is_valid is True
+    assert result.is_valid is False
     assert result.verified_count == 0
-    assert result.first_break_reason is None
+    assert result.first_break_reason is not None
+    assert "empty chain" in result.first_break_reason
     assert result.first_break_sequence is None
+
+
+def test_verify_audit_chain_missing_is_unverifiable(engine: PactEngine) -> None:
+    """The wrapper cannot report valid when its underlying chain is absent."""
+    engine._governance._audit_chain = None
+    result = asyncio.run(engine.verify_audit_chain())
+    assert result.is_valid is False
+    assert result.verified_count == 0
+    assert (
+        result.first_break_reason
+        == "no audit chain configured: integrity is unverifiable"
+    )
+    assert result.first_break_sequence is None
+    assert result.chain_id is None
 
 
 def test_verify_audit_chain_with_appended_anchors_valid(engine: PactEngine) -> None:
