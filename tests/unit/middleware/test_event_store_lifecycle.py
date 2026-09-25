@@ -9,7 +9,7 @@ from kailash.middleware.gateway.event_store import EventStore, EventType
 
 def test_sync_construction_defers_coroutine_and_append_starts_flush():
     with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always", RuntimeWarning)
+        warnings.simplefilter("always")
         store = EventStore(storage_backend="memory")
         gc.collect()
         assert store._flush_task is None
@@ -28,7 +28,7 @@ def test_sync_construction_defers_coroutine_and_append_starts_flush():
 
         asyncio.run(append_and_close())
         gc.collect()
-    assert not [w for w in caught if issubclass(w.category, RuntimeWarning)]
+    assert not caught
 
 
 def test_async_construction_starts_flush_and_close_drains():
