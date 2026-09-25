@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from kaizen.l3.factory.execution import Executable, OwnedExecution, TerminationReport
 from kaizen.l3.factory.factory import AgentFactory
 from kaizen.l3.factory.instance import (
     AgentInstance,
@@ -82,6 +83,24 @@ class AgentLifecycleManager:
             parent_id,
         )
         return instance
+
+    async def dispatch_agent(
+        self, instance_id: str, executable: Executable
+    ) -> OwnedExecution:
+        """Own one async execution explicitly; spawn_agent remains metadata-only."""
+        return await self._factory.dispatch(instance_id, executable)
+
+    async def terminate_owned_agent(
+        self,
+        instance_id: str,
+        reason: str = "explicit_termination",
+        *,
+        timeout: float | None = None,
+    ) -> TerminationReport:
+        """Cancel through the SDK and report actual local task completion."""
+        return await self._factory.terminate_owned(
+            instance_id, self._resolve_termination_reason(reason), timeout=timeout
+        )
 
     async def terminate_agent(
         self, instance_id: str, reason: str = "explicit_termination"

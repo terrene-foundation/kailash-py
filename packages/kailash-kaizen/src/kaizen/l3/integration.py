@@ -28,8 +28,9 @@ from kaizen.l3.context.types import DataClassification
 from kaizen.l3.envelope.enforcer import EnvelopeEnforcer
 from kaizen.l3.envelope.tracker import EnvelopeTracker
 from kaizen.l3.envelope.types import PlanGradient
+from kaizen.l3.factory.execution import Executable, OwnedExecution, TerminationReport
 from kaizen.l3.factory.factory import AgentFactory
-from kaizen.l3.factory.instance import AgentInstance
+from kaizen.l3.factory.instance import AgentInstance, TerminationReason
 from kaizen.l3.factory.registry import AgentInstanceRegistry
 from kaizen.l3.factory.spec import AgentSpec
 from kaizen.l3.messaging.router import MessageRouter
@@ -138,6 +139,22 @@ class L3Runtime:
             parent_id=parent_id,
             parent_scope=parent_scope,
         )
+
+    async def dispatch_agent(
+        self, instance_id: str, executable: Executable
+    ) -> OwnedExecution:
+        """Own one async execution explicitly; spawn_agent remains metadata-only."""
+        return await self.factory.dispatch(instance_id, executable)
+
+    async def terminate_owned_agent(
+        self,
+        instance_id: str,
+        reason: TerminationReason = TerminationReason.EXPLICIT_TERMINATION,
+        *,
+        timeout: float | None = None,
+    ) -> TerminationReport:
+        """Cancel through the SDK and report actual local task completion."""
+        return await self.factory.terminate_owned(instance_id, reason, timeout=timeout)
 
     def create_plan_executor(
         self,
