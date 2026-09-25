@@ -553,10 +553,9 @@ class TestAudioFieldBytes:
 
         field = AudioField()
 
-        import warnings
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
+        with pytest.warns(
+            UserWarning, match="^Could not detect audio format from bytes[.]"
+        ):
             field.load(audio_bytes)
 
         # Validation should fail because format is None
