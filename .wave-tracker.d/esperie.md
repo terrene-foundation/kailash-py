@@ -1,20 +1,21 @@
-## Live gate-repair lanes — CSQ 13 resumed, 2026-09-25
+## Integrated promotion gate — CSQ 13 resumed, 2026-09-25
 
-Primary dev published `ca15ac555`. Original promotion, #2249 and coroutine lanes are landed
-and their completed worktrees/local branches removed. This table supersedes older tables.
+All implementation lanes are landed. Completed siblings are drained immediately after
+publication; only the primary checkout is needed for final validation.
 
-| Lane | Branch / sibling worktree | Task set | Agent roster | State |
-| --- | --- | --- | --- | --- |
-| Warning fixtures | `fix/promotion-warning-fixtures` / `promotion-warning-fixtures` | JWT/AppKey fixtures, explicit warning contracts, real dead-loop pool test, runtime cleanup, recovered Align lazy import | owned_execution implements; root correctness; security_review independent | focused Core green; Align/control verification and final reviews |
-| Kaizen gate | `fix/promotion-kaizen-gates` / `promotion-kaizen-gates` | audio import isolation, mapped-IP/version parity, embedded custom CIDRs, localhost parse/connect parity | promotion_recovery Kaizen specialist; root correctness; security_review adversarial | repairing actual review findings before fresh two-clean gate |
-| Landed and drained | deleted coroutine branch/tree | EventStore deferred creation, MCP single-execution owned loop preserving caller policy | security_review implemented; owned_execution + root independently reviewed | `b31c191f9` on dev; ZERO-LOSS reap complete |
-| Integration | primary dev | memory temporary paths and cancellation-safe cleanup; CI trust extra; all-ref adjudication and final promotion | root implements/integrates; security_review two final clean memory rounds | `ca15ac555` published; final combined parity still due |
+| Lane | Task set | Agent roster | State |
+| --- | --- | --- | --- |
+| Final parity | Actual Core, infrastructure, Kaizen and full configured hooks; serial one remote mirror | promotion_recovery | prepared from current workflow including root trust extra; awaits final freeze |
+| Holistic correctness | Union since `71a9347cb`; absolute caller/assertion/lifecycle sweeps | owned_execution | reviewing integrated final source |
+| Holistic security | Refute cross-shard interactions; mapped CIDRs, ownership, warning scopes | security_review | reviewing integrated final source |
+| Integration / all refs | Publish dev, reap completed siblings, pinned promotion checks and approved merge; archive adjudication | root | warning merge `8fe71c879`, network source `9eaa4d4ee` |
 
-Every agent has an explicit report-back contract. Reuse these agents; do not launch duplicate
-lanes after a context boundary. No live original-session agents are implied by old tables.
-Archive evidence: `workspaces/issue-1720-llm-consolidation/04-validate/csq13-ref-adjudication.json`.
-The five inherited stashes stay held. The remote promotion branch still points to its old
-head pending one consolidated push; no main merge or final CI success is claimed.
+Completed coroutine `b31c191f9`, memory/CI `ca15ac555`, warning/Align `849157905`,
+and network/audio `9eaa4d4ee` have focused tests, negative controls and independent
+review receipts. Final full parity is not yet green. Reuse this roster; do not duplicate lanes.
+The five inherited stashes stay held. Archive evidence is in
+`workspaces/issue-1720-llm-consolidation/04-validate/csq13-ref-adjudication.json`.
+The remote promotion branch retains its old head until one consolidated validated push.
 
 ## CSQ 13 recovery — 2026-09-25
 

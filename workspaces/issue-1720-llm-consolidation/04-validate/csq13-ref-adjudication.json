@@ -2,25 +2,26 @@
   "reviewed_head": "71a9347cb3226ee9c6f9e0d304f677b486d1e0f1",
   "scope": "Archived ref content retention, not conformance of all historical behaviors; no ref deletion authorized by this report. Current repair commits are recorded separately.",
   "counts": {
+    "landed-equivalent": 10,
+    "superseded-diagnostics": 1,
+    "diagnostics-superseded-baggage-unverified": 1,
     "unresolved-historical-document": 1,
     "landed-exact-tree-via-squash": 19,
     "superseded-checkpoint": 1,
+    "landed-repair-with-evolved-dependencies": 1,
+    "superseded": 3,
+    "unresolved": 1,
+    "current-equivalent-with-unverified-test-markers": 1,
+    "current-equivalent": 1,
     "included-in-landed-snapshot": 2,
     "superseded-release-metadata": 2,
     "superseded-ci-experiment": 2,
     "landed-content-with-evolved-release-metadata": 1,
     "unresolved-historical-release-proposal": 1,
+    "unverified-large-mixed-snapshot": 1,
     "unresolved-historical-docs-and-probes": 1,
     "landed-content-with-test-relocation": 1,
-    "unresolved-production-prototype": 1,
-    "landed-equivalent": 10,
-    "unresolved": 2,
-    "superseded": 3,
-    "superseded-diagnostics": 1,
-    "diagnostics-superseded-baggage-unverified": 1,
-    "current-equivalent-with-unverified-test-markers": 1,
-    "current-equivalent": 1,
-    "unverified-large-mixed-snapshot": 1
+    "unresolved-production-prototype": 1
   },
   "refs": [
     {
@@ -236,15 +237,15 @@
       "ref": "refs/archive/2026-08-21/feat/outstanding-issues-consolidation",
       "tip": "bc2f685dbcdcffd184fb1f2ad691c781427ade36",
       "unique_patch_plus_count": 6,
-      "disposition": "unresolved",
+      "disposition": "landed-repair-with-evolved-dependencies",
       "evidence": [
         "Read all six plus commits: d684ce20f security rows independently reconciled with current source/landed commits; edf37fa3e covers proxy + batch50,669e3a497 empty bulk_update,416a6951e/81acadbee cursor set,37447ab82 malformed numeric fail-closed.",
         "Actual current GovernanceContext copy/deepcopy/pickle0-5 probe all TypeError; valid dict controls pass. Missing literal methods in old note do not mean missing protection.",
         "f92bce90c ML protocol-package consolidation exists as kailash_ml/types.py and engine imports; d012a6109 dependency floors/root extras have evolved, not candidates for blind pin restoration.",
-        "e4ddd346e test repair remains ABSENT: current packages/kailash-align/tests/test_package.py:31-60 skips if torch is already loaded and mutates sys.modules; archive uses fresh subprocess with timeout and explicit failure assertion."
+        "Recovered e4ddd346e fresh-process lazy-import repair in 849157905, merged to dev as 8fe71c879. Exact checkout provenance and a fresh isolated Python child replace order-dependent sys.modules mutation; actual eager-torch mutation failed as expected even with torch already loaded in parent. Independent two-round review passed."
       ],
-      "remaining": "Actionable: port fresh-process lazy-import test from e4ddd346e to current package with exact import provenance and a discriminating eager-torch negative control; do not cherry-pick whole archived head. Historical dependency-resolution patch needs current-lock context only if pursued.",
-      "retention_status": "unresolved"
+      "remaining": "Historical dependency-resolution patch needs current-lock context only if pursued; its old pins are not restored. The identified missing lazy-import test repair is landed.",
+      "retention_status": "landed-repair-with-evolved-dependencies"
     },
     {
       "ref": "refs/archive/2026-08-21/feat/studio-app-session",

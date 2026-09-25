@@ -1,30 +1,31 @@
 ## Active landing checkpoint — CSQ 13 resumed, 2026-09-25
 
-**Do next:** finish the two active gate-repair lanes, land each to dev and remove its
-worktree immediately; then run full configured parity/hooks, push PR #2229 once,
-verify required checks AND all failing test jobs on its exact head, and merge under
-already-recorded D1 approval. Advisory #73 is excluded; five inherited stashes stay held.
+**Do next:** run full configured parity/hooks on the integrated source, push PR #2229
+once, verify required checks AND all failing test jobs on its exact head, and merge
+under already-recorded D1 approval. Advisory #73 is excluded; five inherited stashes stay held.
+Re-check: `gh pr view 2229 --json state,headRefOid` — OPEN means promotion remains due.
 
-Dev is published through `ca15ac555`: recovered source consolidated at `71a9347cb`,
-coroutine ownership/replay repair `b31c191f9`, isolated memory fixtures and explicit
-trust gate dependencies `ca15ac555`. Original promotion and #2249 worktrees and local
-branches are removed. The completed coroutine worktree/branch is also removed.
-Only primary plus active warning-fixture and Kaizen-gate siblings remain; see wave tracker.
+All gate repairs are on dev: coroutine ownership/replay `b31c191f9`, isolated memory
+fixtures and trust dependencies `ca15ac555`, warning/Align fixtures `849157905`
+(merge `8fe71c879`), network/audio parity `9eaa4d4ee`. Both final repair worktrees are
+being drained immediately; the final gate runs in primary. See the current wave tracker.
+Each substantive repair has independent correctness and security evidence; a holistic
+review of their union and final actual workflow/hook runs remain open.
 
-Actual full-job census found Core tests passing with warnings; infrastructure passing;
-Kaizen blocked on mapped-IP policy drift, recursive audio import mocking, unmanaged
-memory fixture paths, and missing trust extra. These findings are being repaired before
-one consolidated promotion push. Full parity is NOT green yet. Per-commit pytest-check
-is documented as deferred to the full configured remote hook run; other hooks passed.
+Focused results: 37 coroutine tests, 22 memory tests, 118 Core fixtures plus one fresh
+Align import test, and 277 network/audio tests passed with negative controls. These
+DO NOT establish full promotion parity. The earlier full Kaizen runs stopped before
+completion; all required jobs must finish on the final source. Per-commit pytest-check
+was explicitly deferred to the assigned full configured hook run; all other hooks passed.
 
-Unfiltered archive inventory and per-ref evidence are recorded in
+Unfiltered archive evidence is in
 `workspaces/issue-1720-llm-consolidation/04-validate/csq13-ref-adjudication.json`.
-Exact squash-tree matches and superseded work are distinguished from unresolved historical
-artifacts/prototypes. No archive ref/tag has been deleted, and no whole-forest completion
-is claimed. The Align fresh-process lazy-import repair found there is in the active lane.
+The missing Align fresh-process test is now recovered with a landing receipt. Exact
+squash-tree matches and superseded work remain distinct from unresolved historical
+artifacts/prototypes. No archive ref/tag was deleted and no whole-forest completion is claimed.
 
-All earlier checkpoints below are historical wherever this section differs. Standing
-uncompleted directives and forest IDs remain in force; recovery was never merged.
+Earlier checkpoints below are historical wherever this section differs. Standing
+uncompleted directives and forest IDs remain in force; rejected recovery was never merged.
 
 ## CSQ 13 transcript recovered — 2026-09-25
 
