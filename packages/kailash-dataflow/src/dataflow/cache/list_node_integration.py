@@ -72,7 +72,11 @@ class ListNodeCacheIntegration:
 
         # Check if caching is enabled and possible
         # FIX: Properly await async cache.can_cache() method
-        if not cache_enabled or not await self.cache_manager.can_cache():
+        if (
+            not cache_enabled
+            or (cache_ttl is not None and cache_ttl <= 0)
+            or not await self.cache_manager.can_cache()
+        ):
             # Execute directly without caching
             if inspect.iscoroutinefunction(executor_func):
                 result = await executor_func()
