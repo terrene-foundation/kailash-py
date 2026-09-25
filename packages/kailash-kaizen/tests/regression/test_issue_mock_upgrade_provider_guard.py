@@ -1,5 +1,10 @@
 """Regression test — mock-upgrade substitution MUST be provider-gated.
 
+The cache-drift cases follow #2220's current model-routing contract: unrelated
+credentials cannot change a registered model's provider. They change an explicit
+default-provider declaration for an unregistered model while holding the model
+and agent config fixed, exercising cache invalidation without a mutator reset.
+
 ``kaizen.core.agents.Agent`` ships a test-harness "mock-upgrade" mechanism:
 ``_extract_intelligent_response`` (direct-LLM / CoT / ReAct paths) and
 ``_apply_intelligent_mock_conversion_to_llm_result`` (signature-based path)
@@ -87,10 +92,19 @@ _AGENT_LOGGER_NAME = "kaizen.core.agents"
 _ENV_LOCK = threading.Lock()
 
 # Every env var `_get_provider_for_config()` / `_create_llm_agent_params`
-# consult. Cleared before the one test in this file that mutates env, so
+# consult. Cleared before each environment-controlled test, so
 # ambient .env (or this repo's root-conftest LLM cost-guard scrub) never
 # leaks into the assertion either way.
-_PROVIDER_ENV_VARS = ("OPENAI_API_KEY", "ANTHROPIC_API_KEY")
+_PROVIDER_ENV_VARS = (
+    "OPENAI_API_KEY",
+    "AZURE_OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "GOOGLE_API_KEY",
+    "KAILASH_LLM_DEPLOYMENT",
+    "KAILASH_LLM_PROVIDER",
+    "KAIZEN_DEFAULT_PROVIDER",
+    "DEFAULT_LLM_PROVIDER",
+)
 
 
 @pytest.fixture
@@ -99,6 +113,22 @@ def _env_serialized(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         for var in _PROVIDER_ENV_VARS:
             monkeypatch.delenv(var, raising=False)
         yield
+
+
+@pytest.fixture
+def _declared_provider_env(monkeypatch, _env_serialized):
+    """Change declared configuration, never infer a model vendor from a key.
+
+    The model intentionally has no registered vendor. #2220 permits an
+    explicit provider declaration for that case; a credential is not one.
+    """
+    monkeypatch.delenv("KAIZEN_ALLOW_KEYLESS_MOCK", raising=False)
+    monkeypatch.setenv("DEFAULT_LLM_PROVIDER", "mock")
+    from kaizen.core._provider_env import resolve_node_provider
+
+    model = "unregistered-provider-drift"
+    assert resolve_node_provider(model) == "mock"
+    return model
 
 
 # Real-looking answers that happen to OPEN with one of the mock-transport's
@@ -753,43 +783,24 @@ class TestCompileWorkflowProviderPropagation:
 
 
 class TestMultiModalSignatureCompilerProviderPropagation:
-    """ADDITIONAL sibling finding (same class, discovered during the Part B
-    LLMAgentNode-param-building sweep, fixed in the SAME PR per
-    rules/security.md "Multi-Site Kwarg Plumbing"):
-    `SignatureCompiler._create_llm_agent_params` (used by
-    `compile_to_workflow_config()` / `Agent.compile_to_workflow()` for
-    multi-modal signatures) hardcoded `config.get("provider", "mock")` — a
-    signature config with NO explicit "provider" key silently
-    mock-dispatched regardless of real API keys present. Fixed to mirror
-    `Agent._get_provider_for_config()`'s env-first detection.
-    """
+    """The signature compiler must propagate the model-resolved provider.
 
-    def test_create_llm_agent_params_uses_env_detected_provider(
+    A registered model keeps its vendor despite an unrelated credential; an
+    explicit provider still takes precedence."""
+
+    def test_create_llm_agent_params_uses_model_vendor_despite_unrelated_key(
         self, monkeypatch, _env_serialized
     ):
-        """Deterministic regardless of ambient environment: this repo's root
-        ``conftest.py`` actively SCRUBS ``OPENAI_API_KEY``/``ANTHROPIC_API_KEY``
-        from ``os.environ`` for every bare test run (LLM cost-guard) — so
-        asserting against whatever the ambient env happens to hold would
-        pass identically for BOTH the buggy hardcoded-"mock" code and the
-        fixed env-detecting code (both resolve to "mock" when no key is
-        visible). Injecting a fake key via ``monkeypatch.setenv`` AFTER
-        collection — when the test body actually runs — makes the key
-        genuinely visible to `os.environ.get(...)`, giving the assertion
-        real discriminating power between fixed and buggy behavior.
-        """
         from kaizen.signatures.core import Signature, SignatureCompiler
 
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-fake-key")
-
+        # #2220: an unrelated credential cannot redirect a registered model.
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-not-a-real-key")
         compiler = SignatureCompiler()
-        config = {"model": _resolve_default_model()}  # NO explicit "provider"
-
+        config = {"model": "claude-3-5-sonnet"}
         node_params = compiler._create_llm_agent_params(
             signature_obj=Signature(inputs=["question"], outputs=["answer"]),
             config=config,
         )
-
         assert node_params["provider"] == "anthropic"
 
     def test_create_llm_agent_params_explicit_provider_wins(self):
@@ -955,22 +966,11 @@ class TestBaseAgentToWorkflowProviderKey:
 
 
 class TestDeploymentCacheKeyProviderResolution:
-    """FIX 8 — `DeploymentCache.create_cache_key` (kaizen/integrations/nexus/
-    deployment_cache.py) hashed the RAW `llm_provider` attribute, not the
-    RESOLVED provider `to_workflow()` would actually dispatch to.
-    `deploy_as_api`/`deploy_as_cli`/`deploy_as_mcp` (deployment.py, default
-    `use_cache=True`) check the cache key BEFORE ever calling
-    `agent.to_workflow()` — on a cache hit, `to_workflow()` never runs at
-    all. When `llm_provider` is None (the common auto-detect case FIX5/
-    FIX6 target), the OLD key was IDENTICAL regardless of ambient key
-    availability. Scenario this closes: process starts with no keys ->
-    deploy caches a `provider="mock"` workflow under a `llm_provider=None`
-    key -> real keys are injected into the SAME long-lived process later
-    -> a re-deploy hits the SAME stale key -> serves mock to real requests
-    forever. Fixed by hashing the RESOLVED provider (`llm_provider or
-    detect_provider_from_env()` — the SAME resolution `to_workflow()`
-    uses), so the key changes the moment ambient key availability changes.
-    """
+    """Deployment keys include the effective provider, not merely raw config.
+
+    #2220 makes registered-model routing credential-independent. For an
+    unregistered model, changing the declared default provider must change
+    the key while unchanged declarations and unrelated keys stay stable."""
 
     class _FakeAgent:
         """Minimal stand-in exposing exactly what `create_cache_key` reads
@@ -982,29 +982,37 @@ class TestDeploymentCacheKeyProviderResolution:
             self.config = _FakeNexusAgentConfig(llm_provider=llm_provider, model=model)
             self.signature = None
 
-    def test_cache_key_differs_when_ambient_provider_availability_changes(
+    def test_cache_key_differs_when_declared_provider_changes(
+        self, monkeypatch, _declared_provider_env
+    ):
+        from kaizen.integrations.nexus.deployment_cache import DeploymentCache
+
+        agent = self._FakeAgent(llm_provider=None, model=_declared_provider_env)
+
+        # Only the explicit default-provider declaration changes.
+        key_with_mock = DeploymentCache.create_cache_key(agent, "my_workflow")
+
+        # Same agent/model and no config mutation: the declaration now names OpenAI.
+        monkeypatch.setenv("DEFAULT_LLM_PROVIDER", "openai")
+        key_with_openai = DeploymentCache.create_cache_key(agent, "my_workflow")
+
+        assert key_with_mock != key_with_openai, (
+            "cache key MUST change when declared provider configuration "
+            "changes for an agent with no explicit llm_provider — "
+            "otherwise a cache hit serves a stale mock-dispatching "
+            "workflow forever after the declared provider changes in the "
+            "same long-lived process"
+        )
+
+    def test_registered_model_cache_key_ignores_unrelated_credentials(
         self, monkeypatch, _env_serialized
     ):
         from kaizen.integrations.nexus.deployment_cache import DeploymentCache
 
-        agent = self._FakeAgent(llm_provider=None, model=_resolve_default_model())
-
-        # No real API keys present (cleared by `_env_serialized`) -> the
-        # resolved provider is "mock".
-        key_no_keys = DeploymentCache.create_cache_key(agent, "my_workflow")
-
-        # Inject a real key AFTER the first key was computed — the SAME
-        # agent object, SAME `llm_provider=None` — now resolves to "openai".
-        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-fake-key")
-        key_with_openai_key = DeploymentCache.create_cache_key(agent, "my_workflow")
-
-        assert key_no_keys != key_with_openai_key, (
-            "cache key MUST change when ambient provider availability "
-            "changes for an agent with no explicit llm_provider — "
-            "otherwise a cache hit serves a stale mock-dispatching "
-            "workflow forever after real keys are injected into the "
-            "same long-lived process"
-        )
+        agent = self._FakeAgent(llm_provider=None, model="gpt-4o-mini")
+        before = DeploymentCache.create_cache_key(agent, "my_workflow")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-not-a-real-key")
+        assert DeploymentCache.create_cache_key(agent, "my_workflow") == before
 
     def test_cache_key_stable_when_explicit_provider_set_regardless_of_env(
         self, monkeypatch, _env_serialized
@@ -1083,22 +1091,11 @@ class TestToNodeConfigProviderKey:
 
 
 class TestBaseAgentToWorkflowMemoRebuildsOnProviderDrift:
-    """FIX 12 — `BaseAgent.to_workflow()` (kaizen/core/base_agent.py)
-    memoized `self._workflow` on first build with the THEN-resolved
-    provider baked in, and `self._workflow` was only reset by `cleanup()`
-    — never by a config OR ambient-env change. Because provider resolution
-    is env-dependent (FIX 6: `llm_provider or detect_provider_from_env()`),
-    the memo could go stale: process starts with no keys -> to_workflow()
-    builds+memoizes provider="mock" -> a real key is injected into the
-    SAME long-lived process -> the SAME agent's NEXT to_workflow() call
-    returned the STALE mock-dispatching memo — even through
-    `deploy_as_api`, even after `clear_deployment_cache()` (FIX 8 alone
-    cannot fix this; it only makes the CACHE KEY track the resolved
-    provider, it does not make `to_workflow()` itself re-resolve). Fixed
-    by tracking `self._workflow_provider` (the provider the memo was BUILT
-    with) and trusting the memo ONLY when it still matches the CURRENT
-    resolved provider.
-    """
+    """BaseAgent rebuilds its memo when the declared provider changes.
+
+    The same unregistered model and config remain in place. Only the
+    explicit default-provider declaration changes, so the resolver-aware
+    guard itself must invalidate the memo; no config mutator clears it."""
 
     @staticmethod
     def _llm_agent_node_config(workflow) -> dict:
@@ -1106,25 +1103,25 @@ class TestBaseAgentToWorkflowMemoRebuildsOnProviderDrift:
         assert workflow.nodes[node_id]["type"] == "LLMAgentNode"
         return workflow.nodes[node_id]["config"]
 
-    def test_memo_rebuilds_when_ambient_provider_drifts(
-        self, monkeypatch, _env_serialized
+    def test_memo_rebuilds_when_declared_provider_drifts(
+        self, monkeypatch, _declared_provider_env
     ):
         from kaizen.core.base_agent import BaseAgent
         from kaizen.core.config import BaseAgentConfig
 
-        config = BaseAgentConfig(llm_provider=None, model=_resolve_default_model())
+        config = BaseAgentConfig(llm_provider=None, model=_declared_provider_env)
         agent = BaseAgent(config=config)
 
-        # No real keys present (cleared by `_env_serialized`) -> resolves
+        # The declared default provider resolves
         # to "mock" and memoizes it.
         wf1 = agent.to_workflow()
         node1 = self._llm_agent_node_config(wf1)
         assert node1["provider"] == "mock"
 
-        # Inject a real key AFTER the first build — the SAME agent
+        # Change the declared provider AFTER the first build — the SAME agent
         # instance, SAME llm_provider=None (no `update_config`/config
         # mutation of any kind — purely an ambient env change).
-        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-fake-key")
+        monkeypatch.setenv("DEFAULT_LLM_PROVIDER", "openai")
 
         wf2 = agent.to_workflow()
         node2 = self._llm_agent_node_config(wf2)
@@ -1159,36 +1156,28 @@ class TestBaseAgentToWorkflowMemoRebuildsOnProviderDrift:
 
 
 class TestCompileWorkflowMemoRebuildsOnProviderDrift:
-    """FIX 13 — the SAME class of gap as FIX 12, one layer up:
-    `Agent.compile_workflow()` (kaizen/core/agents.py) — and the `.workflow`
-    property, which used to bypass `compile_workflow()`'s check entirely
-    once `_is_compiled` was True — trusted the `_is_compiled`/`_workflow`
-    memo regardless of whether the resolved provider had drifted since the
-    memo was built. `update_config()`/`set_signature()`/`reset()` already
-    invalidated the memo for EXPLICIT config changes; this closes the
-    AMBIENT-env-drift path those mutators cannot see. Fixed via the same
-    `self._workflow_provider` tracking pattern as FIX 12, and by making
-    `.workflow` ALWAYS route through `compile_workflow()` instead of
-    returning `self._workflow` directly.
-    """
+    """Agent compile_workflow and workflow property reject stale providers.
+
+    Changing the declared default provider leaves the model/config object
+    intact and exercises the live resolver comparison at both surfaces."""
 
     @staticmethod
     def _llm_agent_node_config(agent, workflow) -> dict:
         return workflow.nodes[agent.agent_id]["config"]
 
-    def test_compile_workflow_rebuilds_when_ambient_provider_drifts(
-        self, monkeypatch, _env_serialized
+    def test_compile_workflow_rebuilds_when_declared_provider_drifts(
+        self, monkeypatch, _declared_provider_env
     ):
         agent = Agent(
             "compile_workflow_drift_agent",
-            {"model": _resolve_default_model()},  # NO explicit "provider"
+            {"model": _declared_provider_env},  # NO explicit "provider"
         )
 
         wf1 = agent.compile_workflow()
         node1 = self._llm_agent_node_config(agent, wf1)
         assert node1["provider"] == "mock"
 
-        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-fake-key")
+        monkeypatch.setenv("DEFAULT_LLM_PROVIDER", "openai")
 
         wf2 = agent.compile_workflow()
         node2 = self._llm_agent_node_config(agent, wf2)
@@ -1198,22 +1187,22 @@ class TestCompileWorkflowMemoRebuildsOnProviderDrift:
         )
         assert wf1 is not wf2
 
-    def test_workflow_property_rebuilds_when_ambient_provider_drifts(
-        self, monkeypatch, _env_serialized
+    def test_workflow_property_rebuilds_when_declared_provider_drifts(
+        self, monkeypatch, _declared_provider_env
     ):
         """Same scenario through the `.workflow` property specifically —
         it used to short-circuit straight to `self._workflow` once
         `_is_compiled` was True, bypassing any memo check at all."""
         agent = Agent(
             "workflow_property_drift_agent",
-            {"model": _resolve_default_model()},
+            {"model": _declared_provider_env},
         )
 
         wf1 = agent.workflow
         node1 = self._llm_agent_node_config(agent, wf1)
         assert node1["provider"] == "mock"
 
-        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-fake-key")
+        monkeypatch.setenv("DEFAULT_LLM_PROVIDER", "openai")
 
         wf2 = agent.workflow
         node2 = self._llm_agent_node_config(agent, wf2)
@@ -1237,45 +1226,34 @@ class TestCompileWorkflowMemoRebuildsOnProviderDrift:
 
 
 class TestExecuteWithSignatureCacheRebuildsOnProviderDrift:
-    """FIX 15 — a THIRD memoization site with the SAME class of gap as
-    FIX 12/13, surfaced by Round 5's mandated FINAL EXHAUSTIVE RE-SWEEP:
-    `Agent._execute_with_signature()`'s `self._signature_workflow` cache
-    (kaizen/core/agents.py) was guarded by a bare `hasattr(self,
-    "_signature_workflow")` check — "was a signature-workflow already
-    built", never "is it still valid". `update_config()`/`set_signature()`/
-    `reset()` already invalidate it for EXPLICIT config mutations (Round 2
-    FIX 1), but an AMBIENT env-provider change (a real key injected into a
-    long-lived process, with NO explicit mutator call) left the cache
-    trusted forever — not merely a mock-upgrade-gate misclassification
-    (PART A's `dispatched_provider` threading already keeps that gate
-    honest against whatever's dispatched), but every subsequent
-    signature-execution DISPATCH itself never advancing past the provider
-    resolved at first build. Fixed via the same `self.
-    _signature_workflow_provider` tracking pattern as FIX 12/13.
-    """
+    """Signature execution rechecks the declared provider before dispatch.
 
-    def test_execute_with_signature_rebuilds_when_ambient_provider_drifts(
-        self, monkeypatch, _env_serialized
+    Both executions use the same agent, model, and recording runtime. A
+    changed declaration must rebuild the cached workflow and dispatch its
+    new provider without relying on update_config/reset invalidation."""
+
+    def test_execute_with_signature_rebuilds_when_declared_provider_drifts(
+        self, monkeypatch, _declared_provider_env
     ):
         real_content = "Quarterly revenue increased 8 percent due to expanded partner integrations and reduced customer churn."
         stub = _RecordingKaizenStub("ambient_drift_signature_agent", real_content)
         agent = Agent(
             "ambient_drift_signature_agent",
-            {"model": _resolve_default_model()},  # NO explicit "provider"
+            {"model": _declared_provider_env},  # NO explicit "provider"
             signature="question -> answer",
             kaizen_instance=stub,
         )
 
-        # No real keys present (cleared by `_env_serialized`) -> resolves
+        # The declared default provider resolves
         # to "mock" and memoizes `_signature_workflow` under "mock".
         result1 = agent.execute(question="What changed?")
         assert stub.dispatched_providers == ["mock"]
         assert result1["answer"] == real_content
 
-        # Inject a real key AFTER the first dispatch — the SAME agent
+        # Change the declared provider AFTER the first dispatch — the SAME agent
         # instance, NO explicit update_config()/set_signature()/reset()
         # call — purely an ambient env change.
-        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-fake-key")
+        monkeypatch.setenv("DEFAULT_LLM_PROVIDER", "openai")
 
         result2 = agent.execute(question="What changed?")
         assert stub.dispatched_providers == ["mock", "openai"], (
