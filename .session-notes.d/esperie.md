@@ -1,3 +1,13 @@
+## Latest decisions and lands — 2026-09-25
+
+D1 approved. Latest CodeQL11587/11588/11594 false-positive dismissals independently verified and applied; earlier superseded list not bulk-dismissed. User excludes advisory #73 type backlog from D1 but every failing test job and required check still gates merge. User chose explicit rejection of unresolved #2251 annotations.
+
+Dev published at `839a039a3`: #2238, #2248 and #2251 closed with code receipts. PACT/recovery/Kaizen branches and completed trees drained; rejected recovery NEVER merged. Root keeps three total trees: integration, promotion, and active SQLite audit repair.
+
+Promotion `28602f1a0` gate exposed remaining REST/provider/pool/redaction failures. Packed lane: pact_lane async HTTP resource ownership; census_review model-routing test contracts; promotion_security_review credential scrubber newline handling; root pool instruments and real HTTP tests. Same-tree trestle jobs serialized. No main merge yet. Separate root SQLite repair fixes known-budget warning, derived-index boundary, and exact identifier matching;153tests plus actual mutation controls passed, final independent reviews pending.
+
+D5 stray draft and #2249 opt-in owned execution design questions await answers. Five inherited stashes preserved. Earlier checkpoints below are historical where this one differs.
+
 ## Live checkpoint — 2026-09-25 continuation
 
 - Dev published at `35e27dd0c`: census, audit parity, PACT, and CI regression/dependency repairs landed. #2238 closed with `fcf1ec06b`; fix and rejected recovery refs drained. Recovery was NEVER merged; evidence in #2225 comment 5830857222.

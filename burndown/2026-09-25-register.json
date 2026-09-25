@@ -1153,7 +1153,7 @@
     {
       "id": "ISSUE-2248",
       "page": "GitHub issues",
-      "status": "In progress",
+      "status": "Built-not-walked",
       "title": "PlanMonitor: empty plan reports success; no-op modification is recorded as applied",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2248",
       "labels": [
@@ -1164,10 +1164,13 @@
       "updated_at": "2026-09-24T14:57:21Z",
       "lane_pack": "kaizen-lifecycle",
       "disposition": "confirm",
-      "assessment": "Runtime empty-plan public path reports completed without callbacks; internal malformed modification boundary records no-op applied. Built-in Recomposer rejects malformed payload; do not generalize reachability. Fix lane active.",
+      "assessment": "156 targeted passed; two independent correctness and two separate adversarial rounds; public empty input and recovery-boundary no-op controls. Built-in Recomposer malformed payload reachability explicitly not claimed. Landed on dev; no owner acceptance or main delivery inferred.",
       "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
       "comment_urls": [],
-      "landed_receipts": []
+      "landed_receipts": [
+        "c1b04c8ae"
+      ],
+      "observed_github_state": "CLOSED"
     },
     {
       "id": "ISSUE-2249",
@@ -1207,7 +1210,7 @@
     {
       "id": "ISSUE-2251",
       "page": "GitHub issues",
-      "status": "In progress",
+      "status": "Built-not-walked",
       "title": "TypeIntrospector: nested TypedDict fields become {\"type\":\"string\"} under `from __future__ import annotations`",
       "url": "https://github.com/terrene-foundation/kailash-py/issues/2251",
       "labels": [],
@@ -1215,17 +1218,20 @@
       "updated_at": "2026-09-25T06:26:09Z",
       "lane_pack": "kaizen-types",
       "disposition": "execute",
-      "assessment": "Resolved future-annotation TypedDict defects reproduced; shared resolution, wrapper/recursive/native union parity repairs under independent review. Unknown-name fallback policy pending human answer.",
+      "assessment": "90 package and 15 shared annotation tests; concrete schema/value oracles on Python3.11/3.13; two correctness and two security rounds. Owner explicitly chose unresolved annotation rejection. Landed on dev; no owner acceptance or main delivery inferred.",
       "evidence_scope": "Issue body and comment excerpts reviewed for triage; complete comment capture was requested. Historical receipts checked for ancestry only, not runtime closure.",
       "comment_urls": [],
-      "landed_receipts": []
+      "landed_receipts": [
+        "839a039a3"
+      ],
+      "observed_github_state": "CLOSED"
     },
     {
       "id": "FOREST-F21",
       "page": "Standing forest",
       "status": "In progress",
       "title": "Promotion and package release backlog",
-      "assessment": "D1 promotion approved; package publication remains separately gated.",
+      "assessment": "D1 approved, latest CodeQL11587/11588/11594 verified dismissals approved and applied. Owner excludes advisory #73 type backlog from D1. Repaired head28602f1a0 required gate ran; failing REST/provider/pool/redaction test jobs still being fixed.",
       "source": ".session-notes.d/esperie.md"
     },
     {
@@ -1257,7 +1263,7 @@
       "page": "Standing forest",
       "status": "Blocked on you",
       "title": "Workstation/process/stash hygiene",
-      "assessment": "Healthy-interpreter configured hook parity passed; installed pyenv hook still signal11. Pinned hook metadata update validation underway. Stray draft and five inherited stashes held.",
+      "assessment": "Healthy configured hook parity and refreshed metadata pins landed29ce7012b. Installed interpreter still signal11. Explicit D5 deletion question pending; five inherited stashes held.",
       "source": ".session-notes.d/esperie.md"
     },
     {
@@ -1281,7 +1287,7 @@
       "page": "Standing forest",
       "status": "In progress",
       "title": "#2248/#2249 confirmation and triage",
-      "assessment": "Public #2248 empty plan confirmed; malformed modification proven at internal boundary, not built-in Recomposer reachability. #2249 metadata-only spawn confirmed; executable binding is a design addition pending approval. Both issues labelled.",
+      "assessment": "#2248 public and injected recovery-boundary behavior confirmed, fixed and CLOSED with c1b04c8ae. #2249 metadata-only spawn confirmed; opt-in owned execution design awaits human decision.",
       "source": "2026-09-25 user handover, sections 5–7; root dispatch mapping"
     },
     {

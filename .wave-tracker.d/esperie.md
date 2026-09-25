@@ -1,3 +1,13 @@
+## Current packed lanes — 2026-09-25
+
+| Lane | Tree | Agents/tasks |
+| --- | --- | --- |
+| Promotion / F21 | sibling `promote-2229` | pact_lane: HTTP async pool lifecycle; census_review: provider-contract tests; promotion_security_review: shared credential scrubbing; root: pool observation/REST real tests, pinned gate. Serialize trestle. |
+| SQLite audit | sibling `audit-sqlite-budget` | root implementation; census_review correctness; promotion_security_review adversarial review.153tests plus source mutation controls, final review pending. |
+| Completed dev | drained | PACT/#2238 fcf1ec06b; Kaizen/#2248 c1b04c8ae and #2251 839a039a3. Census source/manifest d10295cf4. Recovery never merged. |
+
+All tables below are historical where this one differs. Root owns dev publication/drain and approved main promotion after pinned checks. No dev PR or workflow trigger.
+
 ## Live lanes — 2026-09-25 continuation
 
 | Lane | Tree | Roster and gate |
