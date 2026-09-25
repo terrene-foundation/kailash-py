@@ -11975,6 +11975,16 @@ class DataFlow(DataFlowEventMixin):
                     extra={"error": str(e)},
                 )
 
+        # Match sync close: migration adapters own runtime references too.
+        migration_system = getattr(self, "_migration_system", None)
+        if migration_system is not None:
+            try:
+                migration_system.close()
+            except Exception as exc:
+                logger.debug(
+                    "engine.error_closing_migration_system", extra={"error": str(exc)}
+                )
+
         # Issue #711 — stop the SyncTransactionManager BG event loop thread
         # BEFORE the pool/adapter teardown so any in-flight sync transactions
         # do not strand on closed connections. Lazy attribute — only present
