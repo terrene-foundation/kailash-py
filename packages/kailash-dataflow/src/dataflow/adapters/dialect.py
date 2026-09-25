@@ -305,7 +305,7 @@ class PostgreSQLDialect(SQLDialect):
                 f"exceeds {self._MAX_IDENTIFIER_LENGTH}-char PostgreSQL limit "
                 f"(len={len(name)})"
             )
-        if not _SAFE_IDENTIFIER_RE.match(name):
+        if not _SAFE_IDENTIFIER_RE.fullmatch(name):
             raise InvalidIdentifierError(
                 f"Invalid SQL identifier "
                 f"(fingerprint={_identifier_fingerprint(name)}): "
@@ -414,7 +414,7 @@ class MySQLDialect(SQLDialect):
                 f"exceeds {self._MAX_IDENTIFIER_LENGTH}-char MySQL limit "
                 f"(len={len(name)})"
             )
-        if not _SAFE_IDENTIFIER_RE.match(name):
+        if not _SAFE_IDENTIFIER_RE.fullmatch(name):
             raise InvalidIdentifierError(
                 f"Invalid SQL identifier "
                 f"(fingerprint={_identifier_fingerprint(name)}): "
@@ -522,7 +522,7 @@ class SQLiteDialect(SQLDialect):
                 f"exceeds {self._MAX_IDENTIFIER_LENGTH}-char SQLite limit "
                 f"(len={len(name)})"
             )
-        if not _SAFE_IDENTIFIER_RE.match(name):
+        if not _SAFE_IDENTIFIER_RE.fullmatch(name):
             raise InvalidIdentifierError(
                 f"Invalid SQL identifier "
                 f"(fingerprint={_identifier_fingerprint(name)}): "
