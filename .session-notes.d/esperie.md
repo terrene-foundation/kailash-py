@@ -1,263 +1,114 @@
-## Active landing checkpoint — CSQ 13 resumed, 2026-09-25
+# CSQ 13 recovery — active landing checkpoint, 2026-09-25
 
-**Do next:** run the final exact Core gate and complete configured hooks, push PR #2229
-once, verify required checks AND all failing test jobs on its exact head, and merge
-under already-recorded D1 approval. Advisory #73 is excluded; five inherited stashes stay held.
-Re-check: `gh pr view 2229 --json state,headRefOid` — OPEN means promotion remains due.
+## Next actions (standing authorization preserved)
 
-All gate repairs are on dev: coroutine ownership/replay `b31c191f9`, isolated memory
-fixtures and trust dependencies `ca15ac555`, warning/Align fixtures `849157905`
-(merge `8fe71c879`), network/audio parity `9eaa4d4ee`. Both final repair worktrees are
-being drained immediately; the final gate runs in primary. See the current wave tracker.
-Each substantive repair has independent correctness and security evidence; a holistic
-review of their union and final actual workflow/hook runs remain open.
+1. Finish the formatter gate, publish dev, push PR #2229 once, and merge after exact-head required checks AND every previously failing test job pass. D1 is already approved; advisory type backlog #73 is excluded.
+   Revalidate: `gh pr view 2229 --json state,headRefOid,mergeStateStatus`.
+2. Land every completed branch in dev and remove its clean worktree immediately. Only the primary checkout remains; there are no completed implementation siblings to retain. No PR or CI trigger for dev.
+   Revalidate: `git worktree list --porcelain` and `git for-each-ref refs/heads refs/remotes`.
+3. Preserve the five inherited stashes. Never restore/drop them without the user's decision. Rejected recovery was deleted and NEVER merged; the approved stale draft was deleted with its landing receipt.
+   Revalidate: `git stash list` (five held entries), and archived disposition below.
+4. Continue bounded archive-content adjudication; retain uncertain historical refs and never merge a stale prototype wholesale. Five archive clusters still have partial/unresolved content; no whole-forest completion claim.
+   Revalidate: `workspaces/issue-1720-llm-consolidation/04-validate/csq13-ref-adjudication.json` (52 refs, explicit dispositions).
+5. Keep the unresolved #2225 design question and paused Express routing/cache findings distinct from completed repairs. Package publishing is a separate release gate, not implied by promotion approval.
+   Revalidate: `gh issue view 2225 --comments`; inspect Express callers before resuming that shard.
 
-Actual integrated census at `b796ffe08`: Core unit 5368 pass / one watchdog failure;
-Core integration 2607 pass; infrastructure 27 + 22 pass; Kaizen LLM 1822 pass.
-Expanded Kaizen 8387 pass, regression 1965 pass, authorization parity 43 pass,
-agents 818 pass. Skipped paths are not verified. Full hooks found one formatting-only
-delta; the final hooks must rerun after that correction. Watchdog `772f12c64` is landed
-(merge `03efa7c48`) with 13 strict tests, discriminating threshold/callback controls,
-two independent clean rounds, and its completed sibling/branch removed.
-Warning-instrument repairs
-`0f126ca02` and `1df572866` are published. Ignored duplicate pytest configuration is
-landed as `658d97de4` with actual old/new pytest9 controls; active pytest.ini settings stay intact.
+## Recovered authorization
 
-Focused results: 37 coroutine tests, 22 memory tests, 118 Core fixtures plus one fresh
-Align import test, and 277 network/audio tests passed with negative controls. These
-DO NOT establish full promotion parity. The earlier full Kaizen runs stopped before
-completion; all required jobs must finish on the final source. Per-commit pytest-check
-was explicitly deferred to the assigned full configured hook run; all other hooks passed.
+Exact slot-13 Codex thread: `01a0d7ea-e2a1-74b3-8af2-2a47dc410525`.
+Final user decision at 12:53:14 UTC: **"Retain reusable pool identities (recommended)"**.
+The next turn ended `usage_limit_exceeded`; that decision is now implemented.
+Also approved: #2249 opt-in owned execution, owner-loop HTTP reuse with aggregate cap,
+and harmless URL diagnostics. No repeat approval is needed for those repairs.
+User reiterated landing all remote/local branches, refs and worktrees, with active WIP drain.
+Future promotions retain the 10-landings / 72-hours / immediate-security-or-deploy trigger
+and require their own user authorization; #2229's D1 approval is already recorded.
 
-Unfiltered archive evidence is in
-`workspaces/issue-1720-llm-consolidation/04-validate/csq13-ref-adjudication.json`.
-The missing Align fresh-process test is now recovered with a landing receipt. Exact
-squash-tree matches and superseded work remain distinct from unresolved historical
-artifacts/prototypes. No archive ref/tag was deleted and no whole-forest completion is claimed.
+## Integrated source and WIP
 
-Earlier checkpoints below are historical wherever this section differs. Standing
-uncompleted directives and forest IDs remain in force; rejected recovery was never merged.
+Dev includes #2238/PACT `fcf1ec06b`, #2248 `c1b04c8ae`, #2251 `839a039a3`,
+#2249 `d3549dee4` (merge `0711ddee9`), Edge `a98075487`, SQLite `fc93ee8ff`,
+credential scanner `d02980968`, cache controls `b91e8d177`, async migration `d2d8d1f34`,
+coroutine ownership/replay `b31c191f9`, memory/CI `ca15ac555`, warning/Align `849157905`,
+network/audio `9eaa4d4ee`, warning instruments `0f126ca02` / `1df572866`, duplicate
+pytest configuration cleanup `658d97de4`, watchdog `772f12c64` (merge `03efa7c48`),
+and Black assertion formatting `db9565623`.
+All implementation worktrees and branches were drained after landing.
+Formatter repair is landed as `e30256691`, with two clean correctness/security rounds; remote promotion still
+points to `28602f1a0` until a single validated consolidated push. Refresh live refs before acting.
 
-## CSQ 13 transcript recovered — 2026-09-25
+The final formatter repair sets `combine_as_imports` and consistent first-party namespaces
+in four active configs. Actual old settings produced five Black/isort two-state cycles and
+Kaizen-first batch grouping differed from single/root batches. Candidate fixed-point probes
+passed three rounds. Actual all-file Black, isort and Ruff pass; import-order and narrow-pragma
+reviews are complete. Three pragma scopes and optional-provider lookup order were preserved
+with narrow sort boundaries. No behavioral equality is inferred solely from an import multiset.
 
-**Landing/drain checkpoint:** #2249 landed as `d3549dee4` / dev merge `0711ddee9`,
-issue closed with receipt, owned-execution worktree removed ZERO-LOSS and branch deleted.
-Edge `a98075487`, SQLite lifecycle `fc93ee8ff`, scanner `d02980968`, nested cache
-controls `b91e8d177`, and async migration cleanup `d2d8d1f34` are on dev.
-Only primary dev and the dirty promotion worktree remain. Finish existing test repairs,
-integrate dev, run the pinned promotion gate, and drain promotion after completion.
+## Actual validation (scope matters)
 
-**Open review follow-ons (no implementation started; paused to finish landing):**
-Express `read/list/find_one` accept `use_primary` but their AST has no body reference;
-the replica-routing connection-manager helpers have no source callers. Warm outer-cache
-returns precede `_trust_check_read`, and `_cache_get` scopes by tenant without agent or
-clearance. These are source-level concerns, not runtime-confirmed security verdicts.
-They remain open and are NOT covered by the TTL-forwarding shard's clean review.
+Integrated census at `b796ffe08`: Core units 5368 passed / one watchdog fixture failure;
+Core integration 2607 passed; DataFlow infrastructure 27 passed; root infrastructure22 passed.
+Kaizen LLM/parity/security1822 passed, expanded units8387 passed, regressions1965 passed,
+authorization parity43 passed without skips, agents818 passed. Skips/deselections are excluded.
+These are completed runs, superseding older interrupted Kaizen runs. Core final rerun is owed.
+Full configured hooks completed: pytest-check, doc8 and structural hooks passed; formatter/lint
+failures are being repaired. The final full hook run, including pytest-check, remains mandatory.
 
-Resume source is slot-13 Codex thread `01a0d7ea-e2a1-74b3-8af2-2a47dc410525`.
-The user's final answer at 12:53:14 UTC was **"Retain reusable pool identities
-(recommended)"** for EdgeInfrastructure cleanup. This supersedes the pending-decision
-statements below. The following turn ended `usage_limit_exceeded` before acting.
+Watchdog repair has13 strict tests, actual delayed/disabled monitor controls, reached threshold
+mutations, callback-survival checks, and two independent clean rounds. Warning tests now reject
+unexpected categories. Old/new pytest9 controls prove duplicate-config notices removed while
+authoritative pytest.ini files stay byte-identical. Focused coroutine37, memory22,
+warning/Core118 + fresh Align1, network/audio277, and real SQLite cache6 all passed.
+Holistic correctness/security reviews exercised ownership, warning scope, mapped CIDRs,
+real localhost transport, and memory cleanup. DNS resolution-to-connect TOCTOU is not claimed fixed.
 
-The approved work is resumed in the preserved promotion and owned-execution worktrees.
-See the CSQ 13 recovery section of `.wave-tracker.d/esperie.md` for current ownership.
-Promotion #2229 remains approved after exact-head checks; #2249 opt-in owned execution,
-HTTP reuse/lifecycle wiring, and harmless URL diagnostics are all already approved.
-The five inherited stashes remain held. No new approval is needed for these decisions.
+Final assigned remote runner: fresh workflow environments, strict changed tests, exact Core
+Tier1 selection and every configured hook; one trestle mirror owner, no concurrent installs.
+Per-commit pytest-check skips are documented and tracked to this final full-hook gate.
+Local launcher/cache repair succeeded; older signal11 claims are historical, not current blockers.
 
-Hook repair (CSQ 13 recovery): reinstalling pre-commit with the project
-venv repaired the launcher; the cached Black hook still exited `-11` until its
-single environment was rebuilt with uv-managed Python 3.13.7. The exact two-file
-Black hook invocation then passed without changing source/config. Old environment
-is preserved as `py_env-python3.csq13-backup-20260925` within its existing cache.
-The interrupted hook's saved patch was restored with `git apply --check` then
-`git apply`; scanner hashes and the complete dirty inventory matched afterward.
-Full hook-set verification via trestle remains due before the promotion push.
-Edge scoped Black, Ruff, other applicable
-hooks, real-file tests and two correctness/security rounds passed; its commit
-records the temporary hook bypass. Never run auto-stashing hooks during lane edits.
+## Archive and follow-on evidence
 
-## Latest verified checkpoint — 2026-09-25 continued
+52-ref adjudication and follow-up JSONs are in
+`workspaces/issue-1720-llm-consolidation/04-validate/csq13-*.json`.
+Exact squash-tree matches are distinct from behavioral conformance. Align's missing fresh-process
+regression was recovered with `849157905`. Release v0.9.7 matches its retained tag; this is not a
+PyPI publication claim. Old strategy prose and cycle-test markers have explicit historical dispositions.
+The parameter-validator prototype retains required/type safety and injection behavior in current
+code, but its runtime-wide policy/report API is absent; debugger/optimizer remain unaudited.
+Current spec's root-only flat-injection wording differs from actual old/current all-accepting-node
+behavior. This is recorded, not treated as an archive-only lost feature.
+Two trust files in the large scrap snapshot have landed/superseded receipts and actual controls;
+that bounded review does not dispose of the whole mixed snapshot. No archive ref/tag was deleted.
 
-Dev through2d3b5bd40 includes reviewed audit/identifier repair7278bdb3e and provider-contract tests25ae7376f. Audit branch/tree drained after clean and zero-unlanded proof. #2221 also closed with104acceptance tests and actual negative source controls; #2238/#2248/#2251 remain closed. Owner acceptance remains separate.
+Paused source findings: Express read/list/find_one accept `use_primary` without using it;
+replica-routing helpers have no source callers. Warm outer-cache returns precede `_trust_check_read`
+and keys scope by tenant without agent/clearance. These are source-level concerns, not
+runtime-confirmed security verdicts, and were not closed by TTL-forwarding reviews.
 
-User approved opt-in #2249 execution, owner-loop HTTP reuse with aggregate cap, and URL authority boundaries preserving harmless diagnostics. D5 approved then deleted after exact draft/message match to landed f1fe3d68f and ancestry proof. Five inherited stashes held. EdgeInfrastructure retain-versus-seal decision pending.
+## Standing forest (IDs preserved)
 
-Promotion PR2229 remote28602f1a0 remains open; local provider test commit25ae7376f is already in dev. Core/HTTP143tests and independent correctness/security rounds passed; Edge caller repair pending. Shared credential scanner now addresses21 actual known leak xfails. DataFlow inner ListNode cache may ignore outer zero-TTL; deterministic reproduction underway. No main merge, no dev CI or dev PR.
+| ID | Obligation | Current disposition |
+| --- | --- | --- |
+| F21 | Promotion and package release backlog | #2229 D1 approved; final gates/promotion active. Publishing remains separate. |
+| F22 | #2238 sites3–4 and restore | Landed `fcf1ec06b`, issue closed, tree drained; owner acceptance not inferred. |
+| F23 | #2225 blocklist design/headline reconciliation | Residual A design remains unresolved; headline is capability accuracy. |
+| F24 | Rejected recovery branch | Deleted with #2225 comment5830857222 evidence; NEVER merged. |
+| F25 | Workstation/stash hygiene | Hook launcher repaired; D5 stale draft deleted; five stashes held. |
+| F26 | Open-issue burndown | Active standing obligation, not closed by branch drain. |
+| F27 | #2238 clearance parity | Landed with F22; independent union2713 passed,15 skipped. |
+| F28 | #2248/#2249 | Both fixed/closed; #2249 merge0711ddee9,220 tests and two clean rounds, tree drained. |
+| F29 | Burndown manifest | Landed `d10295cf4`; frozen source/generator counts are not owner acceptance. |
+| F30 | Unlabelled issue triage | Labels captured and dispositions proposed; external labeling not done by this lane. |
 
-## Latest decisions and lands — 2026-09-25
+## Operating hazards
 
-D1 approved. Latest CodeQL11587/11588/11594 false-positive dismissals independently verified and applied; earlier superseded list not bulk-dismissed. User excludes advisory #73 type backlog from D1 but every failing test job and required check still gates merge. User chose explicit rejection of unresolved #2251 annotations.
+- Use explicit primary `.venv/bin/python`; bare pyenv launchers were unreliable. Pin uv subprocess Python.
+- Never edit primary while a commit's auto-stashing hooks run; preserve dirty work with cp backups.
+- Offload expensive gates through trestle; 114/116 are no evidence. No concurrent mutation of one mirror venv.
+- Assert resolved checkout root before any sibling work; a removed CWD must not silently redirect edits.
+- Exact PR head required checks must be read separately from the merge command.
+- Do not mistake archive reachability or GitHub issue closure for implementation/owner acceptance.
+- `.session-notes.d/esperie.md` remains the existing operator fragment; avoid creating a stale second identity.
 
-Dev published at `839a039a3`: #2238, #2248 and #2251 closed with code receipts. PACT/recovery/Kaizen branches and completed trees drained; rejected recovery NEVER merged. Root keeps three total trees: integration, promotion, and active SQLite audit repair.
-
-Promotion `28602f1a0` gate exposed remaining REST/provider/pool/redaction failures. Packed lane: pact_lane async HTTP resource ownership; census_review model-routing test contracts; promotion_security_review credential scrubber newline handling; root pool instruments and real HTTP tests. Same-tree trestle jobs serialized. No main merge yet. Separate root SQLite repair fixes known-budget warning, derived-index boundary, and exact identifier matching;153tests plus actual mutation controls passed, final independent reviews pending.
-
-D5 stray draft and #2249 opt-in owned execution design questions await answers. Five inherited stashes preserved. Earlier checkpoints below are historical where this one differs.
-
-## Live checkpoint — 2026-09-25 continuation
-
-- Dev published at `35e27dd0c`: census, audit parity, PACT, and CI regression/dependency repairs landed. #2238 closed with `fcf1ec06b`; fix and rejected recovery refs drained. Recovery was NEVER merged; evidence in #2225 comment 5830857222.
-- PACT union: 2713 passed / 15 skipped, two correctness and adversarial review rounds. Skips excluded. Owner acceptance not inferred.
-- PR #2229 remote head `7c2377918` remains red; local `4e7ef9ba0` repairs await consolidated push. CodeQL dismissal and advisory type-check scope answers pending. No main merge or dismissal.
-- Healthy configured-hook run passed; installed hook still signal11. Pinned hook metadata updates validating. D5 stray draft and five inherited stashes held.
-- Kaizen sibling lane: #2248 and resolved #2251 repairs, reciprocal correctness review plus independent security. Unknown annotation and #2249 execution-binding decisions pending. Same-tree trestle serialized.
-
-Historical sections below are superseded where this checkpoint differs.
-
----
-owner: esperie
-last_reconciled_sha: 3764191aa
-migrated_from: .session-notes
----
-
-# Session Notes — 2026-09-25
-
-## Next-session directives
-
-**2026-09-25 live-session override:** user answered D1 "approved". Promotion #2229
-is authorized after required checks on the exact head; the standing condition is
-replaced by 10 landings / 72 hours / immediate security-or-deploy triggers, with
-human approval still required for each promotion. Work is active in the wave tracker.
-The old BLOCKED-on-D1 statements below are historical and superseded.
-
-1. **Get the dev→main promotion decision from the user FIRST — it gates everything else.** The
-   standing condition "no promotion until burndown completes" is UNSATISFIABLE, not merely unmet:
-   open issues went 52 → 55 → 63 across three sweeps, and the last 7 days closed ZERO. A fixed
-   privilege escalation sits on `dev`, unpromoted. Recommendation: promote now (PR #2229) and
-   replace the condition with the dual trigger (`dev-integration-trunk.md` MUST-4).
-   re-validate: `gh pr view 2229 --json state,mergeStateStatus` → `OPEN`/`BEHIND` ⇒ still undecided
-2. **Land all backlog and every remote/local branch, ref and worktree into `dev`, and drain
-   immediately upon completion** (user standing order, restated 2026-09-25). Landing in `dev` is
-   free — never open a PR against `dev` or add it to a workflow trigger.
-   re-validate: `git rev-list --count origin/dev..<branch>` per branch → `0` ⇒ landed, drain it
-   (`git branch -d`, never `-D` without a zero-content-diff proof)
-3. **`fix/2238-sites34` is FINISHED and UNLANDED (2 commits, 5 days).** It closes #2238 sites 3–4
-   (`create_ksp`, `create_bridge`, `set_role_envelope` target_role_address, `approve_bridge`) plus a
-   restore blast-radius fix. Land it, verify zero unlanded, then reap its ZERO-LOSS worktree.
-   re-validate: `git rev-list --count origin/dev..origin/fix/2238-sites34` → `2` ⇒ still unlanded
-4. **Hold `recovery/2225-inflight` and NEVER merge it** — it carries the two hunks both reviews
-   measured as a privilege escalation. Record the escalation shape in #2225's comments, then delete
-   the branch.
-   re-validate: `git cherry origin/dev recovery/2225-inflight` → a `+` line ⇒ still present
-5. **Fix #2238's CLEARANCE leg** — the same bug class, explicitly reported-not-fixed in `23989ed67`.
-   Same-class gap in the in-flight PR ⇒ fix it in the session the PR lands.
-   re-validate: `gh issue view 2238 --json state -q .state` → `OPEN` ⇒ still owed
-6. **Author `burndown-manifest.json`** — without it `burndown-build.mjs` refuses (exit 2) and every
-   count in every future sweep stays uncertified prose.
-   re-validate: `[ -f burndown-manifest.json ]` → absent ⇒ still owed
-
-## Where we are
-
-Mode is **human supervision**: surface decisions, do not self-authorize them. `dev` is unchanged for
-six days (`3764191aa`) while the open backlog grew +8 and closed zero — so the outstanding surface
-grew, and one finished security fix has been stranded on a branch for five of those days. The next
-move is a user decision (directive 1), not code.
-
-**Note:** the carried ledger row F23 does NOT match the live issue — F23 says "#2225 residual A — no
-blocklist axis in `validate_tightening`", but live #2225 is titled "DelegationRecord
-.capabilities_delegated advertises capabilities every enforcement surface denies". Reconcile before
-scoping work against it.
-
-## Read first
-
-1. The vault pair `2026-09-25-01-sweep` / `-wrapup` — full decision report, burndown chart,
-   the verbatim `/clear` seed (location: `CLAUDE.md` Absolute Directive 1)
-2. `CLAUDE.md` — Directive 1 (vault handover) and the trunk model
-3. `.claude/rules/dev-integration-trunk.md` — MUST-1 (land same session) and MUST-4's dual trigger
-4. `gh issue view 2238 --comments` — the bypass class, sites fixed and sites still open
-
-## In-flight state
-
-None. **No agents were dispatched this session and no in-repo kailash-py peer session exists**
-(`ListAgents` showed 10 live peers, all other repos; no kailash-py claims in the log).
-
-A cross-repo producer DID file into this repo on 2026-09-24: **#2248** and **#2249**, after I
-verified its five source citations at this trunk. Both are **unlabelled** and explicitly marked
-NOT runtime-verified. **#2250** and **#2251** arrived the same day from other sessions.
-
-## In-play branches and worktrees
-
-- **Finished, unlanded** — `fix/2238-sites34` (local+origin, `23989ed67`) — 2 commits not in `dev`.
-  Land it (directive 3), then drain branch + worktree.
-  re-check: `git rev-list --count origin/dev..origin/fix/2238-sites34` → `2` ⇒ still unlanded
-- **At risk** — `recovery/2225-inflight` — pushed — PR none. Held deliberately (directive 4); its
-  content is NOT meant to land. Recoverable because it is pushed.
-  re-check: `git cherry origin/dev recovery/2225-inflight` → `+` ⇒ content not upstream
-- **Stale** — local `main` is **4 commits behind** `origin/main`. Refresh before any main-based work.
-- **Worktrees** — TWO trees. The main checkout (KEEP) and
-  `.kailash-py-wt/fix-2238-sites34` (**ZERO-LOSS** — clean, branch pushed, sibling-placed). Removal
-  deletes a DIRECTORY, never a branch (`worktree-isolation.md` Rule 8).
-  re-check: `node .claude/bin/worktree-reap.mjs --no-size`
-
-## Executed this session
-
-- Verified a sibling-SDK session's five source citations line-by-line at `dev @ 3764191aa`; reported
-  full paths, corrected line numbers, and flagged one claim as **false** (the "despite its
-  docstring" clause). The filed issues #2248/#2249 absorbed every correction.
-- Ran `/sweep` + `/wrapup` and wrote the vault pair; ran the worktree/forest audit and the
-  Sweep-4/Sweep-5 gates; generated the 48-day burndown chart with its control.
-- Read-only throughout: **nothing landed, merged, deleted, or pushed.**
-
-## Wave tracker
-
-→ `.wave-tracker.d/esperie.md` — no wave in flight, 0 agents running, 0 PRs merged this session.
-Resume: read the tracker BEFORE launching anything (`wave-loop.md` MUST-6).
-
-## Outstanding ledger (forest)
-
-| ID  | Item                                                                  | Value-anchor (MUST-1 source)                                                              | Status                     |
-| --- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------- |
-| F21 | dev→main promotion + PyPI release backlog                             | user directive "no promotion until burndown completes"; `dev-integration-trunk.md` MUST-4 | BLOCKED on user decision   |
-| F22 | #2238 sites 3–4 — finished, on `fix/2238-sites34`, unlanded           | user decision 2026-09-13 "Fix it, and file an issue for the wider class"                  | BLOCKED on F21             |
-| F23 | #2225 residual A — design call owed (ledger wording ≠ live title)     | user decision 2026-09-13 "Salvage the good half, drop the rest"                           | BLOCKED on design decision |
-| F24 | `recovery/2225-inflight` disposition                                  | user decision 2026-09-13 — branch "stays until that lands" (it has)                       | BLOCKED on user            |
-| F25 | Workstation/repo hygiene — `lightning_fabric` segfault; stash entries | user seed "do NOT kill them, that is a human gate"                                        | BLOCKED on user            |
-| F26 | Open-issue burndown — 8 opened / 0 closed in 7 days                   | user directive "land all backlog into dev"                                                | queued                     |
-| F27 | #2238 CLEARANCE leg — same class, reported-not-fixed                  | same-class gap in the in-flight PR                                                        | queued                     |
-| F28 | #2248 / #2249 — filed by a cross-repo peer; unlabelled, unverified    | filed from this session's verification                                                    | queued                     |
-| F29 | No `burndown-manifest.json` — counts cannot be certified              | `burndown-integrity.md` MUST-1                                                            | queued                     |
-| F30 | 39 of 63 open issues are unlabelled                                   | `value-prioritization.md` MUST-1                                                          | queued                     |
-
-Nothing closed by ID this session. Logged against a prior ID: none — no ID'd item moved.
-
-## Unreleased packages
-
-All nine distributions carry commits since their last tag: `kailash`, `kailash-align`,
-`kailash-dataflow`, `kailash-kaizen`, `kailash-mcp`, `kailash-ml`, `kailash-nexus`,
-`kailash-pact`, `kaizen-agents`. Re-measure rather than recalling counts:
-`node -e 'require("./.claude/hooks/lib/release-drift.js").detectUnreleasedPackages(".")'`.
-The root `kailash` row counts path `.` — every commit — so it overstates shippable change.
-Releasing is gated behind F21.
-
-## Traps
-
-- **A count instrument can lie here.** `gh issue list --state open … | wc -l` returned 1, then 59,
-  then 63 in ONE session — other sessions file issues concurrently. Re-measure, and diff SETS.
-- **`gh issue list --search` is BODY-ONLY** — this repo's analysis lives in comments. Pass
-  `--comments` before concluding "untracked".
-- **No `burndown-manifest.json`** ⇒ `burndown-build.mjs` exits 2. A refused build is UNANSWERED,
-  never clean.
-- **Two-dot `git diff dev main` lies here**: `main` is far behind `dev`, so it renders everything
-  `dev` added as deletions. Use three dots (`origin/dev...origin/main`).
-- **Legacy `git merge-tree <base> <a> <b>` cannot show a conflict** — it emits no markers. Use
-  `git merge-tree --write-tree`.
-- **A worktree has no `.env`** (gitignored). An A/B run across two trees is confounded unless you
-  copy it in.
-- **`cd` into a reaped worktree fails silently**, and every later command then runs in the main
-  checkout. Assert `git rev-parse --show-toplevel` = `pwd -P` first.
-- **zsh does not word-split an unquoted variable**, and it expands `--include=*.py` itself: the
-  command dies with "no matches found" instead of running. Quote globs, list file args literally.
-- **pre-commit dies of SIGSEGV on this host** — commits need `--no-verify` (documented, never
-  silent), and `pytest`/other subprocess-spawning tools may be unusable.
-- **Fragment identity mismatch**: session-start resolves operator `jack-hong`, but this fragment is
-  `esperie.md`. Kept the existing name so no stale second fragment is left; reconcile if the
-  aggregate ever shows two.
-- `.git-merge-msg.tmp` at the repo root is untracked and predates this session — a stale draft merge
-  message (3013 B, 11 Sep) for a #2224 merge that already happened. Not ours to delete unasked.
-
-## Open questions for the human
-
-See the Decision Points in the vault sweep `2026-09-25-01`. The one that gates everything else is
-directive 1. D3 (dispose of the held recovery branch) and D5 (delete the stale merge-message temp
-file) are small and answerable in one line each.
+Vault sweep/wrapup pair remains owed before ending this recovery run (CLAUDE.md Directive1).

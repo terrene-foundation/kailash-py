@@ -2,26 +2,26 @@
   "reviewed_head": "71a9347cb3226ee9c6f9e0d304f677b486d1e0f1",
   "scope": "Archived ref content retention, not conformance of all historical behaviors; no ref deletion authorized by this report. Current repair commits are recorded separately.",
   "counts": {
-    "landed-equivalent": 10,
-    "superseded-diagnostics": 1,
-    "diagnostics-superseded-baggage-unverified": 1,
-    "unresolved-historical-document": 1,
-    "landed-exact-tree-via-squash": 19,
-    "superseded-checkpoint": 1,
-    "landed-repair-with-evolved-dependencies": 1,
-    "superseded": 3,
-    "unresolved": 1,
-    "current-equivalent-with-unverified-test-markers": 1,
     "current-equivalent": 1,
+    "diagnostics-superseded-baggage-unverified": 1,
     "included-in-landed-snapshot": 2,
-    "superseded-release-metadata": 2,
-    "superseded-ci-experiment": 2,
     "landed-content-with-evolved-release-metadata": 1,
-    "unresolved-historical-release-proposal": 1,
-    "unverified-large-mixed-snapshot": 1,
-    "unresolved-historical-docs-and-probes": 1,
+    "landed-content-with-superseded-test-markers": 1,
     "landed-content-with-test-relocation": 1,
-    "unresolved-production-prototype": 1
+    "landed-equivalent": 10,
+    "landed-exact-tree-via-squash": 19,
+    "landed-repair-with-evolved-dependencies": 1,
+    "retained-historical-release-tag": 1,
+    "retained-historical-strategy-document": 1,
+    "superseded": 3,
+    "superseded-checkpoint": 1,
+    "superseded-ci-experiment": 2,
+    "superseded-diagnostics": 1,
+    "superseded-release-metadata": 2,
+    "unresolved": 1,
+    "unresolved-historical-docs-and-probes": 1,
+    "unresolved-production-prototype": 1,
+    "unverified-large-mixed-snapshot": 1
   },
   "refs": [
     {
@@ -144,10 +144,14 @@
     },
     {
       "ref": "refs/archive/2026-08-21/dev",
-      "status": "unresolved-historical-document",
-      "evidence": "134 changed file blobs retained in dev history, only EXECUTION-READY-SUMMARY.md missing (725-line historical MVR strategy). No missing production blob in this archive range.",
-      "remaining": "Disposition of historical strategy document; no production port identified.",
-      "retention_status": "unresolved-historical-document"
+      "status": "retained-historical-strategy-document",
+      "evidence": [
+        "134 changed file blobs retained in dev history. Sole absent blob 1e9a8c9784c4c00754d17deed82a316978820ee9 at .claude/improvements/repivot/EXECUTION-READY-SUMMARY.md read fully.",
+        "Document dated October 24, 2025 is a human staffing/kickoff schedule and strategic forecast, not production code or current approval. Retain archive as historical evidence; do not import its old directives into current operating instructions. No current MVR completion claim."
+      ],
+      "remaining": "None identified in the bounded historical-content review; archive retained.",
+      "retention_status": "retained-historical-strategy-document",
+      "prior_retention_status": "unresolved-historical-document"
     },
     {
       "ref": "refs/archive/2026-08-21/docs/mcp-gateway-integration",
@@ -363,9 +367,12 @@
       "ref": "refs/archive/2026-08-21/fix/bug-report-issues",
       "tip": "f723e0ab05427d765c8aaba07dfb3ac9746f4b98",
       "plus_count": 12,
-      "status": "current-equivalent-with-unverified-test-markers",
+      "status": "landed-content-with-superseded-test-markers",
       "receipt": "040d4371d",
-      "evidence": "Whole archivedtip vs landed squash differs ONLY5 @pytest.mark.slow decorators in tests/unit/scenarios/test_cycle_scenarios.py. Thus all production/docs content landed; historical decorator disposition not independently exercised.",
+      "evidence": [
+        "040d4371d squash comparison differs only five slow decorators. Subsequent landed ca1604a79 rewrote the scenario tests (275 additions/1294 deletions) around mocked timing; e75ac9721 later reorganized tests.",
+        "Read full current tests/integration/scenarios/test_cycle_scenarios.py relevant scenarios: current synthetic retry/poll/checkpoint bodies no longer carry old sleeping-loop contracts. Restoring decorators from the former source is not an unlanded implementation repair. This is test-history disposition, not runtime conformance."
+      ],
       "commit_subjects": [
         "6582f083b docs: add bug resolution documentation for Run 1",
         "0a3c20223 refactor: consolidate auth modules and fix circular import issues",
@@ -380,7 +387,9 @@
         "17b56aea4 fix: improve GitHub Actions concurrency grouping",
         "f723e0ab0 fix: mark cycle scenario tests as slow to improve CI performance"
       ],
-      "retention_status": "current-equivalent-with-unverified-test-markers"
+      "retention_status": "landed-content-with-superseded-test-markers",
+      "prior_retention_status": "current-equivalent-with-unverified-test-markers",
+      "remaining": "None identified in the bounded historical-content review; archive retained."
     },
     {
       "ref": "refs/archive/2026-08-21/fix/ci-green-v5",
@@ -729,10 +738,14 @@
     },
     {
       "ref": "refs/archive/2026-08-21/release/v0.9.7",
-      "status": "unresolved-historical-release-proposal",
-      "evidence": "Only4files: two version anchors and release/changelog documentation, no implementation. Original blobs not in dev history.",
-      "remaining": "Confirm historical release-document disposition; do not restore obsolete version anchors or assert that an unverified release happened.",
-      "retention_status": "unresolved-historical-release-proposal"
+      "status": "retained-historical-release-tag",
+      "evidence": [
+        "Archive tip and v0.9.7 peeled tag are exactly 25f9e3d70e4e3ae7be740f53bbf7b04a62606ea9; v0.9.6 differs (negative control).",
+        "Read all four changed paths: two version anchors and two release documents; no production implementation change. Current version anchors must not regress. Tagged history is retained, not a claim about external package publication."
+      ],
+      "remaining": "None identified in the bounded historical-content review; archive retained.",
+      "retention_status": "retained-historical-release-tag",
+      "prior_retention_status": "unresolved-historical-release-proposal"
     },
     {
       "ref": "refs/archive/2026-08-21/release/v0.9.9",
@@ -751,7 +764,9 @@
       "commit_subjects": [
         "4cd5ef512 snapshot: pre-triage working tree from prior /implement session"
       ],
-      "retention_status": "unverified-large-mixed-snapshot"
+      "retention_status": "unverified-large-mixed-snapshot",
+      "bounded_followup": "csq13-scrap-trust-adjudication.json",
+      "remaining": "Named envelope.py and auth/chain.py are retained then deliberately hardened/superseded with ancestor receipts and actual controls. Remaining271snapshot paths are not adjudicated by this bounded follow-up; retain mixed archive."
     },
     {
       "ref": "refs/archive/2026-08-21/sync/main-with-dataflow-v0.4.3-release",
@@ -778,8 +793,9 @@
       "ref": "refs/archive/2026-08-21/todo-096-parameter-injection-testing",
       "status": "unresolved-production-prototype",
       "evidence": "Archived b7ecec280 adds1394productionlines across local.py, parameter_debugger.py,parameter_validator.py,validation/performance_optimizer.py,sdk_exceptions.py; 35changedblobs absentfromdevhistory. Current runtime has parameter_injection/injector/mixins but no archived validator/debugger/optimizer modules. Presence/absence does not establish behavioral equivalence.",
-      "remaining": "Requires bounded current-contract analysis and sharded plan before restoring/porting any missing behavior; never blindly merge oldhead.",
-      "retention_status": "unresolved-production-prototype"
+      "remaining": "Required/type rejection and actual flat/per-node injection retained. Runtime-wide parameter_validation modes and structured reports are an unlanded archival capability, not required by the inspected current specs. Debugger/optimizer remain unadjudicated. Current spec says root-only flat injection but actual old/current behavior reaches all accepting nodes. No blind restoration or blanket landed verdict.",
+      "retention_status": "unresolved-production-prototype",
+      "bounded_followup": "csq13-parameter-validator-adjudication.json"
     },
     {
       "ref": "refs/original/refs/heads/feat/1125-from-brief-analyze",
@@ -788,5 +804,6 @@
       "remaining": "None; backup ref retains original spelling.",
       "retention_status": "landed-equivalent"
     }
-  ]
+  ],
+  "followup_reviewed_head": "db9565623dd03620e03869fc63e4d51c9ceedd67"
 }

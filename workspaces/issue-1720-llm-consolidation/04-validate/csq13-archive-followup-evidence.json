@@ -1,0 +1,29 @@
+{
+  "reviewed_head": "b796ffe0816cef02c8c02768030a5359b8d31891",
+  "rows": [
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.7",
+      "status": "retained-historical-release-tag",
+      "evidence": [
+        "Archive tip and v0.9.7 peeled tag are exactly 25f9e3d70e4e3ae7be740f53bbf7b04a62606ea9; v0.9.6 differs (negative control).",
+        "Read all four changed paths: two version anchors and two release documents; no production implementation change. Current version anchors must not regress. Tagged history is retained, not a claim about external package publication."
+      ]
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/bug-report-issues",
+      "status": "landed-content-with-superseded-test-markers",
+      "evidence": [
+        "040d4371d squash comparison differs only five slow decorators. Subsequent landed ca1604a79 rewrote the scenario tests (275 additions/1294 deletions) around mocked timing; e75ac9721 later reorganized tests.",
+        "Read full current tests/integration/scenarios/test_cycle_scenarios.py relevant scenarios: current synthetic retry/poll/checkpoint bodies no longer carry old sleeping-loop contracts. Restoring decorators from the former source is not an unlanded implementation repair. This is test-history disposition, not runtime conformance."
+      ]
+    },
+    {
+      "ref": "refs/archive/2026-08-21/dev",
+      "status": "retained-historical-strategy-document",
+      "evidence": [
+        "134 changed file blobs retained in dev history. Sole absent blob 1e9a8c9784c4c00754d17deed82a316978820ee9 at .claude/improvements/repivot/EXECUTION-READY-SUMMARY.md read fully.",
+        "Document dated October 24, 2025 is a human staffing/kickoff schedule and strategic forecast, not production code or current approval. Retain archive as historical evidence; do not import its old directives into current operating instructions. No current MVR completion claim."
+      ]
+    }
+  ]
+}
