@@ -271,6 +271,11 @@ class CompiledOrg:
             )
         return self.nodes[address]
 
+    def get_role_node(self, identifier: str) -> OrgNode | None:
+        """Look up an exact positional address, requiring a ROLE node."""
+        node = self.nodes.get(identifier)
+        return node if node is not None and node.node_type == NodeType.ROLE else None
+
     def get_node_by_role_id(self, role_id: str) -> OrgNode | None:
         """Find a node by its original role_id.
 
@@ -282,7 +287,8 @@ class CompiledOrg:
         """
         for node in self.nodes.values():
             if (
-                node.role_definition is not None
+                node.node_type == NodeType.ROLE
+                and node.role_definition is not None
                 and node.role_definition.role_id == role_id
             ):
                 return node
