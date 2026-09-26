@@ -1,5 +1,5 @@
 {
-  "status": "20 bounded repairs committed; separate confirmed Nexus/Kaizen DNS connection binding repair and full promotion gates pending",
+  "status": "21 bounded repairs committed; webhook, HTTP diagnostic callback ownership, DNS fixture isolation and final promotion gates pending",
   "repairs": [
     {
       "repair": "streaming",
@@ -1706,6 +1706,29 @@
       "conservative_added_production_line_ceiling": 100,
       "invariants": 5,
       "validation": "cycle_abc_final_validation below; two independent scoped correctness and adversarial clean rounds, not whole-promotion approval"
+    },
+    {
+      "repair": "validated DNS connection binding and coherent checkout dependency resolution",
+      "commit": "b05f02798da5c43a126e51ff371d3eaf3cff7dd9",
+      "files": {
+        "packages/kailash-kaizen/pyproject.toml": "9ab78629830755be89bbcf1ffd341c70be331ffb1d5ecf96abbfbf82bc7b4bfa",
+        "packages/kailash-kaizen/src/kaizen/llm/http_client.py": "2da1e1fe1e1d153dc2e1be78575c0a2b8509c5ed69bcab54f2d61bebc7e83a6d",
+        "packages/kailash-kaizen/src/kaizen/llm/url_safety.py": "37e0b892070f2494cab7fb3aeabd99a47949343683c5419c3663d30b5942ec99",
+        "packages/kailash-kaizen/tests/integration/llm/test_llmhttpclient_wiring.py": "b8729472ac8ef2fbcf4f1834df3fbadaf12fcd48b191648dff0f9cfab51185c3",
+        "packages/kailash-kaizen/tests/unit/llm/test_wire_timeout_reaches_transport.py": "c3f46620b7eddae998016b1d88ee7eb10210ce668f2c971afec9825b9a2fcda9",
+        "packages/kailash-nexus/pyproject.toml": "c0779556c84e9da582270f412bac662bd9e6206e429ece2c1e31ff30b6b345ff",
+        "packages/kailash-nexus/src/nexus/http_client.py": "867cdc12f9d6182d6ef2a5e21c738f9b36b7ff49be128428ff1bec7ca77a9d16",
+        "pyproject.toml": "1b2515db758705ddb871d788ea96a7e7558e21d222d8f07b31cdb56130cace43",
+        "specs/kaizen-providers-provider-system.md": "7cada0e51af006434bd14323d97918152eab69e11250f6f5699cefc51b2ab680",
+        "specs/nexus-services.md": "7fd548cb32a0915c169385b975d5968776eb1144d4c8258a39164e1a964f002a",
+        "src/kailash/utils/http_transport.py": "90248812a0fd563f0140b2add2f2b14a6cadfa5c2114fc1f0386fa29f43fa1b9",
+        "src/kailash/utils/network_guard.py": "87d700e283fc96399790334a4151bb92b98c4a9e2ec5d6a208dad5c164aacda5",
+        "tests/regression/test_http_dns_connection_binding.py": "d95143ef43a2fa505886fe9ef6231a03c1aebd007eb42afa8f4bbcf4ced365f1",
+        "uv.lock": "8f44979174cf84dcfd754979249c1140a5c0b8da15e9340532f8848a01523bb7",
+        "packages/kailash-kaizen/uv.lock": "041c569f859799f0edd69605ba7688deb4c4a8006c71dc9f46fb803833fd707c"
+      },
+      "review": "Independent correctness and security each two scoped clean rounds; fixture isolation follow-up remains open",
+      "evidence": "csq14-http-repair-receipt.json"
     }
   ],
   "retry_status": "Committed467bda018; independent correctness and security each two clean scoped rounds. Full union remains open.",

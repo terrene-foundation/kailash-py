@@ -2,44 +2,39 @@
 
 ## Current checkpoint — supersedes historical statuses
 
-Source HEAD `ea4f09514` on dev. Approved CodeQL9 executed; pools design exception
-recorded. No push/merge/publish this continuation. Historical `0a01bfe29` full
-checks are NOT final approval; its DataFlow type gate and independent reviews
-found the now-committed repairs.
+Source commit `b05f02798` on dev contains reviewed DNS connection binding and
+checkout lock corrections. Both correctness and security delivered two scoped
+clean rounds. All 15 committed file hashes match their receipts; parent DNS suite
+32 passed with no Python warnings. Both tracked locks and isolated locked installs
+passed; standalone Kaizen uses the paired local Core source. Details are in
+`04-validate/csq14-http-repair-receipt.json`.
 
-Twenty bounded repairs are recorded in the final-gate-repairs receipt. Cycle A
-`1ea7f5dd7`, B `ef2f89cce`, C `ea4f09514` exactly match FINAL6's11-file manifest.
-Independent correctness and adversarial each delivered two scoped clean rounds;
-author475strict/Python0; parent194strict/Python0 on identical production. Final
-fixture permits an actual deadline before first dispatch while exactly correlating
-node calls, closure and completion events; reached disabled-timer controls fail.
-Native trust precedes checkpoint reads, preparation errors keep identity, and
-wrapper policy is captured before verifier callbacks. All other interim hooks pass;
-SKIP=pytest-check remains documented and must be unset for final all-files gates.
+Promotion is NOT ready. Webhook custom sender selection must preserve falsey
+callables. The initial logging repair needs callback ownership corrections for
+new auth Requests, synchronous upload iterator factories and custom resolver hooks.
+A DNS-first combined run also exposed a fixture restoration leak (14 failed,
+33 passed); its test-only correction is pending. Authors and independent reviewers
+remain active in their isolated sibling trees. No push, merge or publishing here.
 
-Whole-promotion review found a separate confirmed outbound DNS binding gap in
-Nexus HttpClient and Kaizen LlmHttpClient: guards see public DNS answers, then the
-socket independently resolves to the owned loopback endpoint and receives200.
-Author ml_correctness_review is implementing the shared Core pinned transport in
-`csq14-nexus-dns-binding` (base4d2a1dbbc), with Nexus/Kaizen specialist guidance.
-Archive and cycle_final_review are independently checking actual sockets/TLS,
-Host/SNI/origin pools, redirects, timeout/cancel/close and minimum dependency APIs.
-No whole-union convergence or promotion readiness is claimed.
+The nine approved CodeQL alerts were re-read through GitHub: all remain dismissed
+as false positives. The user approved BOTH separate API design tasks: DataFlow pools
+and inherited Kaizen base execution. No approval question remains pending.
+Required checks and the D1 promotion authorization persist; publishing is excluded.
 
-The user explicitly approved recording the inherited Kaizen base provider execution
-gap separately and finishing promotion on2026-09-26. The bounded Rule2 exception is
-in `04-validate/csq14-kaizen-base-execution-design-task.md`. Together with the earlier
-pools decision, both API design dispositions are resolved; no approval remains
-pending. Required checks and D1 promotion scope remain in force.
+Cycle A/B/C remain committed with FINAL6 two-round correctness/security evidence.
+There are now 21 bounded committed repairs. Interim commits document
+SKIP=pytest-check; final all-files hooks MUST run with SKIP unset before pushing.
+After the remaining repairs: regenerate final assertion/caller inventory; run
+exact-candidate Linux/Mac gates and three delivered whole-promotion reviews; push
+once, verify every required check on the exact PR head, then separately merge
+PR2229 under D1. Post-main review, clean owned worktree drain and the authorized
+vault-pair update follow. Future publishing requires a helper-bearing Core release
+and coordinated dependent floors; checkout source mappings do not establish that.
 
-Cycle/convergence completed source worktrees were backed up after committed-byte
-parity and drained. Review trees were cleaned/re-pinned toea4f. All52 historical
-refs (51archive +1original) and5ordered stashes remain exact after the source
-commits. Preserve them. No publishing. After DNS repair/reviews, regenerate final
-assertion/caller inventory, run exact-candidate Linux/Mac gates and three delivered
-whole-promotion reviews, consolidated push, exact-head required checks and separate
-D1-authorized mergePR2229. Post-main holistic review/owned-tree drain and bounded
-vault-pair update follow; both separate API design tasks are authorized.
+All 52 historical refs (51 archive plus 1 original) and five ordered stashes were
+rechecked unchanged after `b05f02798`. Preserve them. Completed cycle/convergence
+worktrees were already backed up and drained; current HTTP/review trees remain
+owned and active.
 
 ## Historical checkpoints (superseded)
 

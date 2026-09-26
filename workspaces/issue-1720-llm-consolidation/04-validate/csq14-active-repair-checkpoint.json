@@ -1,5 +1,5 @@
 {
-  "source_head": "ea4f09514b2aa6b6287fddaad3a961578b2a793c",
+  "source_head": "b05f02798da5c43a126e51ff371d3eaf3cff7dd9",
   "promotion": {
     "pr": 2229,
     "remote_head": "ce4c9de676f1ab1e0a159cb8c273dcf2e47a2cb4",
@@ -422,18 +422,18 @@
     "status": "NOT CLEAN; absolute review also reproduced migration dependency misordering and unconfigured retry attempt; final holistic rerun required"
   },
   "implementation_worktrees": [
-    "csq14-cycle-runtime-contract",
-    "csq14-convergence-diagnostics"
+    "csq14-nexus-dns-binding",
+    "csq14-webhook-safe-delivery"
   ],
   "current_repair_receipt": "04-validate/csq14-final-gate-repairs-receipt.json",
-  "latest_committed_head": "ea4f09514b2aa6b6287fddaad3a961578b2a793c",
+  "latest_committed_head": "b05f02798da5c43a126e51ff371d3eaf3cff7dd9",
   "current_retry_status": "Committed467bda018; independent correctness and security each two clean scoped rounds. Full union remains open.",
   "pools_decision_resolved": "User explicitly chose Record separately; finish promotion (Recommended). See csq14-dataflow-pools-design-task.md.",
   "current_pending_work": [
-    "Complete confirmed Nexus/Kaizen DNS binding repair and independent two-round reviews",
-    "Regenerate final assertion/caller inventory, run exact-candidate Linux/Mac full gates and three whole-promotion review deliveries",
-    "Consolidated push, exact-head required checks, separate merge under existing D1 approval",
-    "Post-main holistic review, clean owned worktree drain and authorized vault-pair continuity updates"
+    "independent webhook and refined logging reviews to two clean rounds",
+    "final committed-candidate Linux and Mac full gates plus three whole-promotion reviews",
+    "consolidated push, exact-head required checks, separate D1-authorized merge PR2229",
+    "post-main review, owned worktree drain, bounded vault pair update"
   ],
   "cycle_candidate_manifest": {
     "head": "0a01bfe29503c30cec484d4fc374390afc67cc90",
@@ -504,7 +504,7 @@
     "warnings_scope": "371 deliberate negative-path records, old baseline DurableRequest diagnostic root separately fixed; complete records in final4-warnings.json"
   },
   "cycle_status": "FINAL6 all11 hashes committed across A/B/C; independent correctness and adversarial each two clean scoped rounds",
-  "final_review_overlays": "Coverage tree clean after committed parity backup-final5; correctness/security contain historical cyclefinal2 overlays, cannot count as finalcandidate evidence; source/review overlays owned and preserved.",
+  "final_review_overlays": "Review trees pinned at ea4 with exact reviewed DNS, checkout, webhook and initial logging overlays; refined callback logging and fixture corrections pending; no final promotion convergence.",
   "whole_union_attempt_0a01": {
     "commit": "0a01bfe29503c30cec484d4fc374390afc67cc90",
     "tree": "f681128ea721970621ed2a6409148df40d1cfc76",
@@ -544,11 +544,12 @@
     "durable_helper_fixtures": "e2aeb3fd3",
     "convergence_diagnostic": "2545588b0",
     "convergence_fixtures": "8c6847208",
-    "kaizen_diagnostic": "4d2a1dbbc"
+    "kaizen_diagnostic": "4d2a1dbbc",
+    "http_dns_and_checkout": "b05f02798da5c43a126e51ff371d3eaf3cff7dd9"
   },
   "review_failure_receipt": "ml_gate_recovery errored twice (one allowed recovery exhausted); zero review evidence credited. Replacement cycle_final_review delivered actual ran/evidence receipts.",
   "cycle_scheduling_and_trust": {
-    "status": "required bounded C repair in progress; not frozen",
+    "status": "COMPLETE in committed FINAL6; retained evidence below is historical",
     "evidence": [
       "/tmp/csq14-parallel-policy-baseline-concurrent.log",
       "/tmp/csq14-parallel-policy-original-wrapper-concurrent.log",
@@ -599,6 +600,8 @@
     "reviewers": [
       "archive_checkpoint",
       "cycle_final_review"
-    ]
-  }
+    ],
+    "status": "DNS production committed; author currently repairs separate HTTP logging callback scope and DNS test fixture isolation"
+  },
+  "current_http_receipt": "04-validate/csq14-http-repair-receipt.json"
 }

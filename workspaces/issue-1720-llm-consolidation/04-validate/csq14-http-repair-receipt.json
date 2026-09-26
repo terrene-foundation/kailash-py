@@ -1,0 +1,128 @@
+{
+  "status": "DNS source and checkout dependency correction committed; webhook, automatic logging, DNS test-fixture isolation and whole-promotion gates remain open",
+  "dns_commit": "b05f02798da5c43a126e51ff371d3eaf3cff7dd9",
+  "committed_dns_manifest": {
+    "packages/kailash-kaizen/pyproject.toml": "9ab78629830755be89bbcf1ffd341c70be331ffb1d5ecf96abbfbf82bc7b4bfa",
+    "packages/kailash-kaizen/src/kaizen/llm/http_client.py": "2da1e1fe1e1d153dc2e1be78575c0a2b8509c5ed69bcab54f2d61bebc7e83a6d",
+    "packages/kailash-kaizen/src/kaizen/llm/url_safety.py": "37e0b892070f2494cab7fb3aeabd99a47949343683c5419c3663d30b5942ec99",
+    "packages/kailash-kaizen/tests/integration/llm/test_llmhttpclient_wiring.py": "b8729472ac8ef2fbcf4f1834df3fbadaf12fcd48b191648dff0f9cfab51185c3",
+    "packages/kailash-kaizen/tests/unit/llm/test_wire_timeout_reaches_transport.py": "c3f46620b7eddae998016b1d88ee7eb10210ce668f2c971afec9825b9a2fcda9",
+    "packages/kailash-nexus/pyproject.toml": "c0779556c84e9da582270f412bac662bd9e6206e429ece2c1e31ff30b6b345ff",
+    "packages/kailash-nexus/src/nexus/http_client.py": "867cdc12f9d6182d6ef2a5e21c738f9b36b7ff49be128428ff1bec7ca77a9d16",
+    "pyproject.toml": "1b2515db758705ddb871d788ea96a7e7558e21d222d8f07b31cdb56130cace43",
+    "specs/kaizen-providers-provider-system.md": "7cada0e51af006434bd14323d97918152eab69e11250f6f5699cefc51b2ab680",
+    "specs/nexus-services.md": "7fd548cb32a0915c169385b975d5968776eb1144d4c8258a39164e1a964f002a",
+    "src/kailash/utils/http_transport.py": "90248812a0fd563f0140b2add2f2b14a6cadfa5c2114fc1f0386fa29f43fa1b9",
+    "src/kailash/utils/network_guard.py": "87d700e283fc96399790334a4151bb92b98c4a9e2ec5d6a208dad5c164aacda5",
+    "tests/regression/test_http_dns_connection_binding.py": "d95143ef43a2fa505886fe9ef6231a03c1aebd007eb42afa8f4bbcf4ced365f1",
+    "uv.lock": "8f44979174cf84dcfd754979249c1140a5c0b8da15e9340532f8848a01523bb7",
+    "packages/kailash-kaizen/uv.lock": "041c569f859799f0edd69605ba7688deb4c4a8006c71dc9f46fb803833fd707c"
+  },
+  "scoped_reviews": {
+    "correctness": "two clean rounds; final policy hooks, original assertions, actual HTTP/TLS/stream/timeout/retry and minimum dependencies",
+    "security": "two clean rounds,39 independent cases plus32 regressions each, no Python warnings or unclosed peers",
+    "checkout_metadata": "two static/control rounds; both actual lock checks pass; parent separately verified locked install and local Core/Kaizen import/close"
+  },
+  "evidence_sha256": {
+    "/tmp/csq14-dns-correctness-refined3-final-receipt.json": "fe58fa04612635313f65681d46333cecb7455fe288e713108cfb457037320d75",
+    "/tmp/csq14-dns-independent-refined3-security-receipt.json": "1dcf1a969cd1aff656d4e86d22564f0a6630bfb59c98c2d5c7b8d648cc122a3c",
+    "/tmp/csq14-http-lock-correctness-final-receipt.json": "13b6cb9b06c2edc3a35e466609a3f5bffc52bdfd838db76e72b8cf3d98c6cec5",
+    "/tmp/csq14-http-checkout-locks-receipt.json": "f5d9afb127e309cc3fda1dfb00cabfc2aa83fd14f359fc77cd8bb7e883d8c1e3",
+    "/tmp/csq14-http-parent-dns-refined3-receipt.json": "ed7924109cacecf0c514bf48b2e0be7ec91b21ee2b937c9cb3a29fa28bba7044"
+  },
+  "parent_dns_tests": {
+    "passed": 32,
+    "python_warnings": 0,
+    "intentional_negative_error_records": 22
+  },
+  "approved_codeql_live_recheck": [
+    {
+      "dismissed_reason": "false positive",
+      "number": 11595,
+      "rule": "py/polynomial-redos",
+      "state": "dismissed"
+    },
+    {
+      "dismissed_reason": "false positive",
+      "number": 11596,
+      "rule": "py/polynomial-redos",
+      "state": "dismissed"
+    },
+    {
+      "dismissed_reason": "false positive",
+      "number": 11466,
+      "rule": "py/clear-text-logging-sensitive-data",
+      "state": "dismissed"
+    },
+    {
+      "dismissed_reason": "false positive",
+      "number": 11467,
+      "rule": "py/clear-text-logging-sensitive-data",
+      "state": "dismissed"
+    },
+    {
+      "dismissed_reason": "false positive",
+      "number": 10866,
+      "rule": "py/clear-text-logging-sensitive-data",
+      "state": "dismissed"
+    },
+    {
+      "dismissed_reason": "false positive",
+      "number": 5153,
+      "rule": "py/overly-permissive-file",
+      "state": "dismissed"
+    },
+    {
+      "dismissed_reason": "false positive",
+      "number": 131,
+      "rule": "py/bad-tag-filter",
+      "state": "dismissed"
+    },
+    {
+      "dismissed_reason": "false positive",
+      "number": 133,
+      "rule": "py/bad-tag-filter",
+      "state": "dismissed"
+    },
+    {
+      "dismissed_reason": "false positive",
+      "number": 6082,
+      "rule": "py/missing-call-to-delete",
+      "state": "dismissed"
+    }
+  ],
+  "preserved_state": {
+    "refs": 52,
+    "ordered_stashes": 5,
+    "receipt_sha256": "75d3436689882bc60442c800bdb3827030e639ce21b46e3837c4fe1e28c962ef"
+  },
+  "open_findings": [
+    {
+      "scope": "webhook custom callback dispatch",
+      "evidence": "/tmp/csq14-webhook-correctness-independent.log",
+      "finding": "A supplied falsey callable selects the default sender; explicit None selection correction assigned to original author."
+    },
+    {
+      "scope": "owned HTTP dependency diagnostics",
+      "evidence": [
+        "/tmp/csq14-http-logging-independent-new-auth.json",
+        "/tmp/csq14-http-logging-iterator-correctness.json",
+        "/tmp/csq14-http-logging-independent-resolver.json"
+      ],
+      "finding": "Supported callback paths inherit owned logging scope and alter unrelated HTTP logging; public callback scope correction in progress."
+    },
+    {
+      "scope": "DNS regression fixture isolation",
+      "evidence": "/tmp/csq14-http-parent-logging.log",
+      "finding": "DNS-first combined selection14failed33passed; nested monkeypatch restoration leaves the child resolver active. Test-only LIFO restoration correction in progress."
+    }
+  ],
+  "remaining": [
+    "independent webhook and refined logging reviews to two clean rounds",
+    "final committed-candidate Linux and Mac full gates plus three whole-promotion reviews",
+    "consolidated push, exact-head required checks, separate D1-authorized merge PR2229",
+    "post-main review, owned worktree drain, bounded vault pair update"
+  ],
+  "permissions": "Nine specified CodeQL dispositions and both API design exceptions approved. D1 promotion authorized; no publishing. Preserve52 historical refs and5 stashes.",
+  "future_release_boundary": "A helper-bearing Core release and corresponding dependent floors must precede future package publishing. Checkout uv source mappings are not published metadata."
+}
