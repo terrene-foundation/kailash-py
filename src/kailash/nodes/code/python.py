@@ -79,6 +79,7 @@ from kailash.security import (
     memory_limit_guard,
     validate_node_parameters,
 )
+from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
 
 logger = logging.getLogger(__name__)
 
@@ -510,7 +511,10 @@ class CodeExecutor:
                     # Installed but not importable (broken install, missing
                     # native dependency). Leave the name unbound, as before.
                     logger.debug(
-                        "Module %s could not be imported: %s", module_name, exc
+                        "Module %s could not be imported (%s): %s",
+                        module_name,
+                        safe_type_name(exc),
+                        safe_exception_frames(exc),
                     )
                 continue
             bindings[module_name] = _LazyModule(module_name)
@@ -674,7 +678,11 @@ class CodeExecutor:
             raise
         except Exception as e:
             error_msg = f"Code execution failed: {str(e)}\n{traceback.format_exc()}"
-            logger.error(error_msg)
+            logger.error(
+                "Code execution failed (%s): %s",
+                safe_type_name(e),
+                safe_exception_frames(e),
+            )
             raise NodeExecutionError(error_msg)
 
     def execute_function(self, func: Callable, inputs: dict[str, Any]) -> Any:
@@ -738,7 +746,11 @@ class CodeExecutor:
 
         except Exception as e:
             error_msg = f"Function execution failed: {str(e)}\n{traceback.format_exc()}"
-            logger.error(error_msg)
+            logger.error(
+                "Function execution failed (%s): %s",
+                safe_type_name(e),
+                safe_exception_frames(e),
+            )
             raise NodeExecutionError(error_msg)
 
     def _ensure_serializable(self, data: Any) -> Any:
@@ -1631,7 +1643,11 @@ class PythonCodeNode(Node):
 
             raise NodeExecutionError(error_msg)
         except Exception as e:
-            logger.error(f"Python code execution failed: {e}")
+            logger.error(
+                "Python code execution failed (%s): %s",
+                safe_type_name(e),
+                safe_exception_frames(e),
+            )
             raise NodeExecutionError(f"Execution failed: {str(e)}")
 
     @classmethod

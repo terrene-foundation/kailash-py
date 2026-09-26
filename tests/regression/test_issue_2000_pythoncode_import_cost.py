@@ -381,7 +381,8 @@ class TestLazyProxyDoesNotWidenTheSandbox:
         from kailash.nodes.code import PythonCodeNode
         from kailash.sdk_exceptions import NodeExecutionError
 
-        node = PythonCodeNode(name="t", code=self.PRELUDE + body)
+        # Nine setup lines plus up to three lines for the attack under test.
+        node = PythonCodeNode(name="t", code=self.PRELUDE + body, max_code_lines=12)
         with pytest.raises(NodeExecutionError) as excinfo:
             node.execute()
         # And specifically NOT because the payload silently produced nothing.
@@ -401,6 +402,8 @@ class TestLazyProxyDoesNotWidenTheSandbox:
         node = PythonCodeNode(
             name="t",
             code=self.PRELUDE + "_m = type(_p)('os')\nresult = {'sep': _m.path.sep}\n",
+            # Nine setup lines plus the two-line allowed-module control.
+            max_code_lines=11,
         )
         assert node.execute()["result"] == {"sep": "/"}
 
