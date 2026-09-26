@@ -2563,6 +2563,7 @@ class LocalRuntime(
             WorkflowCancelledError: If cancellation is requested.
             PermissionError: If access control denies execution.
         """
+        cyclic_executor = self._cycle_executor_for_attempt()
         # Extract kwargs for backward compatibility
         _validate_force_resume_with_drift(kwargs.get("force_resume_with_drift", False))
         task_manager: TaskManager | None = kwargs.get("task_manager")
@@ -2795,10 +2796,16 @@ class LocalRuntime(
             }
 
             # Check for cyclic workflows and delegate to CycleExecutionMixin
-            if self.enable_cycles and workflow.has_cycles():
+            if cyclic_executor is not None and workflow.has_cycles():
                 # Delegate to CycleExecutionMixin (Phase 3 integration)
-                results, run_id = self._execute_cyclic_workflow(
-                    workflow, processed_parameters, task_manager, run_id
+                results, run_id = await self._execute_cyclic_workflow_async(
+                    workflow,
+                    processed_parameters,
+                    task_manager,
+                    run_id,
+                    workflow_context=workflow_context,
+                    execution_state=conditional_state,
+                    cyclic_executor=cyclic_executor,
                 )
             elif (
                 self.conditional_execution == "skip_branches"
@@ -5494,6 +5501,16 @@ class LocalRuntime(
         if self._hook_registry.subscriber_count > 0:
             await self._hook_registry.dispatch_async(_redacted_event)
 
+    @staticmethod
+    def _check_execution_cancelled(node_id, execution_state):
+        token = execution_state.cancellation_token
+        tracker = execution_state.execution_tracker
+        if token is not None and token.is_cancelled:
+            raise WorkflowCancelledError(
+                cancelled_at_node=node_id,
+                completed_nodes=tracker.completed_node_ids if tracker else [],
+            )
+
     def _check_node_result(self, node_id: str, result: Any) -> None:
         """Reject failed output before publishing results or successful checkpoints."""
         should_stop, error_info = should_stop_on_content_failure(
@@ -5540,12 +5557,7 @@ class LocalRuntime(
         started_at = datetime.now(UTC)
         if execution_state is not None:
             tracker = execution_state.execution_tracker
-            token = execution_state.cancellation_token
-            if token is not None and token.is_cancelled:
-                raise WorkflowCancelledError(
-                    cancelled_at_node=node_id,
-                    completed_nodes=tracker.completed_node_ids if tracker else [],
-                )
+            self._check_execution_cancelled(node_id, execution_state)
             if tracker is not None and tracker.is_completed(node_id):
                 restored = tracker.get_output(node_id)
                 self._check_node_result(node_id, restored)

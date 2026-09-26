@@ -21,13 +21,22 @@ Version:
     Part of: Runtime parity remediation (Phase 3)
 """
 
+import asyncio
+import concurrent.futures
+import contextvars
 import logging
+import threading
+from contextlib import contextmanager
+from dataclasses import replace
+from datetime import UTC, datetime
 from typing import Any, Dict, Optional, Tuple
 
 from kailash.sdk_exceptions import RuntimeExecutionError
+from kailash.utils.secure_logging import safe_exception_frames
 from kailash.workflow import Workflow
 
 logger = logging.getLogger(__name__)
+_cycle_attempt_executor = contextvars.ContextVar("cycle_attempt_executor", default=None)
 
 
 class CycleExecutionMixin:
@@ -84,6 +93,24 @@ class CycleExecutionMixin:
     debug: bool
     enable_cycles: bool
     cyclic_executor: Any
+
+    @contextmanager
+    def _cycle_executor_scope(self, executor):
+        """Select a wrapper's policy for exactly one attempt on this owner."""
+        token = _cycle_attempt_executor.set((self, executor))
+        try:
+            yield
+        finally:
+            _cycle_attempt_executor.reset(token)
+
+    def _cycle_executor_for_attempt(self):
+        selection = _cycle_attempt_executor.get()
+        # Clear even a foreign selection before any node can start nested work.
+        # The outer scope restores its caller's context on exit.
+        _cycle_attempt_executor.set(None)
+        if selection is not None and selection[0] is self:
+            return selection[1]
+        return self.cyclic_executor if self.enable_cycles else None
 
     def __init__(self, *args, **kwargs):
         """Initialize mixin via super() for proper MRO chain.
@@ -180,5 +207,140 @@ class CycleExecutionMixin:
 
         except Exception as e:
             # Phase 6: Error Handling - Wrap executor exceptions with context
-            self.logger.error(f"Cyclic workflow execution failed: {str(e)}")
+            from kailash.runtime.resource_manager import (
+                _is_retry_observer_failure,
+                _raise_if_runtime_terminal,
+            )
+
+            _raise_if_runtime_terminal(e)
+            if _is_retry_observer_failure(e):
+                raise
+            self.logger.error(
+                "Cyclic workflow execution failed: %s", safe_exception_frames(e)
+            )
             raise RuntimeExecutionError(f"Cycle execution failed: {str(e)}") from e
+
+    async def _execute_cyclic_workflow_async(
+        self,
+        workflow,
+        parameters,
+        task_manager,
+        run_id,
+        *,
+        workflow_context,
+        execution_state,
+        cyclic_executor,
+    ):
+        """Keep graph traversal off-loop, and node work on the attempt's loop.
+
+        The traversal worker owns no async resources. Every node dispatch and
+        completion runs on the originating runtime loop and carries its context.
+        Cancellation drains that worker before the attempt releases its resources.
+        """
+        loop = asyncio.get_running_loop()
+        stopped = threading.Event()
+        active = []
+        active_lock = threading.Lock()
+        node_tasks = set()
+
+        async def execute_node(node, node_id, inputs, cycle_id, iteration):
+            task = asyncio.current_task()
+            node_tasks.add(task)
+            try:
+                self._check_execution_cancelled(node_id, execution_state)
+                if stopped.is_set():
+                    raise asyncio.CancelledError()
+                started_at = datetime.now(UTC)
+                if workflow_context is not None:
+                    node._workflow_context = workflow_context
+                result = await self.execute_node_with_enterprise_features(
+                    node, node_id, inputs
+                )
+                self._check_node_result(node_id, result)
+                # Iteration-aware durable storage is supplied by the cycle tracker.
+                await self._publish_node_completion(
+                    workflow=workflow,
+                    node_id=node_id,
+                    node_instance=node,
+                    outputs=result,
+                    run_id=run_id,
+                    started_at=started_at,
+                    execution_state=replace(execution_state, execution_tracker=None),
+                )
+                return result
+            finally:
+                node_tasks.remove(task)
+
+        def dispatch(*args):
+            if stopped.is_set():
+                raise asyncio.CancelledError()
+            coroutine = execute_node(*args)
+            try:
+                future = asyncio.run_coroutine_threadsafe(coroutine, loop)
+            except BaseException:
+                coroutine.close()
+                raise
+            # Scheduling can race with cancellation before registration. Do not
+            # hold this lock while scheduling or waiting on the owner loop.
+            with active_lock:
+                active.append(future)
+                cancel_after_admission = stopped.is_set()
+            if cancel_after_admission:
+                future.cancel()
+            try:
+                return future.result()
+            except concurrent.futures.CancelledError:
+                raise asyncio.CancelledError() from None
+            finally:
+                with active_lock:
+                    active.remove(future)
+
+        executor = cyclic_executor._fork_for_execution()
+        worker = asyncio.create_task(
+            asyncio.to_thread(
+                executor.execute,
+                workflow,
+                parameters,
+                task_manager,
+                run_id,
+                self,
+                node_executor=dispatch,
+            )
+        )
+        try:
+            return await asyncio.shield(worker)
+        except asyncio.CancelledError:
+            with active_lock:
+                stopped.set()
+                pending = list(active)
+            for future in pending:
+                future.cancel()
+
+            async def drain_owner():
+                await asyncio.gather(worker, return_exceptions=True)
+                # Concurrent Future cancellation precedes the asyncio task's
+                # async finally blocks; wait for actual node tasks as well.
+                await asyncio.sleep(0)
+                await asyncio.gather(*node_tasks, return_exceptions=True)
+
+            drain = asyncio.create_task(drain_owner())
+            while not drain.done():
+                try:
+                    await asyncio.shield(drain)
+                except asyncio.CancelledError:
+                    continue
+            drain.result()
+            raise
+        except Exception as error:
+            from kailash.runtime.resource_manager import (
+                _is_retry_observer_failure,
+                _raise_if_runtime_terminal,
+            )
+
+            _raise_if_runtime_terminal(error)
+            if _is_retry_observer_failure(error):
+                raise
+            self.logger.error(
+                "Cyclic workflow execution failed: %s", safe_exception_frames(error)
+            )
+            raise RuntimeExecutionError(f"Cycle execution failed: {error}") from error

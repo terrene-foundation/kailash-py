@@ -99,6 +99,7 @@ See Also:
 """
 
 import logging
+from copy import copy
 from datetime import UTC, datetime
 from typing import Any, Optional
 
@@ -132,6 +133,7 @@ class WorkflowState:
         self.metadata: dict[str, Any] = {}
         self.initial_parameters: dict[str, Any] = {}
         self.runtime: Any = None  # Will be set by executor for enterprise features
+        self.node_executor = None
 
 
 class CyclicWorkflowExecutor:
@@ -147,6 +149,13 @@ class CyclicWorkflowExecutor:
         self.cycle_state_manager = CycleStateManager()
         self.dag_runner: Any = WorkflowRunner()  # For executing DAG portions
 
+    def _fork_for_execution(self):
+        """Retain configured traversal policy, isolating mutable attempt state."""
+        executor = copy(self)
+        executor.cycle_state_manager = CycleStateManager()
+        executor.safety_manager = self.safety_manager._fork_for_execution()
+        return executor
+
     def execute(
         self,
         workflow: Workflow,
@@ -154,6 +163,8 @@ class CyclicWorkflowExecutor:
         task_manager: TaskManager | None = None,
         run_id: str | None = None,
         runtime=None,
+        *,
+        node_executor=None,
     ) -> tuple[dict[str, Any], str]:
         """Execute workflow with cycle support.
 
@@ -187,13 +198,24 @@ class CyclicWorkflowExecutor:
         # The plan handles DAG stages even when there are no cycle groups.
         # WorkflowRunner instead accepts registered workflow IDs and state models.
         try:
+            execution_options = (
+                {"node_executor": node_executor} if node_executor is not None else {}
+            )
             results = self._execute_with_cycles(
-                workflow, parameters, run_id, task_manager, runtime
+                workflow, parameters, run_id, task_manager, runtime, **execution_options
             )
             logger.info(f"Cyclic workflow execution completed: {workflow.name}")
             return results, run_id
 
         except Exception as e:
+            from kailash.runtime.resource_manager import (
+                _is_retry_observer_failure,
+                _raise_if_runtime_terminal,
+            )
+
+            _raise_if_runtime_terminal(e)
+            if _is_retry_observer_failure(e):
+                raise
             logger.error(
                 "Cyclic workflow execution failed: %s", safe_exception_frames(e)
             )
@@ -282,6 +304,8 @@ class CyclicWorkflowExecutor:
         run_id: str,
         task_manager: TaskManager | None = None,
         runtime=None,
+        *,
+        node_executor=None,
     ) -> dict[str, Any]:
         """Execute workflow with cycle handling.
 
@@ -310,6 +334,7 @@ class CyclicWorkflowExecutor:
         state.initial_parameters = parameters or {}
         # Store runtime for enterprise features
         state.runtime = runtime
+        state.node_executor = node_executor
 
         # Execute the plan
         results = self._execute_plan(workflow, execution_plan, state, task_manager)
@@ -1296,7 +1321,15 @@ class CyclicWorkflowExecutor:
         try:
             with collector.collect(node_id=node_id) as metrics_context:
                 # Use enterprise node execution if runtime is available
-                if state.runtime and hasattr(
+                if state.node_executor is not None:
+                    result = state.node_executor(
+                        node,
+                        node_id,
+                        dict(context=context, **merged_inputs),
+                        cycle_state.cycle_id if cycle_state else None,
+                        iteration,
+                    )
+                elif state.runtime and hasattr(
                     state.runtime, "execute_node_with_enterprise_features_sync"
                 ):
                     # Use sync enterprise wrapper for automatic feature integration

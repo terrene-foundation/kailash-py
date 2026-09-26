@@ -983,6 +983,7 @@ class AsyncLocalRuntime(LocalRuntime):
         # #912 Shard 1: validate typed time-limit kwargs at the entry point.
         _validate_force_resume_with_drift(force_resume_with_drift)
         _validate_limits(soft_time_limit, time_limit)
+        cyclic_executor = self._cycle_executor_for_attempt()
 
         # #912 Shard 6: arm asyncio-task-based deadlines around the
         # in-process async execution path. Mirrors the LocalRuntime
@@ -1114,13 +1115,21 @@ class AsyncLocalRuntime(LocalRuntime):
                     logger.debug(f"Executing with timeout={self.execution_timeout}s")
                     tracker_result = await asyncio.wait_for(
                         self._execute_workflow_internal(
-                            workflow, inputs, context, run_id
+                            workflow,
+                            inputs,
+                            context,
+                            run_id,
+                            cyclic_executor=cyclic_executor,
                         ),
                         timeout=self.execution_timeout,
                     )
                 else:
                     tracker_result = await self._execute_workflow_internal(
-                        workflow, inputs, context, run_id
+                        workflow,
+                        inputs,
+                        context,
+                        run_id,
+                        cyclic_executor=cyclic_executor,
                     )
 
                 # Update total execution time
@@ -1241,7 +1250,13 @@ class AsyncLocalRuntime(LocalRuntime):
                 await cancellable.disarm_async()
 
     async def _execute_workflow_internal(
-        self, workflow, inputs: Dict[str, Any], context: ExecutionContext, run_id: str
+        self,
+        workflow,
+        inputs: Dict[str, Any],
+        context: ExecutionContext,
+        run_id: str,
+        *,
+        cyclic_executor,
     ):
         """
         Internal workflow execution (extracted for timeout wrapping).
@@ -1249,6 +1264,25 @@ class AsyncLocalRuntime(LocalRuntime):
         P0 Component 1: Separated from execute_workflow_async to enable
         timeout protection via asyncio.wait_for().
         """
+        if cyclic_executor is not None and workflow.has_cycles():
+            results, _ = await self._execute_cyclic_workflow_async(
+                workflow,
+                inputs,
+                None,
+                run_id,
+                workflow_context=None,
+                cyclic_executor=cyclic_executor,
+                execution_state=_ConditionalExecutionState(
+                    execution_tracker=context._w1_execution_tracker,
+                    cancellation_token=context._w1_cancellation_token,
+                    workflow_fingerprint=context._w1_workflow_fingerprint,
+                    checkpoint_key=context._w1_checkpoint_key,
+                    tenant_id=context._w1_tenant_id,
+                    idempotency_key=context._w1_idempotency_key,
+                ),
+            )
+            return {"results": results}
+
         # Check for conditional workflow with skip_branches mode
         # Only use conditional execution approach if skip_branches is enabled
         if (
