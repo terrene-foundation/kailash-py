@@ -107,28 +107,31 @@ def sqlite_url():
 async def test_node_update_bumps_updated_at_sqlite(sqlite_url):
     url, _ = sqlite_url
     db = DataFlow(url, auto_migrate=True)
+    try:
 
-    @db.model
-    class DocU1564:
-        title: str
+        @db.model
+        class DocU1564:
+            title: str
 
-    await db.initialize()
-    rt = AsyncLocalRuntime()
+        await db.initialize()
+        async with AsyncLocalRuntime() as rt:
 
-    await _create(rt, "DocU1564", {"title": "orig"})
-    row0 = (await _list(rt, "DocU1564"))[0]
-    rid = row0["id"]
+            await _create(rt, "DocU1564", {"title": "orig"})
+            row0 = (await _list(rt, "DocU1564"))[0]
+            rid = row0["id"]
 
-    time.sleep(1.2)  # SQLite CURRENT_TIMESTAMP has 1-second resolution
-    await _update(rt, "DocU1564", rid, {"title": "changed"})
+            time.sleep(1.2)  # SQLite CURRENT_TIMESTAMP has 1-second resolution
+            await _update(rt, "DocU1564", rid, {"title": "changed"})
 
-    row1 = (await _list(rt, "DocU1564", {"id": rid}))[0]
-    assert row1["title"] == "changed"  # write persisted (read-back)
-    assert row1.get("created_at") and row1.get("updated_at")
-    assert row1["updated_at"] > row1["created_at"], (
-        "updated_at was NOT bumped on node UPDATE (issue #1564): "
-        f"{row1['updated_at']!r} !> {row1['created_at']!r}"
-    )
+            row1 = (await _list(rt, "DocU1564", {"id": rid}))[0]
+            assert row1["title"] == "changed"  # write persisted (read-back)
+            assert row1.get("created_at") and row1.get("updated_at")
+            assert row1["updated_at"] > row1["created_at"], (
+                "updated_at was NOT bumped on node UPDATE (issue #1564): "
+                f"{row1['updated_at']!r} !> {row1['created_at']!r}"
+            )
+    finally:
+        await db.close_async()
 
 
 # ---------------------------------------------------------------------------
@@ -139,44 +142,47 @@ async def test_node_update_bumps_updated_at_sqlite(sqlite_url):
 async def test_node_upsert_bumps_updated_at_sqlite(sqlite_url):
     url, _ = sqlite_url
     db = DataFlow(url, auto_migrate=True)
+    try:
 
-    @db.model
-    class DocUp1564:
-        slug: str
-        title: str
-        __dataflow__ = {"indexes": [{"fields": ["slug"], "unique": True}]}
+        @db.model
+        class DocUp1564:
+            slug: str
+            title: str
+            __dataflow__ = {"indexes": [{"fields": ["slug"], "unique": True}]}
 
-    await db.initialize()
-    rt = AsyncLocalRuntime()
+        await db.initialize()
+        async with AsyncLocalRuntime() as rt:
 
-    await _upsert(
-        rt,
-        "DocUp1564",
-        {"slug": "s1"},
-        {"title": "orig"},
-        {"slug": "s1", "title": "orig"},
-    )
-    # CREATE branch (first upsert, no existing row) produced a COMPLETE row —
-    # the async column resolution ran on the INSERT path too (LOW-2 coverage).
-    created = (await _list(rt, "DocUp1564", {"slug": "s1"}))[0]
-    assert created["title"] == "orig"
-    assert created.get("created_at") and created.get("updated_at")
+            await _upsert(
+                rt,
+                "DocUp1564",
+                {"slug": "s1"},
+                {"title": "orig"},
+                {"slug": "s1", "title": "orig"},
+            )
+            # CREATE branch (first upsert, no existing row) produced a COMPLETE row —
+            # the async column resolution ran on the INSERT path too (LOW-2 coverage).
+            created = (await _list(rt, "DocUp1564", {"slug": "s1"}))[0]
+            assert created["title"] == "orig"
+            assert created.get("created_at") and created.get("updated_at")
 
-    time.sleep(1.2)
-    await _upsert(
-        rt,
-        "DocUp1564",
-        {"slug": "s1"},
-        {"title": "changed"},
-        {"slug": "s1", "title": "changed"},
-    )
+            time.sleep(1.2)
+            await _upsert(
+                rt,
+                "DocUp1564",
+                {"slug": "s1"},
+                {"title": "changed"},
+                {"slug": "s1", "title": "changed"},
+            )
 
-    row1 = (await _list(rt, "DocUp1564", {"slug": "s1"}))[0]
-    assert row1["title"] == "changed"
-    assert row1["updated_at"] > row1["created_at"], (
-        "updated_at was NOT bumped on node UPSERT-UPDATE (issue #1564): "
-        f"{row1['updated_at']!r} !> {row1['created_at']!r}"
-    )
+            row1 = (await _list(rt, "DocUp1564", {"slug": "s1"}))[0]
+            assert row1["title"] == "changed"
+            assert row1["updated_at"] > row1["created_at"], (
+                "updated_at was NOT bumped on node UPSERT-UPDATE (issue #1564): "
+                f"{row1['updated_at']!r} !> {row1['created_at']!r}"
+            )
+    finally:
+        await db.close_async()
 
 
 # ---------------------------------------------------------------------------
@@ -188,21 +194,24 @@ async def test_node_upsert_bumps_updated_at_sqlite(sqlite_url):
 async def test_node_list_select_includes_timestamps_sqlite(sqlite_url):
     url, _ = sqlite_url
     db = DataFlow(url, auto_migrate=True)
+    try:
 
-    @db.model
-    class DocS1564:
-        title: str
+        @db.model
+        class DocS1564:
+            title: str
 
-    await db.initialize()
-    rt = AsyncLocalRuntime()
+        await db.initialize()
+        async with AsyncLocalRuntime() as rt:
 
-    await _create(rt, "DocS1564", {"title": "x"})
-    row = (await _list(rt, "DocS1564"))[0]
-    # Pre-fix the async select template dropped the timestamp columns.
-    assert "created_at" in row and "updated_at" in row, (
-        "SELECT column list dropped timestamp columns (issue #1564): "
-        f"got keys {sorted(row.keys())}"
-    )
+            await _create(rt, "DocS1564", {"title": "x"})
+            row = (await _list(rt, "DocS1564"))[0]
+            # Pre-fix the async select template dropped the timestamp columns.
+            assert "created_at" in row and "updated_at" in row, (
+                "SELECT column list dropped timestamp columns (issue #1564): "
+                f"got keys {sorted(row.keys())}"
+            )
+    finally:
+        await db.close_async()
 
 
 # ---------------------------------------------------------------------------
@@ -216,34 +225,37 @@ async def test_node_list_select_includes_timestamps_sqlite(sqlite_url):
 async def test_managed_path_resolves_columns_with_zero_db_io(sqlite_url):
     url, _ = sqlite_url
     db = DataFlow(url, auto_migrate=True)
+    try:
 
-    @db.model
-    class DocZ1564:
-        title: str
+        @db.model
+        class DocZ1564:
+            title: str
 
-    await db.initialize()
+        await db.initialize()
 
-    async def _boom(*a, **k):
-        raise AssertionError(
-            "discover_schema_async MUST NOT run on the managed auto_migrate path"
-        )
+        async def _boom(*a, **k):
+            raise AssertionError(
+                "discover_schema_async MUST NOT run on the managed auto_migrate path"
+            )
 
-    db.discover_schema_async = _boom  # any introspection would raise loudly
+        db.discover_schema_async = _boom  # any introspection would raise loudly
 
-    # Direct resolver assertion — derived, no catalog query.
-    cols = await db._resolve_table_columns_async("DocZ1564")
-    assert cols == ["id", "title", "created_at", "updated_at"]
+        # Direct resolver assertion — derived, no catalog query.
+        cols = await db._resolve_table_columns_async("DocZ1564")
+        assert cols == ["id", "title", "created_at", "updated_at"]
 
-    # End-to-end: the node UPDATE path still bumps updated_at without any
-    # introspection round-trip.
-    rt = AsyncLocalRuntime()
-    await _create(rt, "DocZ1564", {"title": "orig"})
-    rid = (await _list(rt, "DocZ1564"))[0]["id"]
-    time.sleep(1.2)
-    await _update(rt, "DocZ1564", rid, {"title": "changed"})
-    row1 = (await _list(rt, "DocZ1564", {"id": rid}))[0]
-    assert row1["title"] == "changed"
-    assert row1["updated_at"] > row1["created_at"]
+        # End-to-end: the node UPDATE path still bumps updated_at without any
+        # introspection round-trip.
+        async with AsyncLocalRuntime() as rt:
+            await _create(rt, "DocZ1564", {"title": "orig"})
+            rid = (await _list(rt, "DocZ1564"))[0]["id"]
+            time.sleep(1.2)
+            await _update(rt, "DocZ1564", rid, {"title": "changed"})
+            row1 = (await _list(rt, "DocZ1564", {"id": rid}))[0]
+            assert row1["title"] == "changed"
+            assert row1["updated_at"] > row1["created_at"]
+    finally:
+        await db.close_async()
 
 
 # ---------------------------------------------------------------------------
@@ -261,40 +273,45 @@ async def test_existing_schema_branch_introspects_and_caches(sqlite_url):
     # WITHOUT updated_at — so the test actually exercises custom table-name
     # resolution in the introspection branch (MED-2).
     conn = sqlite3.connect(path)
-    conn.execute(
-        "CREATE TABLE legacy_archive (id INTEGER PRIMARY KEY, title TEXT, created_at TEXT)"
-    )
-    conn.commit()
-    conn.close()
+    try:
+        conn.execute(
+            "CREATE TABLE legacy_archive (id INTEGER PRIMARY KEY, title TEXT, created_at TEXT)"
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
     db = DataFlow(url, auto_migrate=False, existing_schema_mode=True)
+    try:
 
-    @db.model
-    class LegacyDoc:  # default plural "legacy_docs" != the real table name
-        title: str
-        __tablename__ = "legacy_archive"
+        @db.model
+        class LegacyDoc:  # default plural "legacy_docs" != the real table name
+            title: str
+            __tablename__ = "legacy_archive"
 
-    await db.initialize()
+        await db.initialize()
 
-    cols = await db._resolve_table_columns_async("LegacyDoc")
-    assert "title" in cols and "created_at" in cols, (
-        "existing-schema introspection must resolve the CUSTOM table name "
-        f"(legacy_archive, not the default legacy_docs) and read its real "
-        f"columns; got {cols}"
-    )
-    assert "updated_at" not in cols, (
-        "existing-schema introspection must report the REAL table shape "
-        f"(no updated_at), got {cols}"
-    )
+        cols = await db._resolve_table_columns_async("LegacyDoc")
+        assert "title" in cols and "created_at" in cols, (
+            "existing-schema introspection must resolve the CUSTOM table name "
+            f"(legacy_archive, not the default legacy_docs) and read its real "
+            f"columns; got {cols}"
+        )
+        assert "updated_at" not in cols, (
+            "existing-schema introspection must report the REAL table shape "
+            f"(no updated_at), got {cols}"
+        )
 
-    # The introspection result is cached under the custom table name.
-    assert any(
-        k.endswith(":legacy_archive") for k in db._column_cache
-    ), db._column_cache
+        # The introspection result is cached under the custom table name.
+        assert any(
+            k.endswith(":legacy_archive") for k in db._column_cache
+        ), db._column_cache
 
-    # clear_schema_cache evicts the column cache.
-    db.clear_schema_cache()
-    assert db._column_cache == {}
+        # clear_schema_cache evicts the column cache.
+        db.clear_schema_cache()
+        assert db._column_cache == {}
+    finally:
+        await db.close_async()
 
 
 # ---------------------------------------------------------------------------
@@ -319,29 +336,34 @@ async def test_node_update_bumps_updated_at_postgresql():
             query="DROP TABLE IF EXISTS docpg1564 CASCADE",
             validate_queries=False,
         )
-        await drop.async_run()
-        await drop.cleanup()
+        try:
+            await drop.async_run()
+        finally:
+            await drop.cleanup()
 
         db = DataFlow(url, auto_migrate=True)
+        try:
 
-        @db.model
-        class DocPg1564:
-            title: str
+            @db.model
+            class DocPg1564:
+                title: str
 
-        await db.initialize()
-        rt = AsyncLocalRuntime()
+            await db.initialize()
+            async with AsyncLocalRuntime() as rt:
 
-        await _create(rt, "DocPg1564", {"title": "orig"})
-        row0 = (await _list(rt, "DocPg1564"))[0]
-        rid = row0["id"]
+                await _create(rt, "DocPg1564", {"title": "orig"})
+                row0 = (await _list(rt, "DocPg1564"))[0]
+                rid = row0["id"]
 
-        # PostgreSQL CURRENT_TIMESTAMP is microsecond-resolution; a separate
-        # UPDATE transaction gets a strictly later value — no sleep needed.
-        await _update(rt, "DocPg1564", rid, {"title": "changed"})
+                # PostgreSQL CURRENT_TIMESTAMP is microsecond-resolution; a separate
+                # UPDATE transaction gets a strictly later value — no sleep needed.
+                await _update(rt, "DocPg1564", rid, {"title": "changed"})
 
-        row1 = (await _list(rt, "DocPg1564", {"id": rid}))[0]
-        assert row1["title"] == "changed"
-        assert str(row1["updated_at"]) > str(row1["created_at"]), (
-            "updated_at was NOT bumped on node UPDATE on PostgreSQL (issue #1564): "
-            f"{row1['updated_at']!r} !> {row1['created_at']!r}"
-        )
+                row1 = (await _list(rt, "DocPg1564", {"id": rid}))[0]
+                assert row1["title"] == "changed"
+                assert str(row1["updated_at"]) > str(row1["created_at"]), (
+                    "updated_at was NOT bumped on node UPDATE on PostgreSQL (issue #1564): "
+                    f"{row1['updated_at']!r} !> {row1['created_at']!r}"
+                )
+        finally:
+            await db.close_async()

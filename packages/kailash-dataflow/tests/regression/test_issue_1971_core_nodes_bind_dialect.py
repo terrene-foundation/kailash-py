@@ -98,39 +98,43 @@ def test_modules_under_test_are_the_worktree_copies():
 async def test_single_upsert_binds_its_detected_dialect(tmp_path, caplog):
     """``{Model}UpsertNode`` resolves ``database_type`` before it validates."""
     db = DataFlow(f"sqlite:///{tmp_path / 'upsert_bind.db'}")
+    try:
 
-    @db.model
-    class Widget:
-        id: str
-        name: str
+        @db.model
+        class Widget:
+            id: str
+            name: str
 
-    workflow = WorkflowBuilder()
-    workflow.add_node(
-        "WidgetUpsertNode",
-        "up",
-        {
-            "where": {"id": "w1"},
-            "update": {"name": "beta"},
-            "create": {"id": "w1", "name": "alpha"},
-        },
-    )
-
-    with caplog.at_level(logging.WARNING, logger="kailash.db.dialect"):
-        results, _ = await AsyncLocalRuntime().execute_workflow_async(
-            workflow.build(), inputs={}
+        workflow = WorkflowBuilder()
+        workflow.add_node(
+            "WidgetUpsertNode",
+            "up",
+            {
+                "where": {"id": "w1"},
+                "update": {"name": "beta"},
+                "create": {"id": "w1", "name": "alpha"},
+            },
         )
 
-    # The path must still WORK, not merely fall silent: a broken path would
-    # emit no warning either.
-    record = results["up"]["record"]
-    assert record["id"] == "w1", f"upsert did not return the row: {record}"
-    assert record["name"] == "alpha", f"upsert did not return the row: {record}"
+        with caplog.at_level(logging.WARNING, logger="kailash.db.dialect"):
+            async with AsyncLocalRuntime() as runtime:
+                results, _ = await runtime.execute_workflow_async(
+                    workflow.build(), inputs={}
+                )
 
-    assert _MARKER not in caplog.text, (
-        "the single-record upsert node validated identifiers against the "
-        "unknown-dialect budget although database_type was already resolved "
-        f"and is used immediately below to pick the dialect: {caplog.text!r}"
-    )
+        # The path must still WORK, not merely fall silent: a broken path would
+        # emit no warning either.
+        record = results["up"]["record"]
+        assert record["id"] == "w1", f"upsert did not return the row: {record}"
+        assert record["name"] == "alpha", f"upsert did not return the row: {record}"
+
+        assert _MARKER not in caplog.text, (
+            "the single-record upsert node validated identifiers against the "
+            "unknown-dialect budget although database_type was already resolved "
+            f"and is used immediately below to pick the dialect: {caplog.text!r}"
+        )
+    finally:
+        await db.close_async()
 
 
 # ---------------------------------------------------------------------------
@@ -148,41 +152,43 @@ async def test_genuinely_unknown_dialect_still_warns_from_core_nodes(tmp_path, c
     have silenced the signal rather than bound the budget.
     """
     db = DataFlow(f"sqlite:///{tmp_path / 'upsert_unknown.db'}")
+    try:
 
-    @db.model
-    class Gadget:
-        id: str
-        name: str
+        @db.model
+        class Gadget:
+            id: str
+            name: str
 
-    workflow = WorkflowBuilder()
-    workflow.add_node(
-        "GadgetUpsertNode",
-        "up",
-        {
-            "database_url": "mongodb://localhost:27017/nowhere",
-            "where": {"id": "g1"},
-            "update": {"name": "beta"},
-            "create": {"id": "g1", "name": "alpha"},
-        },
-    )
+        workflow = WorkflowBuilder()
+        workflow.add_node(
+            "GadgetUpsertNode",
+            "up",
+            {
+                "database_url": "mongodb://localhost:27017/nowhere",
+                "where": {"id": "g1"},
+                "update": {"name": "beta"},
+                "create": {"id": "g1", "name": "alpha"},
+            },
+        )
 
-    with caplog.at_level(logging.WARNING, logger="kailash.db.dialect"):
-        with pytest.raises(Exception):
-            # The dialect factory rejects "mongodb" AFTER the identifier
-            # validation above it has already run — which is the point.
-            await AsyncLocalRuntime().execute_workflow_async(
-                workflow.build(), inputs={}
-            )
+        with caplog.at_level(logging.WARNING, logger="kailash.db.dialect"):
+            with pytest.raises(Exception):
+                # The dialect factory rejects "mongodb" AFTER the identifier
+                # validation above it has already run — which is the point.
+                async with AsyncLocalRuntime() as runtime:
+                    await runtime.execute_workflow_async(workflow.build(), inputs={})
 
-    assert _MARKER in caplog.text, (
-        "a db type the dialect registry does not know reached the identifier "
-        "validator without warning — the unbound-budget signal was silenced "
-        f"rather than bound: {caplog.text!r}"
-    )
-    assert "core/nodes.py" in caplog.text, (
-        "the warning fired but was attributed to another call site, so it is "
-        f"not evidence about the site under test: {caplog.text!r}"
-    )
+        assert _MARKER in caplog.text, (
+            "a db type the dialect registry does not know reached the identifier "
+            "validator without warning — the unbound-budget signal was silenced "
+            f"rather than bound: {caplog.text!r}"
+        )
+        assert "core/nodes.py" in caplog.text, (
+            "the warning fired but was attributed to another call site, so it is "
+            f"not evidence about the site under test: {caplog.text!r}"
+        )
+    finally:
+        await db.close_async()
 
 
 # ---------------------------------------------------------------------------
@@ -206,53 +212,56 @@ async def test_postgres_budget_rejects_identifier_sqlite_accepts(tmp_path, caplo
     connection is opened, which is exactly where the defect lived.
     """
     db = DataFlow(f"sqlite:///{tmp_path / 'upsert_budget.db'}")
+    try:
 
-    @db.model
-    class Doohickey:
-        __tablename__ = _LONG_TABLE
+        @db.model
+        class Doohickey:
+            __tablename__ = _LONG_TABLE
 
-        id: str
-        name: str
+            id: str
+            name: str
 
-    assert db._get_table_name("Doohickey") == _LONG_TABLE
-    assert len(_LONG_TABLE) == 70
+        assert db._get_table_name("Doohickey") == _LONG_TABLE
+        assert len(_LONG_TABLE) == 70
 
-    def _wf(database_url: str | None):
-        workflow = WorkflowBuilder()
-        params = {
-            "where": {"id": "d1"},
-            "update": {"name": "beta"},
-            "create": {"id": "d1", "name": "alpha"},
-        }
-        if database_url is not None:
-            params["database_url"] = database_url
-        workflow.add_node("DoohickeyUpsertNode", "up", params)
-        return workflow.build()
+        def _wf(database_url: str | None):
+            workflow = WorkflowBuilder()
+            params = {
+                "where": {"id": "d1"},
+                "update": {"name": "beta"},
+                "create": {"id": "d1", "name": "alpha"},
+            }
+            if database_url is not None:
+                params["database_url"] = database_url
+            workflow.add_node("DoohickeyUpsertNode", "up", params)
+            return workflow.build()
 
-    # PostgreSQL: 70 > 63 → rejected client-side instead of silently truncated.
-    with pytest.raises(Exception) as excinfo:
-        await AsyncLocalRuntime().execute_workflow_async(
-            _wf("postgresql://u:p@127.0.0.1:5432/nowhere"), inputs={}
+        # PostgreSQL: 70 > 63 → rejected client-side instead of silently truncated.
+        with pytest.raises(Exception) as excinfo:
+            async with AsyncLocalRuntime() as runtime:
+                await runtime.execute_workflow_async(
+                    _wf("postgresql://u:p@127.0.0.1:5432/nowhere"), inputs={}
+                )
+        chain, err = [], excinfo.value
+        while err is not None and err not in chain:
+            chain.append(err)
+            err = err.__cause__ or err.__context__
+        assert any(isinstance(e, IdentifierError) for e in chain), (
+            "a 70-char table name was NOT rejected against PostgreSQL's 63-char "
+            f"budget; raised chain was {[type(e).__name__ for e in chain]}: {chain[0]!r}"
         )
-    chain, err = [], excinfo.value
-    while err is not None and err not in chain:
-        chain.append(err)
-        err = err.__cause__ or err.__context__
-    assert any(isinstance(e, IdentifierError) for e in chain), (
-        "a 70-char table name was NOT rejected against PostgreSQL's 63-char "
-        f"budget; raised chain was {[type(e).__name__ for e in chain]}: {chain[0]!r}"
-    )
-    assert any(
-        "63-char limit" in str(e) for e in chain
-    ), f"rejected, but not against PostgreSQL's budget: {chain!r}"
+        assert any(
+            "63-char limit" in str(e) for e in chain
+        ), f"rejected, but not against PostgreSQL's budget: {chain!r}"
 
-    # SQLite: 70 < 128 → still accepted, and still returns the real row.
-    with caplog.at_level(logging.WARNING, logger="kailash.db.dialect"):
-        results, _ = await AsyncLocalRuntime().execute_workflow_async(
-            _wf(None), inputs={}
+        # SQLite: 70 < 128 → still accepted, and still returns the real row.
+        with caplog.at_level(logging.WARNING, logger="kailash.db.dialect"):
+            async with AsyncLocalRuntime() as runtime:
+                results, _ = await runtime.execute_workflow_async(_wf(None), inputs={})
+        assert results["up"]["record"]["id"] == "d1", (
+            "binding the dialect budget broke the SQLite path, which legally "
+            f"allows a 70-char identifier: {results['up']!r}"
         )
-    assert results["up"]["record"]["id"] == "d1", (
-        "binding the dialect budget broke the SQLite path, which legally "
-        f"allows a 70-char identifier: {results['up']!r}"
-    )
-    assert _MARKER not in caplog.text, caplog.text
+        assert _MARKER not in caplog.text, caplog.text
+    finally:
+        await db.close_async()
