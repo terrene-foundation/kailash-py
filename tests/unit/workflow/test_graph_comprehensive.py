@@ -38,12 +38,14 @@ class MockNode(Node):
         """Initialize with flexible parameter handling."""
         self.name = name or id or "mock_node"
         self.id = id or name or "mock_node"
-        self.config = kwargs
         self.executed = False
         self.execution_count = 0
         self.return_value = kwargs.get("return_value", {"result": "success"})
         self.should_fail = kwargs.get("should_fail", False)
         self.required_params = kwargs.get("required_params", [])
+        super().__init__(
+            name=self.name, _node_id=kwargs.pop("_node_id", self.id), **kwargs
+        )
 
     def get_parameters(self):
         """Get node parameters."""
@@ -85,7 +87,7 @@ class NodeWithNameConstructor(Node):
 
     def __init__(self, name, **kwargs):
         self.name = name
-        self.config = kwargs
+        super().__init__(name=name, **kwargs)
 
     def get_parameters(self):
         return {}
@@ -101,8 +103,7 @@ class NodeWithIdConstructor(Node):
     """Node that requires '_node_id' parameter in constructor (updated for namespace separation)."""
 
     def __init__(self, _node_id, **kwargs):
-        self._node_id = _node_id
-        self.config = kwargs
+        super().__init__(_node_id=_node_id, **kwargs)
 
     def get_parameters(self):
         return {}
@@ -119,7 +120,7 @@ class NodeWithInvalidConstructor(Node):
 
     def __init__(self, required_param, **kwargs):
         self.required_param = required_param
-        self.config = kwargs
+        super().__init__(**kwargs)
 
     def get_parameters(self):
         return {}
@@ -430,6 +431,11 @@ class TestWorkflowExecution:
         assert run_id is None
         # The runtime should not be called since workflow.run() calls workflow.execute() directly
         mock_runtime.execute.assert_not_called()
+        assert self.workflow._node_instances["node1"].execution_count == 1
+        assert self.workflow._node_instances["node2"].execution_count == 1
+        assert (
+            self.workflow._node_instances["node2"].last_inputs["input_data"] == "data1"
+        )
 
     @patch("kailash.runtime.local.LocalRuntime")
     def test_execute_method(self, mock_runtime_class):
