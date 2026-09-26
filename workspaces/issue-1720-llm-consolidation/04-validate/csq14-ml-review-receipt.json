@@ -1,0 +1,42 @@
+{
+  "source_commit": "34eca2992b04b4cbc13c7eababc4355d34145374",
+  "merge_commit": "6fa357a1b",
+  "candidate_sha256": "23406d699cd29b3933a3305e9faaeb902827c38ece81b1348e7024933b5d6cfe",
+  "scope": "Only test_seed.py changed; independent optional-subsystem dispatch and reporting. No real-library or GPU integration claim.",
+  "gate": "Original six-file ML selection; 237 passed, --timeout=30 -W error; see csq14-ml-gate-evidence.txt",
+  "correctness": {
+    "ran": true,
+    "rounds": [
+      "CLEAN: complete producer/API and 13-call AST inventory",
+      "CLEAN: three touched test baselines; four reached mutations rejected"
+    ],
+    "mutations": [
+      "incorrect opt-out determinism",
+      "missing opt-in determinism",
+      "reordered applied results",
+      "Lightning incorrectly coupled to Torch"
+    ]
+  },
+  "adversarial": {
+    "ran": true,
+    "rounds": [
+      "CLEAN: three touched baselines and seven reached source mutants",
+      "CLEAN: reversed execution order, exception propagation, unexpected imports, fixture restoration"
+    ],
+    "mutations": [
+      "Lightning coupled to Torch",
+      "false opt-out determinism",
+      "wrong seed value",
+      "deterministic(False)",
+      "false success report",
+      "wrong workers flag",
+      "reversed applied order"
+    ]
+  },
+  "non_evidence": [
+    "Initial run with obsolete temporary test-on-test controls passed240 with a provenance-induced pytest warning; superseded by final237 strict run.",
+    "Intermediate venv re-creation refused before tests; rerun reused private environment.",
+    "Bare pyenv launcher exited139 during parent check; final GitHub verifier reran using /usr/bin/python3."
+  ],
+  "pending": "None for local gate: complete configured all-files hooks, including pytest-check, passed at fe791935c; see csq14-final-hooks-receipt.json. Exact promotion-head GitHub checks remain a separate gate."
+}

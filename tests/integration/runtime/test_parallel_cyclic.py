@@ -350,10 +350,23 @@ class TestParallelCyclicRuntimeParallelExecution:
         assert can_parallel is False
 
     def test_can_execute_in_parallel_network_error(self):
-        """Test handling of NetworkX errors."""
-        # Mock NetworkX to raise an error
-        with patch(
-            "networkx.topological_sort", side_effect=nx.NetworkXError("Test error")
+        """Test handling of NetworkX errors.
+
+        Patch target corrected (issue #2107 lane, zero-tolerance Rule 1): this
+        previously patched the module-level ``networkx.topological_sort``, but
+        ``_can_execute_in_parallel`` calls ``workflow.graph.topological_sort()``
+        -- a bound method on ``kailash.workflow.dag.WorkflowDAG``. The patch was
+        therefore INERT: the real sort ran, the fixture workflow genuinely has
+        parallel opportunities, and the call returned True, so the test failed
+        on ``assert True is False``. Patching the method actually invoked makes
+        the error path execute, which is what this test exists to cover.
+        """
+        from kailash.workflow.dag import WorkflowDAG
+
+        with patch.object(
+            WorkflowDAG,
+            "topological_sort",
+            side_effect=nx.NetworkXError("Test error"),
         ):
             can_parallel = self.runtime._can_execute_in_parallel(self.workflow)
 

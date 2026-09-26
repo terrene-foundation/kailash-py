@@ -42,10 +42,12 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Set
 
 import prometheus_client
-from prometheus_client import CollectorRegistry
-from prometheus_client import Counter as PromCounter
-from prometheus_client import Histogram as PromHistogram
-from prometheus_client import generate_latest
+from prometheus_client import (
+    CollectorRegistry,
+    Counter as PromCounter,
+    Histogram as PromHistogram,
+    generate_latest,
+)
 
 from kaizen.providers.provider_names import MODEL_PREFIX_MAP, PROVIDER_NAMES
 

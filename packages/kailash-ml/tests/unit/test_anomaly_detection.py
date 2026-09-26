@@ -6,6 +6,8 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 import pytest
+from sklearn.datasets import make_blobs
+
 from kailash_ml.engines.anomaly_detection import (
     AnomalyDetectionEngine,
     AnomalyResult,
@@ -15,7 +17,6 @@ from kailash_ml.engines.anomaly_detection import (
     _validate_algorithm,
     _validate_contamination,
 )
-from sklearn.datasets import make_blobs
 
 # ---------------------------------------------------------------------------
 # Fixtures

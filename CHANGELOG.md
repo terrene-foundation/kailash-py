@@ -13,6 +13,169 @@ such as `>=2.0`.
 
 ## [Unreleased]
 
+### Changed (BREAKING) — audit-store `verify_chain()` fails closed on an empty chain (#2221)
+
+`AuditStoreProtocol.verify_chain()` (both `InMemoryAuditStore` and `SqliteAuditStore`) previously
+returned `True` for an **empty** chain. That made a wiped audit store indistinguishable from a
+never-written one at the return value — an attacker who deletes the audit store passed
+verification.
+
+`verify_chain() -> bool` now returns `True` **only** when the chain is `INTACT` (>=1 event and
+every hash + linkage check passes). An empty store now returns `False` (fail-closed), as does a
+tampered chain. A new three-state API distinguishes the cases:
+
+```python
+from kailash.trust import ChainStatus  # or kailash.trust.audit_store
+
+status = await store.verify_chain_status()   # ChainStatus.INTACT | EMPTY | TAMPERED
+if status is ChainStatus.EMPTY:
+    ...  # a caller for whom "empty is fine" must now say so EXPLICITLY
+```
+
+**What this DOES and does NOT detect.** The chain is an **unkeyed** SHA-256 hash chain with no
+signed or anchored head. `verify_chain` therefore detects: a **full wipe** (→ `EMPTY`), a **naive
+in-place edit** of any event (its recomputed hash no longer matches → `TAMPERED`), and a **middle-
+or front-deletion** among the stored events (linkage break → `TAMPERED`). It does **NOT** detect
+**tail-truncation from genesis** (dropping the newest events leaves a shorter but internally
+consistent chain) nor **full re-hash substitution** (an attacker who rewrites every event and
+recomputes every hash produces a chain that verifies) — closing those requires a keyed HMAC or a
+signed/anchored head and is out of scope for this change. Do not read `verify_chain() is True` as
+full tamper-evidence; it is empty-detection plus naive-edit / interior-deletion detection.
+
+Note `InMemoryAuditStore` is a bounded `deque(maxlen)` that legitimately EVICTS its oldest events
+once full; a wrapped-but-intact chain now verifies `INTACT` (it does not require the genesis anchor
+once eviction has occurred), while a genuine linkage break among the surviving events still reports
+`TAMPERED`.
+
+**Migration.** Callers that treated `verify_chain() is True` as "chain sound" need no code change —
+an empty store is simply no longer reported sound. One in-tree caller changes OUTPUT (not API):
+`pact.compliance.evidence.EvidenceCollector` (`packages/kailash-pact`) feeds `verify_chain()` into
+the SOC 2 **CC7 `audit_chain_integrity`** criterion; against an **empty** store that criterion now
+emits `outcome="failure"` where it previously emitted `success`. This is the intended fail-closed
+direction (an empty audit trail is not evidence of a sound one), but it is a visible change in
+generated compliance evidence. Callers that intentionally accept an empty trail must switch to
+`verify_chain_status()` and handle `ChainStatus.EMPTY` explicitly. `verify_chain()` keeps its `bool`
+signature; only the empty-chain verdict changed (`True` → `False`).
+
+### Fixed — sibling audit verifiers no longer report an empty store as verified (#2221)
+
+Two more "an absence rendered as a success" sites in the same tree, same class as the canonical
+stores above:
+
+- `AppendOnlyAuditStore.verify_integrity()` (legacy) returned `IntegrityVerificationResult(valid=
+  True, total_records=0)` for an empty store; it now returns `valid=False` with a recorded reason.
+  (This store is a plain list — it never evicts — so empty unambiguously means no records.)
+- `ConsentLedger.verify_chain()` returned `True` for an empty ledger (the linkage loop never ran);
+  it now returns `False`. A wiped consent ledger no longer reports verified. (Consent records carry
+  per-record Ed25519 signatures, so this is less severe than the unkeyed audit chain — but
+  empty-passes is the same defect.)
+
+### Fixed — suspension resume gate no longer fails open on an empty condition set (#2221)
+
+`PlanSuspension.all_conditions_met()` returned `True` vacuously (`all([]) is True`) when
+`resume_conditions` was empty, so a suspended plan with no stated resume conditions resumed
+immediately and unconditionally — a fail-OPEN resume gate the docstring wrongly called
+"defensive". It now returns `False` for an empty condition set: such a suspension is un-resumable
+through this gate without an explicit override.
+
+### Fixed — MCPChannel health check uses a falsifiable workflow-registry assertion (#2221)
+
+`MCPChannel.health_check()` asserted `len(self._workflow_registry) >= 0`, which is `True` for every
+sized object and raised `TypeError` on a `None` registry — an assertion that cannot fail is not a
+check. It now checks `self._workflow_registry is not None` (falsifiable, matching its sibling
+`is not None` checks: it detects an uninitialized/torn-down channel where the registry is `None`),
+and the workflow-count metric is `None`-safe so such a channel reports unhealthy instead of crashing
+the health report. Note this does **not** detect a "corrupt-but-nonempty" registry — it is a
+crash-fix plus a falsifiable init-state check, not a content-integrity check.
+
+### Changed (BREAKING) — residual audit/chain verifiers fail closed on an empty basis (#2221)
+
+A re-sweep of `src/kailash/trust` for the same "an absence rendered as a success" class (#2189)
+found five more verifiers that returned a PASS verdict for an input they never examined. Each
+returned the identical value for "checked everything and it was sound" and "there was nothing to
+check", so a wiped store was indistinguishable from a verified one at the only field callers gate
+on. All five now fail closed, and each carries a reason string naming the empty/unconfigured cause
+so it stays distinguishable from a genuine tamper finding:
+
+- `SqliteAuditLog.verify_integrity()` (`trust/pact/stores/sqlite.py`) returned `(True, None)` for a
+  table with no rows. A **wiped `pact_audit_log` table** verified clean. Now `(False, "empty audit
+  log: ...")`.
+- `GovernanceEngine.verify_audit_integrity()` (`trust/pact/engine.py`) returned `(True, None)` when
+  no SQLite audit log was configured — its own docstring called this "vacuously valid". "No audit
+  log is configured" and "the audit log is intact" are different facts; an entirely unaudited
+  engine now reports `(False, "no SQLite audit log configured ...")`.
+- `LinkedHashChain.verify_chain_linkage()` (`trust/chain.py`) returned `(True, None)` for an empty
+  `original_hashes` list. This is the method the SECURITY NOTE on `verify_chain` designates as the
+  **full cryptographic verification** path, so `True` reads as "cryptographically proven"; zero
+  hashes prove nothing. Now `(False, None)`.
+- `LinkedHashChain.verify_chain()` (and its `verify_integrity()` deprecation shim) returned
+  `(True, None)` for an empty chain as "structurally valid". Now `(False, None)`.
+- `AuditChain.verify_chain_integrity()` (`trust/pact/audit.py`) computed `len(errors) == 0` over a
+  loop that never ran, so a chain with no anchors returned `(True, [])`. Now
+  `(False, ["empty chain: ..."])`. `AuditChain.from_dict` is unaffected — it already skipped
+  verification for an anchor-less chain.
+
+**Migration.** Callers treating a `True` verdict as "sound" need no code change — an absent chain is
+simply no longer reported sound. Callers that legitimately operate without a persisted audit log
+(memory backend) and called `verify_audit_integrity()` for a green check must now either configure
+`store_backend="sqlite"` or branch on the returned reason string, which names the configuration
+cause explicitly rather than reporting success.
+
+Three in-tree tests asserted these vacuous passes **as intended behaviour** — the
+"test asserting the vulnerability" flavour #2189 warned about — and were corrected rather than
+worked around: `test_verify_audit_integrity_empty`, `test_engine_verify_audit_integrity_no_audit_log`,
+and `test_verify_integrity_empty_chain`. Each new probe ships with a paired CONTROL asserting the
+populated/intact case still verifies `True`, so none of these fixes can be satisfied by
+"now always False".
+
+### Fixed — the first `PythonCodeNode` execution no longer imports the whole ML stack (#2000)
+
+On a machine with torch and sklearn installed, the **first** `PythonCodeNode` execution in a
+process took 7–9 seconds before running a single line of user code, and failed outright where
+those packages were present but broken. Two independent paths each eagerly imported every heavy
+optional dependency, for code that referenced none of them. Measured cold, same instrument, for
+`result = {'ok': True}`:
+
+```
+before:  run0 8.485s / 4.546s / 6.629s   torch, sklearn, scipy, pandas all imported
+after:   run0 1.387s / 0.960s / 0.498s   none of them imported
+```
+
+`kailash.security` built `sanitize_input()`'s type allow-list by importing torch, sklearn, scipy,
+pandas, xgboost, lightgbm, plotly, PIL and networkx purely to read type identities off them. It
+now reads `sys.modules` instead: the allow-list is consumed only by `isinstance()`, and a value
+cannot be an instance of `torch.Tensor` unless torch has already executed in this process. The
+cache is keyed on which of those modules are loaded and that key is re-read per call, so a
+framework imported later is still picked up.
+
+`CodeExecutor.execute_code()` imported every module in `ALLOWED_MODULES` into the sandbox
+namespace on every execution. Modules the code actually names are now imported for real and the
+rest are bound to a lazy proxy, so the set of names available to user code is unchanged — only
+the timing of the import differs.
+
+#### Two allow-list verdicts changed
+
+Everything else about the allow-list is verdict-preserving; these two are not, and are called
+out rather than left to be discovered:
+
+- **sklearn under coverage — now WIDER.** The old sklearn branch was wrapped in
+  `if "coverage" not in sys.modules`, so a process running under coverage **rejected**
+  `BaseEstimator`/`TransformerMixin` values that every normal process accepted. That guard was
+  about import cost, not policy, and nothing imports sklearn here any more, so coverage runs now
+  agree with production. If you relied on coverage runs rejecting estimator values, they no
+  longer do.
+- **Non-pandas frames named `DataFrame` — unchanged, deliberately.** `sanitize_input()` has a
+  long-standing branch that accepts any value whose class name contains `DataFrame` (polars,
+  spark), which historically ran whenever pandas was *installed*. It is now gated on
+  installed-ness via `find_spec` rather than on pandas being *imported*, so the verdict is
+  identical to before while no longer importing pandas.
+
+#### Sandbox note
+
+The lazy proxy validates every module name against the same allow-list the eager path enforced,
+at resolve time as well as construction, and subclasses `types.ModuleType` so it is stripped from
+node outputs exactly as a real module is.
+
 ## [2.65.0] — 2026-09-11 — `PactEngine.governance` is genuinely read-only and an empty `allowed_actions` denies at every enforcement surface; the idle-pool reaper stops closing busy pools; a denial-of-service in the brief scrubber is closed (#2224, #2218, #697, #2128, #2162, #2163, #2057, #2175, #2118)
 
 ### Fixed — the idle-pool reaper no longer closes a pool that is actively serving queries (#697)

@@ -1357,7 +1357,14 @@ def _try_ragas_evaluate(
     try:
         from datasets import Dataset  # type: ignore[import-not-found]
         from ragas import evaluate as ragas_evaluate  # type: ignore[import-not-found]
-        from ragas.metrics import answer_relevancy, context_precision, context_recall
+        from ragas.metrics import (
+            answer_relevancy,
+            context_precision,
+            context_recall,
+        )
+
+        # Preserve optional-provider attribute lookup order and the narrow type ignore.
+        # isort: split
         from ragas.metrics import (
             faithfulness as ragas_faithfulness,  # type: ignore[import-not-found]
         )

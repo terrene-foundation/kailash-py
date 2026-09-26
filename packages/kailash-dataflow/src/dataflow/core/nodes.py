@@ -48,6 +48,9 @@ try:
 except ImportError:
     AsyncNode = Node  # type: ignore[assignment,misc]
 
+from kailash.utils.secure_logging import (  # log-injection barrier for logged VALUES
+    sanitize_log_value,
+)
 from kailash.utils.url_credentials import (  # Issue #2027: field-name fingerprints
     fingerprint_secret,
 )
@@ -57,8 +60,8 @@ from .exceptions import sanitize_db_error  # Issue #1552: redact driver-error VA
 from .exceptions import (  # Issue #1519/#1520: typed conflict-target error propagation
     BulkUpsertConflictTargetError,
     UpsertConflictTargetError,
+    is_conflict_target_error as _is_conflict_target_error,
 )
-from .exceptions import is_conflict_target_error as _is_conflict_target_error
 from .logging_config import mask_sensitive_values  # Phase 7: Sensitive value masking
 
 
@@ -1032,6 +1035,36 @@ class NodeGenerator:
                         # value: the field may be `password`/`token` and the
                         # value is attacker- or user-supplied plaintext. The
                         # fingerprint still correlates repeat hits on one field.
+                        #
+                        # #2171: the tag is UNKEYED and a column name is drawn
+                        # from the schema, so anyone holding the log line and
+                        # the schema can hash field names until one matches --
+                        # it is a correlation tag, NOT a way to keep the column
+                        # secret, and the value (the part that is genuinely
+                        # sensitive) is what is actually withheld here. Keying
+                        # it is deliberately NOT done: these lines are joined
+                        # across processes and against the cross-SDK 8-hex
+                        # contract in rules/event-payload-classification.md 2.
+                        #
+                        # #2171: the tag is UNKEYED and a column name is drawn
+                        # from the schema, so anyone holding the log line and
+                        # the schema can hash field names until one matches --
+                        # it is a correlation tag, NOT a way to keep the column
+                        # secret, and the value (the part that is genuinely
+                        # sensitive) is what is actually withheld here. Keying
+                        # it is deliberately NOT done: these lines are joined
+                        # across processes and against the cross-SDK 8-hex
+                        # contract in rules/event-payload-classification.md 2.
+                        #
+                        # #2171: the tag is UNKEYED and a column name is drawn
+                        # from the schema, so anyone holding the log line and
+                        # the schema can hash field names until one matches --
+                        # it is a correlation tag, NOT a way to keep the column
+                        # secret, and the value (the part that is genuinely
+                        # sensitive) is what is actually withheld here. Keying
+                        # it is deliberately NOT done: these lines are joined
+                        # across processes and against the cross-SDK 8-hex
+                        # contract in rules/event-payload-classification.md 2.
                         field_fp = fingerprint_secret(str(field_name))
                         for pattern in sql_injection_patterns:
                             if re.search(pattern, original_value):
@@ -3119,8 +3152,16 @@ class NodeGenerator:
                     import logging
 
                     logger = logging.getLogger(__name__)
+                    # `record_id` is CALLER-CONTROLLED. Interpolated raw, a value
+                    # carrying \r or \n ends the record mid-line and everything
+                    # after the break reads as a separate, attacker-authored log
+                    # record. sanitize_log_value flattens every non-printable to
+                    # a space AND bounds the length; the FLATTEN is the half that
+                    # closes the hole -- a length bound alone leaves it open.
                     logger.debug(
-                        f"DELETE: table={table_name}, id={record_id}, query={query}"
+                        f"DELETE: table={table_name}, "
+                        f"id={sanitize_log_value(record_id)}, "
+                        f"query={sanitize_log_value(query)}"
                     )
 
                     # Get or create cached AsyncSQLDatabaseNode for connection pooling
@@ -3684,17 +3725,34 @@ class NodeGenerator:
                     # every interpolated identifier against the strict allowlist
                     # BEFORE the dialect builds SQL (same defense as the bulk
                     # path in features/bulk.py::bulk_upsert).
-                    from kailash.db.dialect import DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
                     from kailash.db.dialect import _validate_identifier as _vid
 
-                    _vid(table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH)
+                    from ..adapters.dialect import identifier_budget_for
+
+                    # Issue #1971: ``database_type`` was resolved ~80 lines above
+                    # on BOTH branches (explicit ``database_url`` kwarg ->
+                    # ConnectionParser, otherwise
+                    # ``DataFlow._detect_database_type()``), and is consumed
+                    # immediately below by ``SQLDialectFactory.get_dialect`` to
+                    # pick the engine this SQL is built for. The engine IS known
+                    # here, so bind its budget instead of the unknown sentinel:
+                    # that sentinel is SQLite's 128, the LOOSEST, so on
+                    # PostgreSQL it accepts a 64..128-char identifier the server
+                    # then truncates at 63, silently aliasing two models onto one
+                    # physical table. A db type the dialect registry does not
+                    # know (``ConnectionParser`` also emits ``mongodb``) still
+                    # resolves to the sentinel, so the genuinely-unknown case
+                    # keeps warning exactly as before.
+                    _id_budget = identifier_budget_for(database_type)
+
+                    _vid(table_name, max_length=_id_budget)
                     for _col in (
                         set(conflict_columns)
                         | set(where.keys())
                         | set(insert_data.keys())
                         | set(update_data.keys())
                     ):
-                        _vid(_col, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH)
+                        _vid(_col, max_length=_id_budget)
 
                     # Get SQL dialect for database-specific query generation
                     from ..sql.dialects import SQLDialectFactory

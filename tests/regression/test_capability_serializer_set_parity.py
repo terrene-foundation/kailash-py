@@ -62,9 +62,7 @@ from kailash.trust.chain import (
     GenesisRecord,
     TrustLineageChain,
 )
-from kailash.trust.interop import jwt as jwt_interop
-from kailash.trust.interop import sd_jwt as sd_jwt_interop
-from kailash.trust.interop import w3c_vc
+from kailash.trust.interop import jwt as jwt_interop, sd_jwt as sd_jwt_interop, w3c_vc
 from kailash.trust.signing.capability_fold_serde import _CapabilityFoldSource
 from kailash.trust.signing.crypto import generate_keypair, sign, verify_signature
 

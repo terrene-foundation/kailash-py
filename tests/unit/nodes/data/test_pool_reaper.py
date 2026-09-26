@@ -17,6 +17,7 @@ import pytest
 
 from kailash.nodes.data.async_sql import (
     _POOL_DEFAULTS,
+    _POOL_LOOP_ATTR,
     _PROCESS_POOL_REGISTRY,
     _REAPER_TASKS,
     AsyncSQLDatabaseNode,
@@ -25,6 +26,21 @@ from kailash.nodes.data.async_sql import (
     _idle_pool_reaper_loop,
     set_pool_defaults,
 )
+
+
+def _stamp_current_loop(obj):
+    """Mark ``obj`` as an OWN-loop pool, as ``_register_pool`` does for adapters.
+
+    Issue #2211 review F1 gave the reaper a loop-ownership gate: it reaps only
+    pools whose stamped loop is dead or is its own, and FAILS CLOSED (keeps) an
+    unstamped registry entry. Every real registered adapter is stamped by
+    ``_register_pool``; these Tier-1 stubs are registered by hand, so they must
+    carry the same stamp to represent a genuine own-loop idle pool. Without it
+    the reaper would (correctly) refuse to force-close a pool it cannot
+    attribute to any loop.
+    """
+    setattr(obj, _POOL_LOOP_ATTR, asyncio.get_running_loop())
+    return obj
 
 
 class _ReapablePoolStub:
@@ -121,7 +137,7 @@ def test_is_idle_false_when_within_timeout_window():
 async def test_reaper_closes_idle_pool_and_removes_from_registry():
     """One iteration: idle pool is closed and dropped from registry."""
     set_pool_defaults(idle_timeout=4)  # interval = 1s
-    pool = _ReapablePoolStub("idle_one", idle=True)
+    pool = _stamp_current_loop(_ReapablePoolStub("idle_one", idle=True))
     _PROCESS_POOL_REGISTRY["idle_one"] = pool
     assert AsyncSQLDatabaseNode.pool_count() == 1
 
@@ -138,7 +154,7 @@ async def test_reaper_closes_idle_pool_and_removes_from_registry():
 async def test_reaper_does_not_close_active_pool():
     """A pool whose is_idle() returns False survives the reaper."""
     set_pool_defaults(idle_timeout=4)
-    pool = _ReapablePoolStub("active_one", idle=False)
+    pool = _stamp_current_loop(_ReapablePoolStub("active_one", idle=False))
     _PROCESS_POOL_REGISTRY["active_one"] = pool
 
     _ensure_reaper_started()
@@ -173,8 +189,8 @@ async def test_reaper_survives_pool_close_error():
             raise RuntimeError("simulated close failure")
 
     set_pool_defaults(idle_timeout=4)
-    broken = _BrokenCloseStub()
-    healthy = _ReapablePoolStub("healthy", idle=True)
+    broken = _stamp_current_loop(_BrokenCloseStub())
+    healthy = _stamp_current_loop(_ReapablePoolStub("healthy", idle=True))
     _PROCESS_POOL_REGISTRY["broken"] = broken
     _PROCESS_POOL_REGISTRY["healthy"] = healthy
 

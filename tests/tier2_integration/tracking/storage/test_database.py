@@ -705,17 +705,42 @@ class TestDatabaseStorageEdgeCases:
         with pytest.raises(sqlite3.Error):
             storage._execute_query("INVALID SQL")
 
-    def test_database_destructor(self):
-        """Test that database connection is closed on deletion."""
+    def test_database_destructor_warns_and_performs_no_cleanup(self):
+        """The finalizer emits ResourceWarning and does NOT close (issue #2107).
+
+        DatabaseStorage.__del__ used to call self.close(); that was removed
+        because close() takes a non-reentrant lock and a finalizer firing
+        mid-locked-section deadlocks the process. The finalizer now only warns;
+        deterministic close is the caller's job via close()/__exit__, and the
+        sqlite3 C-level deallocator frees the handle once conn is unreachable.
+        This test pins the NEW contract (finalizer does not close); see
+        test_database_close_is_deterministic for the close() half.
+        """
+        import gc
+
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = f"{tmpdir}/test.db"
             storage = DatabaseStorage(db_path)
             conn = storage.conn
 
-            # Delete storage object
-            del storage
+            # Deleting an unclosed storage warns AND performs no cleanup.
+            with pytest.warns(ResourceWarning):
+                del storage
+                gc.collect()
 
-            # Connection should be closed
+            # The connection is still open — the finalizer closed nothing.
+            conn.execute("SELECT 1")
+            conn.close()
+
+    def test_database_close_is_deterministic(self):
+        """close() (and the context manager) DO close the connection."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = f"{tmpdir}/test.db"
+            storage = DatabaseStorage(db_path)
+            conn = storage.conn
+
+            storage.close()
+
             with pytest.raises(sqlite3.ProgrammingError):
                 conn.execute("SELECT 1")
 

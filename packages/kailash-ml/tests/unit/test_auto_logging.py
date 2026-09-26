@@ -13,6 +13,8 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 import pytest
+
+from kailash.db.connection import ConnectionManager
 from kailash_ml.engines.experiment_tracker import ExperimentTracker
 from kailash_ml.engines.feature_store import FeatureStore
 from kailash_ml.engines.model_registry import LocalFileArtifactStore, ModelRegistry
@@ -23,8 +25,6 @@ from kailash_ml.engines.training_pipeline import (
     TrainingResult,
 )
 from kailash_ml.types import FeatureField, FeatureSchema
-
-from kailash.db.connection import ConnectionManager
 
 # ---------------------------------------------------------------------------
 # Fixtures

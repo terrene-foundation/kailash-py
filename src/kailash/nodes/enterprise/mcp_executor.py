@@ -296,27 +296,24 @@ class EnterpriseMLCPExecutorNode(Node):
                 circuit_state = CircuitState.CLOSED
 
             # Execute the MCP tool call
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # If we're already in an async context, we can't nest event loops
-                    # This would happen in an async workflow — use a new thread
-                    import concurrent.futures
+            def run_tool():
+                # Create the coroutine in the thread that will consume it.
+                # An explicit factory keeps the caller's selected loop intact.
+                with asyncio.Runner(loop_factory=asyncio.new_event_loop) as runner:
+                    return runner.run(_execute_mcp_tool(server_id, tool_name, params))
 
-                    with concurrent.futures.ThreadPoolExecutor() as pool:
-                        tool_result = pool.submit(
-                            asyncio.run,
-                            _execute_mcp_tool(server_id, tool_name, params),
-                        ).result(timeout=60)
-                else:
-                    tool_result = loop.run_until_complete(
-                        _execute_mcp_tool(server_id, tool_name, params)
-                    )
+            try:
+                asyncio.get_running_loop()
             except RuntimeError:
-                # No event loop exists
-                tool_result = asyncio.run(
-                    _execute_mcp_tool(server_id, tool_name, params)
-                )
+                tool_result = run_tool()
+            else:
+                # A synchronous node cannot nest a loop in an async workflow.
+                # Keep tool failures outside the loop-detection exception handler:
+                # a RuntimeError from a tool must never execute that tool twice.
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    tool_result = pool.submit(run_tool).result(timeout=60)
 
             execution_time_ms = round((time.time() - execution_start) * 1000, 2)
 

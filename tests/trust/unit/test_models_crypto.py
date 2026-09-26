@@ -1339,13 +1339,19 @@ class TestLinkedHashChain:
         assert entries[0].agent_id == "a1"
 
     def test_verify_integrity_empty_chain(self):
+        """An empty chain fails CLOSED -- unverifiable, not verified (#2221).
+
+        Previously asserted ``valid is True``, pinning the vacuous pass as
+        intended behaviour: a wiped chain returned the same verdict as a chain
+        whose every entry was checked.
+        """
         chain = LinkedHashChain()
         # verify_integrity() is a deprecation shim; these tests exist to pin it
         # while it lives, so assert the DeprecationWarning rather than letting
         # it leak to the run's warning summary.
         with pytest.warns(DeprecationWarning, match="verify_integrity"):
             valid, break_idx = chain.verify_integrity()
-        assert valid is True
+        assert valid is False
         assert break_idx is None
 
     def test_verify_integrity_valid_chain(self):

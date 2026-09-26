@@ -13,8 +13,11 @@ from .cloud_integration import (
     InstanceSpec,
     InstanceState,
 )
-from .cost_optimizer import CloudProvider as CostCloudProvider
-from .cost_optimizer import CostOptimizer, OptimizationStrategy
+from .cost_optimizer import (
+    CloudProvider as CostCloudProvider,
+    CostOptimizer,
+    OptimizationStrategy,
+)
 from .docker_integration import (
     ContainerSpec,
     ContainerState,

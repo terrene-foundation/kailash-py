@@ -853,7 +853,7 @@ class TestMultiLevelVerify:
         # VP Eng (D1-R1): allows "deploy" in allowed set but explicitly blocks it
         vp_env = RoleEnvelope(
             id="re-vp",
-            defining_role_address="R1",  # Board sets VP envelope
+            defining_role_address="D1-R1",  # #2238: root envelope; "R1" is a ghost
             target_role_address="D1-R1",
             envelope=_make_envelope(
                 env_id="vp-envelope",
@@ -887,7 +887,7 @@ class TestMultiLevelVerify:
 
         vp_env = RoleEnvelope(
             id="re-vp-ok",
-            defining_role_address="R1",
+            defining_role_address="D1-R1",  # #2238: root envelope; "R1" is a ghost
             target_role_address="D1-R1",
             envelope=_make_envelope(
                 env_id="vp-ok-envelope",
@@ -917,7 +917,7 @@ class TestMultiLevelVerify:
         # VP Eng: max_spend = $100
         vp_env = RoleEnvelope(
             id="re-vp-cheap",
-            defining_role_address="R1",
+            defining_role_address="D1-R1",  # #2238: root envelope; "R1" is a ghost
             target_role_address="D1-R1",
             envelope=_make_envelope(
                 env_id="vp-cheap",
@@ -955,7 +955,7 @@ class TestMultiLevelVerify:
 
         vp_env = RoleEnvelope(
             id="re-vp-cheap2",
-            defining_role_address="R1",
+            defining_role_address="D1-R1",  # #2238: root envelope; "R1" is a ghost
             target_role_address="D1-R1",
             envelope=_make_envelope(
                 env_id="vp-cheap2",

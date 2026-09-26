@@ -654,20 +654,16 @@ class FabricRuntime:
         when module globals have been torn down.
         """
         if getattr(self, "_started", False):
-            try:
-                _warnings.warn(
-                    f"Unclosed FabricRuntime instance "
-                    f"{getattr(self, '_instance_name', '?')!r}. "
-                    "Use 'async with db.fabric(...) as runtime:' or call "
-                    "'await runtime.stop()' before the runtime is garbage "
-                    "collected — pending pipelines, the shared Redis "
-                    "client, and source adapters will leak otherwise.",
-                    ResourceWarning,
-                    source=self,
-                )
-            except Exception:
-                # Interpreter shutdown or recursive GC — best-effort only.
-                pass
+            _warnings.warn(
+                f"Unclosed FabricRuntime instance "
+                f"{getattr(self, '_instance_name', '?')!r}. "
+                "Use 'async with db.fabric(...) as runtime:' or call "
+                "'await runtime.stop()' before the runtime is garbage "
+                "collected — pending pipelines, the shared Redis "
+                "client, and source adapters will leak otherwise.",
+                ResourceWarning,
+                source=self,
+            )
 
     async def _connect_sources(self) -> None:
         """Connect all sources in parallel."""

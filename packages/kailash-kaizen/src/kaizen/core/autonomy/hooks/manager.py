@@ -8,6 +8,7 @@ and performance tracking.
 import functools
 import importlib.util
 import logging
+import math
 import sys
 import time
 from collections import defaultdict
@@ -28,6 +29,13 @@ logger = logging.getLogger(__name__)
 # terminating on any custom ``partial`` subclass without changing the result
 # for real handlers.
 _MAX_PARTIAL_UNWRAP_DEPTH = 8
+
+# Budget for a handler's ``on_error`` callback. ``on_error`` is CALLER-SUPPLIED
+# code awaited from inside the agent loop, so it is the same hang surface
+# "SECURITY FIX #10" bounds for ``handle`` -- it was previously awaited with no
+# bound at all, which meant a hook could evade the timeout guard entirely by
+# hanging in its error handler instead of its body.
+_ON_ERROR_TIMEOUT_S = 0.5
 
 
 def safe_handler_name(handler: object) -> str:
@@ -112,6 +120,10 @@ class HookManager:
             defaultdict(list)
         )
         self._hook_stats: dict[str, dict[str, Any]] = {}
+        # Handlers whose ``timeout_seconds`` override was rejected. Warned once
+        # each rather than per trigger: ``AuditTrailHook`` alone subscribes to
+        # every event in the enum, so a per-call warning would be log spam.
+        self._rejected_timeout_overrides: set[str] = set()
 
     def register(
         self,
@@ -357,10 +369,11 @@ class HookManager:
         # becomes a dict KEY returned verbatim by the public ``get_stats()``.
         # It must not be able to carry caller state; see ``safe_handler_name``.
         handler_name = getattr(handler, "name", safe_handler_name(handler))
+        effective_timeout = self._resolve_timeout(handler, timeout, handler_name)
 
         try:
             # Execute with timeout
-            with anyio.fail_after(timeout):
+            with anyio.fail_after(effective_timeout):
                 start_time = time.perf_counter()
                 result = await handler.handle(context)
                 result.duration_ms = (time.perf_counter() - start_time) * 1000
@@ -370,12 +383,50 @@ class HookManager:
 
                 return result
 
-        except TimeoutError:
+        except TimeoutError as timeout_exc:
             error_msg = f"Hook timeout: {handler_name}"
-            logger.error(error_msg)
-            self._update_stats(handler_name, timeout * 1000, success=False)
+            # Structured, not a bare string. A timeout means the hook's work was
+            # ABANDONED, and for a compliance hook that is a lost record -- so
+            # the signal has to name WHICH event vanished, under WHICH handler,
+            # at WHICH budget, in fields an alert can match on.
+            logger.error(
+                "hook.timeout handler=%s event=%s agent_id=%s timeout_s=%.3f "
+                "trace_id=%s",
+                handler_name,
+                context.event_type.value,
+                context.agent_id,
+                effective_timeout,
+                context.trace_id,
+                extra={
+                    "hook_handler": handler_name,
+                    "hook_event": context.event_type.value,
+                    "hook_agent_id": context.agent_id,
+                    "hook_timeout_s": effective_timeout,
+                    "hook_trace_id": context.trace_id,
+                },
+            )
+            self._update_stats(
+                handler_name, effective_timeout * 1000, success=False, timed_out=True
+            )
+
+            # A timeout is a hook FAILURE, and the handler's own failure path
+            # must see it. Previously only ``except Exception`` reached
+            # ``on_error``, and because ``TimeoutError`` is matched by the
+            # branch above it never got there -- so a hook that implemented
+            # on_error specifically to surface dropped work was bypassed in the
+            # one case where the work was guaranteed lost.
+            await self._invoke_on_error(handler, timeout_exc, context, handler_name)
+
             return HookResult(
-                success=False, error=error_msg, duration_ms=timeout * 1000
+                success=False,
+                error=error_msg,
+                duration_ms=effective_timeout * 1000,
+                data={
+                    "timeout": True,
+                    "handler": handler_name,
+                    "event": context.event_type.value,
+                    "timeout_s": effective_timeout,
+                },
             )
 
         except Exception as e:
@@ -390,19 +441,122 @@ class HookManager:
             self._update_stats(handler_name, 0, success=False)
 
             # Call error handler if available
-            if hasattr(handler, "on_error"):
-                try:
-                    await handler.on_error(e, context)
-                except Exception as err_e:
-                    # ``handler.on_error`` is caller-supplied, same as the
-                    # handler itself; its failure carries whatever that code
-                    # touched.
-                    logger.error("Error handler failed: %s", scrub_remote_error(err_e))
+            await self._invoke_on_error(handler, e, context, handler_name)
 
             return HookResult(success=False, error=error_msg, duration_ms=0.0)
 
+    def _resolve_timeout(
+        self, handler: HookHandler, default: float, handler_name: str
+    ) -> float:
+        """
+        Resolve the execution budget for one handler.
+
+        A handler MAY declare ``timeout_seconds`` to opt onto a budget other
+        than the caller's shared one. This exists because the builtin hooks are
+        not alike: three are best-effort observability, where dropping the
+        work costs a gap in a graph, while ``AuditTrailHook`` writes a
+        compliance record whose whole value is that it is complete.
+
+        The override selects a DIFFERENT finite bound; it can never remove one.
+        A missing, non-numeric, non-positive, infinite or NaN value falls back
+        to the shared default, so "SECURITY FIX #10" cannot be disabled by
+        setting an attribute -- including by a caller-supplied hook loaded off
+        the filesystem by :meth:`discover_filesystem_hooks`.
+
+        Args:
+            handler: Hook whose budget is being resolved.
+            default: Shared budget supplied by the ``trigger`` caller.
+            handler_name: Diagnostic name, already made payload-safe.
+
+        Returns:
+            A finite, positive timeout in seconds.
+        """
+        override = getattr(handler, "timeout_seconds", None)
+        if override is None:
+            return default
+
+        # ``bool`` is an ``int`` subclass; ``timeout_seconds = True`` would
+        # otherwise silently become a 1-second budget.
+        if isinstance(override, bool) or not isinstance(override, (int, float)):
+            self._warn_rejected_timeout(handler_name, override, "not a number")
+            return default
+
+        value = float(override)
+        if not math.isfinite(value) or value <= 0:
+            self._warn_rejected_timeout(
+                handler_name, override, "not finite and positive"
+            )
+            return default
+
+        return value
+
+    def _warn_rejected_timeout(
+        self, handler_name: str, override: object, reason: str
+    ) -> None:
+        """Warn once per handler that its timeout override was refused."""
+        if handler_name in self._rejected_timeout_overrides:
+            return
+        self._rejected_timeout_overrides.add(handler_name)
+        # ``override`` is caller-supplied, so only its TYPE is rendered -- a
+        # value here could carry state, the same channel ``safe_handler_name``
+        # closes for the handler itself.
+        logger.warning(
+            "hook.timeout_override_rejected handler=%s type=%s reason=%s "
+            "falling back to the shared budget",
+            handler_name,
+            type(override).__name__,
+            reason,
+            extra={
+                "hook_handler": handler_name,
+                "hook_timeout_override_type": type(override).__name__,
+                "hook_timeout_override_reason": reason,
+            },
+        )
+
+    async def _invoke_on_error(
+        self,
+        handler: HookHandler,
+        error: BaseException,
+        context: HookContext,
+        handler_name: str,
+    ) -> None:
+        """
+        Run a handler's ``on_error`` callback under its own bound.
+
+        ``on_error`` is caller-supplied code awaited from inside the agent
+        loop, so it is bounded for the same reason ``handle`` is: without a
+        bound, a hook that hangs in its error handler hangs the loop, which is
+        the exact failure "SECURITY FIX #10" exists to prevent.
+        """
+        if not hasattr(handler, "on_error"):
+            return
+
+        try:
+            with anyio.fail_after(_ON_ERROR_TIMEOUT_S):
+                await handler.on_error(error, context)
+        except TimeoutError:
+            logger.error(
+                "hook.on_error_timeout handler=%s event=%s timeout_s=%.3f",
+                handler_name,
+                context.event_type.value,
+                _ON_ERROR_TIMEOUT_S,
+                extra={
+                    "hook_handler": handler_name,
+                    "hook_event": context.event_type.value,
+                    "hook_timeout_s": _ON_ERROR_TIMEOUT_S,
+                },
+            )
+        except Exception as err_e:
+            # ``handler.on_error`` is caller-supplied, same as the handler
+            # itself; its failure carries whatever that code touched.
+            logger.error("Error handler failed: %s", scrub_remote_error(err_e))
+
     def _update_stats(
-        self, handler_name: str, duration_ms: float, success: bool
+        self,
+        handler_name: str,
+        duration_ms: float,
+        success: bool,
+        timed_out: bool = False,
     ) -> None:
         """
         Track hook performance statistics.
@@ -411,12 +565,18 @@ class HookManager:
             handler_name: Name of the hook
             duration_ms: Execution duration in milliseconds
             success: Whether execution succeeded
+            timed_out: Whether the failure was a timeout, i.e. the hook's work
+                was abandoned rather than attempted and refused. Counted
+                separately from ``failure_count`` so a consumer can alert on
+                DROPPED work -- for an audit hook that is a missing compliance
+                record, which is not the same event as an append that raised.
         """
         if handler_name not in self._hook_stats:
             self._hook_stats[handler_name] = {
                 "call_count": 0,
                 "success_count": 0,
                 "failure_count": 0,
+                "timeout_count": 0,
                 "total_duration_ms": 0.0,
                 "avg_duration_ms": 0.0,
                 "max_duration_ms": 0.0,
@@ -425,6 +585,8 @@ class HookManager:
         stats = self._hook_stats[handler_name]
         stats["call_count"] += 1
         stats["success_count" if success else "failure_count"] += 1
+        if timed_out:
+            stats["timeout_count"] += 1
         stats["total_duration_ms"] += duration_ms
         stats["avg_duration_ms"] = stats["total_duration_ms"] / stats["call_count"]
         stats["max_duration_ms"] = max(stats["max_duration_ms"], duration_ms)

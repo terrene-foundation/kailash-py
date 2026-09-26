@@ -45,8 +45,10 @@ from typing import Any, Dict, List, Optional
 
 # Core components
 from dataflow.core.engine import DataFlow
-from dataflow.migrations.schema_state_manager import ChangeType
-from dataflow.migrations.schema_state_manager import MigrationOperation as SchemaChange
+from dataflow.migrations.schema_state_manager import (
+    ChangeType,
+    MigrationOperation as SchemaChange,
+)
 
 from .fk_aware_e2e_workflows import (
     E2EWorkflowPatternFactory,

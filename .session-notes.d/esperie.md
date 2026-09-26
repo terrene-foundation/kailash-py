@@ -1,141 +1,134 @@
----
-owner: esperie
-last_reconciled_sha: 58d4b1629
-migrated_from: .session-notes
----
+# CSQ 14 continuation — final promotion gate, 2026-09-26
 
-# Session Notes — 2026-08-10 (session M)
+## Next actions (standing authorization preserved)
 
-## Where we are
+1. Local gates are complete. Update PR #2229 to the consolidated dev checkpoint once, then merge after exact-head required checks AND every previously failing test job pass. If live state is MERGED, this D1 directive is discharged. D1 is already approved; advisory type backlog #73 is excluded.
+   Revalidate: `gh pr view 2229 --json state,headRefOid,mergeStateStatus`.
+2. Land every completed branch in dev and remove its clean worktree immediately. Only the primary checkout remains; there are no completed implementation siblings to retain. No PR or CI trigger for dev.
+   Revalidate: `git worktree list --porcelain` and `git for-each-ref refs/heads refs/remotes`.
+3. Preserve the five inherited stashes. Never restore/drop them without the user's decision. Rejected recovery was deleted and NEVER merged; the approved stale draft was deleted with its landing receipt.
+   Revalidate: `git stash list` (five held entries), and archived disposition below.
+4. Continue bounded archive-content adjudication; retain uncertain historical refs and never merge a stale prototype wholesale. Five archive clusters still have partial/unresolved content; no whole-forest completion claim.
+   Revalidate: `workspaces/issue-1720-llm-consolidation/04-validate/csq13-ref-adjudication.json` (52 refs, explicit dispositions).
+5. Keep the unresolved #2225 design question and paused Express routing/cache findings distinct from completed repairs. Package publishing is a separate release gate, not implied by promotion approval.
+   Revalidate: `gh issue view 2225 --comments`; inspect Express callers before resuming that shard.
 
-Workspace `issue-1720-llm-consolidation`, branch `fix/issue-1720-forest-drain`, **340 commits
-ahead of main**. **PR #2016 IS OPEN and BLOCKED ON HUMAN REVIEW — not on CI.**
+## Recovered authorization
 
-**CI went 3 red → 1**, and the remaining one does not block merge:
-`mergeable=MERGEABLE state=BLOCKED review=REVIEW_REQUIRED`. Branch protection has
-`required_status_checks.contexts = []` (measured, not assumed) and `enforce_admins: false`, so the
-gate is the 1 approving review, and `--admin` would override it. **That override is the co-owner's
-call, not the agent's.**
+Exact slot-13 Codex thread: `01a0d7ea-e2a1-74b3-8af2-2a47dc410525`.
+Final user decision at 12:53:14 UTC: **"Retain reusable pool identities (recommended)"**.
+The next turn ended `usage_limit_exceeded`; that decision is now implemented.
+Also approved: #2249 opt-in owned execution, owner-loop HTTP reuse with aggregate cap,
+and harmless URL diagnostics. No repeat approval is needed for those repairs.
+User reiterated landing all remote/local branches, refs and worktrees, with active WIP drain.
+Future promotions retain the 10-landings / 72-hours / immediate-security-or-deploy trigger
+and require their own user authorization; #2229's D1 approval is already recorded.
 
-Final CI, head `58d4b1629`: **31 pass / 1 fail (advisory CodeQL) / 4 skipped.**
+## Integrated source and WIP
 
-## Read first
+Dev includes #2238/PACT `fcf1ec06b`, #2248 `c1b04c8ae`, #2251 `839a039a3`,
+#2249 `d3549dee4` (merge `0711ddee9`), Edge `a98075487`, SQLite `fc93ee8ff`,
+credential scanner `d02980968`, cache controls `b91e8d177`, async migration `d2d8d1f34`,
+coroutine ownership/replay `b31c191f9`, memory/CI `ca15ac555`, warning/Align `849157905`,
+network/audio `9eaa4d4ee`, warning instruments `0f126ca02` / `1df572866`, duplicate
+pytest configuration cleanup `658d97de4`, watchdog `772f12c64` (merge `03efa7c48`),
+and Black assertion formatting `db9565623`.
+All implementation worktrees and branches were drained after landing.
+Formatter repair is landed as `e30256691`, with two clean correctness/security rounds; remote promotion still
+points to `28602f1a0` until a single validated consolidated push. Refresh live refs before acting.
 
-1. `workspaces/issue-1720-llm-consolidation/04-validate/sweep-2026-08-10b.md` — **THE DECISION
-   REPORT.** PCF-triaged queue, ETA in cycles, Sweep-N revisit, **four decision points (A–D) each
-   with a recommendation**. Supersedes `-08-10.md`.
-2. `workspaces/issue-1720-llm-consolidation/04-validate/launch-ledger-sessionM.md` — orchestration
-   record: the four-shard wave, the security round, and **the corrections agents made to my
-   briefs**.
-3. This file's **Traps** — most are NEW and each cost real time.
+The final formatter repair sets `combine_as_imports` and consistent first-party namespaces
+in four active configs. Actual old settings produced five Black/isort two-state cycles and
+Kaizen-first batch grouping differed from single/root batches. Candidate fixed-point probes
+passed three rounds. Actual all-file Black, isort and Ruff pass; import-order and narrow-pragma
+reviews are complete. Three pragma scopes and optional-provider lookup order were preserved
+with narrow sort boundaries. No behavioral equality is inferred solely from an import multiset.
 
-## Executed this session
+## Actual validation (scope matters)
 
-- **CI red→green.** `Test DataFlow Unit Suite` and `Base (Python 3.12)` both pass. Ten commits.
-- **`#2005` re-triaged INCREMENTAL→BUG on its 5th defer cycle, and FIXED** (`eb7e379dc`) — its own
-  text called it the same bug class as this PR, which makes a sixth defer BLOCKED. 22 tests; the
-  agent classified them honestly (9 discriminating, 4 import-gated, 6 both-sides pins, 3 vacuous).
-- **Found a real shipped-compatibility break** (not just a CI artifact): published
-  `kailash-dataflow` ≤2.19.1 declares `kailash>=2.51.0` **uncapped**, so `pip install -U kailash`
-  on an existing dataflow install raises `TypeError` on **every upsert**. Recorded in
-  `01abb471e`'s body; the floor bump must follow 2.20.0 reaching PyPI.
-- **Filed `#2022`** (`km.from_brief` broken end-to-end, incl. README Quick Start) and **`#2023`**
-  (the CI editable-vs-PyPI skew CLASS — deliberately filed rather than blanket-fixed).
-- **`file:` scheme fixed across all THREE independent classifiers** — see the trap below; this took
-  three commits because I twice believed I was done.
+Integrated census at `b796ffe08`: Core units 5368 passed / one watchdog fixture failure;
+Core integration 2607 passed; DataFlow infrastructure 27 passed; root infrastructure22 passed.
+Kaizen LLM/parity/security1822 passed, expanded units8387 passed, regressions1965 passed,
+authorization parity43 passed without skips, agents818 passed. Skips/deselections are excluded.
+These are completed runs, superseding older interrupted Kaizen runs. Recovered final Core rerun at 709759a38 passed 5371 with 5 skips, 3 deselections, 6 xfails, 5 xpasses; those exclusions are not coverage.
+Full configured hooks completed: pytest-check, doc8 and structural hooks passed; formatter/lint
+failures are being repaired. The final full all-files hook run, including pytest-check, passed at fe791935c after the seed-test repair.
 
-## THE METHODOLOGICAL FINDING — carry this one
+Watchdog repair has13 strict tests, actual delayed/disabled monitor controls, reached threshold
+mutations, callback-survival checks, and two independent clean rounds. Warning tests now reject
+unexpected categories. Old/new pytest9 controls prove duplicate-config notices removed while
+authoritative pytest.ini files stay byte-identical. Focused coroutine37, memory22,
+warning/Core118 + fresh Align1, network/audio277, and real SQLite cache6 all passed.
+Holistic correctness/security reviews exercised ownership, warning scope, mapped CIDRs,
+real localhost transport, and memory cleanup. DNS resolution-to-connect TOCTOU is not claimed fixed.
 
-**A consistency check across a set you CHOSE cannot discover a member you left out.**
+Final assigned remote runner: fresh workflow environments, strict changed tests, exact Core
+Tier1 selection and every configured hook; one trestle mirror owner, no concurrent installs.
+Per-commit pytest-check skips are documented and tracked to this final full-hook gate.
+Local launcher/cache repair succeeded; older signal11 claims are historical, not current blockers.
 
-I ran adversarial security probes on the `file:` change and found the two surfaces I had CHANGED
-consistent with each other. A late correctness review then found a THIRD independent classifier
-(`AdapterFactory.detect_database_type`) that still raised — and the two disagreed **inside one
-function, two lines apart** (`utils/connection.py:116` classifies sqlite, `:125` raises). My probe
-could not have found it: I verified pairwise agreement among my own edits, never ENUMERATING the
-surfaces that exist. That is `instrument-discipline.md` MUST-1 aimed at one's own verification.
+## Archive and follow-on evidence
 
-**The durable fix is in the test, not the code**: the regression test now ENUMERATES the
-classifiers, so a fourth ladder reds the suite instead of waiting for a reviewer.
+52-ref adjudication and follow-up JSONs are in
+`workspaces/issue-1720-llm-consolidation/04-validate/csq13-*.json`.
+Exact squash-tree matches are distinct from behavioral conformance. Align's missing fresh-process
+regression was recovered with `849157905`. Release v0.9.7 matches its retained tag; this is not a
+PyPI publication claim. Old strategy prose and cycle-test markers have explicit historical dispositions.
+The parameter-validator prototype retains required/type safety and injection behavior in current
+code, but its runtime-wide policy/report API is absent; debugger/optimizer remain unaudited.
+Current spec's root-only flat-injection wording differs from actual old/current all-accepting-node
+behavior. This is recorded, not treated as an archive-only lost feature.
+Two trust files in the large scrap snapshot have landed/superseded receipts and actual controls;
+that bounded review does not dispose of the whole mixed snapshot. No archive ref/tag was deleted.
 
-## Corrections I made to my own claims — do not re-derive these
+Paused source findings: Express read/list/find_one accept `use_primary` without using it;
+replica-routing helpers have no source callers. Warm outer-cache returns precede `_trust_check_read`
+and keys scope by tenant without agent/clearance. These are source-level concerns, not
+runtime-confirmed security verdicts, and were not closed by TTL-forwarding reviews.
 
-- **"Restores enforcement-surface parity — only the central detector had never learned it."**
-  FALSE twice: it is not a single source of truth, and the six surfaces I named are CONSUMERS, not
-  classifiers. Corrected in the public CHANGELOG, the in-code comment, and a follow-up commit.
-- **`617d43212` cited "717 passed" as verification.** The run was `2 failed, 717 passed`. My
-  pyright-skew attribution was right, but omitting the failures makes a red run read green in a
-  durable artifact. Corrected via FOLLOW-UP commit (`git.md`: never amend).
-- **I told the user the 3 `test_ml_from_brief` failures were the invalid `OPENAI_API_KEY`.** Not
-  established — an all-empty LLM result is equally consistent with an unresolved provider, and my
-  observation could not distinguish them. Real defect behind it → `#2022`.
-- **I briefed an agent that the underlying traceback was "destroyed."** False — `raise ... from
-exc` had preserved it; one grep on the CI log recovered it. My instrumentation instruction was
-  unnecessary work I created.
-- **Session-L's "no kailash-ml release owed"** — there is one (2.2.2→2.2.3).
-- **Session-L's "open CodeQL alerts carry no security severity"** — main already carries
-  1 critical + 35 high.
+## Standing forest (IDs preserved)
 
-## Traps — NEW this session
+| ID | Obligation | Current disposition |
+| --- | --- | --- |
+| F21 | Promotion and package release backlog | #2229 D1 approved; final gates/promotion active. Publishing remains separate. |
+| F22 | #2238 sites3–4 and restore | Landed `fcf1ec06b`, issue closed, tree drained; owner acceptance not inferred. |
+| F23 | #2225 blocklist design/headline reconciliation | Residual A design remains unresolved; headline is capability accuracy. |
+| F24 | Rejected recovery branch | Deleted with #2225 comment5830857222 evidence; NEVER merged. |
+| F25 | Workstation/stash hygiene | Hook launcher repaired; D5 stale draft deleted; five stashes held. |
+| F26 | Open-issue burndown | Active standing obligation, not closed by branch drain. |
+| F27 | #2238 clearance parity | Landed with F22; independent union2713 passed,15 skipped. |
+| F28 | #2248/#2249 | Both fixed/closed; #2249 merge0711ddee9,220 tests and two clean rounds, tree drained. |
+| F29 | Burndown manifest | Landed `d10295cf4`; frozen source/generator counts are not owner acceptance. |
+| F30 | Unlabelled issue triage | Labels captured and dispositions proposed; external labeling not done by this lane. |
 
-- **Read-only agent types go SILENT on evidence-requiring tasks.** `security-reviewer` ×2 and
-  `reviewer` ×1 were dispatched and returned NO verdict; all four Bash-capable agents reported in
-  full. The read-only types have no `Bash` and were handed a 1358-line scratchpad to READ. **Dispatch
-  reviewers as Bash-capable types.** The one review that did land found the session's highest-value
-  defect — do not conclude "reviews are noise", conclude "reviews need tools".
-- **`core.hooksPath` pointed at a NON-EXISTENT directory** (`/Users/esperie/repos/loom/kailash-py/
-.git/hooks`), so NO commit in this repo was hook-checked. **I unset it** — pre-commit now runs.
-  Consequence: expect a **two-pass commit cycle**, because black/isort/ruff reformat staged files
-  and abort the first attempt. That is the hook working; just re-`git add` and re-commit.
-- **A 7-hour zombie `pytest` from session L was polluting the "are my agents done?" signal.**
-  1:37 CPU in 7h17m — the documented asyncio-selector hang, and its own `--timeout=60` never fired.
-  **Check `ps -eo pid,etime,time` and compare CPU against elapsed before believing a process is
-  working.** Killed it.
-- **`$?` after a pipe bit me again**, in the documented way: `grep ... | head || echo "NONE"` never
-  fires the fallback because the pipeline's exit is `head`'s. An empty result read as "no matches"
-  when it was "instrument didn't discriminate". **Use `grep -c` and include a SANITY count you know
-  should be non-zero.**
-- **The Bash tool's cwd PERSISTS between calls.** A `cd packages/kailash-dataflow` earlier in the
-  session made a later ml test run load dataflow's conftest and die on an unrelated import. Use
-  absolute paths or re-`cd` explicitly.
-- **`test_engine_pyright_invariant` fails LOCALLY and passes in CI.** Local resolves pyright
-  1.1.411 via PATH (no `.venv/bin/pyright`); `pyproject.toml:175` pins **1.1.371**, which CI
-  installs. Verify with `npx -y pyright@1.1.371 <file>` → expect `0 errors, 0 warnings`. **Do not
-  "fix" engine.py for these.**
-- **`EnterpriseMemorySystem(config=...)` takes a DICT, not `MemorySystemConfig`** — passing the
-  dataclass raises `AttributeError: 'MemorySystemConfig' object has no attribute 'items'`.
+## Operating hazards
 
-## Traps — still live from earlier sessions
+- Use explicit primary `.venv/bin/python`; bare pyenv launchers were unreliable. Pin uv subprocess Python.
+- Never edit primary while a commit's auto-stashing hooks run; preserve dirty work with cp backups.
+- Offload expensive gates through trestle; 114/116 are no evidence. No concurrent mutation of one mirror venv.
+- Assert resolved checkout root before any sibling work; a removed CWD must not silently redirect edits.
+- Exact PR head required checks must be read separately from the merge command.
+- Do not mistake archive reachability or GitHub issue closure for implementation/owner acceptance.
+- `.session-notes.d/esperie.md` remains the existing operator fragment; avoid creating a stale second identity.
 
-- Tests: ALWAYS `.venv/bin/python -m pytest`. Bare python dies at conftest with `ImportError: Node`.
-- **Root `tests/` HANGS rather than running slowly.** Use `--timeout=60 --timeout-method=signal`;
-  `--timeout-method=thread` KILLS the process and you get no summary.
-- `pre-commit run --all-files` rewrites 2,022 files (#1995) — always scope to changed files.
-- `.env` `OPENAI_API_KEY` is INVALID (live 401). Anthropic works.
-- Duplicate/cancelled CI runs read as red; pin the head SHA, check-then-merge as SEPARATE commands.
-- The `framework-first` hook false-positives "raw SQL detected" on files with SQL strings.
+## CSQ 14 continuation receipts
 
-## Outstanding — pick up HERE
+Exact recovered slot14 thread: `01a0d8a0-e67b-7dc2-8628-1e1bfbbd3eca`.
+Final old gate actually finished: Core and all configured hooks passed; ML alone failed
+on a 30-second PyTorch Lightning cold import. `seed(torch=False)` intentionally leaves
+its independent Lightning flag enabled. Unit fixtures now isolate optional libraries
+and assert actual calls/reports, preserving production behavior. Strict original six-file
+selection: 237 passed with warnings as errors and unchanged 30-second timeout; reached
+source mutations rejected. Correctness and adversarial reviewers each delivered two
+clean rounds. Implementation 34eca2992, merge 6fa357a1b; sibling and branch removed.
 
-1. **Merge #2016** (human gate), then **`/release`**: kailash 2.63.0 FIRST → dataflow 2.20.0 →
-   kaizen 2.46.0 / nexus 2.16.0 / ml 2.2.3. **Add the lockstep upgrade note** to kailash 2.63.0's
-   CHANGELOG (see the shipped-break above). Then cut `mcp-v0.5.1` from main so the tag matches the
-   already-published artifact.
-2. **Decisions A–D** in the sweep report need co-owner direction — `#1997` fix shape (a third
-   option beats the issue's binary), `#2022` API boundary, `#2023` per-step vs blanket, and whether
-   to dismiss CodeQL `#11400` as the verified false positive it is.
-3. **First post-merge work:** `#1995` (4th defer cycle — decide it) and `#2013` (rank 1, own lane).
-4. **22 issues remain open after merge** (6 auto-close). 7 are `deferred-quality`, and **all seven
-   now cross the ≥2-cycle Sweep-N threshold**.
+Archive evidence landed as f065c42bd, merge 6d5e34e35; sibling and branch removed.
+All 52 archive/original ref names checked, 30 previously recorded tips checked, all 52 current
+tips captured. Five recovered reports distinguish fresh structural evidence from prior
+runtime results; no original unresolved disposition was upgraded. See 04-validate/csq14-*
+and launch-ledger-csq14-resume.md. Only primary checkout remains; five stashes held.
 
-## UNVERIFIED — stated, not glossed
-
-- **No independent adversarial security review exists for this diff.** The security round was run
-  by the orchestrator after three dispatches returned nothing. Targeted probes are not an
-  independent lens, and I did not record the round as clean.
-- **12 of the 22 `#2005` tests** were never reached (reviewer maxfail cap). 10 proved RED.
-- **The combined ml `unit/ + integration/` run hangs locally** past 45 min holding SQLite files
-  open; each directory passes alone in ~43s and CI does it in 507s. Local-harness issue, not a
-  merge gate.
-- **Residuals P2/P3** (session K) still unfilable — no substantive content survives. Filing would
-  mean inventing findings. Accept the loss; do NOT fabricate.
+Final all-files hooks, including the checkpoint-skipped pytest-check, passed at fe791935c.
+See csq14-final-hooks-receipt.json. Only evidence/continuity documents changed afterward.
+PR still had old 28602f1a0 at this receipt; query its current head/state before acting.
+The required vault sweep/wrapup pair was written and will be restamped after promotion.

@@ -333,8 +333,8 @@ class TestSchedulerAdminAPIWiringThroughFacade:
             ScheduleAdminView,
             ScheduleNotFound,
             SchedulerAdminAPI,
+            scheduler_admin as _admin_module,
         )
-        from kailash.runtime import scheduler_admin as _admin_module
         from kailash.sdk_exceptions import ScheduleNotFound as _exc_module
 
         assert SchedulerAdminAPI is _admin_module.SchedulerAdminAPI

@@ -24,7 +24,7 @@ from kailash.nodes.code.python import PythonCodeNode  # noqa: F401
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
-from kaizen.core._provider_env import detect_provider_from_env
+from kaizen.core._provider_env import resolve_node_provider
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
 # LLMAgentNode is imported for its @register_node side effect: the
@@ -931,7 +931,9 @@ class AgenticRAGNode(WorkflowNode):
             "LLMAgentNode",
             node_id="planner_agent",
             config={
-                "provider": detect_provider_from_env(),
+                "provider": resolve_node_provider(
+                    _DEFAULT_LLM_MODEL, component="AgenticRAGNode._create_workflow"
+                ),
                 "system_prompt": f"""You are a research planning agent. Given a query, create a step-by-step plan.
 
 Available tools: {", ".join(self.tools)}
@@ -959,7 +961,9 @@ Return JSON:
             "LLMAgentNode",
             node_id="react_agent",
             config={
-                "provider": detect_provider_from_env(),
+                "provider": resolve_node_provider(
+                    _DEFAULT_LLM_MODEL, component="AgenticRAGNode._create_workflow"
+                ),
                 "system_prompt": f"""You are a ReAct agent that reasons step-by-step and uses tools.
 
 Available tools:
@@ -1010,7 +1014,9 @@ Maximum steps: {self.max_reasoning_steps}""",
                 "LLMAgentNode",
                 node_id="verifier_agent",
                 config={
-                    "provider": detect_provider_from_env(),
+                    "provider": resolve_node_provider(
+                        _DEFAULT_LLM_MODEL, component="AgenticRAGNode._create_workflow"
+                    ),
                     "system_prompt": """You are a fact-checking agent. Verify the accuracy of the answer.
 
 Check for:
@@ -1460,7 +1466,9 @@ class ReasoningRAGNode(WorkflowNode):
             "LLMAgentNode",
             node_id="problem_decomposer",
             config={
-                "provider": detect_provider_from_env(),
+                "provider": resolve_node_provider(
+                    _DEFAULT_LLM_MODEL, component="ReasoningRAGNode._create_workflow"
+                ),
                 "system_prompt": f"""Break down complex problems into reasoning steps.
 
 Strategy: {self.strategy}
@@ -1488,7 +1496,9 @@ Return JSON:
             "LLMAgentNode",
             node_id="step_reasoner",
             config={
-                "provider": detect_provider_from_env(),
+                "provider": resolve_node_provider(
+                    _DEFAULT_LLM_MODEL, component="ReasoningRAGNode._create_workflow"
+                ),
                 "system_prompt": """Execute one reasoning step at a time.
 
 Given:
@@ -1512,7 +1522,9 @@ Be explicit about your logic.""",
             "LLMAgentNode",
             node_id="logic_verifier",
             config={
-                "provider": detect_provider_from_env(),
+                "provider": resolve_node_provider(
+                    _DEFAULT_LLM_MODEL, component="ReasoningRAGNode._create_workflow"
+                ),
                 "system_prompt": """Verify the logical consistency of reasoning.
 
 Check:

@@ -1,0 +1,330 @@
+{
+  "ran": true,
+  "head": "db9565623dd03620e03869fc63e4d51c9ceedd67",
+  "versions": {
+    "black": "25.1.0",
+    "isort": "9.0.1"
+  },
+  "scope": "15-file hook patch exact-version API+CLI reproduction; whole tracked Python dry-run of candidate option, no checkout changes.",
+  "root_causes": [
+    {
+      "kind": "alias-plus-inline-comment formatting disagreement",
+      "evidence": {
+        "disagreement_files": [
+          "packages/kailash-kaizen/src/kaizen/__init__.py",
+          "packages/kailash-ml/src/kailash_ml/diagnostics/classical.py",
+          "packages/kailash-ml/tests/unit/test_w12_logging_primitives.py",
+          "packages/kaizen-agents/src/kaizen_agents/journey/core.py",
+          "src/kailash/trust/plane/exceptions.py"
+        ],
+        "stable_cycle": true
+      },
+      "interpretation": "Three repeated Black\u2192isort rounds settle into a stable TWO-STATE cycle: each formatter undoes the other on5 files. Both formatters exiting0 means they formatted, not that the pair agrees."
+    },
+    {
+      "kind": "CLI batch-first-file config selection changes package membership",
+      "evidence": {
+        "baseline_single": {
+          "sources": [
+            "defaults",
+            "black profile",
+            "/private/var/folders/pm/75clc_t14rl4q7sg7qrxf_1m0000gn/T/csq13-format-proof-yqbyh_wl/baseline_single/pyproject.toml",
+            "runtime"
+          ],
+          "seed_sha256": "30a0658acf03ae48ba5cb305b6e3338924d8144837527df486258653b4f0c27a",
+          "known_first_party": [
+            "kailash",
+            "pact",
+            "nexus",
+            "kaizen",
+            "kaizen_agents",
+            "kailash_mcp",
+            "dataflow"
+          ]
+        },
+        "baseline_batch": {
+          "sources": [
+            "defaults",
+            "black profile",
+            "/private/var/folders/pm/75clc_t14rl4q7sg7qrxf_1m0000gn/T/csq13-format-proof-yqbyh_wl/baseline_batch/pyproject.toml",
+            "runtime"
+          ],
+          "seed_sha256": "30a0658acf03ae48ba5cb305b6e3338924d8144837527df486258653b4f0c27a",
+          "known_first_party": [
+            "dataflow",
+            "nexus",
+            "kaizen",
+            "kailash",
+            "kailash_mcp",
+            "pact",
+            "kaizen_agents"
+          ]
+        },
+        "baseline_batch_reverse": {
+          "sources": [
+            "defaults",
+            "black profile",
+            "/private/var/folders/pm/75clc_t14rl4q7sg7qrxf_1m0000gn/T/csq13-format-proof-yqbyh_wl/baseline_batch_reverse/pyproject.toml",
+            "runtime"
+          ],
+          "seed_sha256": "30a0658acf03ae48ba5cb305b6e3338924d8144837527df486258653b4f0c27a",
+          "known_first_party": [
+            "nexus",
+            "dataflow",
+            "kaizen",
+            "kaizen_agents",
+            "pact",
+            "kailash_mcp",
+            "kailash"
+          ]
+        },
+        "baseline_kaizen_first": {
+          "sources": [
+            "defaults",
+            "black profile",
+            "/private/var/folders/pm/75clc_t14rl4q7sg7qrxf_1m0000gn/T/csq13-format-proof-yqbyh_wl/baseline_kaizen_first/packages/kailash-kaizen/pyproject.toml",
+            "runtime"
+          ],
+          "seed_sha256": "edc82e273ed807e2b8bcaaea87b8b1a98626f92b71445a8dcf0d46bf44388690",
+          "known_first_party": [
+            "kailash_mcp",
+            "nexus",
+            "pact",
+            "dataflow",
+            "kaizen",
+            "kailash",
+            "kaizen_agents"
+          ]
+        },
+        "fixed_single": {
+          "sources": [
+            "defaults",
+            "black profile",
+            "/private/var/folders/pm/75clc_t14rl4q7sg7qrxf_1m0000gn/T/csq13-format-proof-yqbyh_wl/fixed_single/pyproject.toml",
+            "runtime"
+          ],
+          "seed_sha256": "30a0658acf03ae48ba5cb305b6e3338924d8144837527df486258653b4f0c27a",
+          "known_first_party": [
+            "kailash_align",
+            "kaizen",
+            "pact",
+            "nexus",
+            "kailash",
+            "kailash_mcp",
+            "kailash_ml",
+            "kaizen_agents",
+            "dataflow"
+          ]
+        },
+        "fixed_batch": {
+          "sources": [
+            "defaults",
+            "black profile",
+            "/private/var/folders/pm/75clc_t14rl4q7sg7qrxf_1m0000gn/T/csq13-format-proof-yqbyh_wl/fixed_batch/pyproject.toml",
+            "runtime"
+          ],
+          "seed_sha256": "30a0658acf03ae48ba5cb305b6e3338924d8144837527df486258653b4f0c27a",
+          "known_first_party": [
+            "kaizen_agents",
+            "nexus",
+            "pact",
+            "dataflow",
+            "kailash",
+            "kailash_align",
+            "kailash_mcp",
+            "kaizen",
+            "kailash_ml"
+          ]
+        },
+        "fixed_batch_reverse": {
+          "sources": [
+            "defaults",
+            "black profile",
+            "/private/var/folders/pm/75clc_t14rl4q7sg7qrxf_1m0000gn/T/csq13-format-proof-yqbyh_wl/fixed_batch_reverse/pyproject.toml",
+            "runtime"
+          ],
+          "seed_sha256": "30a0658acf03ae48ba5cb305b6e3338924d8144837527df486258653b4f0c27a",
+          "known_first_party": [
+            "dataflow",
+            "kailash_ml",
+            "kailash",
+            "kailash_mcp",
+            "kaizen_agents",
+            "kailash_align",
+            "pact",
+            "nexus",
+            "kaizen"
+          ]
+        },
+        "fixed_kaizen_first": {
+          "sources": [
+            "defaults",
+            "black profile",
+            "/private/var/folders/pm/75clc_t14rl4q7sg7qrxf_1m0000gn/T/csq13-format-proof-yqbyh_wl/fixed_kaizen_first/packages/kailash-kaizen/pyproject.toml",
+            "runtime"
+          ],
+          "seed_sha256": "30a0658acf03ae48ba5cb305b6e3338924d8144837527df486258653b4f0c27a",
+          "known_first_party": [
+            "dataflow",
+            "kaizen",
+            "kaizen_agents",
+            "kailash_ml",
+            "kailash_mcp",
+            "kailash_align",
+            "kailash",
+            "pact",
+            "nexus"
+          ]
+        }
+      },
+      "interpretation": "Root config correctly recognizes ML/Align through src_paths. Kaizen-first batch chooses nested Kaizen config lacking those namespace declarations; seed groups ML with thirdparty pytest. Single/root/reversed versus Kaizen-first are a true opposite control, not conjectured missing root namespace."
+    }
+  ],
+  "smallest_proven_consistent_root_fix": {
+    "config": "Set combine_as_imports=true in four ACTIVE config sections: root pyproject, packages/kailash-dataflow/pyproject, packages/kailash-kaizen/pyproject, packages/kaizen-agents/pyproject. Synchronize known_first_party with ML/Align explicitly across them; root additions serve the stated identical-list contract though root already classifies correctly via src_paths. Format only files actually changed by this policy, then verify exact pinned pair.",
+    "why_not_root_hook_flag_only": "Explicit --settings-path root fixes batch grouping but actual baseline_forced_root still has same5 wrapping disagreements; it also does not change standalone package-local config policy.",
+    "why_not_comment_only": "Promoting prose and retaining narrow noqa text fixes2/5 but leaves3 alias+pragma lines cycling; see comments results. Do not remove narrow lint protections or add skip/suppression blanket.",
+    "legacy_setup_cfg": "Root setup.cfg also defines an isort section but automatic lookup chooses root pyproject first, proved by --show-config. No observed active invocation forced setup.cfg; either synchronize in future or remove duplicate only if separately scoped, not necessary to current proven fix."
+  },
+  "fixedpoint_proof": {
+    "baseline_auto": {
+      "disagreement_files": [
+        "packages/kailash-kaizen/src/kaizen/__init__.py",
+        "packages/kailash-ml/src/kailash_ml/diagnostics/classical.py",
+        "packages/kailash-ml/tests/unit/test_w12_logging_primitives.py",
+        "packages/kaizen-agents/src/kaizen_agents/journey/core.py",
+        "src/kailash/trust/plane/exceptions.py"
+      ],
+      "stable_cycle": true
+    },
+    "baseline_forced_root": {
+      "disagreement_files": [
+        "packages/kailash-kaizen/src/kaizen/__init__.py",
+        "packages/kailash-ml/src/kailash_ml/diagnostics/classical.py",
+        "packages/kailash-ml/tests/unit/test_w12_logging_primitives.py",
+        "packages/kaizen-agents/src/kaizen_agents/journey/core.py",
+        "src/kailash/trust/plane/exceptions.py"
+      ],
+      "stable_cycle": true
+    },
+    "fixed_auto": {
+      "disagreement_files": [],
+      "stable_cycle": true
+    },
+    "fixed_forced_root": {
+      "disagreement_files": [],
+      "stable_cycle": true
+    }
+  },
+  "candidate_fidelity": [
+    {
+      "path": "packages/kailash-align/src/kailash_align/diagnostics/alignment.py",
+      "import_bindings_preserved": true,
+      "narrow_pragma_text_preserved": true
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/__init__.py",
+      "import_bindings_preserved": true,
+      "narrow_pragma_text_preserved": true
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/nodes/__init__.py",
+      "import_bindings_preserved": true,
+      "narrow_pragma_text_preserved": true
+    },
+    {
+      "path": "packages/kailash-kaizen/src/kaizen/__init__.py",
+      "import_bindings_preserved": true,
+      "narrow_pragma_text_preserved": true
+    },
+    {
+      "path": "packages/kailash-kaizen/src/kaizen/judges/_judge.py",
+      "import_bindings_preserved": true,
+      "narrow_pragma_text_preserved": true
+    },
+    {
+      "path": "packages/kailash-kaizen/tests/integration/trust/test_rotation_integration.py",
+      "import_bindings_preserved": true,
+      "narrow_pragma_text_preserved": true
+    },
+    {
+      "path": "packages/kailash-ml/src/kailash_ml/diagnostics/classical.py",
+      "import_bindings_preserved": true,
+      "narrow_pragma_text_preserved": true
+    },
+    {
+      "path": "packages/kailash-ml/src/kailash_ml/diagnostics/rag.py",
+      "import_bindings_preserved": true,
+      "narrow_pragma_text_preserved": true
+    },
+    {
+      "path": "packages/kailash-ml/tests/unit/test_seed.py",
+      "import_bindings_preserved": true,
+      "narrow_pragma_text_preserved": true
+    },
+    {
+      "path": "packages/kailash-ml/tests/unit/test_w12_logging_primitives.py",
+      "import_bindings_preserved": true,
+      "narrow_pragma_text_preserved": true
+    },
+    {
+      "path": "packages/kaizen-agents/src/kaizen_agents/journey/core.py",
+      "import_bindings_preserved": true,
+      "narrow_pragma_text_preserved": true
+    },
+    {
+      "path": "src/kailash/middleware/database/base_models.py",
+      "import_bindings_preserved": true,
+      "narrow_pragma_text_preserved": true
+    },
+    {
+      "path": "src/kailash/trust/__init__.py",
+      "import_bindings_preserved": true,
+      "narrow_pragma_text_preserved": true
+    },
+    {
+      "path": "src/kailash/trust/envelope.py",
+      "import_bindings_preserved": true,
+      "narrow_pragma_text_preserved": true
+    },
+    {
+      "path": "src/kailash/trust/plane/exceptions.py",
+      "import_bindings_preserved": true,
+      "narrow_pragma_text_preserved": true
+    }
+  ],
+  "impact": {
+    "tracked": 6301,
+    "checked": 6299,
+    "changed_files": 110,
+    "added": 461,
+    "removed": 388,
+    "normalized_import_binding_differences": [],
+    "existing_explicit_skip_files": [
+      {
+        "path": "packages/kaizen-agents/tests/unit/delegate/adapters/test_ollama_adapter.py",
+        "error": "/Users/esperie/repos/kailash/build/kailash-py/packages/kaizen-agents/tests/unit/delegate/adapters/test_ollama_adapter.py contains a file skip comment and was skipped."
+      },
+      {
+        "path": "packages/kaizen-agents/tests/unit/delegate/adapters/test_ollama_embedding_and_tools.py",
+        "error": "/Users/esperie/repos/kailash/build/kailash-py/packages/kaizen-agents/tests/unit/delegate/adapters/test_ollama_embedding_and_tools.py contains a file skip comment and was skipped."
+      }
+    ],
+    "limitation": "110/461+/388- is marginal combine_as_imports effect vs existing-config isort-normalized form, not a prediction of unrelated baseline drift or extra firstparty normalization. Binding equality is scoped to imported names/aliases, not proof of arbitrary import side-effect ordering equivalence."
+  },
+  "reproduction": {
+    "api": "/tmp/csq13-formatter-probe.py",
+    "cli": "/tmp/csq13-formatter-cli-probe.py",
+    "impact": "/tmp/csq13-formatter-impact.py",
+    "comment_alternative": "/tmp/csq13-formatter-comments.py",
+    "command_prefix": "uv run --no-project --with black==25.1.0 --with isort==9.0.1 --python /Users/esperie/repos/kailash/build/kailash-py/.venv/bin/python python -I",
+    "artifacts": [
+      "/tmp/csq13-formatter-probe-results.json",
+      "/tmp/csq13-formatter-cli-results.json",
+      "/tmp/csq13-formatter-impact.json",
+      "/tmp/csq13-formatter-comments-results.json"
+    ]
+  },
+  "non_evidence": "Initial API run gave AttributeError because file_path was str; corrected to Path and all counted runs exited0. Local primary venv Black25.12/isort7 were observed but NOT used to infer pinned hook behavior.",
+  "mutation_controls": "Current settings fail5pair agreement checks; candidate passes all15 and three rounds. Current Kaizen-first CLI input order changes seed hash; candidate all4 modes identical. No repository source/config/dependency/ref modifications; only /tmp fixtures and isolated uv cache environment."
+}

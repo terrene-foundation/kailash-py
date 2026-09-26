@@ -37,9 +37,7 @@ from kailash_ml.tracking.registry import (
     ClearAliasResult,
     CrossTenantLineageError,
     DemoteResult,
-)
-from kailash_ml.tracking.registry import FilterParseError as RegistryFilterParseError
-from kailash_ml.tracking.registry import (
+    FilterParseError as RegistryFilterParseError,
     InvalidAliasError,
     InvalidModelNameError,
     Lineage,
@@ -61,10 +59,11 @@ from kailash_ml.tracking.runner import (
     ExperimentRun,
     RunStatus,
     _current_actor_id,
+    _current_run,
+    _current_run as current_run,
+    _current_tenant_id,
+    track,
 )
-from kailash_ml.tracking.runner import _current_run
-from kailash_ml.tracking.runner import _current_run as current_run
-from kailash_ml.tracking.runner import _current_tenant_id, track
 from kailash_ml.tracking.storage import (
     AbstractTrackerStore,
     PostgresTrackerStore,

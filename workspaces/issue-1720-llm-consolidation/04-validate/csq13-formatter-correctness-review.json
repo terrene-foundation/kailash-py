@@ -1,0 +1,139 @@
+{
+  "ran": true,
+  "base": "db9565623",
+  "scope": "317 source/config files =313Python+4isort configs;3 concurrently changed session/adjudication docs explicitly excluded",
+  "manifest_digest": "a22941239d14a955c87982ddfe636ef9986286fb618c8beb5281b8f962b10ccb",
+  "rounds": [
+    {
+      "round": "R1",
+      "verdict": "CLEAN",
+      "evidence": "Full313 Python AST audit explicit against db9565623:312 unchanged outside imports; only intended DataFlow lambda\u2192asyncdef wrapper. Original contiguous-group inventory unchanged; no imports cross control-flow boundaries, no duplicate local binding collisions. Normalizer known controls fire on binding reorder and changed runtime expression. All original per-binding noqa/type-ignore code coverage preserved after3scope fixes; new split markers only partition formatter groups. Config4 identical firstparty sets/combine policy; specs untouched."
+    },
+    {
+      "round": "R2",
+      "verdict": "CLEAN",
+      "evidence": "Fresh-process actual old/current A2A and ML autolog import fragments execute with primary-source provenance: exact exported object identities, loaded producer module sets, lazy lookup counts and7integration registrations match. Ragas entire function ordered-normalized AST restored to baseline, actual exact-version3pass formatter fixedpoint. Real configured Ruff0.3.4 opposite control broad F401 comment hides both unused imports; narrow split candidate leaves unrelated Optional F401 visible (exit1).",
+      "qualification": "A2A repeated lazy attribute lookup ORDER differs due combined fromlist preflight; inspected getter performs only cached service import+getattr, and service initialization target/order, counts, identities and loaded module set match. Does not claim arbitrary thirdparty __getattr__ behavior equivalence."
+    }
+  ],
+  "actual_final_ast_counts": {
+    "python_files": 313,
+    "ordered_ast_residuals": 112,
+    "nonimport_residuals": 1,
+    "pragma_residuals": 13
+  },
+  "producer_evidence": [
+    {
+      "revision": "db9565623",
+      "producer": "kailash.trust.a2a",
+      "lazy_calls": [
+        "A2AService",
+        "service",
+        "A2AService",
+        "create_a2a_app",
+        "create_a2a_app"
+      ],
+      "registry": null,
+      "loaded_producer_modules": [
+        "kailash.trust.a2a",
+        "kailash.trust.a2a.agent_card",
+        "kailash.trust.a2a.auth",
+        "kailash.trust.a2a.authorization",
+        "kailash.trust.a2a.exceptions",
+        "kailash.trust.a2a.jsonrpc",
+        "kailash.trust.a2a.models",
+        "kailash.trust.a2a.service"
+      ]
+    },
+    {
+      "revision": "current",
+      "producer": "kailash.trust.a2a",
+      "lazy_calls": [
+        "A2AService",
+        "service",
+        "create_a2a_app",
+        "A2AService",
+        "create_a2a_app"
+      ],
+      "registry": null,
+      "loaded_producer_modules": [
+        "kailash.trust.a2a",
+        "kailash.trust.a2a.agent_card",
+        "kailash.trust.a2a.auth",
+        "kailash.trust.a2a.authorization",
+        "kailash.trust.a2a.exceptions",
+        "kailash.trust.a2a.jsonrpc",
+        "kailash.trust.a2a.models",
+        "kailash.trust.a2a.service"
+      ]
+    },
+    {
+      "revision": "db9565623",
+      "producer": "kailash_ml.autolog",
+      "lazy_calls": [],
+      "registry": [
+        "lightgbm",
+        "lightning",
+        "polars",
+        "sklearn",
+        "statsmodels",
+        "transformers",
+        "xgboost"
+      ],
+      "loaded_producer_modules": [
+        "kailash_ml.autolog",
+        "kailash_ml.autolog._context",
+        "kailash_ml.autolog._distribution",
+        "kailash_ml.autolog._lightgbm",
+        "kailash_ml.autolog._lightning",
+        "kailash_ml.autolog._polars",
+        "kailash_ml.autolog._registry",
+        "kailash_ml.autolog._sklearn",
+        "kailash_ml.autolog._statsmodels",
+        "kailash_ml.autolog._transformers",
+        "kailash_ml.autolog._types",
+        "kailash_ml.autolog._xgboost",
+        "kailash_ml.autolog.config"
+      ]
+    },
+    {
+      "revision": "current",
+      "producer": "kailash_ml.autolog",
+      "lazy_calls": [],
+      "registry": [
+        "lightgbm",
+        "lightning",
+        "polars",
+        "sklearn",
+        "statsmodels",
+        "transformers",
+        "xgboost"
+      ],
+      "loaded_producer_modules": [
+        "kailash_ml.autolog",
+        "kailash_ml.autolog._context",
+        "kailash_ml.autolog._distribution",
+        "kailash_ml.autolog._lightgbm",
+        "kailash_ml.autolog._lightning",
+        "kailash_ml.autolog._polars",
+        "kailash_ml.autolog._registry",
+        "kailash_ml.autolog._sklearn",
+        "kailash_ml.autolog._statsmodels",
+        "kailash_ml.autolog._transformers",
+        "kailash_ml.autolog._types",
+        "kailash_ml.autolog._xgboost",
+        "kailash_ml.autolog.config"
+      ]
+    }
+  ],
+  "artifacts": [
+    "/tmp/csq13-format-audit-results.json",
+    "/tmp/csq13-import-order-audit.json",
+    "/tmp/csq13-producer-import-order-results.json",
+    "/tmp/csq13-formatter-final-source-manifest.json",
+    "/tmp/csq13-ragas-order-candidate.json"
+  ],
+  "non_evidence": "Initial exact lazy trace equality assertion failed because trace order actually changes; explicitly reported and scope corrected to actual producer effects. Initial python -m ruff invocation failed wheel launcher path; direct resolved exact0.3.4 binary rerun passed opposite controls. Initial total317 assertion caught additional3documentation files rather than silently ignoring them; final source317 explicitly selected.",
+  "limitations": "This source/producer audit does not replace required full remote gates; root owns those. Cross-module cold-import security proof belongs separate independent reviewer; not represented as own run.",
+  "edits": "None to checkout; only /tmp audit artifacts."
+}

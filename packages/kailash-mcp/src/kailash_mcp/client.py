@@ -931,9 +931,16 @@ class MCPClient:
         differ only in their arguments still get distinct references while the
         arguments themselves never appear.
 
-        Every branch returns a MODULE-OWNED LITERAL joined to a non-reversible
+        Every branch returns a MODULE-OWNED LITERAL joined to an UNKEYED
         digest, and nothing else -- no substring of the config survives into the
         return value: not a masked URL, not a command basename, not an argument.
+
+        "Non-reversible" is what this said until #2171 and it was false: the
+        digest is unkeyed, so a server config drawn from a small known set is
+        recoverable by hashing candidates. The guarantee that DOES hold is the
+        one that matters at this sink -- no substring of the config is echoed,
+        so a credential embedded in a CLI flag or in URL userinfo cannot reach
+        a log line intact, whatever the reader already knows.
 
         That is stricter than disclosure-safety alone requires, deliberately.
         ``py/clear-text-logging-sensitive-data`` (HIGH) follows the call graph

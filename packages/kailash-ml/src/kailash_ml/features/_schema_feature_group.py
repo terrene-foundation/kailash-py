@@ -47,9 +47,8 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 
 if TYPE_CHECKING:  # avoid eager DataFlow import on type-only paths
-    from kailash_ml.features.schema import FeatureSchema
-
     from dataflow.core.engine import DataFlow
+    from kailash_ml.features.schema import FeatureSchema
 
 __all__ = ["SchemaFeatureGroup"]
 

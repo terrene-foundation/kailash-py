@@ -23,11 +23,15 @@ import math
 import threading
 import time
 from collections import OrderedDict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
-from kailash.trust.action_policy import evaluate_action, evaluate_scope
+from kailash.trust.action_policy import (
+    delegated_capabilities,
+    evaluate_action,
+    evaluate_scope,
+)
 from kailash.trust.pact.access import (
     AccessDecision,
     KnowledgeSharePolicy,
@@ -125,6 +129,40 @@ _BRIDGE_APPROVAL_TTL: timedelta = timedelta(hours=24)
 
 _MAX_ENVELOPE_CACHE_ENTRIES: int = 10_000
 """Maximum number of cached effective envelope entries (bounded collection)."""
+
+# ---------------------------------------------------------------------------
+# Caller-supplied numeric coercion -- ONE place owns the exception tuple
+# ---------------------------------------------------------------------------
+
+_COERCION_ERRORS: tuple[type[BaseException], ...] = (
+    ValueError,
+    TypeError,
+    OverflowError,
+)
+"""Every way ``int()``/``float()`` can reject a caller-supplied ``ctx`` value.
+
+``OverflowError`` is NOT a subclass of ``ValueError``/``TypeError`` (its MRO is
+``OverflowError -> ArithmeticError -> Exception``), so a tuple of only the
+latter two lets ``int(float("inf"))`` escape. The tuple lives here, once, so a
+future coercion site cannot re-open that hole by re-deriving a shorter one.
+"""
+
+
+def _coerce_or_none(value: Any, caster: type) -> Any | None:
+    """Coerce a caller-supplied ``ctx`` value, returning ``None`` if it cannot be.
+
+    ``int``/``float`` never return ``None``, so ``None`` is an unambiguous
+    "not coercible" sentinel. Callers turn it into a SPECIFIC ``blocked``
+    verdict naming the offending field (``pact-governance.md`` Rule 4:
+    fail-closed), rather than letting the raw coercion error unwind into
+    ``verify_action``'s generic internal-error handler -- which would abort the
+    evaluation before the live rate tally and degrade the audit row to
+    ``{"error": "internal_error"}``.
+    """
+    try:
+        return caster(value)
+    except _COERCION_ERRORS:
+        return None
 
 
 @dataclass
@@ -509,8 +547,7 @@ class GovernanceEngine:
                         return AccessDecision(
                             allowed=False,
                             reason=(
-                                f"Pre-retrieval filter denied: "
-                                f"{filter_decision.reason}"
+                                f"Pre-retrieval filter denied: {filter_decision.reason}"
                             ),
                             step_failed=0,
                             audit_details={
@@ -739,6 +776,25 @@ class GovernanceEngine:
         Returns:
             A GovernanceVerdict with the decision.
         """
+        role_node = self._compiled_org.get_role_node(role_address)
+        if role_node is None or role_node.address != role_address:
+            details = {
+                "role_address": role_address,
+                "action": action,
+                "level": "blocked",
+                "detail": "missing_role",
+            }
+            self._emit_audit_unlocked("verify_action", details)
+            return GovernanceVerdict(
+                level="blocked",
+                reason=f"No role exists at address '{role_address}' -- fail-closed",
+                role_address=role_address,
+                action=action,
+                effective_envelope_snapshot=None,
+                audit_details=details,
+                access_decision=None,
+                timestamp=now,
+            )
         # Step 0: Vacancy check (PACT Section 5.5) -- BEFORE envelope checks.
         # If the role or any ancestor is vacant without a valid acting occupant
         # designation, all actions are blocked (auto-suspended).
@@ -1537,7 +1593,19 @@ class GovernanceEngine:
                 daily_calls is not None
                 and envelope.operational.max_actions_per_day is not None
             ):
-                daily_calls_int = int(daily_calls)
+                daily_calls_int = _coerce_or_none(daily_calls, int)
+                if daily_calls_int is None:
+                    logger.warning(
+                        "Non-numeric ctx['daily_calls'] (%s) for action=%s -- "
+                        "fail-closed to BLOCKED",
+                        type(daily_calls).__name__,
+                        action,
+                    )
+                    return (
+                        "blocked",
+                        "ctx['daily_calls'] is not a valid integer "
+                        f"(got {type(daily_calls).__name__}) -- fail-closed to BLOCKED",
+                    )
                 if daily_calls_int >= envelope.operational.max_actions_per_day:
                     return (
                         "blocked",
@@ -1549,7 +1617,19 @@ class GovernanceEngine:
                 hourly_calls is not None
                 and envelope.operational.max_actions_per_hour is not None
             ):
-                hourly_calls_int = int(hourly_calls)
+                hourly_calls_int = _coerce_or_none(hourly_calls, int)
+                if hourly_calls_int is None:
+                    logger.warning(
+                        "Non-numeric ctx['hourly_calls'] (%s) for action=%s -- "
+                        "fail-closed to BLOCKED",
+                        type(hourly_calls).__name__,
+                        action,
+                    )
+                    return (
+                        "blocked",
+                        "ctx['hourly_calls'] is not a valid integer "
+                        f"(got {type(hourly_calls).__name__}) -- fail-closed to BLOCKED",
+                    )
                 if hourly_calls_int >= envelope.operational.max_actions_per_hour:
                     return (
                         "blocked",
@@ -1560,8 +1640,23 @@ class GovernanceEngine:
         # --- Financial: check cost against max_spend_usd ---
         cost = ctx.get("cost")
         if cost is not None and envelope.financial is not None:
+            # Validate cost is COERCIBLE first -- the isfinite() guard below
+            # only runs on an already-converted float, so it cannot catch a
+            # value float() outright rejects.
+            cost_float = _coerce_or_none(cost, float)
+            if cost_float is None:
+                logger.warning(
+                    "Non-numeric ctx['cost'] (%s) for action=%s -- "
+                    "fail-closed to BLOCKED",
+                    type(cost).__name__,
+                    action,
+                )
+                return (
+                    "blocked",
+                    "ctx['cost'] is not a valid number "
+                    f"(got {type(cost).__name__}) -- fail-closed to BLOCKED",
+                )
             # Validate cost is finite (NaN-safe)
-            cost_float = float(cost)
             if not math.isfinite(cost_float):
                 return (
                     "blocked",
@@ -1600,9 +1695,7 @@ class GovernanceEngine:
 
         # --- Temporal: check active hours and blackout periods ---
         if envelope.temporal is not None:
-            from datetime import datetime as _dt
-            from datetime import timezone as _tz
-            from datetime import tzinfo as _TzInfo
+            from datetime import datetime as _dt, timezone as _tz, tzinfo as _TzInfo
 
             _tz_name = envelope.temporal.timezone or "UTC"
             _tzinfo: _TzInfo
@@ -2016,8 +2109,7 @@ class GovernanceEngine:
                     return GovernanceVerdict(
                         level="blocked",
                         reason=(
-                            f"Cannot resume plan '{plan_id}': "
-                            f"unmet conditions: {unmet}"
+                            f"Cannot resume plan '{plan_id}': unmet conditions: {unmet}"
                         ),
                         role_address=suspension.role_address,
                         action="resume_plan",
@@ -2250,6 +2342,7 @@ class GovernanceEngine:
         """
         with self._lock:
             # Compute effective envelope
+            role_address = self._resolve_role_address(role_address)
             effective_env = self._compute_envelope_locked(role_address)
 
             # Get clearance if it exists
@@ -2302,14 +2395,11 @@ class GovernanceEngine:
             The canonical positional address string.
 
         Raises:
-            PactError: If the identifier cannot be resolved to any node.
+            PactError: If the identifier cannot be resolved to a role node.
         """
-        # Try exact address lookup first (O(1))
-        if role_address in self._compiled_org.nodes:
-            return role_address
-
-        # Fallback: search by config role_id (O(n) over nodes)
-        node = self._compiled_org.get_node_by_role_id(role_address)
+        node = self._compiled_org.get_role_node(role_address)
+        if node is None:
+            node = self._compiled_org.get_node_by_role_id(role_address)
         if node is not None:
             return node.address
 
@@ -2331,7 +2421,8 @@ class GovernanceEngine:
 
         Accepts both D/T/R positional addresses (e.g., "D1-R1") and config
         role IDs (e.g., "r-president"). The address is resolved to its
-        canonical positional form before any store operations.
+        canonical positional form before any store operations. The clearance
+        record must name the same role; matching config aliases are normalized.
 
         FSM validation is enforced for "living" states (PENDING, ACTIVE,
         SUSPENDED). Terminal states (REVOKED, EXPIRED) and missing records
@@ -2353,6 +2444,16 @@ class GovernanceEngine:
         }
         with self._lock:
             role_address = self._resolve_role_address(role_address)
+            clearance_address = self._resolve_role_address(clearance.role_address)
+            if clearance_address != role_address:
+                raise PactError(
+                    "Clearance record must name the role receiving the grant",
+                    details={
+                        "role_address": role_address,
+                        "clearance_role_address": clearance.role_address,
+                    },
+                )
+            clearance = replace(clearance, role_address=role_address)
             existing = self._clearance_store.get_clearance(role_address)
             if (
                 existing is not None
@@ -2367,6 +2468,24 @@ class GovernanceEngine:
             # cached envelopes so next computation uses fresh state.
             self._cascade_invalidate(role_address)
 
+        self._emit_clearance_granted(role_address, clearance)
+
+    def _restore_clearance(self, clearance: RoleClearance) -> None:
+        """Restore trusted admin backup state without authorizing a new grant.
+
+        A historical role may no longer exist in this org, and restoring a
+        vetting snapshot is not a live FSM transition. Keep the stored address,
+        cache invalidation, and grant audit/observation emissions intact.
+        """
+        with self._lock:
+            self._clearance_store.grant_clearance(clearance)
+            self._cascade_invalidate(clearance.role_address)
+        self._emit_clearance_granted(clearance.role_address, clearance)
+
+    def _emit_clearance_granted(
+        self, role_address: str, clearance: RoleClearance
+    ) -> None:
+        """Publish the shared audit, observation, and EATP grant records."""
         self._emit_audit(
             PactAuditAction.CLEARANCE_GRANTED.value,
             create_pact_audit_details(
@@ -2548,7 +2667,7 @@ class GovernanceEngine:
         """
         with self._lock:
             # RED TEAM FIX R2: validate address exists in org
-            if role_address not in self._compiled_org.nodes:
+            if self._compiled_org.get_role_node(role_address) is None:
                 raise PactError(
                     f"Cannot register bridge consent: address '{role_address}' "
                     f"does not exist in the compiled organization",
@@ -2572,7 +2691,7 @@ class GovernanceEngine:
         """Register a role as the designated compliance approver for bridges."""
         with self._lock:
             # RED TEAM FIX R2: validate address exists in org
-            if role_address not in self._compiled_org.nodes:
+            if self._compiled_org.get_role_node(role_address) is None:
                 raise PactError(
                     f"Cannot register compliance role: address '{role_address}' "
                     f"does not exist in the compiled organization",
@@ -2659,8 +2778,29 @@ class GovernanceEngine:
                 )
 
             # Vacancy check: vacant roles cannot approve bridges
-            approver_node = self._compiled_org.nodes.get(approver_address)
-            if approver_node is not None and approver_node.is_vacant:
+            #
+            # SECURITY: an approver that resolves to NO node must fail closed.
+            # The vacancy check is the only gate that reads the approver node,
+            # and it was written `if approver_node is not None and ...`, so a
+            # well-formed approver address naming no node skipped it entirely
+            # and the approval was RECORDED -- measured: a bridge between two
+            # ghosts recorded "D9-R9", a node that exists nowhere, as its
+            # approving LCA. An approval whose decider cannot be looked up
+            # cannot be shown to come from a non-vacant role, so it is refused
+            # rather than trusted. Same precedent as register_compliance_role,
+            # which already refuses an address that is not in the org.
+            approver_node = self._compiled_org.get_role_node(approver_address)
+            if approver_node is None:
+                raise PactError(
+                    f"Bridge approval requires an approver that exists in the "
+                    f"organization: '{approver_address}' names no role",
+                    details={
+                        "approver_address": approver_address,
+                        "source_address": source_address,
+                        "target_address": target_address,
+                    },
+                )
+            if approver_node.is_vacant:
                 raise PactError(
                     f"Bridge approval cannot be given by vacant role '{approver_address}'",
                     details={
@@ -2796,8 +2936,13 @@ class GovernanceEngine:
                 )
 
             # Vacancy check: vacant roles cannot reject bridges
-            rejector_node = self._compiled_org.nodes.get(rejector_address)
-            if rejector_node is not None and rejector_node.is_vacant:
+            rejector_node = self._compiled_org.get_role_node(rejector_address)
+            if rejector_node is None:
+                raise PactError(
+                    f"Bridge rejection requires a role in the organization: '{rejector_address}'",
+                    details={"rejector_address": rejector_address},
+                )
+            if rejector_node.is_vacant:
                 raise PactError(
                     f"Bridge rejection cannot be given by vacant role '{rejector_address}'",
                     details={
@@ -2892,16 +3037,54 @@ class GovernanceEngine:
                 be parsed, or if no common ancestor exists.
         """
         with self._lock:
+            # SECURITY: an endpoint must EXIST, not merely be well-formed.
+            # The parse below rejects malformed input and NOTHING else --
+            # "D9-R9" parses cleanly -- while both the LCA and the approval
+            # gate are computed from the PARSED strings. A name that no node
+            # backs therefore satisfied every remaining check and persisted as
+            # a governance record asserting a connection that exists nowhere.
+            # Each endpoint is resolved through the same helper every other
+            # state mutation uses, which fails closed on a name nothing backs.
+            # Parity: yaml_resolvers.resolve_bridge resolves role_a and role_b
+            # the same way before a PactBridge is ever constructed, so this
+            # also closes the gap between the two authoring surfaces.
+            resolved: dict[str, str] = {}
+            for field_name in ("role_a_address", "role_b_address"):
+                endpoint = getattr(bridge, field_name)
+                try:
+                    resolved[field_name] = self._resolve_role_address(endpoint)
+                except PactError as exc:
+                    raise PactError(
+                        f"Cannot create bridge '{bridge.id}': {field_name} "
+                        f"'{endpoint}' does not resolve to any role in the "
+                        f"compiled organization",
+                        details={
+                            "bridge_id": bridge.id,
+                            field_name: endpoint,
+                            "role_a_address": bridge.role_a_address,
+                            "role_b_address": bridge.role_b_address,
+                        },
+                    ) from exc
+
+            # Durable form: the store, the audit payload and the EATP records
+            # all carry positional addresses, so a bridge can never be persisted
+            # under an alias or ghost key that enforcement never reads.
+            resolved_bridge = replace(
+                bridge,
+                role_a_address=resolved["role_a_address"],
+                role_b_address=resolved["role_b_address"],
+            )
+
             # Parse addresses for LCA computation
             try:
-                source_addr = Address.parse(bridge.role_a_address)
-                target_addr = Address.parse(bridge.role_b_address)
+                source_addr = Address.parse(resolved_bridge.role_a_address)
+                target_addr = Address.parse(resolved_bridge.role_b_address)
             except Exception as exc:
                 raise PactError(
                     f"Cannot parse bridge addresses: {exc}",
                     details={
-                        "role_a_address": bridge.role_a_address,
-                        "role_b_address": bridge.role_b_address,
+                        "role_a_address": resolved_bridge.role_a_address,
+                        "role_b_address": resolved_bridge.role_b_address,
                         "bridge_id": bridge.id,
                     },
                 ) from exc
@@ -2918,7 +3101,10 @@ class GovernanceEngine:
                     },
                 )
 
-            # Check for valid approval from the LCA
+            # Check for valid approval from the LCA. approve_bridge records the
+            # caller's OWN strings verbatim, so this lookup stays on the raw
+            # fields (identical to the resolved pair for every positional
+            # input, which is the only shape approve_bridge accepts).
             approval = self._check_bridge_approval(
                 bridge.role_a_address, bridge.role_b_address
             )
@@ -2955,12 +3141,14 @@ class GovernanceEngine:
                     },
                 )
 
-            # Bilateral consent check (Section 4.4)
-            source_address = bridge.role_a_address
-            target_address = bridge.role_b_address
+            # Bilateral consent check (Section 4.4). consent_bridge records the
+            # caller's OWN strings verbatim, so this lookup stays on the raw
+            # fields; the durable artifacts below use the resolved bridge.
+            source_address = resolved_bridge.role_a_address
+            target_address = resolved_bridge.role_b_address
             if self._require_bilateral_consent:
                 now_check = datetime.now(UTC)
-                for role_addr in (source_address, target_address):
+                for role_addr in (bridge.role_a_address, bridge.role_b_address):
                     key = (role_addr, bridge.id)
                     consent_time = self._bridge_consents.get(key)
                     if consent_time is None:
@@ -2975,17 +3163,17 @@ class GovernanceEngine:
                         )
 
             # Validate bridge scope against endpoint envelopes
-            self._validate_bridge_scope_locked(bridge)
+            self._validate_bridge_scope_locked(resolved_bridge)
 
             # All checks passed -- persist the bridge
-            self._access_policy_store.save_bridge(bridge)
+            self._access_policy_store.save_bridge(resolved_bridge)
 
         self._emit_audit(
             PactAuditAction.BRIDGE_ESTABLISHED.value,
             create_pact_audit_details(
                 PactAuditAction.BRIDGE_ESTABLISHED,
-                role_address=bridge.role_a_address,
-                target_address=bridge.role_b_address,
+                role_address=resolved_bridge.role_a_address,
+                target_address=resolved_bridge.role_b_address,
                 reason=f"Bridge '{bridge.id}' ({bridge.bridge_type}) established",
                 bridge_id=bridge.id,
                 bridge_type=bridge.bridge_type,
@@ -3022,14 +3210,14 @@ class GovernanceEngine:
         # N5: Emit observation for bridge creation
         self._emit_observation(
             event_type="bridge_event",
-            role_address=bridge.role_a_address,
+            role_address=resolved_bridge.role_a_address,
             level="info",
             payload={
                 "bridge_action": "created",
                 "bridge_id": bridge.id,
                 "bridge_type": bridge.bridge_type,
-                "role_a_address": bridge.role_a_address,
-                "role_b_address": bridge.role_b_address,
+                "role_a_address": resolved_bridge.role_a_address,
+                "role_b_address": resolved_bridge.role_b_address,
                 "lca_approver": approval.approved_by,
             },
         )
@@ -3113,21 +3301,69 @@ class GovernanceEngine:
     def create_ksp(self, ksp: KnowledgeSharePolicy) -> None:
         """Create a Knowledge Share Policy. Thread-safe. Emits audit anchor.
 
+        Both unit addresses are resolved to their positional addresses before
+        the policy is stored, so a KSP can never be persisted under a key that
+        enforcement never reads. Resolution accepts exactly what the YAML
+        authoring surface accepts -- a positional address of any node (a
+        department, a team, or a role), or a config department/team id.
+
         Args:
             ksp: The KnowledgeSharePolicy to create.
+
+        Raises:
+            PactError: If ``source_unit_address`` or ``target_unit_address``
+                does not resolve to a node in the compiled organization.
         """
         with self._lock:
-            self._access_policy_store.save_ksp(ksp)
+            # SECURITY: this method previously persisted the policy verbatim,
+            # with NO validation at all -- not even an Address.parse. A KSP
+            # naming units that exist nowhere ("D9", "NOT-AN-ADDRESS", "") was
+            # stored as a governance record, and because _check_ksps matches
+            # source/target by raw string prefix, such a record is a grant the
+            # org never authorised the moment any prefix of it becomes real.
+            # Resolution is delegated to the SAME unit resolver the YAML surface
+            # uses (yaml_resolvers.resolve_ksp -> _resolve_unit_address), so the
+            # two authoring surfaces cannot drift on what a unit identifier
+            # means: both accept a positional D/T address or a config
+            # department/team id, and both fail closed on anything else.
+            from kailash.trust.pact.yaml_resolvers import _resolve_unit_address
+
+            resolved: dict[str, str] = {}
+            for field_name in ("source_unit_address", "target_unit_address"):
+                unit = getattr(ksp, field_name)
+                try:
+                    resolved[field_name] = _resolve_unit_address(
+                        self._compiled_org, unit, ctx=f"KSP '{ksp.id}'"
+                    )
+                except PactError as exc:
+                    raise PactError(
+                        f"Cannot create KSP '{ksp.id}': {field_name} "
+                        f"'{unit}' does not resolve to any unit in the compiled "
+                        f"organization",
+                        details={
+                            "ksp_id": ksp.id,
+                            field_name: unit,
+                            "source_unit_address": ksp.source_unit_address,
+                            "target_unit_address": ksp.target_unit_address,
+                        },
+                    ) from exc
+
+            resolved_ksp = replace(
+                ksp,
+                source_unit_address=resolved["source_unit_address"],
+                target_unit_address=resolved["target_unit_address"],
+            )
+            self._access_policy_store.save_ksp(resolved_ksp)
 
         self._emit_audit(
             PactAuditAction.KSP_CREATED.value,
             create_pact_audit_details(
                 PactAuditAction.KSP_CREATED,
                 role_address=ksp.created_by_role_address,
-                reason=f"KSP '{ksp.id}': {ksp.source_unit_address} -> {ksp.target_unit_address}",
+                reason=f"KSP '{ksp.id}': {resolved_ksp.source_unit_address} -> {resolved_ksp.target_unit_address}",
                 ksp_id=ksp.id,
-                source_unit=ksp.source_unit_address,
-                target_unit=ksp.target_unit_address,
+                source_unit=resolved_ksp.source_unit_address,
+                target_unit=resolved_ksp.target_unit_address,
             ),
         )
 
@@ -3141,20 +3377,112 @@ class GovernanceEngine:
             envelope: The RoleEnvelope to set.
 
         Raises:
+            PactError: If ``defining_role_address`` or ``target_role_address``
+                does not resolve to a role in the compiled organization.
             MonotonicTighteningError: If the envelope is wider than the
                 defining role's effective envelope.
         """
-        with self._lock:
-            # Check if this is a new or modified envelope
-            is_new = (
-                self._envelope_store.get_role_envelope(envelope.target_role_address)
-                is None
-            )
+        self._set_role_envelope(envelope)
 
-            # Validate monotonic tightening: child cannot be wider than parent
-            defining_envelope = self._compute_envelope_locked(
-                envelope.defining_role_address
-            )
+    def _restore_role_envelope(self, envelope: RoleEnvelope) -> None:
+        """Restore an admin snapshot, retaining definer and tightening checks."""
+        self._set_role_envelope(envelope, restore_missing_target=True)
+
+    def _set_role_envelope(
+        self, envelope: RoleEnvelope, *, restore_missing_target: bool = False
+    ) -> None:
+        """Persist an envelope after shared authorization and tightening checks."""
+        with self._lock:
+            # SECURITY: resolve the defining role BEFORE trusting it. The
+            # monotonic-tightening gate below is skipped when the defining
+            # envelope is None -- which is the legitimate state for a genuine
+            # ROOT envelope, but was ALSO the state produced by an address that
+            # exists nowhere in the org: the envelope store's prefix scan
+            # returns {} for a ghost without raising. A caller who could submit
+            # an envelope could therefore name a well-formed but non-existent
+            # definer (e.g. "D9-R9", or a case variant of a real address -- node
+            # lookup is case-sensitive while Address.parse is not) and write an
+            # arbitrarily WIDE envelope over an already-governed role.
+            # Resolving fail-closed through the shared helper restores parity
+            # with the three sibling state mutations (grant_clearance,
+            # revoke_clearance, transition_clearance) and with the YAML surface
+            # (yaml_resolvers.resolve_envelope), which already resolve the
+            # defining address before an envelope is ever constructed.
+            try:
+                defining_address = self._resolve_role_address(
+                    envelope.defining_role_address
+                )
+            except PactError as exc:
+                # Re-raise naming the FIELD: set_role_envelope carries two
+                # addresses, so the helper's generic message is ambiguous here.
+                raise PactError(
+                    f"Cannot set role envelope '{envelope.id}': defining role "
+                    f"address '{envelope.defining_role_address}' does not "
+                    f"resolve to any role in the compiled organization",
+                    details={
+                        "envelope_id": envelope.id,
+                        "defining_role_address": envelope.defining_role_address,
+                        "target_role_address": envelope.target_role_address,
+                    },
+                ) from exc
+
+            # SECURITY: resolve the TARGET role before writing it, for the same
+            # reason and through the same helper as the definer above. The
+            # envelope store is keyed on the raw target_role_address, and every
+            # consumer reaches an envelope only for addresses in the target's
+            # accountability_chain, so a target naming no node -- or naming a
+            # real role by an alias -- was an ABSENCE RENDERED AS A SUCCESS: the
+            # envelope was accepted and persisted under a key nothing reads,
+            # while the caller believed the role was now constrained. Measured
+            # pre-fix: narrowing the Lead to $25 via its config role id was
+            # ACCEPTED and left compute_envelope reporting $100.
+            # Parity: yaml_resolvers.resolve_envelope resolves spec.target the
+            # same way before a RoleEnvelope is ever constructed.
+            try:
+                if (
+                    restore_missing_target
+                    and envelope.target_role_address not in self._compiled_org.nodes
+                ):
+                    # Historical targets stay inert: decision APIs require a
+                    # current ROLE node. Existing units are never exempted.
+                    target_address = str(Address.parse(envelope.target_role_address))
+                    if target_address != envelope.target_role_address:
+                        raise PactError("Historical target must be a canonical address")
+                else:
+                    target_address = self._resolve_role_address(
+                        envelope.target_role_address
+                    )
+            except PactError as exc:
+                raise PactError(
+                    f"Cannot set role envelope '{envelope.id}': target role "
+                    f"address '{envelope.target_role_address}' does not "
+                    f"resolve to any role in the compiled organization",
+                    details={
+                        "envelope_id": envelope.id,
+                        "defining_role_address": envelope.defining_role_address,
+                        "target_role_address": envelope.target_role_address,
+                    },
+                ) from exc
+
+            # Durable form: the TARGET address is what the store key, the
+            # cache-invalidation scope, the audit payload and the EATP
+            # DelegationRecord carry, so an alias can never address a different
+            # envelope than the role it names. Only the target is normalised --
+            # defining_role_address is deliberately left as the caller supplied
+            # it, because the HTTP surface relies on that field staying
+            # resolvable (endpoints.py:535-543) and a config role id is
+            # resolvable as given.
+            resolved_envelope = replace(envelope, target_role_address=target_address)
+
+            # Check if this is a new or modified envelope
+            is_new = self._envelope_store.get_role_envelope(target_address) is None
+
+            # Validate monotonic tightening: child cannot be wider than parent.
+            # Computed from the RESOLVED address: a config role ID ("r-cfo")
+            # names a real role but matches no stored envelope, so computing
+            # from the raw field would skip this gate for the same reason a
+            # ghost did.
+            defining_envelope = self._compute_envelope_locked(defining_address)
             if defining_envelope is not None:
                 RoleEnvelope.validate_tightening(
                     parent_envelope=defining_envelope,
@@ -3174,15 +3502,15 @@ class GovernanceEngine:
                         "effective envelope (no additional tightening). "
                         "Consider whether this delegation adds value.",
                         envelope.id,
-                        envelope.target_role_address,
+                        target_address,
                     )
 
-            self._envelope_store.save_role_envelope(envelope)
+            self._envelope_store.save_role_envelope(resolved_envelope)
 
             # N2: Cascade-invalidate the target address and all descendants.
             # The target role and any role beneath it in the D/T/R tree may
             # have cached envelopes that depend on this role envelope.
-            self._cascade_invalidate(envelope.target_role_address)
+            self._cascade_invalidate(target_address)
 
         audit_action = (
             PactAuditAction.ENVELOPE_CREATED
@@ -3194,8 +3522,8 @@ class GovernanceEngine:
             create_pact_audit_details(
                 audit_action,
                 role_address=envelope.defining_role_address,
-                target_address=envelope.target_role_address,
-                reason=f"Role envelope '{envelope.id}' {'created' if is_new else 'modified'} for '{envelope.target_role_address}'",
+                target_address=target_address,
+                reason=f"Role envelope '{envelope.id}' {'created' if is_new else 'modified'} for '{target_address}'",
                 envelope_id=envelope.id,
                 is_passthrough=is_passthrough,
             ),
@@ -3211,10 +3539,14 @@ class GovernanceEngine:
                 delegation = DelegationRecord(
                     id=f"pact-deleg-{uuid4().hex[:8]}",
                     delegator_id=envelope.defining_role_address,
-                    delegatee_id=envelope.target_role_address,
+                    delegatee_id=target_address,
                     task_id="",
-                    capabilities_delegated=list(
-                        envelope.envelope.operational.allowed_actions
+                    # GH #2225: advertise only what enforcement would GRANT --
+                    # the permitted set (allowed - blocked) from the SAME shared
+                    # predicate verify_action consumes -- never the raw allowlist,
+                    # which over-states every blocked action as delegated.
+                    capabilities_delegated=delegated_capabilities(
+                        envelope.envelope.operational
                     ),
                     constraint_subset=[],
                     delegated_at=datetime.now(UTC),
@@ -3229,7 +3561,7 @@ class GovernanceEngine:
         # N5: Emit observation for role envelope change
         self._emit_observation(
             event_type="envelope_change",
-            role_address=envelope.target_role_address,
+            role_address=target_address,
             level="info",
             payload={
                 "envelope_id": envelope.id,
@@ -3251,20 +3583,51 @@ class GovernanceEngine:
             envelope: The TaskEnvelope to set.
 
         Raises:
+            PactError: If ``parent_envelope_id`` names a role envelope that
+                does not exist.
             MonotonicTighteningError: If the task envelope is wider than the
                 parent role envelope.
         """
         with self._lock:
-            # Validate monotonic tightening: task envelope cannot be wider
-            # than the parent role envelope.
-            parent_role_env = self._find_role_envelope_by_id_locked(
-                envelope.parent_envelope_id
-            )
-            if parent_role_env is not None:
+            # SECURITY: a NAMED parent that does not exist is not the same as
+            # NO parent, and the two must be treated oppositely. The lookup
+            # returns None for both, so the old `if parent is not None` guard
+            # silently skipped monotonic tightening for a caller who asserted
+            # an authority that does not exist -- persisting a task envelope
+            # wider than any envelope it claimed to narrow. The distinction is
+            # therefore made BEFORE the lookup, on whether an id was supplied
+            # at all. Sibling site: set_role_envelope, which resolves
+            # defining_role_address through _resolve_role_address for the same
+            # reason.
+            if envelope.parent_envelope_id:
+                parent_role_env = self._find_role_envelope_by_id_locked(
+                    envelope.parent_envelope_id
+                )
+                if parent_role_env is None:
+                    raise PactError(
+                        f"Cannot set task envelope '{envelope.id}': parent "
+                        f"envelope id '{envelope.parent_envelope_id}' does not "
+                        f"match any role envelope in this organization",
+                        details={
+                            "envelope_id": envelope.id,
+                            "task_id": envelope.task_id,
+                            "parent_envelope_id": envelope.parent_envelope_id,
+                        },
+                    )
+                # Validate monotonic tightening: task envelope cannot be wider
+                # than the parent role envelope.
                 RoleEnvelope.validate_tightening(
                     parent_envelope=parent_role_env.envelope,
                     child_envelope=envelope.envelope,
                 )
+            # An EMPTY parent_envelope_id is the only expressible "this task
+            # envelope narrows no role envelope" (the field is a required str
+            # with no None form). There is nothing to tighten against, and it
+            # cannot widen enforcement: compute_effective_envelope INTERSECTS
+            # the task envelope with every ancestor role envelope
+            # (envelopes.py:782-787), measured at 100.0 for a $1M task envelope
+            # under a $100 role envelope. Only a non-empty id asserts an
+            # authority, and only an assertion can be false.
             self._envelope_store.save_task_envelope(envelope)
 
             # N2: Invalidate any cached envelope entries that match this task_id.
@@ -3302,8 +3665,12 @@ class GovernanceEngine:
                     delegator_id=envelope.parent_envelope_id,
                     delegatee_id=envelope.task_id,
                     task_id=envelope.task_id,
-                    capabilities_delegated=list(
-                        envelope.envelope.operational.allowed_actions
+                    # GH #2225: same shared derivation as the role-envelope site
+                    # above -- the permitted set (allowed - blocked), never the
+                    # raw allowlist. Fixing one site and not this one would leave
+                    # the task-delegation record diverging on its own.
+                    capabilities_delegated=delegated_capabilities(
+                        envelope.envelope.operational
                     ),
                     constraint_subset=[],
                     delegated_at=datetime.now(UTC),
@@ -3365,7 +3732,7 @@ class GovernanceEngine:
 
         with self._lock:
             # Validate the vacant role exists and is actually vacant
-            node = self._compiled_org.nodes.get(vacant_role)
+            node = self._compiled_org.get_role_node(vacant_role)
             if node is None:
                 raise PactError(
                     f"Vacant role address '{vacant_role}' not found in org",
@@ -3378,7 +3745,7 @@ class GovernanceEngine:
                 )
 
             # Validate the acting role exists
-            acting_node = self._compiled_org.nodes.get(acting_role)
+            acting_node = self._compiled_org.get_role_node(acting_role)
             if acting_node is None:
                 raise PactError(
                     f"Acting role address '{acting_role}' not found in org",
@@ -3386,7 +3753,7 @@ class GovernanceEngine:
                 )
 
             # Validate the designating role exists
-            designator_node = self._compiled_org.nodes.get(designated_by)
+            designator_node = self._compiled_org.get_role_node(designated_by)
             if designator_node is None:
                 raise PactError(
                     f"Designating role address '{designated_by}' not found in org",
@@ -3656,16 +4023,28 @@ class GovernanceEngine:
     def verify_audit_integrity(self) -> tuple[bool, str | None]:
         """Walk the audit chain and verify all content_hash and chain_hash values.
 
-        If no SQLite audit log is configured (memory backend), returns
-        (True, None) -- vacuously valid because there are no entries to verify.
+        Fails CLOSED when there is nothing to verify (#2221). If no SQLite audit
+        log is configured (memory backend), this returns ``(False, <reason>)``:
+        "no audit log is configured" is a DIFFERENT fact from "the audit log is
+        intact", and returning ``(True, None)`` for both made an unaudited engine
+        indistinguishable from a verified one at the only field callers gate on.
+        The reason string names the configuration cause, so a caller that
+        legitimately runs unaudited can tell it apart from a tamper finding.
 
         Returns:
-            A tuple (is_valid, error_message). is_valid is True if the chain
-            is intact. error_message describes the first violation found, or
-            None if the chain is valid.
+            A tuple (is_valid, error_message). is_valid is True only when a
+            configured audit log was walked and every hash verified.
+            error_message describes the first violation found, or the reason
+            verification could not run; None only when the chain is valid.
         """
         if self._sqlite_audit_log is None:
-            return (True, None)
+            return (
+                False,
+                "no SQLite audit log configured (memory backend): audit "
+                "integrity is unverifiable (fail-closed). This is NOT a tamper "
+                "finding -- configure store_backend='sqlite' to enable "
+                "verification.",
+            )
         # _sqlite_audit_log is typed Any | None; pin the return shape.
         result: tuple[bool, str | None] = self._sqlite_audit_log.verify_integrity()
         return result

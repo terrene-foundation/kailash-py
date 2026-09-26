@@ -87,15 +87,15 @@ def test_resolver_rejects_ipv6_loopback_and_link_local(
 
 
 @pytest.mark.parametrize(
-    "host",
+    "host,expected_reason",
     [
-        "::ffff:127.0.0.1",  # IPv4-mapped loopback
-        "::ffff:10.0.0.1",  # IPv4-mapped private
-        "::ffff:169.254.169.254",  # IPv4-mapped metadata
+        ("::ffff:127.0.0.1", "ipv4_mapped"),
+        ("::ffff:10.0.0.1", "ipv4_mapped"),
+        ("::ffff:169.254.169.254", "metadata_service"),
     ],
 )
 def test_resolver_rejects_ipv4_mapped_ipv6(
-    resolver: SafeDnsResolver, host: str
+    resolver: SafeDnsResolver, host: str, expected_reason: str
 ) -> None:
     """RFC 4291 IPv4-mapped IPv6 (::ffff:a.b.c.d) MUST be rejected --
     otherwise an attacker wraps a loopback in the v6 form to bypass a
@@ -103,13 +103,7 @@ def test_resolver_rejects_ipv4_mapped_ipv6(
     """
     with pytest.raises(InvalidEndpoint) as excinfo:
         resolver.check_host(host)
-    # The bucket now comes from the SAME classifier the parse-time gate uses,
-    # so these match `network_guard` exactly: `::ffff:169.254.169.254` buckets
-    # as `link_local` (the wrapper itself is link-local, and that candidate is
-    # tested before the embedded IPv4), while the SIIT / NAT64 wrapper forms
-    # bucket as `metadata_service`. The verdict is REJECT in every case; only
-    # the forensic bucket is asserted here.
-    assert excinfo.value.reason in {"ipv4_mapped", "metadata_service", "link_local"}
+    assert excinfo.value.reason == expected_reason
 
 
 def test_resolver_accepts_public_literal_ipv4(resolver: SafeDnsResolver) -> None:

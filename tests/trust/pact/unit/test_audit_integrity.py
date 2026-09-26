@@ -127,13 +127,21 @@ class TestAuditIntegrity:
         assert error is None
 
     def test_verify_audit_integrity_empty(self) -> None:
-        """Empty audit log should verify successfully."""
+        """An empty audit log fails CLOSED -- it is unverifiable, not verified (#2221).
+
+        This test previously asserted ``is_valid is True`` for an empty log,
+        pinning the defect as intended behaviour: a WIPED audit table returned
+        the identical ``(True, None)`` as a table whose every hash was walked
+        and checked. The wipe is the one case tamper detection exists to catch,
+        so the empty case must be distinguishable at the gated field.
+        """
         from kailash.trust.pact.stores.sqlite import SqliteAuditLog
 
         log = SqliteAuditLog(":memory:")
         is_valid, error = log.verify_integrity()
-        assert is_valid is True
-        assert error is None
+        assert is_valid is False
+        assert error is not None
+        assert "empty" in error.lower()
 
     def test_verify_audit_integrity_detects_tampered_content(self) -> None:
         """If details_json is modified, verify_integrity detects the mismatch."""
@@ -224,12 +232,20 @@ class TestEngineAuditIntegrity:
         assert error is None
 
     def test_engine_verify_audit_integrity_no_audit_log(self) -> None:
-        """Engine without audit log should report integrity as valid (no entries)."""
+        """An engine with no audit log cannot claim integrity (#2221).
+
+        Previously asserted ``(True, None)`` -- "no audit log is configured" and
+        "the audit log is intact" are different facts, and collapsing them meant
+        an entirely unaudited engine was indistinguishable from a verified one
+        at the only field callers gate on. The reason string names the
+        configuration cause so it is still distinguishable from a tamper finding.
+        """
         from kailash.trust.pact.engine import GovernanceEngine
 
         org = _make_compiled_org("no-audit-test")
         engine = GovernanceEngine(org)  # memory backend, no sqlite audit log
 
         is_valid, error = engine.verify_audit_integrity()
-        assert is_valid is True
-        assert error is None
+        assert is_valid is False
+        assert error is not None
+        assert "unverifiable" in error.lower()

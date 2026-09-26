@@ -30,6 +30,8 @@ from dataclasses import dataclass
 
 import numpy as np
 import pytest
+from sklearn.ensemble import RandomForestClassifier
+
 from kailash_ml.engines.model_registry import ModelVersion
 from kailash_ml.errors import (
     InferenceServerError,
@@ -39,7 +41,6 @@ from kailash_ml.errors import (
 )
 from kailash_ml.serving import InferenceServer, InferenceServerConfig, ServeHandle
 from kailash_ml.types import FeatureField, FeatureSchema, ModelSignature
-from sklearn.ensemble import RandomForestClassifier
 
 # ---------------------------------------------------------------------------
 # Fixtures / fakes

@@ -606,6 +606,12 @@ function formatFleetDrainAdvisory(verdict) {
       "  A lane freeing is a REFILL trigger, not merely a result to read. Recount and dispatch, or",
       "  state which bound (dependency, structural human gate, capacity, prudence, or a converged",
       "  clean stop) makes the remaining rows non-launchable.",
+      "  PACK THE REFILL TO DEPTH — `orchestration-launch-ledger.md` MUST-6: the ceiling counted",
+      `  above binds LANES (worktrees/branches/PRs), NEVER agents. ${verdict.dispatchable} dispatchable rows do`,
+      "  NOT need one lane each. Give the refilled lane a TASK SET of every co-landable row and let",
+      "  it fan out its own sub-agents; a lane carrying one task while same-scope rows stay open is",
+      "  under-packed. Bounds that still hold: per-AGENT shard budget, adaptive concurrency back-off,",
+      "  and joint revert-safety on the lane's single branch.",
     );
   } else {
     lines.push(

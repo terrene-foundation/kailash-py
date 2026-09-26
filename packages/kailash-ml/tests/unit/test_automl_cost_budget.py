@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 
 import pytest
+
 from kailash_ml.automl.cost_budget import (
     BudgetExceeded,
     CostRecord,

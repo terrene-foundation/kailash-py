@@ -263,7 +263,7 @@ def _validate_identifier(name: str, *, max_length: int) -> None:
             f"(fingerprint={_identifier_fingerprint(name)}): "
             f"exceeds {max_length}-char limit (len={len(name)})"
         )
-    if not _IDENTIFIER_RE.match(name):
+    if not _IDENTIFIER_RE.fullmatch(name):
         raise IdentifierError(
             f"Invalid SQL identifier "
             f"(fingerprint={_identifier_fingerprint(name)}): "
@@ -304,7 +304,7 @@ def _quote_identifier_impl(
             f"(fingerprint={_identifier_fingerprint(name)}): "
             f"exceeds {max_length}-char limit (len={len(name)})"
         )
-    if not _IDENTIFIER_RE.match(name):
+    if not _IDENTIFIER_RE.fullmatch(name):
         raise IdentifierError(
             f"Invalid SQL identifier "
             f"(fingerprint={_identifier_fingerprint(name)}): "

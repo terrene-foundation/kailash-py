@@ -8,7 +8,7 @@ responses when limits are exceeded.
 import fnmatch
 import logging
 from datetime import datetime, timezone
-from typing import Callable, Optional
+from typing import Callable, Mapping, Optional
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -18,7 +18,7 @@ from kailash.trust.rate_limit.backends.base import RateLimitBackend
 from kailash.trust.rate_limit.backends.memory import InMemoryBackend
 from kailash.trust.rate_limit.config import RateLimitConfig
 from kailash.trust.rate_limit.result import RateLimitResult
-from kailash.utils.url_credentials import fingerprint_secret
+from nexus.auth.rate_limit.fingerprint import build_identifier_fingerprinter
 from nexus.extractors.proxy import client_key_for_request
 
 logger = logging.getLogger(__name__)
@@ -38,6 +38,16 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     5. If allowed: process request and add rate limit headers
     6. On backend failure: fail-open (allow) with warning log
 
+    Identifier privacy:
+        A 429 is logged with a KEYED tag for the identifier, never the
+        identifier itself. The key comes from
+        ``NEXUS_RATE_LIMIT_FINGERPRINT_KEY``; set the same value on every node
+        so tags correlate fleet-wide. With the variable unset the tag is still
+        keyed -- with a process-local random key -- and a warning at startup
+        names the degraded correlation. See
+        :mod:`nexus.auth.rate_limit.fingerprint` for the construction and for
+        why rate-limit state is unaffected by key rotation.
+
     Example:
         >>> from fastapi import FastAPI
         >>> from nexus.auth import RateLimitConfig
@@ -56,6 +66,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         app,
         config: RateLimitConfig,
         identifier_extractor: Optional[Callable[[Request], str]] = None,
+        env: Optional[Mapping[str, str]] = None,
     ):
         """Initialize rate limit middleware.
 
@@ -63,12 +74,23 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             app: FastAPI/Starlette application
             config: Rate limit configuration
             identifier_extractor: Custom function to extract identifier from request
+            env: Environment mapping the identifier-tag key is read from.
+                Defaults to ``os.environ``; injectable for tests.
+
+        Raises:
+            InvalidFingerprintKeyError: ``NEXUS_RATE_LIMIT_FINGERPRINT_KEY`` is
+                set but shorter than 32 bytes. Raised HERE, at startup, rather
+                than on the request path -- a misconfigured privacy control
+                must not first surface as a 500 in place of a 429.
         """
         super().__init__(app)
         self.config = config
         self._identifier_extractor = (
             identifier_extractor or self._default_identifier_extractor
         )
+        # Built at startup so the ephemeral-key WARN lands once, at boot,
+        # rather than once per throttled request (issue #2171).
+        self._fingerprint = build_identifier_fingerprinter(env)
         self._backend: Optional[RateLimitBackend] = None
         self._initialized = False
 
@@ -181,11 +203,30 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
             # identifier is whatever _identifier_extractor returns -- an IP or
             # user id (PII), and by convention sometimes an API key. Log a
-            # fingerprint so operators can still correlate repeat offenders;
-            # the raw value stays confined to the rate-limit backend key.
+            # KEYED tag (HMAC-SHA256 under a deployment-scoped secret) so
+            # operators can still correlate repeat offenders; the raw value
+            # stays confined to the rate-limit backend key.
+            #
+            # The tag MUST stay keyed. Until #2171 this was an unkeyed BLAKE2b
+            # digest, and the comment above it claimed the same confidentiality
+            # this line now actually provides: the whole IPv4 space is ~2**32
+            # values, so an unkeyed fast hash is reversible by exhaustive
+            # search in hours, and the tag was equivalent to the plaintext IP
+            # for any log reader. Never log `identifier` itself next to the
+            # tag -- that hands over the pre-image and voids the construction.
+            #
+            # RESIDUAL, stated rather than glossed: `path` is logged on this
+            # same line, so in a URL layout that embeds the principal
+            # (/api/users/alice/profile) the pair re-establishes the
+            # tag -> principal mapping for the `user:` branch. The tag still
+            # protects the `ip:` branch, which is the enumerable case #2171 was
+            # filed for, and `path` is what makes the line actionable for an
+            # operator. A deployment that puts identities in paths and needs
+            # the stronger property should pass an `identifier_extractor` and
+            # log a route TEMPLATE rather than the concrete path.
             logger.warning(
                 "Rate limit exceeded: identifier_fp=%s, path=%s, retry_after=%ds",
-                fingerprint_secret(str(identifier)),
+                self._fingerprint(str(identifier)),
                 path,
                 retry_after,
             )

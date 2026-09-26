@@ -23,10 +23,10 @@ from unittest.mock import AsyncMock
 import numpy as np
 import polars as pl
 import pytest
-from kailash_ml.engines.drift_monitor import DriftMonitor
-from kailash_ml.errors import TenantRequiredError
 
 from kailash.db.connection import ConnectionManager
+from kailash_ml.engines.drift_monitor import DriftMonitor
+from kailash_ml.errors import TenantRequiredError
 
 
 @pytest.fixture

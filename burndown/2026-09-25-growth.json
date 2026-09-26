@@ -1,0 +1,7 @@
+{
+  "_note": "IDs present at census but absent from frozen session baseline. Never move these into the original register.",
+  "_generated": "2026-09-25",
+  "_authority": "agent",
+  "_id_convention": "ISSUE-<GitHub number> or FOREST-F<standing ledger number>",
+  "items": []
+}

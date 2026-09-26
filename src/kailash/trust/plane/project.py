@@ -40,9 +40,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from kailash.trust._locking import atomic_write as _atomic_write
-from kailash.trust._locking import file_lock as _file_lock
-from kailash.trust._locking import safe_read_json as _safe_read_json
+from kailash.trust._locking import (
+    atomic_write as _atomic_write,
+    file_lock as _file_lock,
+    safe_read_json as _safe_read_json,
+)
 from kailash.trust.authority import AuthorityPermission, OrganizationalAuthority
 from kailash.trust.chain import (
     ActionResult,

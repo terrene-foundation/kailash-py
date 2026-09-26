@@ -21,6 +21,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+
 from kailash_ml.engine import _build_auto_callbacks
 
 

@@ -7,6 +7,7 @@ documentation, and data through the MCP protocol.
 import asyncio
 import json
 import os
+import re
 import sys
 from typing import Any, Dict
 from unittest.mock import AsyncMock, Mock, patch
@@ -21,7 +22,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 @pytest.fixture
 def mock_server():
-    """Create a mock MCP server."""
+    """Create a mock MCP server that routes URIs the way FastMCP does.
+
+    ``_read`` reproduces ``mcp.server.fastmcp.resources.templates``'
+    ``ResourceTemplate.matches`` verbatim -- ``{param}`` compiles to
+    ``(?P<param>[^/]+)`` and the handler is called with the captured groups as
+    keyword arguments. Before #2056 this fixture stored handlers under a
+    ``scheme://*`` key and tests fetched them by that literal string, so the
+    tests never exercised URI-to-handler routing at all and stayed green while
+    real FastMCP refused the same registrations outright.
+    """
     server = Mock()
     server.resource = Mock()
 
@@ -36,6 +46,17 @@ def mock_server():
         return decorator
 
     server.resource = mock_resource
+
+    async def _read(uri: str):
+        """Route a concrete URI to its registered template handler."""
+        for template, func in server._resources.items():
+            pattern = template.replace("{", "(?P<").replace("}", ">[^/]+)")
+            match = re.match(f"^{pattern}$", uri)
+            if match:
+                return await func(**match.groupdict())
+        raise KeyError(f"No registered resource template matches {uri!r}")
+
+    server._read = _read
     return server
 
 
@@ -94,7 +115,7 @@ class TestWorkflowResources:
         mock_nexus._workflows["test_workflow"] = workflow
 
         # Get the resource handler
-        handler = mock_server._resources["workflow://*"]
+        handler = mock_server._read
 
         # Call handler
         result = await handler("workflow://test_workflow")
@@ -122,7 +143,7 @@ class TestWorkflowResources:
         self, mock_server, mock_nexus, resource_manager
     ):
         """Test retrieving a non-existent workflow resource."""
-        handler = mock_server._resources["workflow://*"]
+        handler = mock_server._read
 
         result = await handler("workflow://nonexistent")
 
@@ -148,7 +169,7 @@ class TestWorkflowResources:
         }
         mock_nexus._workflows["metadata_workflow"] = workflow
 
-        handler = mock_server._resources["workflow://*"]
+        handler = mock_server._read
         result = await handler("workflow://metadata_workflow")
 
         content = json.loads(result["content"])
@@ -162,7 +183,7 @@ class TestDocumentationResources:
     @pytest.mark.asyncio
     async def test_quickstart_documentation(self, mock_server, resource_manager):
         """Test retrieving quickstart documentation."""
-        handler = mock_server._resources["docs://*"]
+        handler = mock_server._read
 
         result = await handler("docs://quickstart")
 
@@ -174,7 +195,7 @@ class TestDocumentationResources:
     @pytest.mark.asyncio
     async def test_api_documentation(self, mock_server, resource_manager):
         """Test retrieving API documentation."""
-        handler = mock_server._resources["docs://*"]
+        handler = mock_server._read
 
         result = await handler("docs://api")
 
@@ -186,7 +207,7 @@ class TestDocumentationResources:
     @pytest.mark.asyncio
     async def test_mcp_documentation(self, mock_server, resource_manager):
         """Test retrieving MCP documentation."""
-        handler = mock_server._resources["docs://*"]
+        handler = mock_server._read
 
         result = await handler("docs://mcp")
 
@@ -198,7 +219,7 @@ class TestDocumentationResources:
     @pytest.mark.asyncio
     async def test_documentation_not_found(self, mock_server, resource_manager):
         """Test retrieving non-existent documentation."""
-        handler = mock_server._resources["docs://*"]
+        handler = mock_server._read
 
         result = await handler("docs://nonexistent")
 
@@ -212,28 +233,46 @@ class TestDataResources:
     """Test data resources with security."""
 
     @pytest.mark.asyncio
-    async def test_data_resource_security_check(self, mock_server, resource_manager):
-        """Test security checks for data resources."""
-        handler = mock_server._resources["data://*"]
+    @pytest.mark.parametrize(
+        "path",
+        ["../etc/passwd", ".env", "secret_key.pem", "passwords.txt"],
+    )
+    async def test_forbidden_data_paths_are_denied(
+        self, mock_server, resource_manager, path
+    ):
+        """Deny-listed paths that ROUTE are rejected by the allow-list check.
 
-        # Try to access forbidden paths
-        forbidden_paths = [
-            "../etc/passwd",
-            "/etc/shadow",
-            ".env",
-            "secret_key.pem",
-            "passwords.txt",
-        ]
+        ``../etc/passwd`` routes as the three segments ``..``/``etc``/``passwd``
+        and is then caught by ``_is_allowed_resource``; the rest route as a
+        single segment and are caught the same way.
+        """
+        result = await mock_server._read(f"data://{path}")
 
-        for path in forbidden_paths:
-            result = await handler(f"data://{path}")
-            assert "error" in result
-            assert "Access denied" in result["error"]
+        assert "error" in result
+        assert "Access denied" in result["error"]
+        assert "content" not in result
+
+    @pytest.mark.asyncio
+    async def test_absolute_data_path_does_not_route_at_all(
+        self, mock_server, resource_manager
+    ):
+        """``data:///etc/shadow`` is unroutable, which is a STRONGER denial.
+
+        A template parameter is ``[^/]+`` -- one or more non-slash characters --
+        so the empty first segment produced by the leading ``/`` matches no
+        registered template. The request never reaches a handler, so no content
+        can be returned regardless of what the allow-list would have decided.
+        Asserted explicitly rather than folded into the deny-list case above,
+        because the two paths reject for genuinely different reasons and a test
+        that blurred them would not notice if one stopped working.
+        """
+        with pytest.raises(KeyError):
+            await mock_server._read("data:///etc/shadow")
 
     @pytest.mark.asyncio
     async def test_data_resource_examples(self, mock_server, resource_manager):
         """Test predefined example data resources."""
-        handler = mock_server._resources["data://*"]
+        handler = mock_server._read
 
         result = await handler("data://examples/sample.json")
 
@@ -246,35 +285,77 @@ class TestDataResources:
 
     @pytest.mark.asyncio
     async def test_data_resource_file_read(
-        self, mock_server, resource_manager, tmp_path
+        self, mock_server, resource_manager, tmp_path, monkeypatch
     ):
-        """Test reading allowed data files."""
-        # Use a real temporary directory and file
+        """Test reading allowed data files.
+
+        Uses a REAL ``./data`` directory reached by changing the working
+        directory, rather than monkeypatching ``os.path.abspath``. The old
+        version stubbed that one function, which meant the test could not
+        observe path resolution at all -- it would have passed identically
+        against a containment check that resolved nothing.
+        """
         data_dir = tmp_path / "data"
         data_dir.mkdir()
-        config_file = data_dir / "config.json"
-        config_file.write_text('{"test": "data"}')
+        (data_dir / "config.json").write_text('{"test": "data"}')
+        monkeypatch.chdir(tmp_path)
 
-        # Patch the safe_base to use our temp directory
-        with patch("os.path.abspath") as mock_abspath:
-            # Setup abspath to return proper paths
-            def abspath_side_effect(path):
-                if path == "./data":
-                    return str(data_dir)
-                elif path.startswith(str(data_dir)):
-                    return path
-                else:
-                    # For os.path.join(safe_base, resource_path)
-                    return str(data_dir / path.split("/")[-1])
+        result = await mock_server._read("data://config.json")
 
-            mock_abspath.side_effect = abspath_side_effect
+        assert result["uri"] == "data://config.json"
+        assert result["mimeType"] == "application/json"
+        assert result["content"] == '{"test": "data"}'
 
-            handler = mock_server._resources["data://*"]
-            result = await handler("data://config.json")
+    @pytest.mark.asyncio
+    async def test_data_resource_symlink_escape_is_refused(
+        self, mock_server, resource_manager, tmp_path, monkeypatch
+    ):
+        """A symlink inside ./data pointing outside it must NOT be readable.
 
-            assert result["uri"] == "data://config.json"
-            assert result["mimeType"] == "application/json"
-            assert result["content"] == '{"test": "data"}'
+        This is the case a lexical containment check cannot see: the path is
+        lexically inside ./data, so `abspath(...).startswith(safe_base)` is
+        True, and only resolving the REAL path reveals the escape
+        (rules/security.md Path Containment).
+        """
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        secret = tmp_path / "outside.txt"
+        secret.write_text("TOP SECRET")
+        (data_dir / "innocent.txt").symlink_to(secret)
+        monkeypatch.chdir(tmp_path)
+
+        result = await mock_server._read("data://innocent.txt")
+
+        assert "TOP SECRET" not in str(result)
+        assert "content" not in result
+        assert "error" in result
+
+    def test_sibling_directory_prefix_is_not_treated_as_contained(
+        self, resource_manager, tmp_path, monkeypatch
+    ):
+        """``/x/database`` must not count as inside ``/x/data``.
+
+        `startswith` is a PREFIX test, not a boundary test, so a sibling whose
+        name merely extends the base satisfies it:
+        ``"/x/database/leak.txt".startswith("/x/data")`` is True.
+
+        Calls ``_get_data_content`` DIRECTLY, bypassing ``_is_allowed_resource``.
+        That is deliberate and is the only way this assertion can discriminate:
+        the allow-list rejects ``..`` before the containment check is ever
+        reached, so a test routed through the resource handler would pass
+        whether the containment check were sound or not. Containment is
+        defense-in-depth and must hold on its own -- if the allow-list is ever
+        relaxed or reordered, this check becomes the only thing left.
+        """
+        (tmp_path / "data").mkdir()
+        sibling = tmp_path / "database"
+        sibling.mkdir()
+        (sibling / "leak.txt").write_text("SIBLING SECRET")
+        monkeypatch.chdir(tmp_path)
+
+        content = resource_manager._get_data_content("../database/leak.txt")
+
+        assert content is None, "sibling directory sharing the base's prefix was read"
 
     def test_mime_type_detection(self, resource_manager):
         """Test MIME type detection for various file types."""
@@ -304,7 +385,7 @@ class TestConfigurationResources:
         self, mock_server, mock_nexus, resource_manager
     ):
         """Test platform configuration resource."""
-        handler = mock_server._resources["config://*"]
+        handler = mock_server._read
 
         result = await handler("config://platform")
 
@@ -327,7 +408,7 @@ class TestConfigurationResources:
         # Add test workflows
         mock_nexus._workflows = {"workflow1": Mock(), "workflow2": Mock()}
 
-        handler = mock_server._resources["config://*"]
+        handler = mock_server._read
         result = await handler("config://workflows")
 
         config = json.loads(result["content"])
@@ -341,7 +422,7 @@ class TestConfigurationResources:
         """Test limits configuration resource."""
         mock_nexus.rate_limit_config = {"default": 100}
 
-        handler = mock_server._resources["config://*"]
+        handler = mock_server._read
         result = await handler("config://limits")
 
         config = json.loads(result["content"])
@@ -352,7 +433,7 @@ class TestConfigurationResources:
     @pytest.mark.asyncio
     async def test_unknown_configuration(self, mock_server, resource_manager):
         """Test unknown configuration key."""
-        handler = mock_server._resources["config://*"]
+        handler = mock_server._read
 
         result = await handler("config://unknown")
 
@@ -367,7 +448,7 @@ class TestHelpResources:
     @pytest.mark.asyncio
     async def test_getting_started_help(self, mock_server, resource_manager):
         """Test getting started help."""
-        handler = mock_server._resources["help://*"]
+        handler = mock_server._read
 
         result = await handler("help://getting-started")
 
@@ -378,7 +459,7 @@ class TestHelpResources:
     @pytest.mark.asyncio
     async def test_workflows_help(self, mock_server, resource_manager):
         """Test workflows help."""
-        handler = mock_server._resources["help://*"]
+        handler = mock_server._read
 
         result = await handler("help://workflows")
 
@@ -389,7 +470,7 @@ class TestHelpResources:
     @pytest.mark.asyncio
     async def test_troubleshooting_help(self, mock_server, resource_manager):
         """Test troubleshooting help."""
-        handler = mock_server._resources["help://*"]
+        handler = mock_server._read
 
         result = await handler("help://troubleshooting")
 
@@ -401,7 +482,7 @@ class TestHelpResources:
     @pytest.mark.asyncio
     async def test_unknown_help_topic(self, mock_server, resource_manager):
         """Test unknown help topic."""
-        handler = mock_server._resources["help://*"]
+        handler = mock_server._read
 
         result = await handler("help://unknown-topic")
 
@@ -416,18 +497,48 @@ class TestCustomResourceRegistration:
     """Test custom resource registration."""
 
     def test_register_custom_resource(self, mock_server, resource_manager):
-        """Test registering a custom resource handler."""
+        """Test registering a custom resource handler.
 
-        # Define custom handler
-        async def custom_handler(uri: str) -> Dict[str, Any]:
-            return {"uri": uri, "mimeType": "text/plain", "content": "Custom resource"}
+        Uses the ``custom://{name}`` TEMPLATE form. This test previously
+        registered ``custom://*`` against a handler taking ``uri``, which the
+        mock accepts and official FastMCP rejects with ``ValueError: Mismatch
+        between URI parameters set() and function parameters {'uri'}`` -- so it
+        was green while demonstrating the exact pattern that broke #2056.
+        """
+
+        # Define custom handler whose parameter matches the template's
+        async def custom_handler(name: str) -> Dict[str, Any]:
+            return {
+                "uri": f"custom://{name}",
+                "mimeType": "text/plain",
+                "content": "Custom resource",
+            }
 
         # Register custom resource
-        resource_manager.register_custom_resource("custom://*", custom_handler)
+        resource_manager.register_custom_resource("custom://{name}", custom_handler)
 
         # Should be registered
-        assert "custom://*" in mock_server._resources
-        assert mock_server._resources["custom://*"] == custom_handler
+        assert "custom://{name}" in mock_server._resources
+        assert mock_server._resources["custom://{name}"] == custom_handler
+
+    @pytest.mark.asyncio
+    async def test_registered_custom_resource_routes(
+        self, mock_server, resource_manager
+    ):
+        """A registered custom template actually routes a concrete URI to it."""
+
+        async def custom_handler(name: str) -> Dict[str, Any]:
+            return {
+                "uri": f"custom://{name}",
+                "mimeType": "text/plain",
+                "content": name,
+            }
+
+        resource_manager.register_custom_resource("custom://{name}", custom_handler)
+
+        result = await mock_server._read("custom://widget")
+        assert result["uri"] == "custom://widget"
+        assert result["content"] == "widget"
 
 
 class TestWorkflowSchemaExtraction:

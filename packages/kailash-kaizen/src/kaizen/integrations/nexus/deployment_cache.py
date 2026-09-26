@@ -100,10 +100,18 @@ class DeploymentCache:
         # `kaizen/core/base_agent.py` and `kaizen/core/agents.py`). This
         # cache is defense-in-depth for the DEPLOY-time redundant-rebuild
         # cost, not the sole guarantor of freshness.
-        from kaizen.core._provider_env import detect_provider_from_env
+        #
+        # #2220 residual: the non-dispatching mirror of the shared resolver,
+        # not `detect_provider_from_env()`. Same reasoning as the sibling key
+        # in `kaizen/core/mixins/caching_mixin.py` — a cache key must mirror
+        # what `to_workflow()` actually resolves, and since #2220 that is
+        # model-keyed with the environment out of it.
+        from kaizen.core._provider_env import describe_node_provider
 
         llm_provider = getattr(config, "llm_provider", None)
-        resolved_provider = llm_provider or detect_provider_from_env()
+        resolved_provider = describe_node_provider(
+            getattr(config, "model", None), explicit=llm_provider
+        )
 
         # #1948: key on the agent's REAL EFFECTIVE system prompt plus
         # temperature. Two agents that share name + provider + model +

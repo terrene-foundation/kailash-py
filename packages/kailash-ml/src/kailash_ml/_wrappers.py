@@ -47,8 +47,8 @@ from kailash_ml._results import RegisterResult, ServeResult
 # this module so ``from kailash_ml._wrappers import autolog`` works
 # alongside the rest of Group 1. The ``from kailash_ml import autolog``
 # path in ``__init__.py`` pulls them from here.
-from kailash_ml.autolog import autolog as _autolog_cm
 from kailash_ml.autolog import autolog_fn  # noqa: F401 — sibling surface
+from kailash_ml.autolog import autolog as _autolog_cm
 from kailash_ml.diagnostics import diagnose_classifier, diagnose_regressor
 from kailash_ml.diagnostics.dl import DLDiagnostics
 from kailash_ml.diagnostics.rag import RAGDiagnostics
@@ -57,10 +57,13 @@ from kailash_ml.engine import MLEngine
 from kailash_ml.errors import ModelRegistryError
 from kailash_ml.rl._rl_train import rl_train as _rl_train
 from kailash_ml.tracking import erase_subject as _erase_subject  # noqa: F401
+
+# isort: split
 from kailash_ml.tracking import track as _track_cm
 
 if TYPE_CHECKING:
     import polars as pl
+
     from kailash_ml.engines.drift_monitor import DriftMonitor
     from kailash_ml.tracking.runner import ExperimentRun
 

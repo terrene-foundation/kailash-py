@@ -632,10 +632,10 @@ def test_audit_file_and_directory_are_owner_only(config, tmp_path):
     """
     A default-on audit sink in the working directory must not be world-readable.
 
-    `audit_log_path` defaults to a RELATIVE `.kaizen/audit.jsonl`, so enabling
-    audit by default writes into whatever directory the process happens to run
-    in. The trail records which agent did what, when, and the SHAPE of every
-    payload -- at 0o644 that is readable by every local account.
+    The trail records which agent did what, when, and the SHAPE of every
+    payload -- at 0o644 that is readable by every local account. Since #2110
+    the default lands in the XDG state directory rather than the CWD, which
+    narrows who can reach it but does not change the required mode.
     """
     import stat
 
@@ -882,15 +882,24 @@ def test_agent_constructs_on_a_read_only_filesystem(unwritable_dir, monkeypatch)
     """
     `Agent()` must still construct when the CWD is not writable.
 
-    `audit_log_path` defaults to a RELATIVE `.kaizen/audit.jsonl`, so the
-    audit branch writes into whatever directory the process runs in. Under
-    Kubernetes `readOnlyRootFilesystem: true`, a distroless image, or Lambda's
-    read-only `/var/task`, that `mkdir` raises -- and it sits ahead of
-    `Agent.__init__`'s own try, so before the guard it aborted construction.
-    This is the whole-object assertion; the test above pins the warning.
+    Under Kubernetes `readOnlyRootFilesystem: true`, a distroless image, or
+    Lambda's read-only `/var/task`, the audit branch's `mkdir` raises -- and
+    it sits ahead of `Agent.__init__`'s own try, so before the guard it
+    aborted construction. This is the whole-object assertion; the test above
+    pins the warning.
+
+    #2110 -- the default audit location is now the XDG state directory, not
+    the CWD, so `chdir` into an unwritable directory NO LONGER reaches the
+    failing write on its own: the agent would happily write to a perfectly
+    writable state dir and this test would pass without ever exercising the
+    guard it exists to pin. `XDG_STATE_HOME` is therefore pointed AT the
+    unwritable directory, which is what actually reproduces the read-only
+    deployment. Leaving the `chdir` alone here would have left a green test
+    asserting nothing.
     """
     from kaizen.agent import Agent
 
+    monkeypatch.setenv("XDG_STATE_HOME", str(unwritable_dir))
     monkeypatch.chdir(unwritable_dir)
 
     agent = Agent(model=MODEL, llm_provider=PROVIDER, show_startup_banner=False)

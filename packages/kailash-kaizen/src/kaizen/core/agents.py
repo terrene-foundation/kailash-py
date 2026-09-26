@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 from kaizen.errors import EnvModelMissing
 
-from ._provider_env import detect_provider_from_env as _detect_provider_from_env
+from ._provider_env import resolve_node_provider
 
 # PERFORMANCE OPTIMIZATION: Lazy loading for Kailash imports
 # WorkflowBuilder imports can bring heavy dependencies
@@ -1182,15 +1182,28 @@ CRITICAL RULES:
         if "provider" in self.config:
             return self.config["provider"]
 
-        # Env-first fallback (openai -> anthropic -> None when keyless). This IS
-        # the canonical order every other LLMAgentNode-param-building site in
-        # the Agent deployment surface mirrors via `detect_provider_from_env`
-        # (`kaizen/core/_provider_env.py`) — kept inline here (rather than
-        # delegating) so this method stays the single documented source of
-        # the contract; the shared helper exists for OTHER call sites. Returns
-        # None when keyless so the unresolved provider fails loud at the node
-        # (#1952 closes the keyless-mock residual of #1947).
-        return _detect_provider_from_env()
+        # #2220 residual: resolve from the MODEL, never from the environment.
+        #
+        # This used to return `detect_provider_from_env()` — "which credentials
+        # exist" — and `_build_workflow()` writes that answer into the same
+        # `node_params` dict as `self.config["model"]`. So a credential stood
+        # in for a statement about the model's vendor. Measured on this tree
+        # before the fix, via the public `Kaizen.create_agent()` dict-config
+        # path:
+        #
+        #     Agent(config={"model": "llama-3.1"})._get_provider_for_config()
+        #       -> 'openai'      with OPENAI_API_KEY exported
+        #       -> 'anthropic'   with ANTHROPIC_API_KEY exported
+        #       -> None          keyless
+        #
+        # A local model's prompt therefore left the machine, billed, with no
+        # log line or warning, following whichever key happened to be set.
+        # #2220's primary fix closed this at `resolve_agent_provider` but that
+        # resolver has one production consumer (`AgentConfig`); this door was
+        # still open. It now shares the one predicate.
+        return resolve_node_provider(
+            self.config.get("model"), component="Agent._get_provider_for_config"
+        )
 
     def _is_mock_provider_active(self) -> bool:
         """

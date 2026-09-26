@@ -31,20 +31,24 @@ python -c "import m; print(len(m._DANGEROUS_NODE_TYPES), sorted(m._DANGEROUS_NOD
 
 **Why:** A durable artifact is read by sessions and users with no way to distinguish a verified claim from a reconstructed one; the verification command costs seconds, the correction PR costs a cycle. Evidence: two correction PRs in one release cycle (#1187, #1188 — see § Origin).
 
-### 2. Two Claim Sources Are Presumed False Until Re-Verified
+### 2. Three Claim Sources Are Presumed False Until Re-Verified
 
-(a) **Context-boundary reconstructions** — any claim carried across `/clear`, auto-compaction, resume, or sub-agent handoff (same epistemic shape as `zero-tolerance.md` Rule 1c). (b) **Truncated command output** — `tail -N` / `head -N` / `... | head` over the line carrying the cited value silently drops the datum. Writing either into a durable artifact without fresh re-verification is BLOCKED.
+(a) **Context-boundary reconstructions** — any claim carried across `/clear`, auto-compaction, resume, or sub-agent handoff (same epistemic shape as `zero-tolerance.md` Rule 1c). (b) **Truncated command output** — `tail -N` / `head -N` / `... | head` over the line carrying the cited value silently drops the datum. (c) **Selectively-omitted run results** — citing a run while dropping its failures, EVEN WHEN every omitted failure carries a believed-correct benign attribution. Attribution licenses an EXPLANATION, never a DELETION: cite the run's full verdict line, THEN attribute. Writing any of the three into a durable artifact without fresh re-verification is BLOCKED.
 
 ```bash
 # DO — re-derive after any context boundary; print the FULL collection
 python -c "import m; print(sorted(m.__all__), len(m.__all__))"
+# DO — cite the whole verdict line, then attribute the failures
+# "2 failed, 717 passed, 1 skipped, 176 deselected — both failures are a
+#  local-vs-pinned pyright skew, unrelated to this diff"
 
-# DO NOT — trust the summary or the truncated pipe
+# DO NOT — trust the summary, the truncated pipe, or the curated verdict
 # "the prior session established the 5-entrypoint surface"   ← reconstruction, presumed false
 # grep -A20 '_DANGEROUS' file.py | tail -8                   ← truncation, presumed false
+# "Verified — 717 passed, 176 deselected"                    ← omission; the run was RED
 ```
 
-**Why:** Compaction summaries paraphrase and invent structure ("5 surfaces" became 5 function names that never existed); truncated pipes are indistinguishable from complete output in the transcript. Both are unfalsifiable at read time — only a fresh ground-truth command is evidence.
+**Why:** Compaction summaries paraphrase and invent structure ("5 surfaces" became 5 function names that never existed); truncated pipes are indistinguishable from complete output in the transcript; and a curated verdict makes a RED run read GREEN to every later reader, which is worse than either — the omission is deliberate, so no fresh command will be run to catch it. Measured: a commit cited "Verified … 717 passed, 176 deselected" when the run was "2 failed, 717 passed, 1 skipped, 176 deselected". The attribution for those two was RIGHT; the presentation was not. All three are unfalsifiable at read time — only the full ground-truth output is evidence.
 
 ### 3. Structural Backstops Confirm AFTER The Write — They Are Not A Substitute
 
@@ -60,12 +64,21 @@ TestPyPI clean-venv import, post-publish verify, CI doc-sweeps, and review gates
 - "I'll verify if something breaks"
 - "The count is approximate anyway"
 - "The clean-venv check will catch it"
+- "The failures were unrelated to this diff"
+- "I attributed them correctly, so quoting them adds noise"
+- "The relevant tests all passed"
+- "Citing the failures would just confuse the reader"
+- "It's red for an environmental reason, not a real one"
 
 ## MUST NOT
 
 - Write an API/symbol/count/membership claim into a CHANGELOG, commit body, PR description, doc, spec, or rule without a same-session ground-truth verification
 
 **Why:** The originating failure mode — both incidents in § Origin were verbatim carry-forwards of unverified claims.
+
+- Cite a test or build run in a durable artifact with its failures omitted, however benign the attribution
+
+**Why:** The omission is deliberate, so unlike a truncation nobody re-runs the command to catch it — the RED run reads GREEN permanently (Rule 2c).
 
 - Treat a verified-then-compacted claim as still verified
 
@@ -93,3 +106,5 @@ TestPyPI clean-venv import, post-publish verify, CI doc-sweeps, and review gates
 ## Origin
 
 2026-05-27 release cycle, two incidents — both caught before consumer impact, each costing an extra correction PR: (1) a CHANGELOG Added section (commit b9b0a71ed) listed 5 `kailash.workflow` functions carried verbatim from a compaction-summary "5 entrypoints" framing; four did not exist anywhere in the package (the "5 surfaces" were 5 frameworks, not 5 functions); caught by TestPyPI clean-venv import, corrected in PR #1187 (commit ec2c99163). (2) The correction PR then documented a denylist as "8 types" (and asserted a member was absent) because a `tail -8` silently dropped the count line + the first 4 alphabetical entries; real floor 12, member present; caught at post-publish verify, corrected in PR #1188 (commit 1a3dab318). Authored path-scoped (durable-write surfaces) per the verify-resource-existence.md scoping precedent; Codex/Gemini delivery defaults to the skill channel per `rule-authoring.md` Rule 7.
+
+**Rule 2c (selective omission)** — 2026-09-12, folded from journal candidate `1786321079490-1-DISCOVERY.md` (`58d4b1629abe`), a session self-correction: the commit cited _"Verified … 717 passed, 176 deselected"_ where the run was _"2 failed, 717 passed, 1 skipped, 176 deselected"_. Both failures were a genuine local-vs-pinned pyright skew and that attribution held — _"the attribution was right; the presentation was not."_ Added as a THIRD presumed-false source rather than a new MUST because it shares Rule 2's epistemic shape (unfalsifiable at read time) and its remedy (cite the full ground-truth output). The adjacent clauses reach the neighbouring shapes only: MUST-2(b) governs TRUNCATION (accidental), `git.md` § Discipline governs OVER-CLAIMING what the diff contains; neither reaches deliberate omission of a known datum. Coverage gap confirmed by grep with a fired control before authoring.

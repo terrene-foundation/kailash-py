@@ -50,13 +50,22 @@ class NexusDeploymentMixin:
         # configured provider and every deployment defaulted to LLMAgentNode's
         # own "mock" parameter default (`kaizen/nodes/ai/llm_agent.py::
         # get_parameters`), regardless of a real provider being explicitly
-        # configured. `detect_provider_from_env()` mirrors
-        # `Agent._get_provider_for_config()`'s exact env-first fallback
-        # (openai -> anthropic -> mock) so an unset `llm_provider` never
-        # re-defaults to mock when a real API key is present.
-        from kaizen.core._provider_env import detect_provider_from_env
+        # configured, so an unset `llm_provider` never re-defaults to mock
+        # when a real provider is configured.
+        #
+        # #2220 residual: resolved from the MODEL. This was
+        # `self.config.llm_provider or detect_provider_from_env()`, whose
+        # answer is written into the same `add_node` config as
+        # `self.config.model` below — the "a credential answers the vendor
+        # question" composition, on a Nexus-deployed path where the prompt
+        # leaves the machine.
+        from kaizen.core._provider_env import resolve_node_provider
 
-        provider = self.config.llm_provider or detect_provider_from_env()
+        provider = resolve_node_provider(
+            self.config.model,
+            explicit=self.config.llm_provider,
+            component="NexusAgentMixin.to_workflow",
+        )
 
         # Create workflow from agent's signature
         workflow = WorkflowBuilder()

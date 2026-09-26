@@ -29,6 +29,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from kailash.utils.secure_logging import sanitize_log_value
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 from kaizen.providers.document.base_provider import (
     BaseDocumentProvider,
@@ -172,8 +173,10 @@ class OpenAIVisionProvider(BaseDocumentProvider):
         cost = page_count * self.COST_PER_PAGE
 
         logger.info(
-            f"Extracting {file_path} with OpenAI Vision "
-            f"({page_count} pages, ${cost:.3f})"
+            "Extracting %s with OpenAI Vision (%s pages, $%.3f)",
+            sanitize_log_value(file_path),
+            page_count,
+            cost,
         )
 
         # Import OpenAI client
@@ -241,8 +244,11 @@ class OpenAIVisionProvider(BaseDocumentProvider):
         processing_time = time.time() - start_time
 
         logger.info(
-            f"Extracted {len(extracted_text)} chars from {file_path_obj.name} "
-            f"in {processing_time:.2f}s (${cost:.3f})"
+            "Extracted %s chars from %s in %.2fs ($%.3f)",
+            len(extracted_text),
+            sanitize_log_value(file_path_obj.name),
+            processing_time,
+            cost,
         )
 
         return ExtractionResult(

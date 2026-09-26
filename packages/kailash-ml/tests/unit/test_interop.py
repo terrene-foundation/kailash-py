@@ -6,6 +6,7 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 import pytest
+
 from kailash_ml.interop import (
     from_pandas,
     from_sklearn_output,

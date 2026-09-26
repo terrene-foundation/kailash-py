@@ -22,7 +22,7 @@ import numpy as np
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
-from kaizen.core._provider_env import detect_provider_from_env
+from kaizen.core._provider_env import resolve_node_provider
 
 logger = logging.getLogger(__name__)
 
@@ -417,7 +417,9 @@ class SparseRetrievalNode(Node):
                 "LLMAgentNode",
                 node_id="query_expander",
                 config={
-                    "provider": detect_provider_from_env(),
+                    "provider": resolve_node_provider(
+                        None, component="SparseRetrievalNode._create_workflow"
+                    ),
                     "system_prompt": """You are a query expansion expert.
                     Generate 3-5 related terms or synonyms for the given query.
                     Return as JSON: {"expanded_terms": ["term1", "term2", ...]}""",
@@ -1155,7 +1157,10 @@ class CrossEncoderRerankNode(Node):
             "LLMAgentNode",
             node_id="cross_encoder",
             config={
-                "provider": detect_provider_from_env(),
+                "provider": resolve_node_provider(
+                    _DEFAULT_LLM_MODEL,
+                    component="CrossEncoderRerankNode._create_workflow",
+                ),
                 "system_prompt": """You are a relevance scoring system.
                 Given a query and document, score their relevance from 0 to 1.
                 Consider semantic similarity, keyword overlap, and topical relevance.
@@ -1735,7 +1740,10 @@ class PropositionBasedRetrievalNode(Node):
             "LLMAgentNode",
             node_id="proposition_extractor",
             config={
-                "provider": detect_provider_from_env(),
+                "provider": resolve_node_provider(
+                    _DEFAULT_LLM_MODEL,
+                    component="PropositionBasedRetrievalNode._create_workflow",
+                ),
                 "system_prompt": """Extract atomic facts or propositions from the given text.
                 Each proposition should be:
                 1. A single, complete fact

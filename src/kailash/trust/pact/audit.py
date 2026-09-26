@@ -621,10 +621,22 @@ class AuditChain:
     def verify_chain_integrity(self) -> tuple[bool, list[str]]:
         """Walk the chain and verify every anchor's integrity.
 
+        Fails CLOSED on an empty chain (#2221): ``len(errors) == 0`` over a loop
+        that never ran reports the same ``True`` as a chain whose every anchor
+        was checked and passed, so a wiped chain verified clean.
+
         Returns:
-            (is_valid, list of error messages). Empty list means valid.
+            (is_valid, list of error messages). is_valid is True only when at
+            least one anchor was walked AND no anchor produced an error.
         """
         errors: list[str] = []
+
+        if not self.anchors:
+            return False, [
+                "empty chain: no anchors to verify -- an absent audit chain is "
+                "unverifiable (fail-closed). This is NOT a tamper finding: a "
+                "never-written chain and a wiped one are indistinguishable here."
+            ]
 
         for i, anchor in enumerate(self.anchors):
             if anchor.sequence != i:

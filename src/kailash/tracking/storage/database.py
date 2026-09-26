@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
+from ...utils.finalizer import warn_unclosed
 from ..models import TaskMetrics, TaskRun, TaskStatus, WorkflowRun
 from .base import StorageBackend
 
@@ -33,6 +34,8 @@ class SQLiteStorage(StorageBackend):
         import os
         import sqlite3
 
+        self._closed = True
+        self._lock = threading.Lock()
         if db_path is None:
             db_path = os.path.expanduser("~/.kailash/tracking/tracking.db")
         elif db_path.startswith("sqlite://"):
@@ -46,11 +49,15 @@ class SQLiteStorage(StorageBackend):
         self.db_path = db_path
         # check_same_thread=False for cross-thread access (with locking)
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
-        self._lock = threading.Lock()
+        self._closed = False
 
         # Enable optimizations
-        self._enable_optimizations()
-        self._initialize_schema()
+        try:
+            self._enable_optimizations()
+            self._initialize_schema()
+        except BaseException:
+            self.close()
+            raise
 
     def _enable_optimizations(self) -> None:
         """Enable WAL mode and optimal SQLite pragmas."""
@@ -885,8 +892,9 @@ class SQLiteStorage(StorageBackend):
     def close(self) -> None:
         """Close connection cleanly."""
         with self._lock:
-            if hasattr(self, "conn"):
+            if not self._closed:
                 self.conn.close()
+                self._closed = True
 
     def __enter__(self):
         """Context manager entry."""
@@ -897,12 +905,23 @@ class SQLiteStorage(StorageBackend):
         self.close()
         return False
 
-    def __del__(self):
-        """Close database connection on deletion."""
-        try:
-            self.close()
-        except Exception:
-            pass
+    def __del__(self, _warn=warn_unclosed):
+        # Warn and RETURN. This finalizer performs no cleanup, deliberately.
+        #
+        # ``close()`` opens with ``with self._lock:`` — a non-reentrant
+        # ``threading.Lock``. A finalizer fires at an arbitrary bytecode
+        # boundary on whichever thread drops the last reference, which may be a
+        # thread already inside one of this class's own locked sections; taking
+        # the lock again there deadlocks the process permanently. The enclosing
+        # swallow-and-continue guard could not catch that (a deadlock is not an
+        # exception) and additionally hid real close failures. See
+        # ``rules/patterns.md`` § "Async Resource Cleanup" and issue #2107.
+        #
+        # The sqlite3 connection's own C-level deallocator closes the database
+        # handle once ``self.conn`` becomes unreachable, so no descriptor
+        # leaks; deterministic cleanup stays with close()/__exit__.
+        if not getattr(self, "_closed", True):
+            _warn(self, "Call close() or use 'with SQLiteStorage(...) as store:'.")
 
     @staticmethod
     def _reconstruct_metrics(data: dict) -> None:

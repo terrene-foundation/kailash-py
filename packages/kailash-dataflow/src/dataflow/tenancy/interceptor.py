@@ -13,8 +13,7 @@ from threading import Lock
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import sqlparse
-from sqlparse import sql
-from sqlparse import tokens as T
+from sqlparse import sql, tokens as T
 
 from .exceptions import CrossTenantAccessError, QueryParsingError, TenantIsolationError
 

@@ -226,9 +226,12 @@ def diagnose_classifier(
         ValueError: when ``X`` has zero rows.
     """
     from sklearn.metrics import accuracy_score
-    from sklearn.metrics import (  # noqa: PLC0415 — lazy for import cost
-        confusion_matrix as sk_confusion_matrix,
-    )
+
+    # isort: split
+    # Lazy import for import cost; keep the existing PLC0415 scope on this alias.
+    from sklearn.metrics import confusion_matrix as sk_confusion_matrix  # noqa: PLC0415
+
+    # isort: split
     from sklearn.metrics import (
         f1_score,
         precision_recall_fscore_support,

@@ -29,6 +29,9 @@ from pathlib import Path
 
 import polars as pl
 import pytest
+
+from dataflow import DataFlow
+from dataflow.ml import ml_feature_source
 from kailash_ml.errors import FeatureGroupNotFoundError, FeatureStoreError
 from kailash_ml.features import (
     FeatureField,
@@ -38,9 +41,6 @@ from kailash_ml.features import (
     lookup_feature_group,
 )
 from kailash_ml.features.feature_group import FeatureGroup as _FG_module_class
-
-from dataflow import DataFlow
-from dataflow.ml import ml_feature_source
 
 pytestmark = pytest.mark.integration
 

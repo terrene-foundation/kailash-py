@@ -1398,6 +1398,12 @@ class DataFlowExpress:
                             int(current_limit), plan.row_limit
                         )
                 node = self._create_node(model, "List")
+                # Express and ListNode have independent caches. The caller's
+                # policy must govern both, including a warm inner cache.
+                effective_params["enable_cache"] = (
+                    self._cache_enabled and effective_ttl > 0
+                )
+                effective_params["cache_ttl"] = effective_ttl
                 result = await node.async_run(**effective_params)
             except Exception as exc:
                 await self._trust_record_failure(
@@ -1516,6 +1522,12 @@ class DataFlowExpress:
                     merged_filter.update(plan.additional_filters)
                     effective_params["filter"] = merged_filter
                 node = self._create_node(model, "List")
+                # Express and ListNode have independent caches. The caller's
+                # policy must govern both, including a warm inner cache.
+                effective_params["enable_cache"] = (
+                    self._cache_enabled and effective_ttl > 0
+                )
+                effective_params["cache_ttl"] = effective_ttl
                 result = await node.async_run(**effective_params)
             except Exception as exc:
                 await self._trust_record_failure(
@@ -1832,6 +1844,19 @@ class DataFlowExpress:
             await self._check_protection_if_enabled(
                 model, "bulk_create", {"data": records}
             )
+            # RT-6a: an empty batch is a no-op — do NOT dispatch the node,
+            # flush the model cache, or emit a `bulk_create` write event
+            # announcing a write that never happened. Deliberately placed
+            # AFTER the protection precheck above so a write-blocked model
+            # still raises ProtectionViolation on bulk_create([]) — the
+            # guard skips side effects, never an authorization gate.
+            # Return shape: `[]` is the declared contract (-> List[Dict])
+            # and is ALREADY what the three `_apply_classification_mask_rows`
+            # branches below yield for an empty batch; only the unrecognized-
+            # shape passthrough (`return result`) differs, so this introduces
+            # no dual-shape return (zero-tolerance Rule 3d).
+            if not records:
+                return []
             node = self._create_node(model, "BulkCreate")
             node._express_protection_precheck_done = True
             result = await node.async_run(data=records)
@@ -1924,6 +1949,17 @@ class DataFlowExpress:
 
         async def _bulk_update():
             self._check_append_only(model, "bulk_update")
+            # RT-6a: an empty batch is a no-op — the per-record loop below
+            # already executes no query, but the cache flush and the
+            # `bulk_update` write event after it fired unconditionally,
+            # telling subscribers a write occurred when none did.
+            # Deliberately placed AFTER _check_append_only so an
+            # append-only model still raises AppendOnlyViolationError on
+            # bulk_update([]) — the guard skips side effects, never a gate.
+            # Return shape matches the non-empty path's `return results`
+            # (a list) for an all-empty batch: [].
+            if not records:
+                return []
             # Issue #490 redaction contract: bulk_update delegates to
             # self.update(), which applies _apply_classification_mask_record
             # on its return. Do NOT inline a SELECT + row_to_dict here
@@ -2006,6 +2042,16 @@ class DataFlowExpress:
             self._check_append_only(model, "bulk_delete")
             # Issue #1058 Shard 2: protection precheck (see create()).
             await self._check_protection_if_enabled(model, "bulk_delete", {"ids": ids})
+            # RT-6a: an empty id list is a no-op. Without this guard the
+            # BulkDelete node was dispatched with the degenerate filter
+            # {"id": {"$in": []}}, then the model cache was flushed and a
+            # `bulk_delete` write event emitted for a delete that removed
+            # nothing. Deliberately placed AFTER _check_append_only and the
+            # protection precheck so both still fire on bulk_delete([]).
+            # Return shape matches the non-empty path's bool contract:
+            # "True if all deletions succeeded" is vacuously true for none.
+            if not ids:
+                return True
             node = self._create_node(model, "BulkDelete")
             node._express_protection_precheck_done = True
             # Convert IDs list to filter format expected by BulkDeleteNode
@@ -2046,10 +2092,41 @@ class DataFlowExpress:
             records: List of record data dicts
             conflict_on: Fields for conflict detection (default: ["id"]).
                 Each field name is validated against the model schema.
-            batch_size: Records processed per database batch (default 1000)
+            batch_size: Records sent per database statement (default 1000).
+                Treated as a CEILING, not an exact size: it is clamped down to
+                whatever the target engine can bind in one statement for this
+                model's column count (issue #2210). Records beyond one batch
+                are written by additional statements.
 
         Returns:
             ``{"records": [...], "created": int, "updated": int, "total": int}``
+
+        Note:
+            **Batch capacity (issue #2210).** There is no fixed row ceiling:
+            the limit is per-STATEMENT and engine-specific, and DataFlow sizes
+            its statements to stay inside it, so a caller may pass an
+            arbitrarily large ``records`` list. Before this was handled, any
+            batch of >=1000 rows on SQLite failed WHOLESALE and persisted zero
+            rows, because the accounting pre-count that derives the
+            created/updated split emitted one ``OR`` term per row and overran
+            SQLite's ``SQLITE_LIMIT_EXPR_DEPTH`` (1000).
+
+            **Atomicity.** ``bulk_upsert`` does NOT guarantee all-or-nothing
+            across batches. When the input exceeds one statement's capacity it
+            is written by several statements, and outside an enclosing
+            ``TransactionScopeNode`` each commits independently — so a failure
+            partway through can leave earlier batches persisted. Wrap the call
+            in a transaction scope when you need all-or-nothing.
+
+            **Failure contract.** Failures are reported in the returned dict
+            (``{"success": False, "error": ...}``) plus a WARN log line, NOT
+            by raising — consistent with ``bulk_create`` / ``bulk_update`` /
+            ``bulk_delete``. Callers MUST inspect ``result["success"]``; do not
+            infer success from the absence of an exception. Caller-actionable
+            CONFIGURATION errors are the exception and do raise (e.g.
+            :class:`BulkUpsertConflictTargetError` for a non-unique
+            ``conflict_on``, ``AppendOnlyViolationError`` for a protected
+            model).
 
         Example:
             result = await db.express.bulk_upsert("User", [
@@ -2088,12 +2165,31 @@ class DataFlowExpress:
             await self._check_protection_if_enabled(
                 model, "bulk_upsert", {"data": records}
             )
+            # RT-6a: an empty batch is a no-op — do NOT dispatch the node,
+            # flush the model cache, or emit a `bulk_upsert` write event.
+            # Deliberately placed AFTER _check_append_only and the
+            # protection precheck so both still fire on bulk_upsert([]).
+            # Return shape is byte-identical to what the non-empty path
+            # produced for an empty batch pre-fix (measured):
+            # {"records": [], "created": 0, "updated": 0, "total": 0}.
+            if not records:
+                return {"records": [], "created": 0, "updated": 0, "total": 0}
             node = self._create_node(model, "BulkUpsert")
             node._express_protection_precheck_done = True
             # BulkUpsertNode accepts conflict_columns in its config.
             node.conflict_columns = conflict_fields
             node.batch_size = batch_size
-            result = await node.async_run(data=records)
+            # Issue #2210 (zero-tolerance Rule 3c): the instance attribute
+            # above is INERT — the node resolves batch_size from
+            # ``validate_inputs(**kwargs)`` (core/nodes.py), never from
+            # ``getattr(self, ...)``, so every call reached the bulk engine
+            # with the default 1000 no matter what the caller passed. Measured
+            # before this fix: bulk.bulk_upsert received batch_size=1000 for
+            # express batch_size=100 AND for 400. ``batch_size`` is a declared
+            # NodeParameter for every ``bulk_*`` operation, so passing it as a
+            # run kwarg is the seam that actually binds it. The attribute is
+            # kept for callers that read it back off the node.
+            result = await node.async_run(data=records, batch_size=batch_size)
 
             # Model-scoped cache invalidation (TSG-104)
             await self._invalidate_model_cache(model)
@@ -2803,18 +2899,13 @@ class SyncExpress:
         ``db.close()`` / ``await db.close_async()``.
         """
         if not getattr(self, "_closed", True):
-            try:
-                _warnings.warn(
-                    f"{type(self).__name__} not closed; call "
-                    f"db.close()/await db.close_async() to stop the BG "
-                    f"event loop thread cleanly.",
-                    ResourceWarning,
-                    stacklevel=2,
-                )
-            except Exception:
-                # Finalizer must not raise. Hooks/cleanup carve-out per
-                # rules/zero-tolerance.md Rule 3.
-                pass
+            _warnings.warn(
+                f"{type(self).__name__} not closed; call "
+                f"db.close()/await db.close_async() to stop the BG "
+                f"event loop thread cleanly.",
+                ResourceWarning,
+                stacklevel=2,
+            )
 
     def _check_append_only(self, model: str, operation: str) -> None:
         """Sync delegate to :meth:`DataFlowExpress._check_append_only`.

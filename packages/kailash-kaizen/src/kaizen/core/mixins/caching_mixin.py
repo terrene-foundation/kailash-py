@@ -218,13 +218,24 @@ class CachingMixin:
         # same inputs can dispatch to a different provider across calls). The
         # resolved provider is a bare name ("openai"/"anthropic"/"mock"), never
         # a credential — safe to embed in the key.
-        from kaizen.core._provider_env import detect_provider_from_env
+        # #2220 residual: keyed via the non-dispatching mirror of the shared
+        # resolver, not `detect_provider_from_env()`. This is a cache KEY, so
+        # it must never raise and it sends nothing anywhere — but it must
+        # track whatever the dispatch path resolves, and since #2220 that path
+        # is a function of (explicit provider, model) with the environment out
+        # of it. Keying on a credential meant the key for an unregistered model
+        # drifted with whichever key happened to be exported, while the
+        # dispatch it was supposed to mirror no longer did.
+        from kaizen.core._provider_env import describe_node_provider
 
         config = getattr(agent, "config", None)
         llm_provider = (
             getattr(config, "llm_provider", None) if config is not None else None
         )
-        resolved_provider = llm_provider or detect_provider_from_env()
+        resolved_provider = describe_node_provider(
+            getattr(config, "model", None) if config is not None else None,
+            explicit=llm_provider,
+        )
 
         key_data = {
             "agent_class": agent.__class__.__name__,

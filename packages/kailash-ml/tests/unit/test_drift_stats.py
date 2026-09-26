@@ -23,6 +23,7 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 import pytest
+
 from kailash_ml.drift import (
     JSD_SMOOTH_EPS,
     KL_SMOOTH_EPS,

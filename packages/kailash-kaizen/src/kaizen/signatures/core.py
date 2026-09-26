@@ -1313,23 +1313,27 @@ class SignatureCompiler:
         # LLMAgentNode-param-building bug class fixed across the Agent
         # deployment surface (rules/zero-tolerance.md Rule 2; no hardcoded
         # mock responses on a production path). Delegates to the shared
-        # `detect_provider_from_env()` (kaizen/core/_provider_env.py) so an
-        # unconfigured provider resolves to a real key when one is present,
-        # else to None (keyless) so LLMAgentNode's #1947 fail-loud gate fires
-        # rather than silently dispatching "mock" — the SAME env-first order
-        # `Agent._get_provider_for_config()` uses (#1952).
+        # resolver (kaizen/core/_provider_env.py) so an unconfigured provider
+        # never silently dispatches "mock" — the SAME predicate
+        # `Agent._get_provider_for_config()` uses (#1952, #2220).
         # LOCAL import: `kaizen.core.__init__` imports `kaizen.signatures`
         # at module scope, and `kaizen.signatures.__init__` imports `.core`
         # (this file) at module scope — a module-level import here would
         # risk a circular partial-init depending on which package a caller
         # imports first. `_provider_env` is a leaf module (only imports
         # `os`), so a lazy import here is always safe.
-        if "provider" in config:
-            resolved_provider = config["provider"]
-        else:
-            from kaizen.core._provider_env import detect_provider_from_env
+        #
+        # #2220 residual: the else-branch was `detect_provider_from_env()`,
+        # whose answer went into `node_params` beside `config["model"]` three
+        # lines below — so a credential decided the vendor for a model it says
+        # nothing about. Resolution is now model-keyed and fails closed.
+        from kaizen.core._provider_env import resolve_node_provider
 
-            resolved_provider = detect_provider_from_env()
+        resolved_provider = resolve_node_provider(
+            config.get("model"),
+            explicit=config.get("provider"),
+            component="SignatureExecutor._create_llm_agent_params",
+        )
 
         node_params = {
             "model": config["model"],

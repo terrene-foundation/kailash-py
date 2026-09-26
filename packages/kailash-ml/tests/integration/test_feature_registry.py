@@ -33,6 +33,8 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+
+from dataflow import DataFlow
 from kailash_ml.errors import (
     FeatureEvolutionError,
     FeatureGroupNotFoundError,
@@ -46,8 +48,6 @@ from kailash_ml.features import (
     FeatureRegistry,
     FeatureSchema,
 )
-
-from dataflow import DataFlow
 
 pytestmark = pytest.mark.integration
 

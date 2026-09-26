@@ -17,9 +17,14 @@ from types import SimpleNamespace
 
 import polars as pl
 import pytest
+
 from kailash_ml.errors import TenantRequiredError
-from kailash_ml.features import FeatureField, FeatureSchema, FeatureStore
-from kailash_ml.features import store as _store_mod
+from kailash_ml.features import (
+    FeatureField,
+    FeatureSchema,
+    FeatureStore,
+    store as _store_mod,
+)
 
 
 def _mk_schema() -> FeatureSchema:

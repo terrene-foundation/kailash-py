@@ -27,7 +27,7 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.code.python import PythonCodeNode  # noqa: F401
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
-from kaizen.core._provider_env import detect_provider_from_env
+from kaizen.core._provider_env import resolve_node_provider
 from kaizen.utils.credential_scrub import scrub_remote_error
 
 # Module-scope import retained as the monkeypatch target for the
@@ -917,7 +917,9 @@ class QueryExpansionNode(Node):
             "LLMAgentNode",
             node_id="llm_expander",
             config={
-                "provider": detect_provider_from_env(),
+                "provider": resolve_node_provider(
+                    _DEFAULT_LLM_MODEL, component="QueryExpansionNode._create_workflow"
+                ),
                 "system_prompt": f"""You are a query expansion expert.
                 Generate {self.num_expansions} variations of the given query that capture different aspects:
 
@@ -1134,7 +1136,10 @@ class QueryDecompositionNode(Node):
             "LLMAgentNode",
             node_id="query_decomposer",
             config={
-                "provider": detect_provider_from_env(),
+                "provider": resolve_node_provider(
+                    _DEFAULT_LLM_MODEL,
+                    component="QueryDecompositionNode._create_workflow",
+                ),
                 "system_prompt": """You are a query decomposition expert.
                 Break down complex queries into simpler sub-questions that can be answered independently.
 
@@ -1370,7 +1375,9 @@ class QueryRewritingNode(Node):
             "LLMAgentNode",
             node_id="query_analyzer",
             config={
-                "provider": detect_provider_from_env(),
+                "provider": resolve_node_provider(
+                    _DEFAULT_LLM_MODEL, component="QueryRewritingNode._create_workflow"
+                ),
                 "system_prompt": """Analyze the query for potential issues and improvements:
 
                 1. Spelling and grammar errors
@@ -1397,7 +1404,9 @@ class QueryRewritingNode(Node):
             "LLMAgentNode",
             node_id="query_rewriter",
             config={
-                "provider": detect_provider_from_env(),
+                "provider": resolve_node_provider(
+                    _DEFAULT_LLM_MODEL, component="QueryRewritingNode._create_workflow"
+                ),
                 "system_prompt": """Rewrite the query for optimal retrieval based on the analysis.
 
                 Create multiple versions:
@@ -1774,7 +1783,10 @@ class QueryIntentClassifierNode(Node):
             "LLMAgentNode",
             node_id="intent_classifier",
             config={
-                "provider": detect_provider_from_env(),
+                "provider": resolve_node_provider(
+                    _DEFAULT_LLM_MODEL,
+                    component="QueryIntentClassifierNode._create_workflow",
+                ),
                 "system_prompt": """Classify the query intent and characteristics:
 
                 1. Query Type:
@@ -2046,7 +2058,10 @@ class MultiHopQueryPlannerNode(Node):
             "LLMAgentNode",
             node_id="hop_planner",
             config={
-                "provider": detect_provider_from_env(),
+                "provider": resolve_node_provider(
+                    _DEFAULT_LLM_MODEL,
+                    component="MultiHopQueryPlannerNode._create_workflow",
+                ),
                 "system_prompt": """Plan a multi-hop retrieval strategy for the query.
 
                 Identify:

@@ -114,6 +114,81 @@ class SQLDialect(ABC):
         """
         return self._MAX_IDENTIFIER_LENGTH
 
+    # ------------------------------------------------------------------
+    # Statement capacity budget (issue #2210)
+    # ------------------------------------------------------------------
+
+    #: Maximum depth of a single expression tree the parser accepts. A
+    #: generator that emits ONE node per input row (an ``a OR b OR c`` chain
+    #: parses as a left-deep binary tree, so its depth IS the term count)
+    #: turns this parser limit into a flat ROW ceiling. Every concrete
+    #: subclass binds it.
+    _MAX_EXPRESSION_DEPTH: int
+
+    #: Maximum number of bound parameters in a single prepared statement. A
+    #: multi-row ``VALUES`` list spends ``rows * columns`` of this budget, so
+    #: it is the ceiling that scales with COLUMN COUNT.
+    _MAX_BIND_PARAMETERS: int
+
+    #: Expression-tree nodes withheld from :meth:`max_terms_per_expression` so
+    #: a caller that wraps the generated chain in one more predicate still
+    #: emits a legal statement. Costs at most one extra round-trip per batch.
+    _EXPRESSION_DEPTH_MARGIN = 8
+
+    @property
+    def max_expression_depth(self) -> int:
+        """Maximum expression-tree depth this dialect's parser accepts.
+
+        Public accessor so a generator that builds an N-term expression can
+        SPLIT to fit ahead of execution, instead of discovering the limit as
+        an opaque driver error that loses the whole batch.
+        """
+        return self._MAX_EXPRESSION_DEPTH
+
+    @property
+    def max_bind_parameters(self) -> int:
+        """Maximum bound parameters this dialect accepts in one statement."""
+        return self._MAX_BIND_PARAMETERS
+
+    def max_terms_per_expression(self, terms_per_row: int = 1) -> int:
+        """Clauses that fit in ONE ``OR``-chain of ``terms_per_row`` nodes each.
+
+        Issue #2210. ``_count_existing_conflicts`` emits one ``(col = ? AND
+        col = ?)`` clause per row, joined by ``OR``.
+
+        The relationship is ADDITIVE, not multiplicative: the ``OR`` chain
+        parses left-deep so N clauses contribute depth N, while the ``AND``
+        conds INSIDE one clause form a sibling subtree whose depth is
+        ``terms_per_row`` — the two nest, they do not multiply. Measured
+        against SQLite 3.49.1, the exact ceiling is
+        ``_MAX_EXPRESSION_DEPTH - terms_per_row``, confirmed at
+        ``terms_per_row`` = 1, 2, 3, 4, 5, 8, 10, 16 and 32 (yielding 999,
+        998, 997, 996, 995, 992, 990, 984 and 968 clauses respectively). A
+        multiplicative model would have predicted 499 clauses for a two-column
+        conflict target where 998 are legal — a 2x over-chunk on every
+        composite conflict target.
+
+        ``_MARGIN`` nodes are withheld so a caller that wraps the chain in an
+        additional predicate (a tenant guard, a soft-delete filter) still
+        emits a legal statement.
+        """
+        per_row = max(1, int(terms_per_row))
+        return max(
+            1, self._MAX_EXPRESSION_DEPTH - per_row - self._EXPRESSION_DEPTH_MARGIN
+        )
+
+    def max_rows_per_statement(self, columns_per_row: int) -> int:
+        """Rows whose bound values fit in ONE statement's parameter budget.
+
+        Issue #2210. A multi-row ``INSERT ... VALUES`` binds
+        ``rows * columns_per_row`` parameters; exceeding the budget fails the
+        WHOLE statement (SQLite: "too many SQL variables"), persisting zero
+        rows. Callers clamp their batch size to this so the statement they
+        build is executable by construction.
+        """
+        per_row = max(1, int(columns_per_row))
+        return max(1, self._MAX_BIND_PARAMETERS // per_row)
+
     def normalize_identifier(self, name: str) -> str:
         """Fit *name* to this dialect's identifier length budget.
 
@@ -203,6 +278,16 @@ class PostgreSQLDialect(SQLDialect):
 
     _MAX_IDENTIFIER_LENGTH = POSTGRES_MAX_IDENTIFIER_LENGTH
 
+    # Issue #2210. PostgreSQL documents NO fixed expression-node ceiling — the
+    # parser is bounded by `max_stack_depth` (a byte budget, default 2MB), not
+    # by a node count. Binding a large finite value keeps the budget API total
+    # (no dialect returns "unlimited", so no caller special-cases None) while
+    # never clamping a batch PostgreSQL would have accepted.
+    _MAX_EXPRESSION_DEPTH = 1_000_000
+    # The wire protocol carries the parameter count as an int16, so 65535 is a
+    # PROTOCOL ceiling, not a tunable.
+    _MAX_BIND_PARAMETERS = 65535
+
     def get_parameter_placeholder(self, position: int) -> str:
         return f"${position}"
 
@@ -220,7 +305,7 @@ class PostgreSQLDialect(SQLDialect):
                 f"exceeds {self._MAX_IDENTIFIER_LENGTH}-char PostgreSQL limit "
                 f"(len={len(name)})"
             )
-        if not _SAFE_IDENTIFIER_RE.match(name):
+        if not _SAFE_IDENTIFIER_RE.fullmatch(name):
             raise InvalidIdentifierError(
                 f"Invalid SQL identifier "
                 f"(fingerprint={_identifier_fingerprint(name)}): "
@@ -304,6 +389,14 @@ class MySQLDialect(SQLDialect):
 
     _MAX_IDENTIFIER_LENGTH = MYSQL_MAX_IDENTIFIER_LENGTH
 
+    # Issue #2210. MySQL bounds nested expressions by parser stack rather than
+    # a documented node count; see PostgreSQLDialect for why this is a large
+    # finite value rather than a sentinel.
+    _MAX_EXPRESSION_DEPTH = 1_000_000
+    # `mysql_stmt_bind_param` carries the placeholder count as an unsigned
+    # short: 65535 placeholders per prepared statement.
+    _MAX_BIND_PARAMETERS = 65535
+
     def get_parameter_placeholder(self, position: int) -> str:
         return "%s"
 
@@ -321,7 +414,7 @@ class MySQLDialect(SQLDialect):
                 f"exceeds {self._MAX_IDENTIFIER_LENGTH}-char MySQL limit "
                 f"(len={len(name)})"
             )
-        if not _SAFE_IDENTIFIER_RE.match(name):
+        if not _SAFE_IDENTIFIER_RE.fullmatch(name):
             raise InvalidIdentifierError(
                 f"Invalid SQL identifier "
                 f"(fingerprint={_identifier_fingerprint(name)}): "
@@ -401,6 +494,17 @@ class SQLiteDialect(SQLDialect):
 
     _MAX_IDENTIFIER_LENGTH = SQLITE_MAX_IDENTIFIER_LENGTH
 
+    # Issue #2210. SQLITE_LIMIT_EXPR_DEPTH — compile-time default 1000, and the
+    # value measured on this venv's SQLite 3.49.1 via
+    # ``sqlite3.connect(":memory:").getlimit(3)``. An OR-chain of N terms parses
+    # as a left-deep tree of depth N, so this is a flat ceiling on the number of
+    # OR'd clauses a generated WHERE may carry.
+    _MAX_EXPRESSION_DEPTH = 1000
+    # SQLITE_LIMIT_VARIABLE_NUMBER — 32766 since SQLite 3.32 (2020) and the
+    # value measured here via ``getlimit(9)``. Builds older than 3.32 default
+    # to 999; DataFlow's floor is well past 3.32, so the modern value is bound.
+    _MAX_BIND_PARAMETERS = 32766
+
     def get_parameter_placeholder(self, position: int) -> str:
         return "?"
 
@@ -418,7 +522,7 @@ class SQLiteDialect(SQLDialect):
                 f"exceeds {self._MAX_IDENTIFIER_LENGTH}-char SQLite limit "
                 f"(len={len(name)})"
             )
-        if not _SAFE_IDENTIFIER_RE.match(name):
+        if not _SAFE_IDENTIFIER_RE.fullmatch(name):
             raise InvalidIdentifierError(
                 f"Invalid SQL identifier "
                 f"(fingerprint={_identifier_fingerprint(name)}): "
@@ -592,3 +696,77 @@ class DialectManager:
             f: source.supports_feature(f) and target.supports_feature(f)
             for f in features
         }
+
+
+def identifier_budget_for(database_type: Any) -> int:
+    """Return the identifier-length budget bound to *database_type*.
+
+    Issue #1971. Call sites that interpolate a bare identifier into SQL must
+    validate it against the budget of the engine they are about to hit. Passing
+    ``DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH`` when the engine IS knowable is
+    fail-open: it is SQLite's 128, the loosest budget, so a 64..128-char
+    identifier passes here and is then truncated server-side by PostgreSQL at
+    63 — silently aliasing two models onto one physical table.
+
+    This resolver is the one place DataFlow turns the db-type STRING it already
+    has (``DataFlow._detect_database_type()``, ``SyncDDLExecutor._db_type``)
+    into that bound budget, so no call site hand-rolls the mapping.
+
+    An UNRECOGNISED type returns
+    :data:`~kailash.db.dialect.DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH`
+    deliberately, rather than raising: the budget is a defense-in-depth length
+    check, not the caller's dispatch, and hard-failing here would turn an
+    unsupported-engine string into an exception on a path that previously
+    validated fine. Returning the sentinel keeps the genuinely-unknown case
+    warning exactly as it did before — which is the signal the warning exists
+    to carry — while the known cases fall silent.
+    """
+    # Imported locally: the sentinel is only needed on the miss path, and a
+    # module-level import would place an unbound-budget symbol in this module's
+    # namespace where a future call site could pick it up by accident.
+    from kailash.db.dialect import DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+
+    if not isinstance(database_type, str):
+        return DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+    try:
+        return DialectManager.get_dialect(database_type)._MAX_IDENTIFIER_LENGTH
+    except ValueError:
+        return DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+
+
+def statement_capacity_for(database_type: Any) -> SQLDialect:
+    """Return the dialect whose STATEMENT CAPACITY budgets bind *database_type*.
+
+    Issue #2210. Call sites that generate a single statement whose size scales
+    with the INPUT (a multi-row ``VALUES`` list, an OR-chain of per-row
+    predicates) must size it against the engine they are about to hit. This
+    resolver is the one place DataFlow turns the db-type STRING it already has
+    (``DataFlow._detect_database_type()``) into the object carrying
+    :meth:`~SQLDialect.max_terms_per_expression` and
+    :meth:`~SQLDialect.max_rows_per_statement`, so no call site hand-rolls a
+    per-engine magic number.
+
+    An UNRECOGNISED type resolves to the MOST RESTRICTIVE known dialect, which
+    is the OPPOSITE direction from :func:`identifier_budget_for`'s loosest-
+    budget sentinel. The asymmetry is deliberate and the two failure modes are
+    not comparable: an over-tight identifier budget REJECTS a legal name (loud,
+    at validation time), whereas an over-loose capacity budget EMITS a
+    statement the engine refuses, losing the whole batch at execution time.
+    Chunking an unknown engine more finely than necessary costs round-trips;
+    chunking it too coarsely costs data.
+    """
+    if isinstance(database_type, str):
+        try:
+            return DialectManager.get_dialect(database_type)
+        except ValueError:
+            pass
+    logger.warning(
+        "dialect.statement_capacity_unknown_engine",
+        extra={
+            "database_type": str(database_type),
+            "fallback": "sqlite",
+            "reason": "unrecognised engine — binding the tightest known "
+            "statement-capacity budget so generated SQL stays executable",
+        },
+    )
+    return DialectManager.get_dialect("sqlite")

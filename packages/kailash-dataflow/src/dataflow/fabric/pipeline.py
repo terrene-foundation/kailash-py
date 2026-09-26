@@ -889,19 +889,16 @@ class PipelineExecutor:
         during interpreter shutdown when module globals have been torn down.
         """
         if not getattr(self, "_closed", True):
-            try:
-                _warnings.warn(
-                    f"Unclosed PipelineExecutor instance "
-                    f"{getattr(self, '_instance_name', '?')!r}. "
-                    "Call 'await executor.close()' (or stop the parent "
-                    "FabricRuntime) before the executor is garbage "
-                    "collected — pending pipelines and the cache backend "
-                    "reference will leak otherwise.",
-                    ResourceWarning,
-                    source=self,
-                )
-            except Exception:
-                pass
+            _warnings.warn(
+                f"Unclosed PipelineExecutor instance "
+                f"{getattr(self, '_instance_name', '?')!r}. "
+                "Call 'await executor.close()' (or stop the parent "
+                "FabricRuntime) before the executor is garbage "
+                "collected — pending pipelines and the cache backend "
+                "reference will leak otherwise.",
+                ResourceWarning,
+                source=self,
+            )
 
     # ------------------------------------------------------------------
     # Trace + property accessors

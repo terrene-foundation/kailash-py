@@ -23,7 +23,7 @@ from kailash.nodes.code.python import (  # noqa: F401  registers "PythonCodeNode
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
-from kaizen.core._provider_env import detect_provider_from_env
+from kaizen.core._provider_env import resolve_node_provider
 
 from ..ai.llm_agent import LLMAgentNode  # noqa: F401  registers "LLMAgentNode"
 
@@ -945,7 +945,9 @@ class GraphRAGNode(WorkflowNode):
             "LLMAgentNode",
             node_id="entity_extractor",
             config={
-                "provider": detect_provider_from_env(),
+                "provider": resolve_node_provider(
+                    _DEFAULT_LLM_MODEL, component="GraphRAGNode._create_workflow"
+                ),
                 "system_prompt": f"""Extract entities and relationships from text.
 
                 Entity types: {", ".join(self.entity_types)}
@@ -999,7 +1001,9 @@ class GraphRAGNode(WorkflowNode):
             "LLMAgentNode",
             node_id="query_processor",
             config={
-                "provider": detect_provider_from_env(),
+                "provider": resolve_node_provider(
+                    _DEFAULT_LLM_MODEL, component="GraphRAGNode._create_workflow"
+                ),
                 "system_prompt": """Analyze the query to identify:
                 1. Key entities mentioned or implied
                 2. Types of relationships being asked about
@@ -1052,7 +1056,9 @@ class GraphRAGNode(WorkflowNode):
                 "LLMAgentNode",
                 node_id="summary_generator",
                 config={
-                    "provider": detect_provider_from_env(),
+                    "provider": resolve_node_provider(
+                        _DEFAULT_LLM_MODEL, component="GraphRAGNode._create_workflow"
+                    ),
                     "system_prompt": """Generate high-level summaries of document communities.
                     Focus on main themes, key entities, and important relationships.
                     Be concise but comprehensive.""",

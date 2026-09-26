@@ -1107,7 +1107,16 @@ class SqliteAuditLog(_SqliteBase):
             ).fetchall()
 
         if not rows:
-            return (True, None)
+            # Fail CLOSED on an empty table (#2221): a WIPED audit log and a
+            # never-written one are the same bytes here, and the wipe is the one
+            # case tamper detection exists to catch. Returning ``(True, None)``
+            # made a deleted audit trail indistinguishable from a verified one.
+            return (
+                False,
+                "empty audit log: no entries to verify -- an absent audit trail "
+                "is unverifiable (fail-closed). This is NOT a tamper finding: a "
+                "never-written log and a wiped one are indistinguishable here.",
+            )
 
         prev_chain = ""
         for row in rows:

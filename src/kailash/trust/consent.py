@@ -472,8 +472,14 @@ class ConsentLedger:
            the first).
 
         Returns:
-            True iff the entire chain is intact.
+            True iff the ledger is NON-EMPTY and the entire chain is intact.
+            An empty ledger returns ``False`` (fail-closed, #2221): a wiped
+            consent ledger is unverifiable and must not report ``verified`` --
+            a wipe and a never-written ledger are otherwise indistinguishable
+            at this return value.
         """
+        if not self._records:
+            return False
         prev_hash = _GENESIS_HASH
         for attestation in self._records:
             if not verify_consent_attestation(

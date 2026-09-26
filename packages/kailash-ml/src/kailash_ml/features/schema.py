@@ -17,8 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import dataclass
-from dataclasses import field as _dc_field
+from dataclasses import dataclass, field as _dc_field
 from typing import Any
 
 __all__ = [

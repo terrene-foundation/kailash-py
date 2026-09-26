@@ -360,3 +360,147 @@ class TestAlreadyBlockedDoesNotMintKey:
             assert engine.verify_action(_ROLE, "read", {}).level == "auto_approved"
         assert engine.verify_action(_ROLE, "read", {}).level == "blocked"
         assert any("\x1fread\x1f" in key for key in engine._rate_enforcer._tracker)
+
+
+# ---------------------------------------------------------------------------
+# Fail-closed coercion (RT-3a) — a malformed caller-supplied numeric in `ctx`
+# yields a SPECIFIC blocked verdict, not a generic internal error
+# ---------------------------------------------------------------------------
+
+
+class TestMalformedCtxNumericsFailClosedSpecifically:
+    """A non-numeric ``ctx`` value MUST name the offending field in the verdict.
+
+    Before the fix, ``int(daily_calls)`` / ``int(hourly_calls)`` /
+    ``float(cost)`` were unguarded. A malformed value raised out of
+    ``_evaluate_limit_proximity`` into ``verify_action``'s broad
+    ``except Exception``. The verdict stayed BLOCKED (never fail-open), so the
+    harm is not an authorization bypass -- it is AUDIT DEGRADATION: the
+    exception aborts the evaluation before the live rate tally and the circuit
+    breaker record, and the audit row collapses to
+    ``{"error": "internal_error"}``, disguising a governance denial as a
+    phantom internal bug that a caller controlling ``ctx`` can trigger at will.
+
+    Asserting only ``level == "blocked"`` would pass BOTH before and after the
+    fix (``instrument-discipline.md`` MUST-1: a check that cannot return the
+    other answer is not evidence). Every assertion below therefore pins the
+    SPECIFIC reason AND the un-degraded audit row.
+    """
+
+    # (field, value, expected reason fragment)
+    # The float("inf") rows are load-bearing: int(inf) raises OverflowError,
+    # which is NOT a subclass of ValueError/TypeError (MRO: OverflowError ->
+    # ArithmeticError -> Exception). A guard catching only (ValueError,
+    # TypeError) lets these two escape, so they discriminate the exception
+    # tuple itself, not merely the presence of a guard.
+    _CASES = [
+        ("daily_calls", "abc", "ctx['daily_calls'] is not a valid integer (got str)"),
+        ("daily_calls", {}, "ctx['daily_calls'] is not a valid integer (got dict)"),
+        ("daily_calls", [], "ctx['daily_calls'] is not a valid integer (got list)"),
+        (
+            "daily_calls",
+            float("inf"),
+            "ctx['daily_calls'] is not a valid integer (got float)",
+        ),
+        (
+            "daily_calls",
+            float("nan"),
+            "ctx['daily_calls'] is not a valid integer (got float)",
+        ),
+        ("hourly_calls", "abc", "ctx['hourly_calls'] is not a valid integer (got str)"),
+        ("hourly_calls", {}, "ctx['hourly_calls'] is not a valid integer (got dict)"),
+        (
+            "hourly_calls",
+            float("-inf"),
+            "ctx['hourly_calls'] is not a valid integer (got float)",
+        ),
+        ("cost", "abc", "ctx['cost'] is not a valid number (got str)"),
+        ("cost", {}, "ctx['cost'] is not a valid number (got dict)"),
+        # float(10**400) raises OverflowError ("int too large to convert to
+        # float") -- the cost-side sibling of the int(inf) case above.
+        ("cost", 10**400, "ctx['cost'] is not a valid number (got int)"),
+    ]
+
+    @pytest.mark.parametrize("field,value,expected_reason", _CASES)
+    def test_malformed_value_blocks_with_specific_reason(
+        self,
+        engine: GovernanceEngine,
+        field: str,
+        value: Any,
+        expected_reason: str,
+    ) -> None:
+        _set_rate_envelope(engine, max_per_day=5, max_per_hour=5)
+        verdict = engine.verify_action(_ROLE, "read", {field: value})
+
+        assert verdict.level == "blocked"
+        # The SPECIFIC reason -- names the field and its offending type.
+        assert verdict.reason == f"{expected_reason} -- fail-closed to BLOCKED"
+        # NOT the generic internal-error fallback the unguarded coercion hit.
+        assert "Internal error during action verification" not in verdict.reason
+
+    @pytest.mark.parametrize("field,value,expected_reason", _CASES)
+    def test_malformed_value_does_not_degrade_the_audit_row(
+        self,
+        engine: GovernanceEngine,
+        field: str,
+        value: Any,
+        expected_reason: str,
+    ) -> None:
+        # The actual harm the fix closes: a caller-controllable path that turns
+        # every governance decision into an "internal_error" audit row.
+        _set_rate_envelope(engine, max_per_day=5, max_per_hour=5)
+        verdict = engine.verify_action(_ROLE, "read", {field: value})
+
+        assert verdict.audit_details.get("error") != "internal_error"
+        assert "error" not in verdict.audit_details
+
+    def test_hostile_ctx_cannot_mask_a_real_denial_as_an_internal_bug(
+        self, engine: GovernanceEngine
+    ) -> None:
+        # End-to-end shape of the abuse: a caller who controls `ctx` repeatedly
+        # forces the malformed path. Each call must read as a governance denial
+        # naming the caller's own bad input -- never as a server-side fault.
+        _set_rate_envelope(engine, max_per_day=5, max_per_hour=5)
+        for _ in range(5):
+            verdict = engine.verify_action(_ROLE, "read", {"daily_calls": "not-a-int"})
+            assert verdict.level == "blocked"
+            assert "daily_calls" in verdict.reason
+            assert verdict.audit_details.get("error") is None
+
+
+class TestCoercibleCtxNumericsUnchanged:
+    """Values that ALREADY coerced without raising keep their exact behaviour.
+
+    ``bool``/``float`` inputs to ``int()`` are a separate judgment call about
+    caller-supplied types (``True -> 1``, ``3.7 -> 3``); the fail-closed guard
+    deliberately does not change them. These pin that the guard did not widen
+    into a behaviour change.
+    """
+
+    @pytest.mark.parametrize(
+        "value,expected_level",
+        [
+            (True, "auto_approved"),  # int(True) == 1, under the limit of 5
+            (3.7, "auto_approved"),  # int(3.7) == 3, under the limit of 5
+            (9, "blocked"),  # plain int at/over the limit still blocks
+            (9.9, "blocked"),  # int(9.9) == 9, at/over the limit
+        ],
+    )
+    def test_daily_calls_coercible_values_unchanged(
+        self, engine: GovernanceEngine, value: Any, expected_level: str
+    ) -> None:
+        _set_rate_envelope(engine, max_per_day=5)
+        verdict = engine.verify_action(_ROLE, "read", {"daily_calls": value})
+        assert verdict.level == expected_level
+        if expected_level == "blocked":
+            assert "Daily rate limit exceeded" in verdict.reason
+
+    def test_valid_cost_still_flows_through_the_financial_dimension(
+        self, engine: GovernanceEngine
+    ) -> None:
+        # A coercible-but-non-float cost (str "500.0") still reaches the
+        # financial checks -- the guard rejects only what float() rejects.
+        _set_rate_envelope(engine, max_spend=1000.0, approval_above=100.0)
+        verdict = engine.verify_action(_ROLE, "read", {"cost": "500.0"})
+        assert verdict.level == "held"
+        assert "approval threshold" in verdict.reason

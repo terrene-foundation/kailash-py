@@ -771,9 +771,11 @@ class TestExtensionPoint3_GenerateSystemPrompt:
         # This test validates the actual production implementation
         from kaizen.core.base_agent import BaseAgent as RealBaseAgent
         from kaizen.core.config import BaseAgentConfig as RealBaseAgentConfig
-        from kaizen.signatures import InputField as RealInputField
-        from kaizen.signatures import OutputField as RealOutputField
-        from kaizen.signatures import Signature as RealSignature
+        from kaizen.signatures import (
+            InputField as RealInputField,
+            OutputField as RealOutputField,
+            Signature as RealSignature,
+        )
 
         class FormattedOutputSignature(RealSignature):
             """You MUST respond with exactly 3 bullet points.

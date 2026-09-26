@@ -30,6 +30,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from kailash.utils.secure_logging import sanitize_log_value
 from kailash.utils.url_credentials import mask_error_text
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 from kaizen.providers.document.base_provider import (
@@ -167,7 +168,9 @@ class OllamaVisionProvider(BaseDocumentProvider):
         cost = 0.0  # Free!
 
         logger.info(
-            f"Extracting {file_path} with Ollama Vision ({page_count} pages, FREE)"
+            "Extracting %s with Ollama Vision (%s pages, FREE)",
+            sanitize_log_value(file_path),
+            page_count,
         )
 
         # Check if Ollama is available
@@ -262,8 +265,10 @@ class OllamaVisionProvider(BaseDocumentProvider):
         processing_time = time.time() - start_time
 
         logger.info(
-            f"Extracted {len(extracted_text)} chars from {file_path_obj.name} "
-            f"in {processing_time:.2f}s (FREE)"
+            "Extracted %s chars from %s in %.2fs (FREE)",
+            len(extracted_text),
+            sanitize_log_value(file_path_obj.name),
+            processing_time,
         )
 
         return ExtractionResult(

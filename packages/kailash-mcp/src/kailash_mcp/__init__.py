@@ -20,9 +20,7 @@ from kailash_mcp.advanced.features import (
     MultiModalContent,
     ProgressReporter,
     ResourceChange,
-)
-from kailash_mcp.advanced.features import ResourceTemplate as AdvancedResourceTemplate
-from kailash_mcp.advanced.features import (
+    ResourceTemplate as AdvancedResourceTemplate,
     SchemaValidator,
     StreamingHandler,
     StructuredTool,

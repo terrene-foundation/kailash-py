@@ -54,6 +54,7 @@ dependencies = [
 # ─────────────────────────────────────────────────────────────────
 postgres-sync = [
     "psycopg2-binary>=2.9",  # sync paths (migrations/sync_ddl_executor.py, etc.)
+    "psycopg[binary]>=3.2",  # SQLAlchemy 2.1+ defaults to psycopg for PostgreSQL URLs
 ]
 mysql = [
     "aiomysql>=0.2.0",
@@ -63,7 +64,8 @@ sqlite = [
 ]
 mongo = [
     "motor>=3.3.0",
-    "pymongo[srv]>=4.5.0",  # `[srv]` extra pulls dnspython transitively for mongodb+srv:// URLs
+    "pymongo>=4.5.0",
+    "dnspython>=2.1.0",  # Explicit SRV support, including versions without PyMongo's former srv extra
 ]
 redis = [
     "redis>=4.5.0",
@@ -235,10 +237,12 @@ extend-exclude = '''
 
 [tool.isort]
 profile = "black"
+# Keep aliased imports compatible with Black, including narrow inline pragmas.
+combine_as_imports = true
 line_length = 88
 # MUST match the root pyproject.toml list exactly — see the note in
 # packages/kailash-kaizen/pyproject.toml (#1995).
-known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact", "kailash_mcp"]
+known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact", "kailash_mcp", "kailash_ml", "kailash_align"]
 multi_line_output = 3
 include_trailing_comma = true
 force_grid_wrap = 0

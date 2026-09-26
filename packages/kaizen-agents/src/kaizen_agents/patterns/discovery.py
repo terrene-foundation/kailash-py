@@ -9,8 +9,7 @@ import inspect
 import logging
 import math
 from collections import OrderedDict
-from collections.abc import Mapping, Sequence
-from collections.abc import Set as AbstractSet
+from collections.abc import Mapping, Sequence, Set as AbstractSet
 from dataclasses import dataclass, field
 from datetime import time as _time
 from typing import Any, Final

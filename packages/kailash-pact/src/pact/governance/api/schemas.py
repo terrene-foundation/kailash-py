@@ -214,7 +214,13 @@ class GrantClearanceRequest(BaseModel):
         description="Named compartments to grant access to",
     )
     granted_by_role_address: str = Field(
-        description="D/T/R address of the role granting the clearance"
+        description=(
+            "D/T/R address the caller CLAIMS is granting the clearance. "
+            "Unverified: the shared bearer token carries no principal "
+            "identity, so the server cannot confirm the caller holds this "
+            "role. It is validated for shape only, and is recorded marked "
+            "as an unverified claim (issue #2194)."
+        )
     )
 
     @field_validator("role_address")
@@ -234,6 +240,13 @@ class GrantClearanceRequest(BaseModel):
     @field_validator("granted_by_role_address")
     @classmethod
     def validate_granted_by(cls, v: str) -> str:
+        """Validate SHAPE only -- this is not an authorization check.
+
+        A well-formed D/T/R address is not evidence that the caller holds
+        that role. Nothing here compares the value to the authenticated
+        caller, because under the shared-token scheme there is no principal
+        to compare it to (#2194).
+        """
         return _validate_dtr_address(v)
 
 
@@ -313,7 +326,12 @@ class CreateKSPRequest(BaseModel):
     target_unit_address: str = Field(description="D/T prefix receiving access")
     max_classification: str = Field(description="Maximum classification level shared")
     created_by_role_address: str = Field(
-        description="Role that created this policy (audit trail)"
+        description=(
+            "D/T/R address the caller CLAIMS created this policy (audit "
+            "trail). Unverified for the same reason as "
+            "GrantClearanceRequest.granted_by_role_address, and recorded "
+            "marked as an unverified claim (issue #2194)."
+        )
     )
     compartments: list[str] = Field(
         default_factory=list,
@@ -425,6 +443,7 @@ class CreateKSPRequest(BaseModel):
     @field_validator("created_by_role_address")
     @classmethod
     def validate_created_by(cls, v: str) -> str:
+        """Validate SHAPE only -- see ``validate_granted_by`` (#2194)."""
         return _validate_dtr_address(v)
 
 

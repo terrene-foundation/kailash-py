@@ -52,6 +52,7 @@ from kailash.trust.constraints.dimension import (
     ConstraintDimensionRegistry,
     ConstraintValue,
 )
+from kailash.utils.secure_logging import sanitize_log_value
 
 logger = logging.getLogger(__name__)
 
@@ -436,7 +437,9 @@ class ResourceDimension(ConstraintDimension):
             # Warn about patterns that could be dangerous (but don't reject)
             if "**" in p:
                 logger.warning(
-                    f"Resource pattern '{p}' uses '**' which matches across directories. Ensure this is intentional."
+                    "Resource pattern '%s' uses '**' which matches across "
+                    "directories. Ensure this is intentional.",
+                    sanitize_log_value(p, 256),
                 )
 
         return ConstraintValue(
@@ -482,7 +485,9 @@ class ResourceDimension(ConstraintDimension):
         validation_error = self._validate_resource_path(resource)
         if validation_error:
             logger.warning(
-                f"Resource path security violation: {validation_error} (resource: {resource!r})"
+                "Resource path security violation: %s (resource: %s)",
+                validation_error,
+                sanitize_log_value(resource, 256),
             )
             return ConstraintCheckResult(
                 satisfied=False,

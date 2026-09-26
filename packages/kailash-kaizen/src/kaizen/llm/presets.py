@@ -69,9 +69,20 @@ _PRESET_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 
 
 def _fingerprint(raw: str) -> str:
-    """8-char non-reversible tag — matches the cross-SDK contract (see
+    """8-char UNKEYED correlation tag -- matches the cross-SDK contract (see
     ``rules/event-payload-classification.md`` §2 and DataFlow's
     ``format_record_id_for_event``).
+
+    Explicitly NOT non-reversible, which this docstring claimed until #2170,
+    and this is the most enumerable input in the whole fingerprint family:
+    `_validate_preset_name` restricts a preset name to
+    ``^[a-z][a-z0-9_]{0,31}$`` and the real names are a short published list,
+    so one dictionary guess recovers the plaintext (measured: 1 guess, 43
+    microseconds). Nothing is being protected here and nothing needs to be --
+    a preset name is not a secret. The tag is here so an unvalidated name
+    cannot inject control characters into a log line, while repeat hits on
+    one preset still correlate. Do not reuse this helper where the input IS
+    confidential.
 
     #617: migrated from SHA-256 → fingerprint_secret (BLAKE2b) to close
     CodeQL py/weak-sensitive-data-hashing consistently across kaizen/llm.

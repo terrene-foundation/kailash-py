@@ -77,7 +77,12 @@ http-client = [
 ]
 
 # Database extras — install ONLY the driver(s) your app uses.
-db-postgres = ["sqlalchemy>=2.0.0", "asyncpg>=0.30.0"]
+db-postgres = [
+    "sqlalchemy>=2.0.0",
+    "asyncpg>=0.30.0",
+    "psycopg2-binary>=2.9",  # SQLAlchemy 2.0 default sync driver
+    "psycopg[binary]>=3.2",  # SQLAlchemy 2.1 default sync driver
+]
 db-mysql    = ["sqlalchemy>=2.0.0", "aiomysql>=0.2.0"]
 db-sqlite   = ["sqlalchemy>=2.0.0", "aiosqlite>=0.19.0"]
 
@@ -192,6 +197,8 @@ dev = [
     "build>=1.2.2.post1",
     "detect-secrets>=1.5.0",
     "faker>=37.4.0",
+    # Starlette TestClient uses httpx2; its legacy httpx fallback is deprecated.
+    "httpx2>=2.13.1",
     "isort>=6.0.1",
     "mypy>=0.9",
     "pre-commit>=4.2.0",
@@ -317,7 +324,9 @@ known-first-party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", 
 
 [tool.isort]
 profile = "black"
-known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact", "kailash_mcp"]
+# Keep aliased imports compatible with Black, including narrow inline pragmas.
+combine_as_imports = true
+known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact", "kailash_mcp", "kailash_ml", "kailash_align"]
 # Scaffold templates are NOT valid Python — they carry `{Placeholder}` substitution tokens
 # (e.g. `class Test{AgentName}Initialization:`), so every formatter fails to parse them.
 # Excluded at CONFIG level, not in the pre-commit hook alone, so a direct `isort .` /

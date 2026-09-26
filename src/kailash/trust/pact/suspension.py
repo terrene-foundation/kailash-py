@@ -27,7 +27,9 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Mapping
+
+from kailash.trust.pact.immutable import FrozenMapping
 
 logger = logging.getLogger(__name__)
 
@@ -131,9 +133,13 @@ def resume_condition_for_trigger(
 class PlanSuspension:
     """A suspended plan with its resume conditions and frozen state snapshot.
 
-    frozen=True: prevents post-construction mutation of any field, including
-    the snapshot dict (shallow freeze -- the dict reference is frozen, but
-    callers should not mutate its contents).
+    frozen=True prevents post-construction REBINDING of any field. It does not
+    freeze a dict field's contents, and ``GovernanceEngine.get_suspension`` --
+    on the read-only governance view's allowlist -- hands back the very object
+    the suspension gate reads, so this docstring previously asked callers not
+    to mutate ``snapshot`` and nothing enforced it (#2226). ``snapshot`` is now
+    coerced to a :class:`~kailash.trust.pact.immutable.FrozenMapping` in
+    ``__post_init__``, so the request is a guarantee rather than a hope.
 
     Attributes:
         plan_id: Unique identifier for the plan that was suspended.
@@ -152,18 +158,38 @@ class PlanSuspension:
     trigger: SuspensionTrigger
     suspended_at: str
     resume_conditions: tuple[ResumeCondition, ...]
-    snapshot: dict[str, Any] = field(default_factory=dict)
+    snapshot: Mapping[str, Any] = field(default_factory=FrozenMapping)
     role_address: str = ""
     suspension_id: str = field(default_factory=lambda: uuid.uuid4().hex)
+
+    def __post_init__(self) -> None:
+        """Freeze ``snapshot`` in place so the stored record cannot be edited.
+
+        Uses ``object.__setattr__`` because the dataclass is ``frozen=True``;
+        this is the same build-phase pattern ``compile_org`` uses to install
+        the read-only nodes mapping on ``CompiledOrg``.
+        """
+        if not isinstance(self.snapshot, FrozenMapping):
+            object.__setattr__(self, "snapshot", FrozenMapping(self.snapshot or {}))
 
     def all_conditions_met(self) -> bool:
         """Check whether all resume conditions are currently satisfied.
 
+        This gates whether a suspended plan may RESUME, so it fails CLOSED: a
+        record constructed with an empty ``resume_conditions`` tuple returns
+        ``False``, NOT ``True``. A suspension with no stated resume conditions
+        is un-resumable through this gate without an explicit override -- the
+        vacuous-truth of ``all([])`` is a fail-OPEN resume gate, the opposite
+        of defensive (#2221).
+
         Returns:
-            True if every ResumeCondition has satisfied=True.
-            Returns True vacuously if there are no conditions (defensive).
+            ``True`` iff there is at least one resume condition AND every
+            :class:`ResumeCondition` has ``satisfied=True``. ``False`` when
+            ``resume_conditions`` is empty or any condition is unmet.
         """
-        return all(c.satisfied for c in self.resume_conditions)
+        return bool(self.resume_conditions) and all(
+            c.satisfied for c in self.resume_conditions
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a plain dict suitable for JSON encoding.
@@ -176,7 +202,10 @@ class PlanSuspension:
             "trigger": self.trigger.value,
             "suspended_at": self.suspended_at,
             "resume_conditions": [c.to_dict() for c in self.resume_conditions],
-            "snapshot": self.snapshot,
+            # dict(), not the FrozenMapping itself: to_dict()'s contract is a
+            # plain mutable dict the caller owns, and handing back the frozen
+            # one would make an ordinary `result["snapshot"]["k"] = v` raise.
+            "snapshot": dict(self.snapshot),
             "role_address": self.role_address,
             "suspension_id": self.suspension_id,
         }

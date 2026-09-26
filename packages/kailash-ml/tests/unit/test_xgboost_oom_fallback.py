@@ -19,6 +19,7 @@ from unittest.mock import MagicMock
 
 import polars as pl
 import pytest
+
 from kailash_ml._device_report import DeviceReport
 from kailash_ml._result import TrainingResult
 from kailash_ml.trainable import TrainingContext, XGBoostTrainable, _is_gpu_oom_error

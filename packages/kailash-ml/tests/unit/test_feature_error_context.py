@@ -31,6 +31,7 @@ from __future__ import annotations
 from types import TracebackType
 
 import pytest
+
 from kailash_ml.features._error_context import describe_exception_origin
 
 _SECRET_MESSAGE = "connect failed for postgres://user:hunter2@db.internal/acme"

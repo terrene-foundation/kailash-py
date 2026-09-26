@@ -277,6 +277,48 @@ class TestResumeConditions:
 
 
 # ---------------------------------------------------------------------------
+# Tests: all_conditions_met() fails closed on an empty condition set (#2221)
+# ---------------------------------------------------------------------------
+
+
+class TestAllConditionsMetFailsClosed:
+    """A resume gate with no stated conditions must NOT auto-resume.
+
+    ``all([])`` is vacuously True, which made a suspension constructed with an
+    empty ``resume_conditions`` tuple resume immediately and unconditionally --
+    a fail-OPEN resume gate. The gate must fail CLOSED instead.
+    """
+
+    def _make(self, conditions: tuple) -> PlanSuspension:
+        return PlanSuspension(
+            plan_id="p",
+            trigger=SuspensionTrigger.BUDGET,
+            suspended_at="2026-01-01T00:00:00+00:00",
+            resume_conditions=conditions,
+        )
+
+    def test_empty_conditions_do_not_auto_resume(self) -> None:
+        """No stated conditions -> un-resumable through this gate (not vacuously True)."""
+        assert self._make(()).all_conditions_met() is False
+
+    def test_populated_satisfied_conditions_resume(self) -> None:
+        """The other pole: a populated, all-satisfied set still resumes."""
+        conds = (
+            ResumeCondition(condition_type="budget_replenished", satisfied=True),
+            ResumeCondition(condition_type="posture_restored", satisfied=True),
+        )
+        assert self._make(conds).all_conditions_met() is True
+
+    def test_populated_partially_unmet_conditions_do_not_resume(self) -> None:
+        """A single unmet condition still blocks resume."""
+        conds = (
+            ResumeCondition(condition_type="budget_replenished", satisfied=True),
+            ResumeCondition(condition_type="posture_restored", satisfied=False),
+        )
+        assert self._make(conds).all_conditions_met() is False
+
+
+# ---------------------------------------------------------------------------
 # Tests: Suspended plans block verify_action
 # ---------------------------------------------------------------------------
 
@@ -595,14 +637,21 @@ class TestSerializationRoundTrip:
         assert suspension.all_conditions_met() is False
 
     def test_all_conditions_met_empty(self) -> None:
-        """all_conditions_met returns True vacuously when no conditions exist."""
+        """all_conditions_met fails CLOSED when no conditions exist (#2221).
+
+        Previously this returned True vacuously (``all([]) is True``), a
+        fail-OPEN resume gate: a suspension with no stated resume conditions
+        resumed immediately and unconditionally. It now returns False -- such a
+        suspension is un-resumable through this gate without an explicit
+        override.
+        """
         suspension = PlanSuspension(
             plan_id="plan-empty",
             trigger=SuspensionTrigger.BUDGET,
             suspended_at="2026-04-09T10:00:00+00:00",
             resume_conditions=(),
         )
-        assert suspension.all_conditions_met() is True
+        assert suspension.all_conditions_met() is False
 
 
 # ---------------------------------------------------------------------------

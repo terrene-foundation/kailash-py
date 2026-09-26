@@ -117,7 +117,7 @@ class TestSerialization:
             id="env-001",
             description="test envelope",
             operational=OperationalConstraintConfig(
-                allowed_actions=["read", "write"],
+                allowed_actions=("read", "write"),
             ),
         )
         clearance = RoleClearance(
@@ -138,7 +138,11 @@ class TestSerialization:
         )
 
         data = ctx.to_dict()
-        restored = GovernanceContext.from_dict(data)
+        # from_dict() deliberately warns that it yields an UNVERIFIED context.
+        # Asserting the warning pins that security notice instead of letting it
+        # leak to the run's warning summary.
+        with pytest.warns(UserWarning, match="unverified context"):
+            restored = GovernanceContext.from_dict(data)
 
         assert restored.role_address == ctx.role_address
         assert restored.posture == ctx.posture
@@ -180,7 +184,8 @@ class TestSerialization:
             "org_id": "test-org",
             "created_at": now.isoformat(),
         }
-        ctx = GovernanceContext.from_dict(data)
+        with pytest.warns(UserWarning, match="unverified context"):
+            ctx = GovernanceContext.from_dict(data)
         assert ctx.effective_envelope is None
         assert ctx.clearance is None
         assert ctx.effective_clearance_level is None
@@ -201,7 +206,7 @@ class TestAllowedActionsFromEnvelope:
         envelope = ConstraintEnvelopeConfig(
             id="env-001",
             operational=OperationalConstraintConfig(
-                allowed_actions=["read", "write", "propose"],
+                allowed_actions=("read", "write", "propose"),
             ),
         )
         ctx = GovernanceContext(

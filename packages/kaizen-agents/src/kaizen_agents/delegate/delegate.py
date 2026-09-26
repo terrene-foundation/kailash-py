@@ -59,6 +59,7 @@ from kaizen_agents.delegate.events import (
     TurnComplete,
 )
 from kaizen_agents.delegate.loop import AgentLoop, ToolRegistry
+from kaizen_agents.wrapper_base import WrapperBase
 
 if TYPE_CHECKING:
     from kailash.trust.envelope import ConstraintEnvelope
@@ -720,12 +721,38 @@ class Delegate:
     # ------------------------------------------------------------------
 
     @property
-    def core_agent(self) -> BaseAgent:
-        """The innermost BaseAgent in the wrapper stack (the ``_LoopAgent`` bridge)."""
-        # Walk the wrapper stack via _loop_agent to the bottom
+    def core_agent(self) -> Any:
+        """The innermost agent, or the containment boundary that stands for it.
+
+        For an ungoverned Delegate this is the ``_LoopAgent`` bridge, unchanged.
+        When an envelope is in play it is ``L3GovernedAgent``'s protected proxy.
+
+        Why this delegates instead of walking (#2227 Route C)
+        ----------------------------------------------------
+        This property used to run its own walk::
+
+            agent = self._loop_agent
+            while hasattr(agent, "_inner"):   # private link -- no boundary check
+                agent = agent._inner
+
+        ``__init__`` assigns ``self._loop_agent = L3GovernedAgent(self._loop_agent,
+        envelope=...)`` when an envelope is supplied, so that walk started INSIDE
+        the governed stack and returned the raw bridge. Measured, the exact input
+        the governed path rejects then executed through it::
+
+            d.wrapper_stack.run(_action=BLOCKED, ...)   # GovernanceRejectedError
+            d.core_agent.run(_action=BLOCKED, ...)      # ran, envelope never consulted
+
+        Same defect class as Route A (``WrapperBase.innermost``), and this is a
+        PUBLIC property, so it needed no private access to reach. It is fixed by
+        deferring to ``innermost``, which honours ``_containment_boundary`` --
+        reusing that one contract rather than teaching the facade a second
+        traversal rule that could drift out of sync with it. Pinned by
+        ``tests/unit/delegate/test_delegate_core_agent_containment.py``.
+        """
         agent = self._loop_agent
-        while hasattr(agent, "_inner"):
-            agent = agent._inner
+        if isinstance(agent, WrapperBase):
+            return agent.innermost
         return agent
 
     @property

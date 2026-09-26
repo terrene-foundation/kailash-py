@@ -77,8 +77,23 @@ Issues = "https://github.com/terrene-foundation/kailash-py/issues"
 packages = ["src/kailash_align"]
 
 [tool.pytest.ini_options]
+# See packages/kailash-pact/pyproject.toml for why this block is required: this section
+# makes the package the rootdir, so without an explicit pythonpath `import kailash`
+# resolves to site-packages and the suite collects zero tests. Not globbed -- list them.
+pythonpath = [
+  "src",
+  "../../src",
+  "../kailash-dataflow/src",
+  "../kailash-kaizen/src",
+  "../kailash-mcp/src",
+  "../kailash-ml/src",
+  "../kailash-nexus/src",
+  "../kailash-pact/src",
+  "../kaizen-agents/src",
+]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 timeout = 30
 markers = [
     "unit: Unit tests (no I/O, no network)",

@@ -28,24 +28,29 @@ from datetime import timedelta
 from typing import Any
 
 from kaizen.l3.envelope.types import GradientZone as SdkGradientZone
-from kaizen.l3.plan.types import EdgeType as SdkEdgeType
-from kaizen.l3.plan.types import Plan as SdkPlan
-from kaizen.l3.plan.types import PlanEdge as SdkPlanEdge
-from kaizen.l3.plan.types import PlanNode as SdkPlanNode
-from kaizen.l3.plan.types import PlanNodeOutput as SdkPlanNodeOutput
-from kaizen.l3.plan.types import PlanNodeState as SdkPlanNodeState
-from kaizen.l3.plan.types import PlanState as SdkPlanState
-from kaizen_agents.types import AgentSpec, ConstraintEnvelope
-from kaizen_agents.types import DimensionGradient as LocalDimensionGradient
-from kaizen_agents.types import EdgeType as LocalEdgeType
-from kaizen_agents.types import GradientZone as LocalGradientZone
-from kaizen_agents.types import Plan as LocalPlan
-from kaizen_agents.types import PlanEdge as LocalPlanEdge
-from kaizen_agents.types import PlanGradient as LocalPlanGradient
-from kaizen_agents.types import PlanNode as LocalPlanNode
-from kaizen_agents.types import PlanNodeOutput as LocalPlanNodeOutput
-from kaizen_agents.types import PlanNodeState as LocalPlanNodeState
-from kaizen_agents.types import PlanState as LocalPlanState
+from kaizen.l3.plan.types import (
+    EdgeType as SdkEdgeType,
+    Plan as SdkPlan,
+    PlanEdge as SdkPlanEdge,
+    PlanNode as SdkPlanNode,
+    PlanNodeOutput as SdkPlanNodeOutput,
+    PlanNodeState as SdkPlanNodeState,
+    PlanState as SdkPlanState,
+)
+from kaizen_agents.types import (
+    AgentSpec,
+    ConstraintEnvelope,
+    DimensionGradient as LocalDimensionGradient,
+    EdgeType as LocalEdgeType,
+    GradientZone as LocalGradientZone,
+    Plan as LocalPlan,
+    PlanEdge as LocalPlanEdge,
+    PlanGradient as LocalPlanGradient,
+    PlanNode as LocalPlanNode,
+    PlanNodeOutput as LocalPlanNodeOutput,
+    PlanNodeState as LocalPlanNodeState,
+    PlanState as LocalPlanState,
+)
 
 __all__ = [
     "edge_type_from_sdk",
@@ -336,13 +341,22 @@ def plan_gradient_from_dict(data: dict[str, Any]) -> LocalPlanGradient:
 
 
 def envelope_to_dict(local: ConstraintEnvelope) -> dict[str, Any]:
-    """Serialize a ConstraintEnvelopeConfig to a plain dict for the SDK Plan.envelope field."""
+    """Serialize a ConstraintEnvelopeConfig to a plain dict for the SDK Plan.envelope field.
+
+    ``mode="json"`` so the result is genuinely PLAIN, as the docstring above
+    promises: the envelope's sequence dimensions are ``tuple`` fields (#2226 --
+    a mutable list there was a live handle on the governance decision), and
+    python-mode ``model_dump()`` preserves tuples, which would put non-JSON
+    containers into a dict whose whole purpose is to cross a serialization
+    boundary. JSON mode renders them as lists, which is what every consumer of
+    this dict -- and ``envelope_from_dict`` below -- already expects.
+    """
     return {
-        "financial": local.financial.model_dump() if local.financial else {},
-        "operational": local.operational.model_dump(),
-        "temporal": local.temporal.model_dump(),
-        "data_access": local.data_access.model_dump(),
-        "communication": local.communication.model_dump(),
+        "financial": local.financial.model_dump(mode="json") if local.financial else {},
+        "operational": local.operational.model_dump(mode="json"),
+        "temporal": local.temporal.model_dump(mode="json"),
+        "data_access": local.data_access.model_dump(mode="json"),
+        "communication": local.communication.model_dump(mode="json"),
     }
 
 

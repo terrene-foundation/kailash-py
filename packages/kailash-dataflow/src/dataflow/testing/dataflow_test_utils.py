@@ -297,14 +297,11 @@ class DataFlowTestUtils:
         MUST NOT invoke ``close()`` itself — see issue #1000.
         """
         if getattr(self, "runtime", None) is not None:
-            try:
-                _warnings.warn(
-                    f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
-                    ResourceWarning,
-                    source=self,
-                )
-            except Exception:
-                pass
+            _warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
 
     def verify_schema(self, expected_tables: List[str]) -> bool:
         """Verify that expected tables exist using DataFlow schema discovery."""

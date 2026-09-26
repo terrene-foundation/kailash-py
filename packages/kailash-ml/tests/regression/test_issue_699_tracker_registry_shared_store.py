@@ -34,11 +34,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+
+from kailash.db.connection import ConnectionManager
 from kailash_ml import ExperimentTracker, ModelRegistry
 from kailash_ml.engines.model_registry import LocalFileArtifactStore
 from kailash_ml.types import FeatureField, FeatureSchema, MetricSpec, ModelSignature
-
-from kailash.db.connection import ConnectionManager
 
 
 @pytest.fixture

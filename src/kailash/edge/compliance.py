@@ -626,15 +626,19 @@ class ComplianceRouter:
         self, location: EdgeLocation, requirement: ComplianceRequirement
     ) -> Dict[str, Any]:
         """Check multi-factor authentication support."""
-        # For now, assume all locations support MFA
-        return {"compliant": True, "message": "MFA support available"}
+        if location.capabilities.mfa_supported:
+            return {"compliant": True, "message": "MFA support available"}
+        else:
+            return {"compliant": False, "message": "MFA support not available"}
 
     def _check_rbac_support(
         self, location: EdgeLocation, requirement: ComplianceRequirement
     ) -> Dict[str, Any]:
         """Check role-based access control support."""
-        # For now, assume all locations support RBAC
-        return {"compliant": True, "message": "RBAC support available"}
+        if location.capabilities.rbac_supported:
+            return {"compliant": True, "message": "RBAC support available"}
+        else:
+            return {"compliant": False, "message": "RBAC support not available"}
 
     def _select_recommended_location(
         self,

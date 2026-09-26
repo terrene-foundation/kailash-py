@@ -47,12 +47,17 @@ Examples:
 """
 
 import ast
+import functools
 import importlib.util
 import inspect
+import io
 import json
 import logging
 import os
+import sys
+import tokenize
 import traceback
+import types
 from collections.abc import Callable
 from datetime import date, datetime
 from decimal import Decimal
@@ -79,6 +84,7 @@ logger = logging.getLogger(__name__)
 
 # Import shared constants and utilities
 from kailash.nodes.code.common import (  # noqa: E402
+    ALLOWED_ASYNC_MODULES,
     ALLOWED_BUILTINS,
     ALLOWED_MODULES,
     COMPLETELY_BLOCKED_MODULES,
@@ -190,6 +196,166 @@ class SafeCodeChecker(ast.NodeVisitor):
                     }
                 )
         self.generic_visit(node)
+
+
+# The complete set of module names a lazy proxy is ever permitted to import.
+# This is the SAME allow-list the eager binding path enforced, minus the modules
+# that are blocked outright. It is consulted at RESOLVE time, not only at
+# construction, because the proxy CLASS is reachable from sandboxed code -- see
+# _LazyModule.__doc__ -- and code that reached it could otherwise name any
+# importable module, including one COMPLETELY_BLOCKED_MODULES forbids.
+_LAZY_BINDABLE_MODULES: frozenset[str] = frozenset(
+    (ALLOWED_MODULES | ALLOWED_ASYNC_MODULES) - COMPLETELY_BLOCKED_MODULES
+)
+
+
+class _LazyModule(types.ModuleType):
+    """Deferred binding for a sandbox-allowed module (#2000).
+
+    ``CodeExecutor`` makes every module in its allow-list available to user code
+    as a bare name, without the user writing an ``import``. Materialising that
+    convenience eagerly meant importing pandas, numpy, scipy, sklearn,
+    matplotlib and friends on the FIRST ``PythonCodeNode`` execution of every
+    process -- 7-9s of stall for code that referenced none of them, and a hard
+    failure on a broken or partial ML install.
+
+    Modules the code actually mentions are imported for real. Every other
+    allow-listed module is bound to one of these proxies instead, so a dynamic
+    reference still resolves, while code that never touches the name pays
+    nothing. The underlying module is imported on first attribute access and
+    memoised on the proxy.
+
+    SECURITY -- why the allow-list is re-checked here
+    -------------------------------------------------
+    Sandboxed code CAN reach this class. ``type`` is an allow-listed builtin and
+    a user-defined function's ``__globals__`` exposes the execution namespace, so
+    ``type(some_proxy)`` hands the sandbox this constructor. Before lazy binding,
+    that namespace slot held a real module, so ``type(x)`` was
+    ``types.ModuleType`` and ``ModuleType("subprocess")`` built an EMPTY module
+    that imported nothing. An unguarded proxy constructor would instead import
+    whatever it was named -- with the module name appearing only inside a string
+    literal, where the AST checker cannot see it. Both ``__init__`` and
+    ``_kailash_resolve`` therefore validate against ``_LAZY_BINDABLE_MODULES``,
+    so neither a fresh construction nor mutation of an existing proxy's recorded
+    name can import a module the eager path would have refused.
+
+    Subclassing ``types.ModuleType`` is also load-bearing: the execution-namespace
+    egress filter strips modules from node outputs by ``isinstance``, and a plain
+    object would sail past it and then fail JSON-serialisation validation,
+    breaking a node that previously succeeded.
+
+    Binding, precisely: a module absent from the environment is not bound at all,
+    so referencing it raises ``NameError`` as before. A module that is present
+    but fails to import is bound lazily when the code does not name it -- there
+    the ``ImportError`` surfaces at first attribute access rather than at bind
+    time.
+    """
+
+    def __init__(self, module_name: str) -> None:
+        if module_name not in _LAZY_BINDABLE_MODULES:
+            raise SafetyViolationError(
+                f"Module '{module_name}' is not in the PythonCodeNode allow-list "
+                "and cannot be bound for sandboxed execution."
+            )
+        super().__init__(module_name)
+        self._kailash_module = None
+
+    def _kailash_resolve(self):
+        """Import and memoise the real module. Import errors propagate.
+
+        Re-validates the module name against the allow-list first; see the class
+        docstring. The check is deliberately here and not only in ``__init__`` so
+        that mutating an already-constructed proxy cannot widen what it imports.
+        """
+        module = self.__dict__.get("_kailash_module")
+        if module is None:
+            module_name = self.__dict__.get("__name__")
+            if module_name not in _LAZY_BINDABLE_MODULES:
+                raise SafetyViolationError(
+                    f"Module '{module_name}' is not in the PythonCodeNode "
+                    "allow-list and cannot be imported for sandboxed execution."
+                )
+            module = importlib.import_module(module_name)
+            self._kailash_module = module
+        return module
+
+    def __getattr__(self, name: str):
+        # Guard the proxy's own bookkeeping so a missing entry cannot recurse.
+        if name.startswith("_kailash_") or name in ("__name__", "__dict__"):
+            raise AttributeError(name)
+        return getattr(self._kailash_resolve(), name)
+
+    def __dir__(self):
+        return dir(self._kailash_resolve())
+
+    def __repr__(self) -> str:
+        name = self.__dict__.get("__name__")
+        loaded = self.__dict__.get("_kailash_module") is not None
+        return (
+            f"<lazily-bound module {name!r} ({'loaded' if loaded else 'not loaded'})>"
+        )
+
+
+@functools.lru_cache(maxsize=256)
+def _referenced_identifiers(code: str) -> frozenset[str]:
+    """Return every identifier token appearing in ``code``.
+
+    This is a deliberate over-approximation of "names the code might use as a
+    module": it includes keywords, attribute names and string-free identifiers
+    alike. Over-approximating is the safe direction -- a name wrongly included
+    only means that module is imported eagerly, exactly as before #2000.
+
+    If the source cannot be tokenised an EMPTY set is returned, which binds every
+    allowed module lazily. That is safe because code that cannot be tokenised
+    cannot be compiled or executed either.
+    """
+    try:
+        return frozenset(
+            token.string
+            for token in tokenize.generate_tokens(io.StringIO(code).readline)
+            if token.type == tokenize.NAME
+        )
+    except (tokenize.TokenError, IndentationError, SyntaxError, ValueError):
+        return frozenset()
+
+
+# Memoised per allow-list. Keys are the two module allow-lists the SDK ships
+# (sync and async), so this holds at most a couple of entries; the cap below
+# stops a caller that builds bespoke allow-lists from growing it without bound.
+_IMPORTABLE_MODULES_CACHE: dict[frozenset[str], frozenset[str]] = {}
+_IMPORTABLE_MODULES_CACHE_MAX = 16
+
+
+def _importable_modules(module_names) -> frozenset[str]:
+    """Return the subset of ``module_names`` that can be imported here.
+
+    Uses ``find_spec``, which locates a module without executing it, so this
+    never pays an import cost. The result is memoised: the whole sweep is a
+    single-digit-millisecond, once-per-process cost.
+    """
+    key = frozenset(module_names)
+    cached = _IMPORTABLE_MODULES_CACHE.get(key)
+    if cached is not None:
+        return cached
+
+    importable: set[str] = set()
+    for name in key:
+        if name in sys.modules:
+            importable.add(name)
+            continue
+        try:
+            if importlib.util.find_spec(name) is not None:
+                importable.add(name)
+        except (ImportError, AttributeError, ValueError):
+            # DEBUG, not WARNING: the allow-list is the union of supported
+            # user-code imports; missing entries are normal on slim installs.
+            logger.debug("Module %s not available", name)
+
+    result = frozenset(importable)
+    if len(_IMPORTABLE_MODULES_CACHE) >= _IMPORTABLE_MODULES_CACHE_MAX:
+        _IMPORTABLE_MODULES_CACHE.clear()
+    _IMPORTABLE_MODULES_CACHE[key] = result
+    return result
 
 
 class CodeExecutor:
@@ -311,6 +477,46 @@ class CodeExecutor:
                 f"Error position: {' ' * (e.offset - 1) if e.offset else ''}^"
             )
 
+    def _build_module_bindings(self, code: str) -> dict[str, Any]:
+        """Bind the allow-listed modules for one execution namespace (#2000).
+
+        A module whose name appears anywhere in ``code`` is imported eagerly, so
+        user code gets the genuine module object with no proxy semantics. Every
+        other installed allow-listed module is bound to a :class:`_LazyModule`,
+        which imports on first attribute access -- preserving the ability to
+        reach a module dynamically while costing nothing when nobody does.
+
+        A module that is not installed is not bound at all, so referencing it
+        raises ``NameError`` exactly as it did before this change.
+        """
+        referenced = _referenced_identifiers(code)
+        installed = _importable_modules(self.allowed_modules)
+        skip_scipy_in_ci = bool(os.environ.get("CI"))
+
+        bindings: dict[str, Any] = {}
+        for module_name in self.allowed_modules:
+            if module_name == "scipy" and skip_scipy_in_ci:
+                # Pre-existing carve-out for scipy version conflicts in CI. Kept
+                # so CI behaviour does not change; with lazy binding it is free.
+                logger.debug("Skipping scipy binding in CI environment")
+                continue
+            if module_name not in installed:
+                logger.debug("Module %s not available", module_name)
+                continue
+            if module_name in referenced:
+                try:
+                    bindings[module_name] = importlib.import_module(module_name)
+                except ImportError as exc:
+                    # Installed but not importable (broken install, missing
+                    # native dependency). Leave the name unbound, as before.
+                    logger.debug(
+                        "Module %s could not be imported: %s", module_name, exc
+                    )
+                continue
+            bindings[module_name] = _LazyModule(module_name)
+
+        return bindings
+
     def execute_code(
         self, code: str, inputs: dict[str, Any], node_instance=None
     ) -> dict[str, Any]:
@@ -353,66 +559,16 @@ class CodeExecutor:
                 }
             }
 
-        # Add allowed modules
-        # Check if we're running under coverage to avoid instrumentation conflicts
-        import sys
-
-        if "coverage" in sys.modules:
-            # Under coverage, use lazy loading for problematic modules
-            problematic_modules = {
-                "numpy",
-                "scipy",
-                "sklearn",
-                "pandas",
-                "matplotlib",
-                "seaborn",
-                "plotly",
-                "array",
-            }
-            safe_modules = self.allowed_modules - problematic_modules
-
-            # Eagerly load safe modules
-            for module_name in safe_modules:
-                try:
-                    module = importlib.import_module(module_name)
-                    namespace[module_name] = module  # type: ignore[reportArgumentType]
-                except ImportError:
-                    # DEBUG, not WARNING: the allowed_modules list is the union
-                    # of supported user-code imports; missing entries are normal
-                    # on slim installs and the lazy fallback below handles the
-                    # case where user code actually references them.
-                    logger.debug(f"Module {module_name} not available")
-
-            # Add lazy loader for problematic modules
-            class LazyModuleLoader:
-                def __getattr__(self, name):
-                    if name in problematic_modules:
-                        return importlib.import_module(name)
-                    raise AttributeError(f"Module {name} not found")
-
-            # Make problematic modules available through lazy loading
-            for module_name in problematic_modules:
-                try:
-                    # Try to import the module directly
-                    module = importlib.import_module(module_name)
-                    namespace[module_name] = module  # type: ignore[reportArgumentType]
-                except ImportError:
-                    # If import fails, use lazy loader as fallback
-                    namespace[module_name] = LazyModuleLoader()  # type: ignore[reportArgumentType]
-        else:
-            # Normal operation - eagerly load all modules
-            for module_name in self.allowed_modules:
-                try:
-                    # Skip scipy in CI due to version conflicts
-                    if module_name == "scipy" and os.environ.get("CI"):
-                        logger.warning("Skipping scipy import in CI environment")
-                        continue
-                    module = importlib.import_module(module_name)
-                    namespace[module_name] = module  # type: ignore[reportArgumentType]
-                except ImportError:
-                    # DEBUG, not WARNING: see comment above — allowed_modules is
-                    # a superset; missing entries are expected on slim installs.
-                    logger.debug(f"Module {module_name} not available")
+        # Add allowed modules (#2000).
+        # Modules the code actually names are imported for real; the rest are
+        # bound to a lazy proxy. This replaces the previous behaviour of
+        # importing every allow-listed module (pandas, numpy, scipy, sklearn,
+        # matplotlib, ...) on every execution, which cost 7-9s on the first
+        # execution of a process regardless of what the code referenced.
+        # The former "running under coverage" special case is gone with it: it
+        # existed only to dodge instrumentation conflicts from those eager
+        # imports, which no longer happen.
+        namespace.update(self._build_module_bindings(code))
 
         # Add global utility functions to namespace
         try:
@@ -499,12 +655,18 @@ class CodeExecutor:
             # Return all non-private variables from LOCAL namespace only
             # Variables from previous executions cannot leak through
             # NEW: Also filter out imported modules to prevent serialization errors
-            import types
-
+            #
+            # #2000: _LazyModule subclasses types.ModuleType, so the isinstance
+            # check below already strips it. It is named explicitly as well, so
+            # the proxy keeps being stripped even if that subclassing is ever
+            # changed -- an escaping proxy does not merely leak a live module
+            # into node outputs, it fails the downstream JSON-serialisability
+            # validator and so breaks a node that previously succeeded.
             return {
                 k: v
                 for k, v in local_namespace.items()
-                if not k.startswith("_") and not isinstance(v, types.ModuleType)
+                if not k.startswith("_")
+                and not isinstance(v, (types.ModuleType, _LazyModule))
             }
         except ExecutionTimeoutError:
             raise

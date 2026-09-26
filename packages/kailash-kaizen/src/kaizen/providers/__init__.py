@@ -165,8 +165,10 @@ __all__ = [
 
 if OLLAMA_AVAILABLE:
     from kaizen.providers.ollama_model_manager import ModelInfo, OllamaModelManager
-    from kaizen.providers.ollama_provider import OllamaConfig
-    from kaizen.providers.ollama_provider import OllamaProvider as LegacyOllamaProvider
+    from kaizen.providers.ollama_provider import (
+        OllamaConfig,
+        OllamaProvider as LegacyOllamaProvider,
+    )
     from kaizen.providers.ollama_vision_provider import (
         OllamaVisionConfig,
         OllamaVisionProvider,

@@ -331,22 +331,6 @@ class TestRealCredentialsStillRedacted:
             "avoid"
         )
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "F7 under-redaction residual: a userinfo containing a quote "
-            'IMMEDIATELY followed by a JSON delimiter (`",` `"}` `"]` `":`) '
-            "halts the tempered runs and leaks in full. Live on ALL THREE URL "
-            "rules and in BOTH userinfo positions. This is F2's class narrowed, "
-            "not closed, and it trades in the direction this module refuses. "
-            "Deliberately NOT chased by tightening the lookahead — that swaps "
-            "one aperture for a smaller one indefinitely; the sound route is a "
-            "URL parse on the candidate span. strict=True so these XPASS the "
-            "moment a parse lands and force the markers off, per testing.md "
-            "§ Deferred-Implementation Conformance Vectors Use xfail-Strict, "
-            "Not Skip."
-        ),
-    )
     @pytest.mark.parametrize("delim", [",", "}", "]", ":"])
     @pytest.mark.parametrize(
         "case,dsn_template,secret_template",
@@ -490,19 +474,6 @@ class TestRealCredentialsStillRedacted:
 
         assert secret not in scrub_credentials(dsn)
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Anchor-absence residual, INSIDE stated coverage: the shape IS "
-            "`scheme://user:pass` and only the `@` separator is "
-            "percent-encoded, so all three rules miss it and the credential "
-            "leaks in full. Same root as the documented escaped-scheme entry "
-            "(a required literal anchor is absent or unrecognised). Fixing it "
-            "means teaching the ANCHOR about `%40`, not widening any character "
-            "class. strict=True so this XPASSes and forces the marker off when "
-            "that lands."
-        ),
-    )
     def test_percent_encoded_at_separator_is_redacted(self) -> None:
         """The one anchor-absence sibling that is a genuine residual.
 
@@ -592,31 +563,10 @@ class TestRealCredentialsStillRedacted:
         )
         assert "[REDACTED]" in scrubbed
 
-    def test_same_string_value_over_redaction_is_an_accepted_residual(self) -> None:
-        """Pin the KNOWN limit so it is not mistaken for a new regression.
-
-        `"` fences the case provider bodies actually produce (URL in one JSON
-        field, `@` in another). It does not fence a URL with a `:` in its path
-        followed by an `@` in the SAME string value — that still over-redacts.
-
-        Left deliberately: `scheme://<x>:<y>@<host>` IS the credential shape,
-        and no regex separates it from a real DSN without parsing. Over-redaction
-        is the safe side of this module's trade.
-
-        This test exists to stop the next reader "fixing" it by widening the
-        exclusion set — the exact error already made once here, which leaked
-        every password containing `{`, `}` or `\\`.
-        """
+    def test_same_string_url_path_preserves_diagnostic_text(self) -> None:
+        """Authority parsing distinguishes a path colon/@ from userinfo."""
         body = '{"m":"https://a.example.com/p:q/me' + _AT + 'y.com"}'
-        scrubbed = scrub_credentials(body)
-        assert scrubbed != body, (
-            "The same-string-value case stopped over-redacting. If that was "
-            "achieved by EXCLUDING MORE CHARACTERS, revert it and re-run "
-            "TestRealCredentialsStillRedacted — that is how the brace and "
-            "backslash password leaks were introduced. If it was achieved by "
-            "PARSING the candidate URL, that is the sound fix: delete this "
-            "test and say so in the commit."
-        )
+        assert scrub_credentials(body) == body
 
     def test_credential_inside_compact_json_is_still_redacted(self) -> None:
         """The narrowing must not create a compact-JSON safe harbour.

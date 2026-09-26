@@ -34,7 +34,7 @@ class RichOutputManager:
            • Distributed tracing (http://localhost:4317)
            • Prometheus metrics (serve on port 9090)
            • Structured logging (INFO level)
-           • Audit trail (.kaizen/audit.jsonl)
+           • Audit trail (~/.local/state/kaizen/audit.jsonl)
         ✅ Checkpointing: Filesystem (.kaizen/checkpoints/)
         ✅ Streaming: Console output
         ✅ Control Protocol: CLI transport

@@ -192,7 +192,18 @@ def test_legacy_tier_used_when_no_deployment_signals(monkeypatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "sk-legacy")
     monkeypatch.setenv("OPENAI_PROD_MODEL", "gpt-4o-mini")
 
-    deployment = resolve_env_deployment()
+    with pytest.warns(
+        DeprecationWarning,
+        match=(
+            r"^LlmClient\.from_env\(\): resolved via the legacy per-provider-key "
+            r"auto-detect tier \(OPENAI_API_KEY is set; no KAILASH_LLM_DEPLOYMENT or "
+            r"KAILASH_LLM_PROVIDER configured\)\. This legacy auto-detect path is "
+            r"deprecated and will be removed in a future release -- "
+            r"set KAILASH_LLM_PROVIDER='openai' "
+            r"\(or a KAILASH_LLM_DEPLOYMENT URI\) instead\.$"
+        ),
+    ):
+        deployment = resolve_env_deployment()
     # Legacy tier resolved to openai preset -- assert by inspecting the
     # deployment's wire protocol (OpenAiChat for openai preset).
     assert deployment.wire.value == "OpenAiChat"

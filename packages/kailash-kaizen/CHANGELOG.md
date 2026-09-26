@@ -13,8 +13,67 @@ range such as `>=2.0`.
 
 ## [Unreleased]
 
+### Changed (BREAKING)
+
+- **An unrecognised model name is no longer routed to whichever vendor you happen to hold an API key for (#2220).** If you set a model the framework does not recognise and did *not* say which provider serves it, Kaizen used to pick a provider from your environment: whichever of `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` was set. That is a guess, and for local models it was reliably the wrong one. Running `AgentConfig(model="llama-3.1")` on a machine with `OPENAI_API_KEY` exported — very common, and often exported for some unrelated tool — sent your prompt, and any documents retrieved into it, to **OpenAI**. It was billed to your account. Nothing warned: no error, no log line. Users who chose a local Ollama model specifically so their data stayed on their machine were the ones most affected, because Ollama serves arbitrary model names and so *no* local model could ever be recognised.
+
+  This was only half-fixed in 2.46.0. That release made unrecognised models fail loudly when **no** API key was set, but left the guess in place whenever one was — which is the normal developer setup, so in practice the problem shipped intact.
+
+  Kaizen now refuses to guess. An unrecognised model raises `ConfigurationError` naming the model and the fix, at the moment you build the config — **before any network call is made**.
+
+  **Migration — one argument.** If you see this error, say which provider serves your model:
+
+  ```python
+  # Before — worked by luck, or silently went to the wrong vendor
+  AgentConfig(model="llama-3.1")
+
+  # After — say where it runs
+  AgentConfig(model="llama-3.1", llm_provider="ollama")
+  ```
+
+  This affects you **only** if you relied on the guess. Recognised model names (anything starting `gpt-`, `o1-`, `o3-`, `o4-`, `claude-`, `gemini-`, `deepseek-`) are unchanged, with or without a key set, and anyone already passing `llm_provider=` is unaffected.
+
+  **Who else sees this error.** Besides `AgentConfig`, the same check now runs inside `DataFlow.from_brief()` and `kailash_ml.from_brief()`, which resolve a provider the same way when you do not pass one. If you set `DEFAULT_LLM_MODEL` to a name outside the recognised list, those two calls now raise instead of guessing. Same one-argument fix: pass `llm_provider=`.
+
+  **Model names that are affected even though the vendor is a normal hosted one:** an **Azure** deployment name (these are names you choose yourself, e.g. `prod-chat`, so they almost never match a recognised prefix — pass `llm_provider="azure"`); an OpenAI model whose name carries no recognised prefix, such as `chatgpt-4o-latest` or a fine-tuned `ft:...` name (pass `llm_provider="openai"`). Those cases previously worked, and losing them is the deliberate cost of the fix: the framework cannot tell such a name apart from `llama-3.1`, and being right by luck for one is exactly what made it wrong for the other.
+
+  **One related change if you run your own test suite against Kaizen.** The internal `KAIZEN_ALLOW_KEYLESS_MOCK` opt-in now takes precedence over a provider credential for unrecognised models, so a suite that sets it while a stray key is exported resolves to `mock` where it previously resolved to that key's vendor. This keeps the rule above exact — for an unrecognised model, the answer never depends on which credentials happen to exist. Setting `KAIZEN_ALLOW_REAL_LLM=1` overrides the opt-in, so tests that genuinely call a real provider still fail loudly rather than quietly running against mock output.
+
+  **Scope.** This entry covers the `AgentConfig` path. The other entry points it originally listed as uncovered — `Kaizen.create_agent()` with a plain dict config, `BaseAgent.to_workflow()`, the Nexus deployment surface, and the RAG nodes — are closed by the entry immediately below, in the same unreleased version. A separate hazard remains for local models whose names *do* match a recognised prefix (Ollama serves `deepseek-r1:7b` and `gpt-oss:20b`); those still route to the remote vendor. Pass `llm_provider="ollama"` for local models.
+
+- **The same wrong-vendor routing is now closed at every remaining entry point, not just `AgentConfig` (#2220).** The fix above stopped one door. Roughly thirty other places inside Kaizen built their LLM configuration by asking the environment "which API key is set?" and using that answer as the provider — the same guess, reached a different way. Measured before this change, with the fix above already applied:
+
+  ```text
+  Kaizen.create_agent(config={"model": "llama-3.1"})   ->  openai      (OPENAI_API_KEY set)
+                                                       ->  anthropic   (ANTHROPIC_API_KEY set)
+  RAGEvaluationNode(llm_judge_model="llama3.1:8b")     ->  openai / anthropic, same way
+  ```
+
+  The RAG nodes are the worst of these, because RAG means the documents you retrieved travel in the same request. So a local-only setup still sent retrieved content to a third-party API, billed, with nothing warning.
+
+  All of those now resolve the provider from the **model**, and raise the same `ConfigurationError` — naming the model, the component, and the fix — when the model is not recognised. The affected surfaces are `Kaizen.create_agent()` with a dict config, `BaseAgent.to_workflow()`, the signature executor, the workflow generator, the Nexus deployment surface, and the RAG node families (agentic, conversational, evaluation, graph, multimodal, query-processing, similarity).
+
+  **Migration.** Where you build an agent config yourself, it is the same one argument as above — `llm_provider="ollama"`.
+
+  The RAG node constructors take no provider argument (they read their model from `DEFAULT_LLM_MODEL` / `OPENAI_PROD_MODEL`), so for those you declare the matching half in your environment. Set it alongside the model you already set:
+
+  ```bash
+  # .env — these two belong together
+  DEFAULT_LLM_MODEL=llama3.1:8b
+  DEFAULT_LLM_PROVIDER=ollama      # or KAIZEN_DEFAULT_PROVIDER
+  ```
+
+  `DEFAULT_LLM_PROVIDER` and `KAIZEN_DEFAULT_PROVIDER` are existing Kaizen settings, not new ones. They are read as configuration because naming a provider is all they are for — unlike `OPENAI_API_KEY`, which says only that you hold an account somewhere and is routinely exported for an unrelated tool. That difference is the entire point of this fix. A declared provider is consulted only when the model is unrecognised, so declaring one for local work will **not** redirect a model Kaizen does recognise: `claude-3-opus` still goes to Anthropic.
+
+  **One behaviour deliberately left alone.** Where Kaizen configures a node with **no** model at all, it still reads the environment — there is no model there whose vendor could be mistaken, so "which credentials exist" is the right question to ask. That is unchanged.
+
+  **Also corrected:** a registered model's provider no longer depends on which key is exported either. With only `ANTHROPIC_API_KEY` set, `gpt-4` previously resolved to `anthropic` at these entry points — an OpenAI model pointed at Anthropic. It now resolves to `openai` regardless of the credentials present.
+
+  **Cache keys** (`CachingMixin`, the Nexus deployment cache) were keyed on the same environment answer. They now mirror the real resolution and never raise, so a cached response is still never replayed across a provider change.
+
 ### Fixed
 
+- **Finalizers no longer attempt cleanup while the interpreter is tearing down (#2107, `src/kaizen` half).** Six `__del__` methods called `close()` or `release()` inside a handler that silently discarded any error. That handler could never help — the hazard is a deadlock, and a deadlock raises nothing to catch — while it did hide genuine failures to release a runtime reference. The affected classes are in `governance/storage.py`, `integrations/nexus/storage.py`, `trust/audit_store.py`, `trust/authority.py`, `trust/store.py`, and `ml/_sqlite_sink.py`. Each now emits a `ResourceWarning` naming the class and returns, matching the disposition already shipped across `src/kailash`. Cleanup remains your responsibility via `close()`; the warning is what makes a forgotten one findable.
 - **A documented `timeout` you set on `LLMAgentNode` now actually bounds the LLM request (#2209).** The parameter was declared, documented ("Request timeout in seconds", default 120) and read — then dropped on the real dispatch path, reaching only the LangChain branch. Meanwhile every HTTP transport was built with a hardcoded 60-second limit and neither `LlmClient.complete()` nor `stream()` accepted a timeout at all, so an application could not change the LLM wire timeout by any means. A generation that ran past 60 s failed, and — because the failure surfaced downstream as a schema error rather than a timeout — was expensive to diagnose. Three things change together, because any one alone still leaves the value stranded: `LLMAgentNode` forwards `timeout` to the real dispatch (both the first call and every tool-replay call), `complete()` / `stream()` accept a per-request `timeout` (the contract `embed()` already had), and a new `LlmDeployment.timeout` field sets the client-level transport limit. **Behaviour change to note:** `LLMAgentNode`'s declared default of 120 s now genuinely applies, where the effective ceiling used to be the transport's 60 s. Leave `LlmDeployment.timeout` unset and nothing else moves — the transport default is still 60 s.
 - **A streamed OpenAI-wire call can report its token usage again (#2215).** `StreamingConfig.include_usage` was declared and read by nothing: `stream()` sent no `stream_options`, so the provider returned no `usage` block on a streamed response and there was no supported way to ask for one. Any application metering spend from the provider's own figures had to refuse streaming entirely and fall back to buffered `complete()`. The deployment's `include_usage` (default `true`) now reaches the wire, so the terminal chunk carries `usage`. Set `include_usage=False` on the deployment's `streaming` config to suppress it. Only OpenAI-wire deployments and only streaming requests are affected; buffered bodies and every other provider are byte-identical.
 - **A Gemini tool loop can complete on the four-axis wire (#2121).** Two independent defects made a multi-turn tool loop impossible. First, every non-system message was serialised as text parts only, so an assistant turn carrying tool calls lost the call entirely (an empty-content turn was sent as the literal string `"None"`) and a tool result arrived as anonymous user text — silently, with no error, leaving the model unaware a tool had been called or what it returned. Assistant tool-call turns and tool results now round-trip as `functionCall` / `functionResponse` parts, with the function name resolved from the requesting turn when the tool result carries only a call id. Second, an unset `tool_choice` forced mode `ANY`, which requires a function call on every turn, so the model could never emit the final answer that ends the loop; it now defaults to `AUTO`. That default was described as inherited "legacy `required` semantics", but the legacy Google provider sent no `tool_choice` at all — `ANY` was a regression this wire introduced. Pass `tool_choice="required"` for the old forcing behaviour.

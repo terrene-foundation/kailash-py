@@ -60,6 +60,7 @@ __all__ = [
     "operational_view",
     "read_action_policy",
     "permitted_action_set",
+    "delegated_capabilities",
     "evaluate_action",
     "action_permitted",
     "evaluate_scope",
@@ -245,6 +246,44 @@ def permitted_action_set(operational: Any) -> frozenset[str] | None:
     """
     policy = read_action_policy(operational)
     return None if policy is None else policy.permitted
+
+
+def delegated_capabilities(operational: Any) -> list[str]:
+    """Return the capabilities a DelegationRecord should ADVERTISE (GH #2225).
+
+    A ``DelegationRecord`` is a durable, signed EATP trust-chain artifact that
+    an auditor or a downstream consumer reads to answer *"what was this agent
+    delegated?"*. It MUST NOT advertise a capability the enforcement surfaces
+    deny: the answer has to be a SUBSET of what the agent can actually do, never
+    a superset.
+
+    So the record's capability list is derived from the SAME reading of the
+    operational dimension every enforcement surface uses -- the permitted set
+    ``allowed - blocked`` produced by :func:`read_action_policy` and consumed by
+    :func:`evaluate_action`. Because the record and enforcement now share ONE
+    derivation, an action that is blocked (or not on the allowlist) cannot be
+    advertised as delegated, and the two surfaces cannot drift apart again.
+
+    The allowlist reaching this function has already been intersected with the
+    delegator's effective allowlist by the monotonic-tightening validation that
+    runs before a role/task envelope is persisted (child allowlist must be a
+    SUBSET of the parent's), so ``allowed - blocked`` here IS the delegatee's
+    effective permitted set for that envelope.
+
+    Args:
+        operational: The operational dimension of the delegated envelope, or
+            ``None`` when the envelope does not configure one.
+
+    Returns:
+        The permitted actions, sorted for deterministic (signable) output. An
+        ``None`` dimension is "not configured" (widest); there is no finite
+        capability list to advertise, so the empty list is returned -- it
+        UNDERSTATES, which is safe (it can never over-state a grant).
+    """
+    permitted = permitted_action_set(operational)
+    if permitted is None:
+        return []
+    return sorted(permitted)
 
 
 # ---------------------------------------------------------------------------

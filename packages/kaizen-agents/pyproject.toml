@@ -104,6 +104,20 @@ where = ["src"]
 exclude = ["tests*"]
 
 [tool.pytest.ini_options]
+# See packages/kailash-pact/pyproject.toml for why this block is required: this section
+# makes the package the rootdir, so without an explicit pythonpath `import kailash`
+# resolves to site-packages and the suite collects zero tests. Not globbed -- list them.
+pythonpath = [
+  "src",
+  "../../src",
+  "../kailash-align/src",
+  "../kailash-dataflow/src",
+  "../kailash-kaizen/src",
+  "../kailash-mcp/src",
+  "../kailash-ml/src",
+  "../kailash-nexus/src",
+  "../kailash-pact/src",
+]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
@@ -150,10 +164,12 @@ known-first-party = ["kaizen", "kaizen_agents", "kailash"]
 
 [tool.isort]
 profile = "black"
+# Keep aliased imports compatible with Black, including narrow inline pragmas.
+combine_as_imports = true
 # MUST match the root pyproject.toml list exactly — this previously carried only
 # 3 of the 6 entries, so dataflow/nexus/pact were third-party here and
 # first-party everywhere else (#1995).
-known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact", "kailash_mcp"]
+known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact", "kailash_mcp", "kailash_ml", "kailash_align"]
 
 [tool.mypy]
 python_version = "3.11"

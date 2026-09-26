@@ -1172,25 +1172,48 @@ class SQLiteTransaction:
             self._source_traceback = traceback.extract_stack()
 
     def __del__(self, _warnings=warnings):
+        """Warn and RETURN. This finalizer performs no cleanup, deliberately.
+
+        The previous body reached through to the underlying sqlite3 connection
+        and called ``rollback()`` from inside a ``try`` whose only handler body
+        was ``pass``. Per ``rules/patterns.md`` § Async Resource Cleanup and
+        issue #2107, a finalizer MUST emit ``ResourceWarning`` and return.
+
+        The rollback was not merely redundant, it was blocking I/O in a GC
+        callback. A finalizer fires at an arbitrary bytecode boundary on
+        whichever thread drops the last reference, and this adapter opens its
+        connections with ``check_same_thread=False`` — so the call really did
+        execute SQL on that arbitrary thread, where it can block for the full
+        busy-timeout on ``SQLITE_BUSY`` and can race the aiosqlite worker
+        thread already using the same connection. The enclosing handler bought
+        nothing against either hazard (a stall is not an exception) while
+        hiding genuine rollback failures (``zero-tolerance.md`` Rule 3).
+
+        Dropping the explicit rollback does NOT commit the abandoned work:
+        sqlite3 rolls back any open transaction when the connection is closed
+        or deallocated, from its own C-level deallocator, which is
+        finalizer-safe in a way this Python-level path can never be.
+        Deterministic completion stays the caller's job, via
+        ``await tx.commit()`` / ``await tx.rollback()`` or ``async with``.
+        """
         if self._committed or self._rolled_back or self.connection is None:
             return
         tb = ""
-        if self._source_traceback:
+        if getattr(self, "_source_traceback", None):
             try:
                 tb = "\n" + "".join(traceback.format_list(self._source_traceback))
-            except Exception:
-                tb = ""
+            except Exception:  # noqa: BLE001 - degraded warning beats no warning
+                # Not a silent swallow: this HAS an effect (the warning is
+                # still emitted, just without the allocation site). Losing the
+                # traceback must not cost us the leak signal itself.
+                tb = " <allocation traceback unavailable>"
         _warnings.warn(
-            f"SQLiteTransaction GC'd without commit/rollback. Created at:{tb}",
+            f"SQLiteTransaction GC'd without commit/rollback. "
+            f"Await tx.commit()/tx.rollback() or use 'async with' to complete "
+            f"it. Created at:{tb}",
             ResourceWarning,
             stacklevel=1,
         )
-        # Sync rollback via underlying sqlite3 connection
-        try:
-            if hasattr(self.connection, "_conn") and self.connection._conn is not None:
-                self.connection._conn.rollback()
-        except Exception:
-            pass
 
     async def __aenter__(self):
         """Enter transaction context."""

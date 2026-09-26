@@ -18,6 +18,7 @@ from __future__ import annotations
 import pickle
 
 import pytest
+
 from kailash_ml.errors import ParamValueError
 from kailash_ml.estimators.adapters import (
     CatBoostLightningAdapter,

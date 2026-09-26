@@ -83,10 +83,24 @@ from urllib.parse import urlparse
 
 import httpx
 
+# Address classification is the SHARED implementation (#2091 follow-up).
+# This module previously carried its own copy of `_is_private_ipv4` /
+# `_is_private_ipv6` / `_METADATA_IPS` / the RFC 2765 + RFC 6052 translation
+# ranges — a copy of the copy in `url_safety`, inside the SAME package. Two
+# guards in one package drift exactly as readily as two across packages, and
+# `SafeDnsResolver` is the connect-time half of the same defence, so a
+# divergence here would mean the parse-time and connect-time checks disagreed
+# about what "private" means. Verified identical on a 19-address sweep before
+# consolidating (`zero-tolerance.md` Rule 4).
+from kailash.utils.network_guard import (
+    METADATA_IPS as _METADATA_IPS,
+    ip_reason as _ip_reason,
+    is_private_ipv4 as _is_private_ipv4,
+    is_private_ipv6 as _is_private_ipv6,
+    loopback_allowed,
+    metadata_candidates,
+)
 from kaizen.llm.errors import InvalidEndpoint, ProviderError, RateLimited
-
-logger = logging.getLogger(__name__)
-
 
 # ---------------------------------------------------------------------------
 # SafeDnsResolver -- last-line SSRF defense at DNS resolve time
@@ -100,24 +114,7 @@ logger = logging.getLogger(__name__)
 # connection, which is as close to the SYN as this layer gets.
 
 
-# Address classification is the SHARED implementation (#2091 follow-up).
-# This module previously carried its own copy of `_is_private_ipv4` /
-# `_is_private_ipv6` / `_METADATA_IPS` / the RFC 2765 + RFC 6052 translation
-# ranges — a copy of the copy in `url_safety`, inside the SAME package. Two
-# guards in one package drift exactly as readily as two across packages, and
-# `SafeDnsResolver` is the connect-time half of the same defence, so a
-# divergence here would mean the parse-time and connect-time checks disagreed
-# about what "private" means. Verified identical on a 19-address sweep before
-# consolidating (`zero-tolerance.md` Rule 4).
-from kailash.utils.network_guard import METADATA_IPS as _METADATA_IPS  # noqa: E402
-from kailash.utils.network_guard import ip_reason as _ip_reason  # noqa: E402
-from kailash.utils.network_guard import (  # noqa: E402
-    is_private_ipv4 as _is_private_ipv4,
-)
-from kailash.utils.network_guard import (  # noqa: E402
-    is_private_ipv6 as _is_private_ipv6,
-)
-from kailash.utils.network_guard import metadata_candidates  # noqa: E402
+logger = logging.getLogger(__name__)
 
 
 def _classify_or_raise(
@@ -157,6 +154,9 @@ def _classify_or_raise(
             raise InvalidEndpoint("metadata_service", raw_url=host)
         if candidate.is_link_local:
             raise InvalidEndpoint("link_local", raw_url=host)
+
+    if loopback_allowed(ip, host, {"localhost"}):
+        return
 
     if isinstance(ip, ipaddress.IPv4Address) and _is_private_ipv4(ip):
         raise InvalidEndpoint(_ip_reason(ip), raw_url=host)

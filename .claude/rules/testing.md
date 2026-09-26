@@ -239,6 +239,23 @@ async def test_readme_quickstart_executes_end_to_end():
 
 **Why:** Unit tests per primitive construct fixtures with exactly the fields THAT primitive needs — they cannot observe a field MISSING from the A→B handoff. Only DOCS-EXACT chain exercises the handoff contract. See guide for kailash-ml W33b evidence + `zero-tolerance.md` §2 "Fake integration via missing field".
 
+## MUST: A Duck-Typed Collaborator Is Pinned Against Its REAL Declared Type, Not Only A Stub
+
+The CALL-SHAPE sibling of the field-shape clause above. When a collaborator is injected by duck-type (no `Protocol`, no ABC, no runtime isinstance), every test that supplies its own bespoke stub written to match the CALL SITE makes the call-shape contract untestable — the code and the fixture are consistently WRONG TOGETHER, so a documented integration can be broken since inception and green forever. At least ONE test MUST exercise the REAL declared type, or assert the call against its `inspect.signature`. An all-hand-rolled-double suite is BLOCKED as sole coverage.
+
+```python
+# DO — pin the call against the REAL declared type; fails the day the signature drifts
+sig = inspect.signature(TrustOperations.check_access)
+assert {"user_id", "organization_id"} <= set(sig.parameters)   # or drive the real object
+# DO NOT — every stub written to match the call site; the contract is now unfalsifiable
+class _Checker:                      # hand-rolled to mirror the caller, not the callee
+    def check_access(self, agent, user_id=None, organization_id=None): return True
+```
+
+**BLOCKED rationalizations:** "the stub matches how we call it" / "the real type needs infrastructure" / "a Protocol would be over-engineering here" / "every test passes, so the wiring works" / "the docstring documents the collaborator type" / "an integration test would catch it" (it will not, if it supplies the same stub).
+
+**Why:** A stub written from the call site encodes the caller's BELIEF about the callee, so the test agrees with the bug instead of catching it — and when the resulting `TypeError` is swallowed by a broad `except`, the failure does not merely go unnoticed, it can INVERT the contract. Measured: `UserFilteredAgentDiscovery` documented its checker as `TrustOperations`, whose real signature accepts neither `user_id` nor `organization_id`; the call raised `TypeError` on the FIRST agent of every call, the handler caught it, and the permission check became a GRANT — steady state, not a window, green since inception. Establish the signature with `inspect.signature`, not by reading the docstring.
+
 ## State Persistence Verification (Tiers 2-3)
 
 Every write MUST be verified with a read-back: call create/update, then call get/list, assert the value.

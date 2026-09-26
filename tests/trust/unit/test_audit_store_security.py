@@ -21,6 +21,7 @@ import pytest
 
 from kailash.trust.audit_store import (
     _GENESIS_HASH,
+    AppendOnlyAuditStore,
     AuditEvent,
     AuditEventType,
     AuditFilter,
@@ -576,3 +577,26 @@ class TestProtocolCompliance:
         """InMemoryAuditStore must be a runtime-checkable AuditStoreProtocol."""
         store = InMemoryAuditStore()
         assert isinstance(store, AuditStoreProtocol)
+
+
+# ---------------------------------------------------------------------------
+# Legacy AppendOnlyAuditStore fails closed on an empty store (#2221 F2)
+# ---------------------------------------------------------------------------
+
+
+class TestAppendOnlyStoreFailsClosedOnEmpty:
+    """AppendOnlyAuditStore.verify_integrity must not report an empty store valid."""
+
+    @pytest.mark.asyncio
+    async def test_empty_store_is_not_valid(self):
+        """An empty legacy store fails closed: valid is False (was True, #2221 F2).
+
+        Same 'an absence rendered as a success' class as the canonical stores:
+        a wiped store must not report ``valid``. This store is a plain list (it
+        never evicts), so empty unambiguously means no records.
+        """
+        store = AppendOnlyAuditStore()
+        result = await store.verify_integrity()
+        assert result.valid is False
+        assert result.total_records == 0
+        assert result.errors  # a reason is recorded, not a silent False

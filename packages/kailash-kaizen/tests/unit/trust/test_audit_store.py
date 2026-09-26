@@ -405,13 +405,14 @@ class TestIntegrityVerification:
 
     @pytest.mark.asyncio
     async def test_verify_integrity_empty_store(self, store):
-        """verify_integrity() returns valid result for empty store."""
+        """An empty store cannot establish audit integrity (#2221)."""
         result = await store.verify_integrity()
 
         assert isinstance(result, IntegrityVerificationResult)
-        assert result.valid is True
+        assert result.valid is False
         assert result.total_records == 0
         assert result.verified_records == 0
+        assert any("empty store" in error for error in result.errors)
 
     @pytest.mark.asyncio
     async def test_verify_integrity_valid_chain(

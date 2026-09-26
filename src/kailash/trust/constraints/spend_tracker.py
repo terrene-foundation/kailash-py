@@ -15,6 +15,8 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from kailash.utils.secure_logging import sanitize_log_value
+
 logger = logging.getLogger(__name__)
 
 
@@ -165,8 +167,13 @@ class SpendTracker:
         budget.spent += amount
 
         logger.info(
-            f"[SPEND] agent={agent_id} amount={amount} {currency} "
-            f"action={action} total_spent={budget.spent}/{budget.limit}"
+            "[SPEND] agent=%s amount=%s %s action=%s total_spent=%s/%s",
+            sanitize_log_value(agent_id, 128),
+            amount,
+            sanitize_log_value(currency, 32),
+            sanitize_log_value(action, 128),
+            budget.spent,
+            budget.limit,
         )
 
         return self.check_budget(agent_id)
@@ -234,7 +241,9 @@ class SpendTracker:
         if period is not None:
             budget.period = period
 
-        logger.info(f"[SPEND] Budget reset for agent={agent_id}")
+        logger.info(
+            "[SPEND] Budget reset for agent=%s", sanitize_log_value(agent_id, 128)
+        )
 
     def get_spend_history(
         self,
@@ -292,7 +301,9 @@ class SpendTracker:
 
         if period_end and now >= period_end:
             logger.info(
-                f"[SPEND] Auto-resetting budget for agent={budget.agent_id} (period={budget.period.value} elapsed)"
+                "[SPEND] Auto-resetting budget for agent=%s (period=%s elapsed)",
+                sanitize_log_value(budget.agent_id, 128),
+                budget.period.value,
             )
             budget.spent = 0.0
             budget.period_start = now

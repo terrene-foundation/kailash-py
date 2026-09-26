@@ -1,0 +1,823 @@
+{
+  "reviewed_head": "71a9347cb3226ee9c6f9e0d304f677b486d1e0f1",
+  "scope": "Archived ref content retention, not conformance of all historical behaviors; no ref deletion authorized by this report. Current repair commits are recorded separately.",
+  "counts": {
+    "current-equivalent": 1,
+    "diagnostics-superseded-baggage-unverified": 1,
+    "included-in-landed-snapshot": 2,
+    "landed-content-with-evolved-release-metadata": 1,
+    "landed-content-with-superseded-test-markers": 1,
+    "landed-content-with-test-relocation": 1,
+    "landed-equivalent": 10,
+    "landed-exact-tree-via-squash": 19,
+    "landed-repair-with-evolved-dependencies": 1,
+    "retained-historical-release-tag": 1,
+    "retained-historical-strategy-document": 1,
+    "superseded": 3,
+    "superseded-checkpoint": 1,
+    "superseded-ci-experiment": 2,
+    "superseded-diagnostics": 1,
+    "superseded-release-metadata": 2,
+    "unresolved": 1,
+    "unresolved-historical-docs-and-probes": 1,
+    "unresolved-production-prototype": 1,
+    "unverified-large-mixed-snapshot": 1
+  },
+  "refs": [
+    {
+      "ref": "refs/archive/2026-08-21/audit/w5-a-core-spec-audit",
+      "tip": "68cb2cc3d69a98a633534fca559eb5a9d86c359c",
+      "unique_patch_plus_count": 7,
+      "disposition": "landed-equivalent",
+      "evidence": [
+        "Every plus commit modifies only workspaces/portfolio-spec-audit/04-validate/W5-A-findings.md; current report retained at workspaces/_archive/portfolio-spec-audit/04-validate/W5-A-findings.md.",
+        "Exact blob equality=True; difference if any is final blank line only. Current SHA256=673e3d4dfef59e9feb59957865fdb33eb2fbba8e823cd0b8b6f43b0aa2376647.",
+        "This classifies retention of audit findings, not closure of every finding named in those reports."
+      ],
+      "remaining": "None identified in inspected contract",
+      "retention_status": "landed-equivalent"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/audit/w5-b-dataflow-spec-audit",
+      "tip": "a96169277196846b42b1d28efc804fe1f901b9bc",
+      "unique_patch_plus_count": 3,
+      "disposition": "landed-equivalent",
+      "evidence": [
+        "Every plus commit modifies only workspaces/portfolio-spec-audit/04-validate/W5-B-findings.md; current report retained at workspaces/_archive/portfolio-spec-audit/04-validate/W5-B-findings.md.",
+        "Exact blob equality=True; difference if any is final blank line only. Current SHA256=d7a3a0a58dbcc4767441121971dc4ed41f17870270d348fca6b9c2568e719842.",
+        "This classifies retention of audit findings, not closure of every finding named in those reports."
+      ],
+      "remaining": "None identified in inspected contract",
+      "retention_status": "landed-equivalent"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/audit/w5-c-nexus-spec-audit",
+      "tip": "16187704f5608944819e18470ab94b31443a72e8",
+      "unique_patch_plus_count": 2,
+      "disposition": "landed-equivalent",
+      "evidence": [
+        "Every plus commit modifies only workspaces/portfolio-spec-audit/04-validate/W5-C-findings.md; current report retained at workspaces/_archive/portfolio-spec-audit/04-validate/W5-C-findings.md.",
+        "Exact blob equality=True; difference if any is final blank line only. Current SHA256=3658008ff1adf5a0dafceada999a57c06413cf564b73c236e905c9e3a2da7e5c.",
+        "This classifies retention of audit findings, not closure of every finding named in those reports."
+      ],
+      "remaining": "None identified in inspected contract",
+      "retention_status": "landed-equivalent"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/audit/w5-d-kaizen-spec-audit",
+      "tip": "ef83d5df5251cc2d66190248b3a6ea5ee89f0fef",
+      "unique_patch_plus_count": 13,
+      "disposition": "landed-equivalent",
+      "evidence": [
+        "Every plus commit modifies only workspaces/portfolio-spec-audit/04-validate/W5-D-findings.md; current report retained at workspaces/_archive/portfolio-spec-audit/04-validate/W5-D-findings.md.",
+        "Exact blob equality=True; difference if any is final blank line only. Current SHA256=dd003c92bc00861b9b527b6513af40d62bb2447d55161f768981ec9fcdeff08b.",
+        "This classifies retention of audit findings, not closure of every finding named in those reports."
+      ],
+      "remaining": "None identified in inspected contract",
+      "retention_status": "landed-equivalent"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/audit/w5-e1-ml-core-spec-audit",
+      "tip": "4494c2bc1d0d8cedfccbe2e29029f9251aa7ba90",
+      "unique_patch_plus_count": 2,
+      "disposition": "landed-equivalent",
+      "evidence": [
+        "Every plus commit modifies only workspaces/portfolio-spec-audit/04-validate/W5-E1-findings.md; current report retained at workspaces/_archive/portfolio-spec-audit/04-validate/W5-E1-findings.md.",
+        "Exact blob equality=True; difference if any is final blank line only. Current SHA256=f1b1b73b253f983bd3d48283d19dc4ad5cc7831079339a822c2c962a8dd97f90.",
+        "This classifies retention of audit findings, not closure of every finding named in those reports."
+      ],
+      "remaining": "None identified in inspected contract",
+      "retention_status": "landed-equivalent"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/audit/w5-e2-ml-extras-align-spec-audit",
+      "tip": "e20392a7d255b6511a111880a6ff4ba9da8a9a43",
+      "unique_patch_plus_count": 12,
+      "disposition": "landed-equivalent",
+      "evidence": [
+        "Every plus commit modifies only workspaces/portfolio-spec-audit/04-validate/W5-E2-findings.md; current report retained at workspaces/_archive/portfolio-spec-audit/04-validate/W5-E2-findings.md.",
+        "Exact blob equality=False; difference if any is final blank line only. Current SHA256=dd141f250cf6b4185a18eabec4d01f4bc2356b87d8ffb7660bd29e256db5f5c1.",
+        "This classifies retention of audit findings, not closure of every finding named in those reports."
+      ],
+      "remaining": "None identified in inspected contract",
+      "retention_status": "landed-equivalent"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/audit/w5-f-trust-pact-sec-spec-audit",
+      "tip": "dc24a1cad5c7d92bd882dcff3d7b54507e9a329c",
+      "unique_patch_plus_count": 5,
+      "disposition": "landed-equivalent",
+      "evidence": [
+        "Every plus commit modifies only workspaces/portfolio-spec-audit/04-validate/W5-F-findings.md; current report retained at workspaces/_archive/portfolio-spec-audit/04-validate/W5-F-findings.md.",
+        "Exact blob equality=True; difference if any is final blank line only. Current SHA256=7bbe5b890d00b9902b7c6b84cafb82ffe8a6b3e69c5d9a41e316d64c4704e49e.",
+        "This classifies retention of audit findings, not closure of every finding named in those reports."
+      ],
+      "remaining": "None identified in inspected contract",
+      "retention_status": "landed-equivalent"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/debug/issue-1010-phase-a-diagnostics",
+      "tip": "2aa62651ba2a9b59d2d1e86687f23f84fd483bda",
+      "plus_count": 2,
+      "status": "superseded-diagnostics",
+      "receipt": "a9bc2c7c8",
+      "evidence": "Read actual workflowdiff: branch-specific forensic capture only. Current conftest cites diagnostics, PhaseB PR1014 a8b54a978 and subsequent a9bc2c7c8; c62777770 release records hang closed. Not a production missing feature. No current hang test claimed.",
+      "commit_subjects": [
+        "1d2f1aee6 debug(dataflow): wire issue #1010 Phase A forensic capture",
+        "2aa62651b debug(dataflow): route diagnostics to on-disk file + disable pytest capture"
+      ],
+      "retention_status": "superseded-diagnostics"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/debug/issue-1010-phase-a-prime-linux",
+      "tip": "cface915007d3a8d631671cbfa561cb8708cf47c",
+      "plus_count": 3,
+      "status": "diagnostics-superseded-baggage-unverified",
+      "receipt": "a9bc2c7c8",
+      "evidence": "First2 are duplicate diagnostic mechanism; third renames branch conditions but also contains14file snapshot with docs/notes/lockfile/pytestdebug.log. Workflow contract superseded; incidental snapshot contents NOT independently adjudicated.",
+      "commit_subjects": [
+        "160b6a008 debug(dataflow): wire issue #1010 Phase A forensic capture",
+        "f68af4194 debug(dataflow): route diagnostics to on-disk file + disable pytest capture",
+        "cface9150 debug(ci): rename diagnostic branch references for Phase A-prime"
+      ],
+      "retention_status": "diagnostics-superseded-baggage-unverified",
+      "recovery_followups": [
+        "csq13-debug-1010-incidental-adjudication.json"
+      ]
+    },
+    {
+      "ref": "refs/archive/2026-08-21/dev",
+      "status": "retained-historical-strategy-document",
+      "evidence": [
+        "134 changed file blobs retained in dev history. Sole absent blob 1e9a8c9784c4c00754d17deed82a316978820ee9 at .claude/improvements/repivot/EXECUTION-READY-SUMMARY.md read fully.",
+        "Document dated October 24, 2025 is a human staffing/kickoff schedule and strategic forecast, not production code or current approval. Retain archive as historical evidence; do not import its old directives into current operating instructions. No current MVR completion claim."
+      ],
+      "remaining": "None identified in the bounded historical-content review; archive retained.",
+      "retention_status": "retained-historical-strategy-document",
+      "prior_retention_status": "unresolved-historical-document"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/docs/mcp-gateway-integration",
+      "status": "landed-exact-tree-via-squash",
+      "evidence": "Exact archived tip tree matches 5196eb3dd on origin/dev ancestry; known different historical tree controls recorded.",
+      "remaining": "None for retention; no claim every historical test still passes.",
+      "retention_status": "landed-exact-tree-via-squash",
+      "exact_tree_receipts": [
+        {
+          "commit": "5196eb3ddef96ac1c43cfacc3f1707bf0f54c776",
+          "subject": "docs: Add MCP Gateway Integration documentation and examples (#130)",
+          "different_tree_control": "b62053ffefbc68daecef22ccdd2fb531cadad30e"
+        }
+      ]
+    },
+    {
+      "ref": "refs/archive/2026-08-21/docs/notes-cont18-execution",
+      "status": "superseded-checkpoint",
+      "evidence": "Read archived August16 state claiming #2169 pending; September25 recovery and current dev supersede this transient session state.",
+      "remaining": "Retain historical ref; do not overwrite current directives with old pending states.",
+      "retention_status": "superseded-checkpoint"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/docs/update-iterative-llm-agent-v0.9.9",
+      "status": "landed-exact-tree-via-squash",
+      "evidence": "Exact archived tip tree matches 9cdb54743 on origin/dev ancestry; known different historical tree controls recorded.",
+      "remaining": "None for retention; no claim every historical test still passes.",
+      "retention_status": "landed-exact-tree-via-squash",
+      "exact_tree_receipts": [
+        {
+          "commit": "9cdb54743bb4a53896d8eabdd6c5a2442a5bf8f7",
+          "subject": "docs: Update IterativeLLMAgentNode documentation for v0.9.9 API simplification (#184)",
+          "different_tree_control": "c71c846a7b611e7d2e66c2fa102293b8161e53f2"
+        }
+      ]
+    },
+    {
+      "ref": "refs/archive/2026-08-21/docs/update-v0.8.6-documentation",
+      "status": "landed-exact-tree-via-squash",
+      "evidence": "Exact archived tip tree matches f74e60e45 on origin/dev ancestry; known different historical tree controls recorded.",
+      "remaining": "None for retention; no claim every historical test still passes.",
+      "retention_status": "landed-exact-tree-via-squash",
+      "exact_tree_receipts": [
+        {
+          "commit": "f74e60e45d2082a03b37e6abb38e7b9e70d0c118",
+          "subject": "feat: Complete MCP ecosystem enhancements (v0.8.7) (#160)",
+          "different_tree_control": "6cf7a70cdba1be7ab5f72d027b9eeeed4ca68aab"
+        }
+      ]
+    },
+    {
+      "ref": "refs/archive/2026-08-21/feat/dataflow-dynamic-model-registration",
+      "tip": "bc4f229523c8496f532524a5a286a4517948a93f",
+      "unique_patch_plus_count": 21,
+      "disposition": "landed-equivalent",
+      "evidence": [
+        "Inspected all21 plus subjects and changed paths; ac914c995 dynamic-registration title changes only specialist/docs, no production model implementation.",
+        "Read production diffs1cb7a2066/20c72e5f7/28bdae247/f47010c55/2255f9d4b: adapter parameter_types, SQLite path/memory handling, PostgreSQL named parameter conversion and auto_map_from validation. Current async_sql retains signatures2306/2730, SQLite parsing2570ff and replaces global shared-memory dictionary with per-name URI pool; named casting1830ff remains, workflow/validation.py:212ff retains expanded auto_map_from set.",
+        "Other plus changes are 0.9.x/0.4.x release metadata, test formatting, accidentally committed environment/coverage cleanup and historical docs. No missing production requirement identified in these archived changes.",
+        "Exact tip tree 9ac1047a3253a035eb34218fcff442880f2c8483 equals origin/dev ancestor bd7ba9c1df2f7d3222e41fbb6accc07e4b452465; parent tree differs (negative control)."
+      ],
+      "remaining": "None: exact complete tip tree existed on dev.",
+      "retention_status": "landed-exact-tree-via-squash",
+      "exact_tree_receipts": [
+        {
+          "commit": "bd7ba9c1df2f7d3222e41fbb6accc07e4b452465",
+          "subject": "feat: Release Kailash Core SDK v0.9.14 with DataFlow Enterprise Migration System v0.4.6 (#192)",
+          "different_tree_control": "9233c0989b7437f783485686de378a0813839994"
+        }
+      ]
+    },
+    {
+      "ref": "refs/archive/2026-08-21/feat/fabric-consumer-adapters",
+      "tip": "a9977f9da462fde7e727e8241ccecea98db4a637",
+      "unique_patch_plus_count": 2,
+      "disposition": "landed-equivalent",
+      "evidence": [
+        "Read d11269cfe production paths and current registry/runtime/serving/product/export chain.",
+        "All five ConsumerRegistry methods (__init__, register, get, list_consumers, transform) AST-identical to archive tip.",
+        "Current runtime.py:1192 register_consumer forwards to registry; serving.py:228-246 checks requested consumer declaration/registration, :362 applies transform, :389 sets header. tests/fabric/test_fabric_consumers.py retained.",
+        "11174e1d9 only resolves serving merge markers; current serving parses and retains the consumer path."
+      ],
+      "remaining": "None identified in inspected contract",
+      "retention_status": "landed-equivalent"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/feat/outstanding-issues-consolidation",
+      "tip": "bc2f685dbcdcffd184fb1f2ad691c781427ade36",
+      "unique_patch_plus_count": 6,
+      "disposition": "landed-repair-with-evolved-dependencies",
+      "evidence": [
+        "Read all six plus commits: d684ce20f security rows independently reconciled with current source/landed commits; edf37fa3e covers proxy + batch50,669e3a497 empty bulk_update,416a6951e/81acadbee cursor set,37447ab82 malformed numeric fail-closed.",
+        "Actual current GovernanceContext copy/deepcopy/pickle0-5 probe all TypeError; valid dict controls pass. Missing literal methods in old note do not mean missing protection.",
+        "f92bce90c ML protocol-package consolidation exists as kailash_ml/types.py and engine imports; d012a6109 dependency floors/root extras have evolved, not candidates for blind pin restoration.",
+        "Recovered e4ddd346e fresh-process lazy-import repair in 849157905, merged to dev as 8fe71c879. Exact checkout provenance and a fresh isolated Python child replace order-dependent sys.modules mutation; actual eager-torch mutation failed as expected even with torch already loaded in parent. Independent two-round review passed."
+      ],
+      "remaining": "Historical dependency-resolution patch needs current-lock context only if pursued; its old pins are not restored. The identified missing lazy-import test repair is landed.",
+      "retention_status": "landed-repair-with-evolved-dependencies"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/feat/studio-app-session",
+      "tip": "4c3eb694c6dbeef8b09428db67f706466818437c",
+      "unique_patch_plus_count": 2,
+      "disposition": "landed-equivalent",
+      "evidence": [
+        "Read actual changed paths/numstat for1b3ab788c:260-file documentation reorganization/deletions including tracking artifact; no src Python production changes. 4c3eb694c deletes test depending on removed studio module.",
+        "No standalone executable feature patch exists in the plus set; archived branch name is not evidence of a missing Studio implementation.",
+        "Exact tip tree f33c24de8ccea4735f38f72fa25412a475d58a4d equals origin/dev ancestor 67b32086f00e1de8c1457a71db86d7b14921d3f3; parent tree differs (negative control)."
+      ],
+      "remaining": "None: exact complete tip tree existed on dev.",
+      "retention_status": "landed-exact-tree-via-squash",
+      "exact_tree_receipts": [
+        {
+          "commit": "67b32086f00e1de8c1457a71db86d7b14921d3f3",
+          "subject": "Major SDK documentation reorganization and code cleanup (#131)",
+          "different_tree_control": "5196eb3ddef96ac1c43cfacc3f1707bf0f54c776"
+        }
+      ]
+    },
+    {
+      "ref": "refs/archive/2026-08-21/feat/w6-010-nexus-package-name-canonical",
+      "tip": "9212cbe9378d8823be43fc6fc739c5d25e5bd3d3",
+      "unique_patch_plus_count": 1,
+      "disposition": "landed-equivalent",
+      "evidence": [
+        "Read whole 9212cbe93 diff; all 10 added canonical-module-name lines are exactly retained in specs/nexus-ml-integration.md (checked individual matches).",
+        "String keys kailash_nexus.current_* remain contextvar identifiers intentionally; Python imports and file locations use nexus."
+      ],
+      "remaining": "None identified in inspected contract",
+      "retention_status": "landed-equivalent"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/feat/w6-023-strip-w31-31b-import-error",
+      "tip": "82ac634f822a6805b8597804ffc18f93c4f15d98",
+      "unique_patch_plus_count": 1,
+      "disposition": "superseded",
+      "evidence": [
+        "Read whole 82ac634f8 diff. Current features/store.py:588-637 implements a three-path feature-source resolver; final ImportError cites specs/dataflow-ml-integration.md \u00a71.1 and actual DataFlow export.",
+        "Old W31/31b user error and spec Source-Comment Drift section are absent; current resolver/doc contract substantively incorporates the change."
+      ],
+      "remaining": "None identified in inspected contract",
+      "retention_status": "superseded"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/feature/kaizen-agent-development",
+      "tip": "d0c1daa5a38fa31cccd4188c2ef806ffe9b35c4e",
+      "unique_patch_plus_count": 2,
+      "disposition": "landed-equivalent",
+      "evidence": [
+        "Read exact name-status of both plus commits3a3c4f8c8 and7c96e7080: investigation/proposal documents, specialist/skill docs, root metadata; no production Python paths.",
+        "Current Kaizen control/protocol.py contains ControlProtocol lifecycle/request pairing and stdio/http/cli/memory transports, so release title does not demonstrate missing protocol code.",
+        "Exact tip tree d9e5bb02e5a6cc955ea1a5f1ef24b0d867a727f5 equals origin/dev ancestor 0ff9996a81015388cfe20ab95c44ec2083c94757; parent tree differs (negative control)."
+      ],
+      "remaining": "None: exact complete tip tree existed on dev.",
+      "retention_status": "landed-exact-tree-via-squash",
+      "exact_tree_receipts": [
+        {
+          "commit": "0ff9996a81015388cfe20ab95c44ec2083c94757",
+          "subject": "Release: Kaizen v0.2.0 - Tool Calling & Control Protocol (#426)",
+          "different_tree_control": "b4c48ff1d6ecd65a7faaf6d44c1ac9925be4f110"
+        }
+      ]
+    },
+    {
+      "ref": "refs/archive/2026-08-21/feature/kaizen-developer-experience-improvements",
+      "tip": "0292389bdd6d7ed6caad60f2e4e86a5039f4bbd0",
+      "unique_patch_plus_count": 35,
+      "disposition": "unresolved",
+      "evidence": [
+        "Inspected all35 plus subjects and actual changed paths; mix includes old AI/provider/signature changes, PythonCodeNode context sanitization/persistence, Docker runtime thread changes, deleted Studio/proposal docs, release metadata, test formatting and environment standards.",
+        "Read f351ddc6a provider diff (Ollama None metrics and historical mock-generation changes); old core AI ownership removed by7e141af6b and current Kaizen provider/structured-output contract supersedes those paths.",
+        "Observed overlap with current runtime cleanup recovery, but did not treat different implementations or absent old files as behavioral equivalence."
+      ],
+      "remaining": "Remaining contracts not re-derived:0b020abd9 context-aware Python sanitization,5f0a931de Python variable persistence,77d85299b/f36b10e91 Docker runtime threading, plus broad2025doc/skills replacements. Surface exceeds bounded multi-invariant review; retain archive, no blind merge.",
+      "retention_status": "unresolved",
+      "recovery_followups": [
+        "csq13-devex-archive-adjudication.json"
+      ]
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/2070-logging-hook-redaction-defeat",
+      "tip": "cbb64f8fca867b60de412c1454a8a471c0d9bf14",
+      "plus_count": 3,
+      "status": "superseded",
+      "receipt": "f563556d5",
+      "evidence": "Read all3diffs. Archived NotImplemented guards replaced with actual registered logging/audit/metrics/tracing hooks in smart_defaults322\u2013489. Current source reviewed; no live provider/collector claim.",
+      "commit_subjects": [
+        "4266813cf fix(kaizen): four observability flags advertised subsystems that do not exist (#2084)",
+        "f941ea5f0 fix(kaizen): Agent wrapper still sent explicit True, re-breaking every construction",
+        "cbb64f8fc fix(kaizen): a custom hook manager short-circuited the not-implemented gate"
+      ],
+      "retention_status": "superseded"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/async-runtime-tier1-tests",
+      "tip": "f890f14c49f20864a2d90122e3f6d25ab7e71b55",
+      "plus_count": 2,
+      "status": "landed-exact-tree-via-squash",
+      "receipt": "5afe12ded",
+      "evidence": "Archived tip tree hash equals receipt tree hash, receipt ancestor HEAD, parent tree differs (negative control). This proves preserved net contents, not current behavior of all historical code.",
+      "tree": "cdc7950731c2bd462c301620518a2c6c52929175",
+      "commit_subjects": [
+        "c083d56bf fix: Resolve all Tier 1 test failures and improve async runtime implementation",
+        "f890f14c4 chore: Prepare for v0.9.16 release"
+      ],
+      "retention_status": "landed-exact-tree-via-squash",
+      "exact_tree_receipts": [
+        {
+          "commit": "5afe12deddd934ad6fff135e89be4172ddc7a819",
+          "subject": "fix: Resolve all Tier 1 test failures and improve async runtime implementation (#194)",
+          "different_tree_control": "5a6089e3d9078ac60f90d8710520750ed079518b"
+        }
+      ]
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/bug-report-issues",
+      "tip": "f723e0ab05427d765c8aaba07dfb3ac9746f4b98",
+      "plus_count": 12,
+      "status": "landed-content-with-superseded-test-markers",
+      "receipt": "040d4371d",
+      "evidence": [
+        "040d4371d squash comparison differs only five slow decorators. Subsequent landed ca1604a79 rewrote the scenario tests (275 additions/1294 deletions) around mocked timing; e75ac9721 later reorganized tests.",
+        "Read full current tests/integration/scenarios/test_cycle_scenarios.py relevant scenarios: current synthetic retry/poll/checkpoint bodies no longer carry old sleeping-loop contracts. Restoring decorators from the former source is not an unlanded implementation repair. This is test-history disposition, not runtime conformance."
+      ],
+      "commit_subjects": [
+        "6582f083b docs: add bug resolution documentation for Run 1",
+        "0a3c20223 refactor: consolidate auth modules and fix circular import issues",
+        "f5ca7078b fix: resolve circular imports and consolidate JWT implementations",
+        "15546efc7 chore: release v0.4.2",
+        "2583f9b76 feat: Major architectural refactoring for v0.5.0",
+        "a70c6e4e0 docs: update sdk-users documentation for v0.5.0 architecture changes",
+        "03bfff9b4 docs: update sdk-users documentation for v0.5.0 architecture changes",
+        "4c0e40fe8 chore: remove SDK documentation report (moved to completed)",
+        "d23d2199b fix: make parameter cache performance test more lenient for CI",
+        "f403006f5 fix: make parameter cache performance test much more lenient",
+        "17b56aea4 fix: improve GitHub Actions concurrency grouping",
+        "f723e0ab0 fix: mark cycle scenario tests as slow to improve CI performance"
+      ],
+      "retention_status": "landed-content-with-superseded-test-markers",
+      "prior_retention_status": "current-equivalent-with-unverified-test-markers",
+      "remaining": "None identified in the bounded historical-content review; archive retained."
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/ci-green-v5",
+      "tip": "dcf64b6bc7ed0795d1e888a83e739fa25bc6773f",
+      "plus_count": 1,
+      "status": "superseded",
+      "receipt": "70cc93547",
+      "evidence": "Read full1filediff. Archived deploy extras change targets deleted deploy-production.yml; current history removes dead workflow. No reintroduction required.",
+      "commit_subjects": [
+        "dcf64b6bc fix(ci): install kailash with server/database/trust extras in deploy pipeline"
+      ],
+      "retention_status": "superseded"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/dataflow-connection-parsing-bug",
+      "tip": "b31fe462154869bfcf90a146f169ab902abe3530",
+      "plus_count": 7,
+      "status": "landed-exact-tree-via-squash",
+      "receipt": "803010270",
+      "evidence": "Archived tip tree hash equals receipt tree hash, receipt ancestor HEAD, parent tree differs (negative control). This proves preserved net contents, not current behavior of all historical code.",
+      "tree": "b8b02f96a23b1cf7d6647ff5ecdcba89e1a1aa4b",
+      "commit_subjects": [
+        "b38c96287 fix: Fix DataFlow connection string parsing with special characters",
+        "a07ee6efb style: Apply black formatting to runtime/local.py",
+        "e8f87d4a8 chore: Remove temporary test files",
+        "ae7eb895f fix: Remove utils module import and add ContentAwareExecutionError",
+        "0668bb0a8 fix: Add missing success detection functions",
+        "5485f5784 fix: Complete runtime success detection and DataFlow connection parsing",
+        "b31fe4621 chore: Remove temporary test files"
+      ],
+      "retention_status": "landed-exact-tree-via-squash",
+      "exact_tree_receipts": [
+        {
+          "commit": "803010270afb8af16d32c2b26f2f089065937bd6",
+          "subject": "fix: DataFlow connection string parsing with special characters (#173)",
+          "different_tree_control": "f7a244c5a2115d0604ec55aab7fa8de70a8b0eac"
+        }
+      ]
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/docs-deploy-gtar-missing",
+      "tip": "afde98c0481c9a9cedd2e8678253ef7f62cabce8",
+      "plus_count": 13,
+      "status": "landed-exact-tree-via-squash",
+      "receipt": "43d41983f",
+      "evidence": "Archived tip tree hash equals receipt tree hash, receipt ancestor HEAD, parent tree differs (negative control). This proves preserved net contents, not current behavior of all historical code.",
+      "tree": "e9c5f2292b13c153b09ed9c32cde8e999e45c6bf",
+      "commit_subjects": [
+        "265969caf fix: install GNU tar for docs upload on local runners",
+        "eaac13c9a fix: comprehensive linting and formatting fixes for GitHub Actions",
+        "59921d86f fix: correct example validation path in GitHub Actions",
+        "ee4f018c4 fix: properly detect parallel job failures in CI workflow",
+        "49b045df2 fix: resolve flaky connection pooling test in SQL database tests",
+        "a377cfc9a fix: resolve remaining flaky tests causing Python 3.11/3.12 failures",
+        "fa2c1dac4 fix: apply black formatting fixes to test files",
+        "17d194d04 fix: disable parallel test execution to resolve coverage file conflicts",
+        "f00e79144 fix: resolve critical test failures in SQL database and performance tests",
+        "1db1430e2 fix: disable coverage collection to resolve CI coverage file conflicts",
+        "65f46ec09 fix: collect coverage from only Python 3.11 to avoid parallel conflicts",
+        "5fbc1c8e7 docs: complete Session 059 todos update - Phase 7 workflow library",
+        "afde98c04 docs: Session 059 comprehensive documentation updates"
+      ],
+      "retention_status": "landed-exact-tree-via-squash",
+      "exact_tree_receipts": [
+        {
+          "commit": "43d41983f930d76133e39ea867c58ea742b20962",
+          "subject": "Session 059: Complete Phase 7 documentation updates and todos system (#107)",
+          "different_tree_control": "50d5d369e2bd9e631d7c98e43d2b50220fb9475e"
+        }
+      ]
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/github-actions-branch-patterns",
+      "tip": "3ebf7eb14c5a9a4bdb78b60574ecbed11acebc59",
+      "plus_count": 1,
+      "status": "current-equivalent",
+      "receipt": "b0143c374",
+      "evidence": "Full archiveddiff adds branch-prefix convention; current .claude/rules/git.md23\u201325 and AGENTS.md326\u2013328 enforce type/description. Receipt onHEAD; not whole-tree equality.",
+      "commit_subjects": [
+        "3ebf7eb14 docs: add Git branch naming convention requirements to Claude.md"
+      ],
+      "retention_status": "current-equivalent"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/iterative-llm-agent-fallback-bug",
+      "tip": "b20cdcc1e246c14a787d9f79cd9353cbab37c739",
+      "plus_count": 7,
+      "status": "landed-exact-tree-via-squash",
+      "receipt": "5af47b93d",
+      "evidence": "Archived tip tree hash equals receipt tree hash, receipt ancestor HEAD, parent tree differs (negative control). This proves preserved net contents, not current behavior of all historical code.",
+      "tree": "aa11205e37296b398be8b0d89f6ff906c973dce0",
+      "commit_subjects": [
+        "b5ccb1166 fix: IterativeLLMAgentNode fallback architecture for non-MCP scenarios",
+        "20840e404 fix: Enhanced Node._is_json_serializable() to recognize .to_dict() methods",
+        "0e1399597 style: Apply black, isort and ruff formatting",
+        "21e8264a6 fix: Complete IterativeLLMAgentNode emergency fixes for v0.9.8",
+        "1f30b9447 fix: Comprehensive DataFlow parameter validation and performance optimization",
+        "bc8e27fc1 fix: Move MCP test to Tier 2 integration and fix parameter validation test",
+        "ef084d8c8 docs: Add revolutionary auto-migration documentation for DataFlow"
+      ],
+      "retention_status": "landed-exact-tree-via-squash",
+      "exact_tree_receipts": [
+        {
+          "commit": "5af47b93d2942c951c2baa2b9705c0cee8a8b6be",
+          "subject": "fix: Comprehensive DataFlow parameter validation and performance optimization (#180)",
+          "different_tree_control": "52e378de6a5b89021d276a05f89aa21653fd1b50"
+        }
+      ]
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/mcp-openai-pydantic-v2",
+      "tip": "a0106d1e719e8e26824f63871f8fa8e5f07f711b",
+      "plus_count": 4,
+      "status": "landed-exact-tree-via-squash",
+      "receipt": "e534765d0",
+      "evidence": "Archived tip tree hash equals receipt tree hash, receipt ancestor HEAD, parent tree differs (negative control). This proves preserved net contents, not current behavior of all historical code.",
+      "tree": "41cdabb73bdfc85a5d7abdc3fa39f10712f2b3cb",
+      "commit_subjects": [
+        "4e6952b79 fix: OpenAI Pydantic model compatibility for MCP integration",
+        "86f72a436 style: Apply black formatting to demonstrate_mcp_bug.py",
+        "e4af21a37 style: Apply black formatting to unit test file",
+        "a0106d1e7 fix: Move flaky NoneType test to integration tier for better timeout handling"
+      ],
+      "retention_status": "landed-exact-tree-via-squash",
+      "exact_tree_receipts": [
+        {
+          "commit": "e534765d066f2c8cd4bf11df0c6ba8f8eec06aff",
+          "subject": "fix: OpenAI Pydantic model compatibility for MCP integration (v0.9.18) (#388)",
+          "different_tree_control": "5a04b90ca68ae2014a0b29a2f7a1d5920f292e0e"
+        }
+      ]
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/remove-iterative-llm-mock-mode",
+      "tip": "b12346453ee933b69ce8398e9d83f30ec33c2483",
+      "plus_count": 2,
+      "status": "landed-exact-tree-via-squash",
+      "receipt": "c71c846a7",
+      "evidence": "Archived tip tree hash equals receipt tree hash, receipt ancestor HEAD, parent tree differs (negative control). This proves preserved net contents, not current behavior of all historical code.",
+      "tree": "eaa381856c5d4dcde653cc3878f7c2fa4b0cff36",
+      "commit_subjects": [
+        "c52063ab3 fix: Remove mock mode from IterativeLLMAgentNode entirely",
+        "b12346453 style: Apply black formatting to fix CI"
+      ],
+      "retention_status": "landed-exact-tree-via-squash",
+      "exact_tree_receipts": [
+        {
+          "commit": "c71c846a7b611e7d2e66c2fa102293b8161e53f2",
+          "subject": "fix: Remove mock mode from IterativeLLMAgentNode entirely (#182)",
+          "different_tree_control": "5af47b93d2942c951c2baa2b9705c0cee8a8b6be"
+        }
+      ]
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/runtime-leak-lifecycle-71",
+      "tip": "246631f030552afda1f6d2c6184902ce7e2e86c2",
+      "plus_count": 43,
+      "status": "landed-exact-tree-via-squash",
+      "receipt": "9b3cb0136",
+      "evidence": "Archived tip tree hash equals receipt tree hash, receipt ancestor HEAD, parent tree differs (negative control). This proves preserved net contents, not current behavior of all historical code.",
+      "tree": "3e9775f7c4794b8cb43c6dae9aae3cbbaa0a8eee",
+      "commit_subjects": [
+        "12af0ba29 feat(kaizen-agents): add /holds /approve /reject governance commands",
+        "a03ad9da9 fix(runtime): add lifecycle management and runtime injection to eliminate connection leaks (#71)",
+        "8cd62874b fix(ci): resolve pre-existing CI failures across all workflows",
+        "5c0ee0e61 fix(ci): pyright --level flag, trust-plane deps, PACT optional import",
+        "ea7bb4c0f fix(ci): pyright continue-on-error (#73), trust-plane needs kailash-pact",
+        "324e85f90 fix(types): resolve 1027 pyright errors across src/kailash/ (#73)",
+        "a8af80d59 fix(types): resolve additional 219 pyright errors (#73) \u2014 wave 2",
+        "24743b4e6 fix(types): resolve 389 more pyright errors (#73) \u2014 wave 3",
+        "b702ea912 fix(types): resolve 584 more pyright errors (#73) \u2014 wave 4",
+        "e1bd3c8f5 fix(types): resolve 100 more pyright errors (#73) \u2014 wave 5",
+        "7d2dde1c9 fix(types): fix 9 syntax errors and 2 test regressions from pyright waves",
+        "3dddc13b3 fix(runtime): fix 2 pruned_plan test regressions and 2 pre-existing async test failures",
+        "58a5a0ff0 fix(types): resolve pyright errors in cli, config, planning, runtime, workflow, tracking",
+        "fd1df3454 fix(types): resolve pyright errors in nodes/data, nodes/edge, nodes/auth, trust/ (#73) \u2014 wave 6",
+        "7f858a901 fix(types): resolve pyright errors in mcp_server, middleware/auth (#73) \u2014 wave 6b",
+        "1e962d38c fix(ci): lazy-import numpy and resource module for cross-platform CI",
+        "27511a52e fix(ci): lazy-import redis, asyncpg, aiohttp for CI without optional deps",
+        "4ebfd1c5d fix(tests): resolve 19 pre-existing test failures in admin nodes + parameter cache",
+        "6215a907e fix(types): resolve pyright errors in mcp_server/server, nodes/api (#73) \u2014 wave 7",
+        "a1895672b fix(types): resolve pyright errors in nodes/api, nodes/monitoring (#73) \u2014 wave 8",
+        "3a8924de1 fix(types): resolve pyright errors in middleware/database, middleware/mcp, trust/ (#73) \u2014 wave 9",
+        "214f31c5e fix(types): resolve pyright errors in middleware/auth, middleware/core, middleware/mcp (#73) \u2014 wave 10",
+        "7ac7142dd fix(ci): resolve 4 ruff errors and redis import chain failure",
+        "d3ec133d3 fix(types): resolve 267 pyright errors across nodes/, mcp_server/, middleware/, trust/ (#73) \u2014 wave 11",
+        "408832354 chore: remove accidentally committed __pycache__ files",
+        "a06408e0c fix(tests): fix pre-existing async runtime test using wrong return type",
+        "b2f2abed6 fix(types): resolve remaining pyright errors across src/kailash/ (#73) \u2014 wave 12",
+        "7053f2025 fix(ci): lazy-import sqlalchemy in sql.py to fix Trust Plane CI import chain",
+        "4c88637d5 fix(tests): fix 6 pre-existing test_input_handling failures",
+        "72a2fe78f fix(ci): lazy-import numpy in vector_db.py to fix Trust Plane CI import chain",
+        "ffb494dd9 fix(ci): guard conftest imports for Trust Plane CI without optional deps",
+        "5609d99aa fix(tests): resolve remaining test_input_handling failures",
+        "3681b59df fix(ci): skip benchmark tests when pytest-benchmark not installed",
+        "63383d573 fix(ci): skip verification gradient benchmarks without pytest-benchmark",
+        "6e856224b fix(ci): skip wire format tests when schema directory doesn't exist",
+        "11158c338 fix(tests): update trust version assertion from 2.0.0 to 2.1.0",
+        "5e123415d fix(security): resolve 2 CRITICAL findings from red team security review",
+        "7465908ce fix(tests): update CLI version assertion from 2.0.0 to 2.1.0",
+        "6b5a44a1d fix(security): resolve HIGH findings from red team review",
+        "26e6c08fe fix(trust): use insertion order for spend history to fix Windows CI",
+        "58547e489 fix(trust): export main from trust.plane.cli for test_dashboard import",
+        "39ac90b0a fix(ci): skip MCP server e2e tests when mcp package not installed",
+        "246631f03 fix(runtime): implement runtime injection with ref counting across all packages (#71)"
+      ],
+      "retention_status": "landed-exact-tree-via-squash",
+      "exact_tree_receipts": [
+        {
+          "commit": "9b3cb0136a77c445ee36e08ef8dd326569de5c03",
+          "subject": "fix(runtime): lifecycle management and runtime injection (#71) (#72)",
+          "different_tree_control": "d918b5a5cf4bc4ad837a1681c0b3c81c249ce2fd"
+        }
+      ]
+    },
+    {
+      "ref": "refs/archive/2026-08-21/kaizen",
+      "tip": "230e29ee236ee13330a621c627a2e362cad9f78d",
+      "unique_patch_plus_count": 1,
+      "disposition": "landed-equivalent",
+      "evidence": [
+        "Read actual bd211bd19 core LLMAgent provider_config parameter/merge patch (commit narrative lists broader changes than its four changed paths).",
+        "Core src/kailash/nodes/ai/llm_agent.py intentionally removed by 7e141af6b (#591). Current Kaizen LLMAgent declares provider_config:551, reads:950 and forwards at1081/1134; WorkflowGenerator preserves nested provider_config at317/475 and separates response_format.",
+        "Current structured_output.py implements json_schema/strict modes; prior core-path patch must not resurrect removed AI ownership.",
+        "Exact tip tree 814bb8d409499583f6932c65bdf32ab76176aa6c equals origin/dev ancestor 9503dcdfa3b833f9642b305715fbdfd0dc9183fd; parent tree differs (negative control)."
+      ],
+      "remaining": "None: exact complete tip tree existed on dev.",
+      "retention_status": "landed-exact-tree-via-squash",
+      "exact_tree_receipts": [
+        {
+          "commit": "9503dcdfa3b833f9642b305715fbdfd0dc9183fd",
+          "subject": "feat(kaizen): v1.0.0 Release - GPT-5 support, guidance restructure (#636)",
+          "different_tree_control": "a3eb9de3f95428dacd66a7c478d61630001b8dc7"
+        }
+      ]
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/license-update-v0.9.10",
+      "status": "included-in-landed-snapshot",
+      "evidence": "Archived tip ancestry is included in exact landed snapshot refs/archive/2026-08-21/feat/dataflow-dynamic-model-registration",
+      "remaining": "None for retention.",
+      "retention_status": "included-in-landed-snapshot"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.12.5",
+      "status": "landed-exact-tree-via-squash",
+      "evidence": "Exact archived tip tree matches 28261a9b2 on origin/dev ancestry; known different historical tree controls recorded.",
+      "remaining": "None for retention; no claim every historical test still passes.",
+      "retention_status": "landed-exact-tree-via-squash",
+      "exact_tree_receipts": [
+        {
+          "commit": "28261a9b2bf83cce09b0843b56fe1984f31a63b2",
+          "subject": "feat(deploy): align dependencies, add OIDC CI publish, release v0.12.5/v0.12.4/v1.2.5 (#671)",
+          "different_tree_control": "1b2f14cdf3a07b88afc26bff8876e4dde1d8bf46"
+        }
+      ]
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.4.1",
+      "status": "landed-exact-tree-via-squash",
+      "evidence": "Exact archived tip tree matches b62053ffe on origin/dev ancestry; known different historical tree controls recorded.",
+      "remaining": "None for retention; no claim every historical test still passes.",
+      "retention_status": "landed-exact-tree-via-squash",
+      "exact_tree_receipts": [
+        {
+          "commit": "b62053ffefbc68daecef22ccdd2fb531cadad30e",
+          "subject": "chore: release v0.4.1 - Alert Nodes and Vision Support (#129)",
+          "different_tree_control": "c20e1ddf2e3ea45baa82451de710adb49b4a79ad"
+        }
+      ]
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.8.5",
+      "status": "landed-exact-tree-via-squash",
+      "evidence": "Exact archived tip tree matches 269a5dee0 on origin/dev ancestry; known different historical tree controls recorded.",
+      "remaining": "None for retention; no claim every historical test still passes.",
+      "retention_status": "landed-exact-tree-via-squash",
+      "exact_tree_receipts": [
+        {
+          "commit": "269a5dee004bd9a9aac5c887b141d322fffa83bb",
+          "subject": "Release v0.8.5: Test Infrastructure & Application Framework Enhancement (#156)",
+          "different_tree_control": "c89ae1988a643aed9317ab06a5476ae783c9e66f"
+        }
+      ]
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.11-final",
+      "status": "landed-exact-tree-via-squash",
+      "evidence": "Exact archived tip tree matches 2232cf57e,9d542d002 on origin/dev ancestry; known different historical tree controls recorded.",
+      "remaining": "None for retention; no claim every historical test still passes.",
+      "retention_status": "landed-exact-tree-via-squash",
+      "exact_tree_receipts": [
+        {
+          "commit": "2232cf57ed0146f577de9cfdb24fb564b011d8b5",
+          "subject": "fix: Correct import order in test_missing_handlers_e2e.py (#187)",
+          "different_tree_control": "1243a3a1014415b31cec851fb208ce1e8ad0f4f7"
+        },
+        {
+          "commit": "9d542d002e08afc78054665b0947384b29280553",
+          "subject": "Release: Core SDK v0.9.11 and DataFlow v0.4.0 - Dynamic Model Registration & Test Milestone (#186)",
+          "different_tree_control": "1243a3a1014415b31cec851fb208ce1e8ad0f4f7"
+        }
+      ]
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.16-version-bump",
+      "status": "superseded-release-metadata",
+      "evidence": "Three changed blobs retained; only init.py differs. Diff to landed4e9b14da3 is removal of2 historical version-description lines. No source logic addition.",
+      "remaining": "None for active implementation.",
+      "retention_status": "superseded-release-metadata"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.17-final",
+      "status": "superseded-ci-experiment",
+      "evidence": "39 changed blobs retained. Only unmatched blob is old unified-ci.yml fast/forked runner experiment; read full diff to4e9b14da3 and current replacement workflow c52b66e23.",
+      "remaining": "None for active implementation; current CI gate remains pending.",
+      "retention_status": "superseded-ci-experiment"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.17-update",
+      "status": "landed-content-with-evolved-release-metadata",
+      "evidence": "All4 changed blobs retained in origin/dev history. Parent release later evolved into4e9b14da3.",
+      "remaining": "None for active implementation.",
+      "retention_status": "landed-content-with-evolved-release-metadata"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.17-version-update",
+      "status": "superseded-release-metadata",
+      "evidence": "All changed blobs except init.py retained; full init.py diff against4e9b14da3 is one removed previous-v0.9.14 docstring line.",
+      "remaining": "None for active implementation.",
+      "retention_status": "superseded-release-metadata"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.4",
+      "status": "landed-exact-tree-via-squash",
+      "evidence": "Exact archived tip tree matches 15c1bdf6b on origin/dev ancestry; known different historical tree controls recorded.",
+      "remaining": "None for retention; no claim every historical test still passes.",
+      "retention_status": "landed-exact-tree-via-squash",
+      "exact_tree_receipts": [
+        {
+          "commit": "15c1bdf6b55678845987bb8df824f348689982dc",
+          "subject": "release: Version 0.9.4 - DataFlow Connection Parsing & Runtime Success Detection (#174)",
+          "different_tree_control": "803010270afb8af16d32c2b26f2f089065937bd6"
+        }
+      ]
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.7",
+      "status": "retained-historical-release-tag",
+      "evidence": [
+        "Archive tip and v0.9.7 peeled tag are exactly 25f9e3d70e4e3ae7be740f53bbf7b04a62606ea9; v0.9.6 differs (negative control).",
+        "Read all four changed paths: two version anchors and two release documents; no production implementation change. Current version anchors must not regress. Tagged history is retained, not a claim about external package publication."
+      ],
+      "remaining": "None identified in the bounded historical-content review; archive retained.",
+      "retention_status": "retained-historical-release-tag",
+      "prior_retention_status": "unresolved-historical-release-proposal"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.9",
+      "status": "included-in-landed-snapshot",
+      "evidence": "Archived tip ancestry is included in exact landed snapshot refs/archive/2026-08-21/docs/update-iterative-llm-agent-v0.9.9",
+      "remaining": "None for retention.",
+      "retention_status": "included-in-landed-snapshot"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/scrap/pre-triage-snapshot-2026-04-08",
+      "tip": "4cd5ef5124e8360c47784c786bf554130e830942",
+      "plus_count": 1,
+      "status": "unverified-large-mixed-snapshot",
+      "receipt": null,
+      "evidence": "273files77545additions10379deletions: provider/MCP/trust/wrappers and workspace notes. Read actual stat and surfaced modules but not full behavioral comparison. Must retain as UNVERIFIED; no missing-contract claim based on patch-id plus.",
+      "commit_subjects": [
+        "4cd5ef512 snapshot: pre-triage working tree from prior /implement session"
+      ],
+      "retention_status": "unverified-large-mixed-snapshot",
+      "bounded_followup": "csq13-scrap-trust-adjudication.json",
+      "remaining": "Named envelope.py and auth/chain.py are retained then deliberately hardened/superseded with ancestor receipts and actual controls. Remaining271snapshot paths are not adjudicated by this bounded follow-up; retain mixed archive.",
+      "recovery_followups": [
+        "csq13-scrap-ast-retention.json",
+        "csq13-scrap-import-normalized-retention.json",
+        "csq13-scrap-nonimport-retention.json"
+      ]
+    },
+    {
+      "ref": "refs/archive/2026-08-21/sync/main-with-dataflow-v0.4.3-release",
+      "status": "unresolved-historical-docs-and-probes",
+      "evidence": "Nine unmatched blobs are old DataFlow migration/configuration docs plus two standalone registry probes; read name/status and commit scope.",
+      "remaining": "Compare supported current registry/migration contracts before porting any still-relevant prose or probes.",
+      "retention_status": "unresolved-historical-docs-and-probes"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/test/ci-verification",
+      "status": "superseded-ci-experiment",
+      "evidence": "Same retained39blobs as release/v0.9.17-final; unmatched old workflow+CI_VERIFICATION.md describe an obsolete pipeline experiment.",
+      "remaining": "None for active implementation; current CI gate remains pending.",
+      "retention_status": "superseded-ci-experiment"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/test/ci-verification-v2",
+      "status": "landed-content-with-test-relocation",
+      "evidence": "Entiretip vs landede534765d0 differs ONLY tests/unit/runtime/test_nonetype_edge_cases.py ->tests/integration/runtime/test_nonetype_edge_cases.py (100%rename); all20changedblobs retained.",
+      "remaining": "None.",
+      "retention_status": "landed-content-with-test-relocation"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/todo-096-parameter-injection-testing",
+      "status": "unresolved-production-prototype",
+      "evidence": "Archived b7ecec280 adds1394productionlines across local.py, parameter_debugger.py,parameter_validator.py,validation/performance_optimizer.py,sdk_exceptions.py; 35changedblobs absentfromdevhistory. Current runtime has parameter_injection/injector/mixins but no archived validator/debugger/optimizer modules. Presence/absence does not establish behavioral equivalence.",
+      "remaining": "Required/type rejection and actual flat/per-node injection retained. Runtime-wide parameter_validation modes and structured reports are an unlanded archival capability, not required by the inspected current specs. Debugger/optimizer remain unadjudicated. Current spec says root-only flat injection but actual old/current behavior reaches all accepting nodes. No blind restoration or blanket landed verdict.",
+      "retention_status": "unresolved-production-prototype",
+      "bounded_followup": "csq13-parameter-validator-adjudication.json"
+    },
+    {
+      "ref": "refs/original/refs/heads/feat/1125-from-brief-analyze",
+      "status": "landed-equivalent",
+      "evidence": "Whole tree vs f94e47dab differs only tests/unit/_from_brief/test_scrubber.py; string-concatenation-folded AST equal; changed-character negativecontrol differs. f94e47dab ancestor origin/dev.",
+      "remaining": "None; backup ref retains original spelling.",
+      "retention_status": "landed-equivalent"
+    }
+  ],
+  "followup_reviewed_head": "db9565623dd03620e03869fc63e4d51c9ceedd67",
+  "recovery_reviewed_head": "709759a385ae5950fdeab2eda739718dddfb75e3",
+  "recovery_verification": "csq14-archive-recovery-verification.json",
+  "recovery_scope": "Recovered prior reports with explicit fresh structural checks; original archive-wide dispositions are not upgraded by source identity or import-insensitive candidate matches."
+}

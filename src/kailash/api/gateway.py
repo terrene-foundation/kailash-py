@@ -93,8 +93,8 @@ from ..utils.lifespan import (
     drive_router_lifespan_shutdown,
     drive_router_lifespan_startup,
 )
-from ..utils.proxy_guard import PROXY_CREDENTIAL_HEADERS as _PROXY_CREDENTIAL_HEADERS
 from ..utils.proxy_guard import (
+    PROXY_CREDENTIAL_HEADERS as _PROXY_CREDENTIAL_HEADERS,
     PROXY_HOP_BY_HOP_HEADERS,
     PROXY_SAFE_RESPONSE_HEADERS,
     SAFE_FORWARD_PATH_RE,

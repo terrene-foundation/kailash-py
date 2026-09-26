@@ -93,13 +93,13 @@ class TestTrustLineageChainHash:
 class TestLinkedHashChain:
     """Tests for LinkedHashChain class."""
 
-    def test_empty_chain_valid(self):
-        """Empty chain passes integrity check."""
+    def test_empty_chain_is_unverifiable(self):
+        """An empty chain cannot establish integrity (#2221)."""
         chain = LinkedHashChain()
 
         valid, break_index = chain.verify_chain()
 
-        assert valid is True
+        assert valid is False
         assert break_index is None
         assert len(chain) == 0
 
@@ -412,8 +412,9 @@ class TestEdgeCases:
         chain = LinkedHashChain.from_dict(data)
 
         assert len(chain) == 0
-        valid, _ = chain.verify_chain()
-        assert valid is True
+        valid, break_index = chain.verify_chain()
+        assert valid is False
+        assert break_index is None
 
     def test_verify_chain_linkage_wrong_order(self):
         """verify_chain_linkage detects wrong hash order."""

@@ -166,6 +166,24 @@ class TestItem2CachingMixinGateConsistency:
 # Item 3 — workflow_generator resolves provider from env, not the "openai" literal
 # ---------------------------------------------------------------------------
 class TestItem3WorkflowGeneratorEnvDetection:
+    @pytest.fixture(autouse=True)
+    def _no_ambient_default_model(self, monkeypatch):
+        """These cases are about a CONFIGURED-MODEL-LESS agent. Clear the model.
+
+        ``generate_fallback_workflow`` falls back to ``DEFAULT_LLM_MODEL`` when
+        the config names no model, and since #2220 a model in hand is the ONLY
+        thing entitled to answer the vendor question -- credentials are never
+        consulted when one is present.  The developer ``.env`` sets
+        ``DEFAULT_LLM_MODEL``, so without this fixture every case here silently
+        asserts the model-keyed path instead of the credential-keyed one it
+        names: the anthropic case failed, and the openai case PASSED
+        vacuously (a ``gpt-*`` default resolves to openai whether or not
+        credential detection works at all).
+        """
+        monkeypatch.delenv("DEFAULT_LLM_MODEL", raising=False)
+        monkeypatch.delenv("DEFAULT_LLM_PROVIDER", raising=False)
+        monkeypatch.delenv("KAIZEN_DEFAULT_PROVIDER", raising=False)
+
     def _provider_of(self, workflow, node_id):
         return workflow.nodes[node_id]["config"]["provider"]
 

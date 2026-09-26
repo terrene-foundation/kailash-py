@@ -7,6 +7,7 @@ Specs: specs/ml-engines.md §4 (TrainingResult dataclass contract).
 from __future__ import annotations
 
 import pytest
+
 from kailash_ml import TrainingResult
 
 REQUIRED_FIELDS = {

@@ -264,20 +264,6 @@ Documentation = "https://docs.kailash.com/kaizen"
 Repository = "https://github.com/terrene-foundation/kailash-py"
 Issues = "https://github.com/terrene-foundation/kailash-py/issues"
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-markers = [
-    "unit: Unit tests (fast, isolated)",
-    "integration: Integration tests (real services)",
-    "e2e: End-to-end tests (complete flows)",
-    "requires_azure: Tests requiring Azure AI Foundry credentials",
-    "requires_docker: Tests requiring Docker Model Runner",
-    "requires_google: Tests requiring Google Gemini credentials",
-    "regression: Regression tests for fixed bugs",
-    "benchmark: Performance benchmark tests (pytest-benchmark)",
-]
-asyncio_mode = "auto"
-
 [tool.coverage.run]
 source = ["src"]
 omit = ["tests/*", "examples/*"]
@@ -296,13 +282,15 @@ target-version = ['py311']
 
 [tool.isort]
 profile = "black"
+# Keep aliased imports compatible with Black, including narrow inline pragmas.
+combine_as_imports = true
 line_length = 88
 # MUST match the root pyproject.toml list exactly. isort resolves config from the
 # nearest file, so a per-package block that omits `known_first_party` silently
 # reclassifies `kailash` as THIRD-party for every file under this package — which
 # is the blank-line-between-import-blocks that flip-flopped on every run and left
 # ~2,000 files permanently modified (#1995).
-known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact", "kailash_mcp"]
+known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact", "kailash_mcp", "kailash_ml", "kailash_align"]
 
 [tool.ruff]
 line-length = 88

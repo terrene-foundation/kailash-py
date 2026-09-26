@@ -60,6 +60,7 @@ from kailash.trust.constraints.dimension import (
     ConstraintDimensionRegistry,
     ConstraintValue,
 )
+from kailash.utils.secure_logging import sanitize_log_value
 
 logger = logging.getLogger(__name__)
 
@@ -200,7 +201,10 @@ class MultiDimensionEvaluator:
                 # produced exactly when the registry is misconfigured, which is
                 # when the caller most needs the truth. Fail closed (#2189).
                 warnings.append(f"Unknown dimension: {dimension_name}")
-                logger.warning(f"Unknown constraint dimension: {dimension_name}")
+                logger.warning(
+                    "Unknown constraint dimension: %s",
+                    sanitize_log_value(dimension_name, 128),
+                )
                 dimension_results[dimension_name] = ConstraintCheckResult(
                     satisfied=False,
                     reason=(
@@ -224,7 +228,11 @@ class MultiDimensionEvaluator:
                     failed_dimensions.append(dimension_name)
 
             except Exception as e:
-                logger.error(f"Error evaluating dimension {dimension_name}: {e}")
+                logger.error(
+                    "Error evaluating dimension %s: %s",
+                    sanitize_log_value(dimension_name, 128),
+                    sanitize_log_value(e),
+                )
                 # Treat errors as failures
                 dimension_results[dimension_name] = ConstraintCheckResult(
                     satisfied=False,
