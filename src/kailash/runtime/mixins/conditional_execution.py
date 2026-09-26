@@ -372,6 +372,8 @@ class ConditionalExecutionMixin:
         Raises:
             None - Method is defensive and returns False on any error
         """
+        from kailash.nodes.logic.operations import SwitchNode
+
         try:
             # Get all incoming edges for this node
             if not hasattr(workflow, "graph") or workflow.graph is None:
@@ -398,7 +400,7 @@ class ConditionalExecutionMixin:
                         has_non_none_connected_input = True
 
                 # Direct connection from SwitchNode
-                if source_node and source_node.__class__.__name__ in ["SwitchNode"]:
+                if isinstance(source_node, SwitchNode):
                     has_conditional_inputs = True
                 # Transitive dependency: source node was skipped due to conditional routing
                 elif current_results and source_node_id in current_results:
@@ -464,8 +466,7 @@ class ConditionalExecutionMixin:
                             # Check if this None input came from conditional routing
                             source_node = workflow._node_instances.get(source_node_id)
                             is_from_conditional = (
-                                source_node
-                                and source_node.__class__.__name__ in ["SwitchNode"]
+                                isinstance(source_node, SwitchNode)
                             ) or (
                                 current_results
                                 and source_node_id in current_results

@@ -45,6 +45,7 @@ import threading
 import time
 import warnings
 from collections import OrderedDict
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Tuple
 
@@ -403,6 +404,18 @@ def _safe_serialize(data: Any, max_size: int = 10000) -> Any:
         return data
     except (TypeError, ValueError):
         return {"_type": str(type(data)), "_str": str(data)[:1000]}
+
+
+@dataclass(frozen=True)
+class _ConditionalExecutionState:
+    """Prepared attempt controls shared by every conditional execution phase."""
+
+    execution_tracker: ExecutionTracker | None = None
+    cancellation_token: CancellationToken | None = None
+    workflow_fingerprint: str | None = None
+    checkpoint_key: str | None = None
+    tenant_id: str | None = None
+    idempotency_key: str | None = None
 
 
 class LocalRuntime(
@@ -2700,6 +2713,11 @@ class LocalRuntime(
             if execution_tracker is None:
                 execution_tracker = ExecutionTracker()
             workflow_context["execution_tracker"] = execution_tracker
+            conditional_state = _ConditionalExecutionState(
+                execution_tracker=execution_tracker,
+                cancellation_token=cancellation_token,
+                **_w1_kwargs,
+            )
 
             # Transform workflow-level parameters if needed
             processed_parameters = self._process_workflow_parameters(
@@ -2812,6 +2830,7 @@ class LocalRuntime(
                                     task_manager=task_manager,
                                     run_id=run_id,
                                     workflow_context=workflow_context,
+                                    execution_state=conditional_state,
                                 )
                             except Exception as e:
                                 if isinstance(
@@ -2850,6 +2869,7 @@ class LocalRuntime(
                                 task_manager=task_manager,
                                 run_id=run_id,
                                 workflow_context=workflow_context,
+                                execution_state=conditional_state,
                             )
                         except Exception as e:
                             if isinstance(
@@ -2888,6 +2908,7 @@ class LocalRuntime(
                             task_manager=task_manager,
                             run_id=run_id,
                             workflow_context=workflow_context,
+                            execution_state=conditional_state,
                         )
                     except Exception as e:
                         if isinstance(
@@ -3140,6 +3161,14 @@ class LocalRuntime(
             WorkflowExecutionError: If execution fails.
             WorkflowCancelledError: If cancellation is requested between nodes.
         """
+        execution_state = _ConditionalExecutionState(
+            execution_tracker=execution_tracker,
+            cancellation_token=cancellation_token,
+            workflow_fingerprint=workflow_fingerprint,
+            checkpoint_key=checkpoint_key,
+            tenant_id=tenant_id,
+            idempotency_key=idempotency_key,
+        )
         # P0C-001: Use cached topological sort from Workflow
         try:
             execution_order = workflow.get_execution_order()
@@ -3444,112 +3473,15 @@ class LocalRuntime(
                 results[node_id] = outputs
                 completed_nodes.append(node_id)
 
-                # === Checkpoint/Restore ===
-                # Record completion so that checkpoint captures include this node.
-                if execution_tracker is not None:
-                    execution_tracker.record_completion(node_id, outputs)
-
-                # === W1: Durable execution — checkpoint + hook dispatch ===
-                # Build the canonical NodeCompletionEvent (post-redaction)
-                # and (a) persist a checkpoint blob if checkpoint_after_each_node
-                # is True, (b) dispatch the event to every subscriber.  Both
-                # paths route through redact_event_for_persistence first so
-                # neither the store nor any subscriber sees a classified
-                # PK or a redacted field's raw value.
-                _node_ended_at = datetime.now(UTC)
-                _node_duration_ms = int(
-                    (_node_ended_at - _node_started_at).total_seconds() * 1000
-                )
-                _raw_outputs: Mapping[str, Any] = (
-                    outputs if isinstance(outputs, Mapping) else {"result": outputs}
-                )
-                _completion_event = NodeCompletionEvent(
-                    run_id=run_id,
-                    workflow_id=getattr(workflow, "workflow_id", "") or "",
-                    workflow_fingerprint=workflow_fingerprint or "",
+                await self._publish_node_completion(
+                    workflow=workflow,
                     node_id=node_id,
-                    node_type=node_instance.__class__.__name__,
-                    outputs=_raw_outputs,
+                    node_instance=node_instance,
+                    outputs=outputs,
+                    run_id=run_id,
                     started_at=_node_started_at,
-                    ended_at=_node_ended_at,
-                    duration_ms=_node_duration_ms,
-                    tenant_id=tenant_id,
-                    idempotency_key=idempotency_key,
-                    error=None,
-                    metadata={},
+                    execution_state=execution_state,
                 )
-                _classification_policy = getattr(self, "_classification_policy", None)
-                _redacted_event = redact_event_for_persistence(
-                    _completion_event,
-                    classification_policy=_classification_policy,
-                )
-
-                # Persist the checkpoint blob if requested AND a store is
-                # configured AND we have a checkpoint_key.  The lock
-                # serialises the per-run save against parallel-node
-                # paths in subclasses.
-                #
-                # W6 redaction discipline: the on_node_complete subscriber
-                # surface dispatches the REDACTED event above (line 2761),
-                # but the tracker_state passed to encode_checkpoint_payload
-                # is the RAW execution_tracker.to_dict() — which embeds
-                # raw classified node outputs in node_outputs[<node_id>].
-                # Route the tracker state through the same classification-
-                # aware redaction helper so the persisted checkpoint blob
-                # carries [REDACTED] / hashed-PK sentinels for every
-                # classified field, matching the hook contract documented
-                # in on_node_complete() above.  See
-                # rules/zero-tolerance.md Rule 2 ("fake redaction") and
-                # rules/dataflow-classification.md MUST Rule 1 ("every
-                # mutation return-path applies redaction").
-                if (
-                    self._checkpoint_after_each_node
-                    and self._checkpoint_store is not None
-                    and checkpoint_key is not None
-                    and execution_tracker is not None
-                ):
-                    _lock_key = run_id or checkpoint_key
-                    _lock = self._get_or_create_checkpoint_lock(_lock_key)
-                    async with _lock:
-                        _redacted_tracker_state = redacted_tracker_state_for_checkpoint(
-                            execution_tracker.to_dict(),
-                            classification_policy=_classification_policy,
-                            workflow_id=getattr(workflow, "workflow_id", "") or "",
-                            workflow_fingerprint=workflow_fingerprint or "",
-                            tenant_id=tenant_id,
-                            idempotency_key=idempotency_key,
-                        )
-                        _blob = encode_checkpoint_payload(
-                            workflow_fingerprint=workflow_fingerprint or "",
-                            tracker_state=_redacted_tracker_state,
-                            tenant_id=tenant_id,
-                            workflow_id=getattr(workflow, "workflow_id", "") or "",
-                            idempotency_key=idempotency_key,
-                        )
-                        try:
-                            await self._checkpoint_store.save(checkpoint_key, _blob)
-                        except (
-                            asyncio.CancelledError,
-                            KeyboardInterrupt,
-                            SystemExit,
-                        ):
-                            raise
-                        except Exception as save_err:
-                            self.logger.warning(
-                                "durable.checkpoint.save_failed",
-                                extra={
-                                    "node_id_hash": hashlib.sha256(
-                                        node_id.encode("utf-8")
-                                    ).hexdigest()[:8],
-                                    "error_type": safe_type_name(save_err),
-                                },
-                            )
-
-                # Dispatch the (redacted) event to all subscribers.  Sync
-                # and async callbacks are both honored.  Subscriber
-                # exceptions are caught + WARN-logged inside dispatch.
-                if self._hook_registry.subscriber_count > 0:
-                    await self._hook_registry.dispatch_async(_redacted_event)
 
                 if self.debug:
                     self.logger.debug("Node %s outputs available", node_id)
@@ -3984,6 +3916,12 @@ class LocalRuntime(
 
             # Apply the filtered parameters
             inputs.update(filtered_params)
+
+        # A pruned branch does not consume its mapped None inputs. Preserve
+        # those inputs for the owner's identical skip decision before applying
+        # execution-input validation to nodes that will actually run.
+        if self._should_skip_conditional_node(workflow, node_id, inputs, node_outputs):
+            return inputs
 
         # Connection parameter validation with enhanced error messages and metrics
         if self.connection_validation != "off":
@@ -4869,7 +4807,8 @@ class LocalRuntime(
         parameters: dict[str, Any] = kwargs.get("parameters") or inputs or {}
         task_manager: TaskManager | None = kwargs.get("task_manager")
         run_id: str = kwargs.get("run_id", "")
-        workflow_context: dict[str, Any] = kwargs.get("workflow_context") or {}
+        workflow_context = kwargs.get("workflow_context")
+        execution_state = kwargs.get("execution_state")
 
         self.logger.info("Starting conditional execution approach")
         results: dict[str, dict[str, Any]] = {}
@@ -4893,6 +4832,7 @@ class LocalRuntime(
                 task_manager=task_manager,
                 run_id=run_id,
                 workflow_context=workflow_context,
+                execution_state=execution_state,
             )
 
             # Extract just switch results for validation and planning
@@ -4924,6 +4864,7 @@ class LocalRuntime(
                 run_id=run_id,
                 workflow_context=workflow_context,
                 existing_results=results,
+                execution_state=execution_state,
             )
 
             # Merge remaining results
@@ -5029,7 +4970,8 @@ class LocalRuntime(
         parameters: dict[str, Any] = kwargs.get("parameters") or inputs or {}
         task_manager: TaskManager | None = kwargs.get("task_manager")
         run_id: str = kwargs.get("run_id", "")
-        workflow_context: dict[str, Any] = kwargs.get("workflow_context") or {}
+        workflow_context = kwargs.get("workflow_context")
+        execution_state = kwargs.get("execution_state")
 
         self.logger.info("Phase 1: Executing SwitchNodes and their dependencies")
         all_phase1_results: dict[str, dict[str, Any]] = (
@@ -5083,6 +5025,7 @@ class LocalRuntime(
                         workflow=workflow,
                         workflow_context=workflow_context,
                         run_id=run_id,
+                        execution_state=execution_state,
                     )
                     return result
 
@@ -5185,6 +5128,7 @@ class LocalRuntime(
                         workflow=workflow,
                         run_id=run_id,
                         workflow_context=workflow_context,
+                        execution_state=execution_state,
                     )
 
                     all_phase1_results[node_id] = result
@@ -5193,7 +5137,15 @@ class LocalRuntime(
                     )
 
                 except Exception as e:
-                    if isinstance(e, ContentAwareExecutionError):
+                    if isinstance(
+                        e,
+                        (
+                            ContentAwareExecutionError,
+                            WorkflowCancelledError,
+                            SoftTimeLimitExceeded,
+                            HardTimeLimitExceeded,
+                        ),
+                    ):
                         raise
                     self.logger.error(
                         f"Error executing node {node_id}: {safe_exception_frames(e)}"
@@ -5218,7 +5170,15 @@ class LocalRuntime(
             return all_phase1_results  # Return ALL results, not just switches
 
         except Exception as e:
-            if isinstance(e, ContentAwareExecutionError):
+            if isinstance(
+                e,
+                (
+                    ContentAwareExecutionError,
+                    WorkflowCancelledError,
+                    SoftTimeLimitExceeded,
+                    HardTimeLimitExceeded,
+                ),
+            ):
                 raise
             self.logger.error(
                 f"Error in switch execution phase: {safe_exception_frames(e)}"
@@ -5254,7 +5214,8 @@ class LocalRuntime(
         parameters: dict[str, Any] = kwargs.get("parameters") or inputs or {}
         task_manager: TaskManager | None = kwargs.get("task_manager")
         run_id: str = kwargs.get("run_id", "")
-        workflow_context: dict[str, Any] = kwargs.get("workflow_context") or {}
+        workflow_context = kwargs.get("workflow_context")
+        execution_state = kwargs.get("execution_state")
         existing_results: dict[str, dict[str, Any]] = kwargs.get("existing_results", {})
 
         self.logger.info("Phase 2: Executing pruned plan based on switch results")
@@ -5357,13 +5318,22 @@ class LocalRuntime(
                         workflow=workflow,
                         run_id=run_id,
                         workflow_context=workflow_context,
+                        execution_state=execution_state,
                     )
 
                     remaining_results[node_id] = result
                     self.logger.debug(f"Node {node_id} completed")
 
                 except Exception as e:
-                    if isinstance(e, ContentAwareExecutionError):
+                    if isinstance(
+                        e,
+                        (
+                            ContentAwareExecutionError,
+                            WorkflowCancelledError,
+                            SoftTimeLimitExceeded,
+                            HardTimeLimitExceeded,
+                        ),
+                    ):
                         raise
                     self.logger.error(
                         f"Error executing remaining node {node_id}: {safe_exception_frames(e)}"
@@ -5384,12 +5354,145 @@ class LocalRuntime(
             return remaining_results
 
         except Exception as e:
-            if isinstance(e, ContentAwareExecutionError):
+            if isinstance(
+                e,
+                (
+                    ContentAwareExecutionError,
+                    WorkflowCancelledError,
+                    SoftTimeLimitExceeded,
+                    HardTimeLimitExceeded,
+                ),
+            ):
                 raise
             self.logger.error(
                 f"Error in pruned plan execution: {safe_exception_frames(e)}"
             )
             return remaining_results
+
+    async def _publish_node_completion(
+        self,
+        *,
+        workflow,
+        node_id,
+        node_instance,
+        outputs,
+        run_id,
+        started_at,
+        execution_state: _ConditionalExecutionState,
+    ) -> None:
+        """Publish one validated completion through the canonical durable path."""
+        execution_tracker = execution_state.execution_tracker
+        workflow_fingerprint = execution_state.workflow_fingerprint
+        checkpoint_key = execution_state.checkpoint_key
+        tenant_id = execution_state.tenant_id
+        idempotency_key = execution_state.idempotency_key
+        _node_started_at = started_at
+        # === Checkpoint/Restore ===
+        # Record completion so that checkpoint captures include this node.
+        if execution_tracker is not None:
+            execution_tracker.record_completion(node_id, outputs)
+
+        # === W1: Durable execution — checkpoint + hook dispatch ===
+        # Build the canonical NodeCompletionEvent (post-redaction)
+        # and (a) persist a checkpoint blob if checkpoint_after_each_node
+        # is True, (b) dispatch the event to every subscriber.  Both
+        # paths route through redact_event_for_persistence first so
+        # neither the store nor any subscriber sees a classified
+        # PK or a redacted field's raw value.
+        _node_ended_at = datetime.now(UTC)
+        _node_duration_ms = int(
+            (_node_ended_at - _node_started_at).total_seconds() * 1000
+        )
+        _raw_outputs: Mapping[str, Any] = (
+            outputs if isinstance(outputs, Mapping) else {"result": outputs}
+        )
+        _completion_event = NodeCompletionEvent(
+            run_id=run_id,
+            workflow_id=getattr(workflow, "workflow_id", "") or "",
+            workflow_fingerprint=workflow_fingerprint or "",
+            node_id=node_id,
+            node_type=node_instance.__class__.__name__,
+            outputs=_raw_outputs,
+            started_at=_node_started_at,
+            ended_at=_node_ended_at,
+            duration_ms=_node_duration_ms,
+            tenant_id=tenant_id,
+            idempotency_key=idempotency_key,
+            error=None,
+            metadata={},
+        )
+        _classification_policy = getattr(self, "_classification_policy", None)
+        _redacted_event = redact_event_for_persistence(
+            _completion_event,
+            classification_policy=_classification_policy,
+        )
+
+        # Persist the checkpoint blob if requested AND a store is
+        # configured AND we have a checkpoint_key.  The lock
+        # serialises the per-run save against parallel-node
+        # paths in subclasses.
+        #
+        # W6 redaction discipline: the on_node_complete subscriber
+        # surface dispatches the REDACTED event above (line 2761),
+        # but the tracker_state passed to encode_checkpoint_payload
+        # is the RAW execution_tracker.to_dict() — which embeds
+        # raw classified node outputs in node_outputs[<node_id>].
+        # Route the tracker state through the same classification-
+        # aware redaction helper so the persisted checkpoint blob
+        # carries [REDACTED] / hashed-PK sentinels for every
+        # classified field, matching the hook contract documented
+        # in on_node_complete() above.  See
+        # rules/zero-tolerance.md Rule 2 ("fake redaction") and
+        # rules/dataflow-classification.md MUST Rule 1 ("every
+        # mutation return-path applies redaction").
+        if (
+            self._checkpoint_after_each_node
+            and self._checkpoint_store is not None
+            and checkpoint_key is not None
+            and execution_tracker is not None
+        ):
+            _lock_key = run_id or checkpoint_key
+            _lock = self._get_or_create_checkpoint_lock(_lock_key)
+            async with _lock:
+                _redacted_tracker_state = redacted_tracker_state_for_checkpoint(
+                    execution_tracker.to_dict(),
+                    classification_policy=_classification_policy,
+                    workflow_id=getattr(workflow, "workflow_id", "") or "",
+                    workflow_fingerprint=workflow_fingerprint or "",
+                    tenant_id=tenant_id,
+                    idempotency_key=idempotency_key,
+                )
+                _blob = encode_checkpoint_payload(
+                    workflow_fingerprint=workflow_fingerprint or "",
+                    tracker_state=_redacted_tracker_state,
+                    tenant_id=tenant_id,
+                    workflow_id=getattr(workflow, "workflow_id", "") or "",
+                    idempotency_key=idempotency_key,
+                )
+                try:
+                    await self._checkpoint_store.save(checkpoint_key, _blob)
+                except (
+                    asyncio.CancelledError,
+                    KeyboardInterrupt,
+                    SystemExit,
+                ):
+                    raise
+                except Exception as save_err:
+                    self.logger.warning(
+                        "durable.checkpoint.save_failed",
+                        extra={
+                            "node_id_hash": hashlib.sha256(
+                                node_id.encode("utf-8")
+                            ).hexdigest()[:8],
+                            "error_type": safe_type_name(save_err),
+                        },
+                    )
+
+        # Dispatch the (redacted) event to all subscribers.  Sync
+        # and async callbacks are both honored.  Subscriber
+        # exceptions are caught + WARN-logged inside dispatch.
+        if self._hook_registry.subscriber_count > 0:
+            await self._hook_registry.dispatch_async(_redacted_event)
 
     def _check_node_result(self, node_id: str, result: Any) -> None:
         """Reject failed output before publishing results or successful checkpoints."""
@@ -5430,16 +5533,30 @@ class LocalRuntime(
         if workflow is None:
             workflow = kwargs.get("workflow")
         run_id: str = kwargs.get("run_id", "")
-        workflow_context: dict[str, Any] = kwargs.get("workflow_context", {})
+        workflow_context = kwargs.get("workflow_context")
+        execution_state: _ConditionalExecutionState | None = kwargs.get(
+            "execution_state"
+        )
+        started_at = datetime.now(UTC)
+        if execution_state is not None:
+            tracker = execution_state.execution_tracker
+            token = execution_state.cancellation_token
+            if token is not None and token.is_cancelled:
+                raise WorkflowCancelledError(
+                    cancelled_at_node=node_id,
+                    completed_nodes=tracker.completed_node_ids if tracker else [],
+                )
+            if tracker is not None and tracker.is_completed(node_id):
+                restored = tracker.get_output(node_id)
+                self._check_node_result(node_id, restored)
+                return restored
 
         # P0B-001: Removed VP#1 (DataTypeValidator.validate_node_input)
         # Node.execute() performs authoritative validation via VP#3
 
-        # Set workflow context on the node instance
-        if hasattr(node_instance, "_workflow_context"):
-            node_instance._workflow_context = workflow_context
-        else:
-            # Initialize the workflow context if it doesn't exist
+        # Local dispatch supplies its context; a native async caller may have
+        # already bound a transaction context directly to the node.
+        if workflow_context is not None:
             node_instance._workflow_context = workflow_context
 
         # Execute the node with retry policy if enabled
@@ -5530,6 +5647,16 @@ class LocalRuntime(
                 outputs = node_instance.execute(**node_inputs)
 
         self._check_node_result(node_id, outputs)
+        if execution_state is not None:
+            await self._publish_node_completion(
+                workflow=workflow,
+                node_id=node_id,
+                node_instance=node_instance,
+                outputs=outputs,
+                run_id=run_id,
+                started_at=started_at,
+                execution_state=execution_state,
+            )
         return outputs
 
     # Retry Policy Management Methods

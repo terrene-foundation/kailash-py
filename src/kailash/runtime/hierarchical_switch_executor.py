@@ -11,6 +11,11 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from kailash.analysis import ConditionalBranchAnalyzer
 from kailash.runtime.local import ContentAwareExecutionError
+from kailash.sdk_exceptions import (
+    HardTimeLimitExceeded,
+    SoftTimeLimitExceeded,
+    WorkflowCancelledError,
+)
 from kailash.tracking import TaskManager
 from kailash.workflow.dag import WorkflowDAG
 from kailash.workflow.graph import Workflow
@@ -77,8 +82,6 @@ class HierarchicalSwitchExecutor:
                 - all_results: All node execution results including dependencies
                 - switch_results: Just the switch node results
         """
-        if workflow_context is None:
-            workflow_context = {}
 
         all_results = {}
         switch_results = {}
@@ -176,7 +179,16 @@ class HierarchicalSwitchExecutor:
 
                         # Process results
                         for (switch_id, _), result in zip(chunk, chunk_results):
-                            if isinstance(result, ContentAwareExecutionError):
+                            if isinstance(
+                                result,
+                                (
+                                    ContentAwareExecutionError,
+                                    WorkflowCancelledError,
+                                    SoftTimeLimitExceeded,
+                                    HardTimeLimitExceeded,
+                                    asyncio.CancelledError,
+                                ),
+                            ):
                                 raise result
                             if isinstance(result, Exception):
                                 logger.error(
@@ -291,7 +303,7 @@ class HierarchicalSwitchExecutor:
         parameters: Dict[str, Any],
         task_manager: Optional[TaskManager],
         run_id: str,
-        workflow_context: Dict[str, Any],
+        workflow_context: Dict[str, Any] | None,
         node_executor,
     ) -> Optional[Dict[str, Any]]:
         """
@@ -335,7 +347,15 @@ class HierarchicalSwitchExecutor:
                 return None
 
         except Exception as e:
-            if isinstance(e, ContentAwareExecutionError):
+            if isinstance(
+                e,
+                (
+                    ContentAwareExecutionError,
+                    WorkflowCancelledError,
+                    SoftTimeLimitExceeded,
+                    HardTimeLimitExceeded,
+                ),
+            ):
                 raise
             logger.error(f"Error executing node {node_id}: {e}")
             return {"error": str(e)}
@@ -347,7 +367,7 @@ class HierarchicalSwitchExecutor:
         parameters: Dict[str, Any],
         task_manager: Optional[TaskManager],
         run_id: str,
-        workflow_context: Dict[str, Any],
+        workflow_context: Dict[str, Any] | None,
         node_executor,
     ) -> Dict[str, Any]:
         """

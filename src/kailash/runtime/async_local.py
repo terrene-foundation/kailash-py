@@ -52,6 +52,7 @@ from kailash.runtime.execution_tracker import ExecutionTracker
 from kailash.runtime.local import (
     ContentAwareExecutionError,
     LocalRuntime,
+    _ConditionalExecutionState,
 )
 from kailash.runtime.metrics import get_metrics_bridge
 from kailash.sdk_exceptions import (
@@ -155,6 +156,7 @@ class ExecutionContext:
         self._w1_idempotency_key: Optional[str] = None
         self._w1_run_id: Optional[str] = None
         self._w1_execution_tracker: Optional["ExecutionTracker"] = None
+        self._w1_cancellation_token: CancellationToken | None = None
 
     def set_variable(self, key: str, value: Any) -> None:
         """Set a context variable accessible to all nodes."""
@@ -1068,6 +1070,7 @@ class AsyncLocalRuntime(LocalRuntime):
             context._w1_tenant_id = tenant_id
             context._w1_idempotency_key = idempotency_key
             context._w1_run_id = run_id
+            context._w1_cancellation_token = _attempt_token
             context._w1_execution_tracker = (
                 execution_tracker
                 if execution_tracker is not None
@@ -1255,6 +1258,14 @@ class AsyncLocalRuntime(LocalRuntime):
                     task_manager=None,
                     run_id=run_id,
                     workflow_context=None,
+                    execution_state=_ConditionalExecutionState(
+                        execution_tracker=context._w1_execution_tracker,
+                        cancellation_token=context._w1_cancellation_token,
+                        workflow_fingerprint=context._w1_workflow_fingerprint,
+                        checkpoint_key=context._w1_checkpoint_key,
+                        tenant_id=context._w1_tenant_id,
+                        idempotency_key=context._w1_idempotency_key,
+                    ),
                 )
                 return {"results": results}
             except (
