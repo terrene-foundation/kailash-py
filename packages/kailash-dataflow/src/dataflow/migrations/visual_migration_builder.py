@@ -14,10 +14,13 @@ Features:
 """
 
 import logging
+import math
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Union
+
+from dataflow.adapters.dialect import DialectManager
 
 from .auto_migration_system import (
     ColumnDefinition,
@@ -168,6 +171,25 @@ class ColumnBuilder:
 
     def _get_sql_type(self) -> str:
         """Convert ColumnType to SQL type string."""
+        if self.max_length is not None and self.column_type not in (
+            ColumnType.VARCHAR,
+            ColumnType.CHAR,
+        ):
+            raise ValueError("Column length requires VARCHAR or CHAR")
+        if (
+            self.precision is not None or self.scale is not None
+        ) and self.column_type != ColumnType.DECIMAL:
+            raise ValueError("Column precision/scale requires DECIMAL")
+        for value in (self.max_length, self.precision):
+            if value is not None and (type(value) is not int or value <= 0):
+                raise ValueError("Column length/precision must be positive integers")
+        if self.scale is not None and (
+            type(self.scale) is not int
+            or self.scale < 0
+            or self.precision is None
+            or self.scale > self.precision
+        ):
+            raise ValueError("Column scale must be between zero and precision")
         if self.column_type == ColumnType.VARCHAR and self.max_length:
             return f"VARCHAR({self.max_length})"
         elif self.column_type == ColumnType.CHAR and self.max_length:
@@ -332,6 +354,8 @@ class VisualMigrationBuilder:
         self.name = name
         self.dialect = dialect
         self.operations: List[MigrationOperation] = []
+        self._pending_operations = []
+        self._quote = DialectManager.get_dialect(dialect).quote_identifier
         self.version = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     def create_table(self, name: str) -> TableBuilder:
@@ -339,13 +363,9 @@ class VisualMigrationBuilder:
         table_builder = TableBuilder(name=name)
 
         # Store a reference to add the operation later
-        def finalize_table():
-            # Convert TableBuilder to MigrationOperation
-            operation = self._create_table_operation(table_builder)
-            self.operations.append(operation)
-
-        # Add finalization method to table builder
-        table_builder._finalize = finalize_table
+        self._queue_operation(
+            table_builder, lambda: self._create_table_operations(table_builder)
+        )
         return table_builder
 
     def drop_table(
@@ -362,7 +382,7 @@ class VisualMigrationBuilder:
             operation_type=MigrationType.DROP_TABLE,
             table_name=name,
             description=f"Drop table '{name}'",
-            sql_up=f"DROP TABLE IF EXISTS {name};",
+            sql_up=f"DROP TABLE IF EXISTS {self._quote(name)};",
             sql_down=f"-- Cannot automatically recreate dropped table: {name}",
             metadata={"warning": "Cannot automatically rollback table drops"},
         )
@@ -375,8 +395,8 @@ class VisualMigrationBuilder:
             operation_type=MigrationType.RENAME_TABLE,
             table_name=old_name,
             description=f"Rename table '{old_name}' to '{new_name}'",
-            sql_up=f"ALTER TABLE {old_name} RENAME TO {new_name};",
-            sql_down=f"ALTER TABLE {new_name} RENAME TO {old_name};",
+            sql_up=f"ALTER TABLE {self._quote(old_name)} RENAME TO {self._quote(new_name)};",
+            sql_down=f"ALTER TABLE {self._quote(new_name)} RENAME TO {self._quote(old_name)};",
             metadata={"old_name": old_name, "new_name": new_name},
         )
         self.operations.append(operation)
@@ -389,11 +409,10 @@ class VisualMigrationBuilder:
         column_builder = ColumnBuilder(name=column_name, column_type=column_type)
 
         # Store a reference to add the operation later
-        def finalize_column():
-            operation = self._add_column_operation(table_name, column_builder)
-            self.operations.append(operation)
-
-        column_builder._finalize = finalize_column
+        self._queue_operation(
+            column_builder,
+            lambda: self._add_column_operation(table_name, column_builder),
+        )
         return column_builder
 
     def drop_column(
@@ -409,7 +428,7 @@ class VisualMigrationBuilder:
             operation_type=MigrationType.DROP_COLUMN,
             table_name=table_name,
             description=f"Drop column '{column_name}' from table '{table_name}'",
-            sql_up=f"ALTER TABLE {table_name} DROP COLUMN {column_name};",
+            sql_up=f"ALTER TABLE {self._quote(table_name)} DROP COLUMN {self._quote(column_name)};",
             sql_down=f"-- Cannot automatically recreate dropped column: {column_name}",
             metadata={
                 "column_name": column_name,
@@ -423,20 +442,8 @@ class VisualMigrationBuilder:
         self, table_name: str, old_name: str, new_name: str
     ) -> "VisualMigrationBuilder":
         """Rename a column in an existing table."""
-        if self.dialect == "postgresql":
-            sql_up = f"ALTER TABLE {table_name} RENAME COLUMN {old_name} TO {new_name};"
-            sql_down = (
-                f"ALTER TABLE {table_name} RENAME COLUMN {new_name} TO {old_name};"
-            )
-        elif self.dialect == "mysql":
-            # MySQL requires specifying the column definition
-            sql_up = f"-- ALTER TABLE {table_name} CHANGE {old_name} {new_name} <type>;"
-            sql_down = (
-                f"-- ALTER TABLE {table_name} CHANGE {new_name} {old_name} <type>;"
-            )
-        else:  # SQLite
-            sql_up = "-- SQLite does not support RENAME COLUMN directly"
-            sql_down = "-- SQLite does not support RENAME COLUMN directly"
+        sql_up = f"ALTER TABLE {self._quote(table_name)} RENAME COLUMN {self._quote(old_name)} TO {self._quote(new_name)};"
+        sql_down = f"ALTER TABLE {self._quote(table_name)} RENAME COLUMN {self._quote(new_name)} TO {self._quote(old_name)};"
 
         operation = MigrationOperation(
             operation_type=MigrationType.RENAME_COLUMN,
@@ -455,22 +462,19 @@ class VisualMigrationBuilder:
         """Modify an existing column."""
         column_builder = ColumnBuilder(name=column_name, column_type=column_type)
 
-        def finalize_modify():
-            operation = self._modify_column_operation(table_name, column_builder)
-            self.operations.append(operation)
-
-        column_builder._finalize = finalize_modify
+        self._queue_operation(
+            column_builder,
+            lambda: self._modify_column_operation(table_name, column_builder),
+        )
         return column_builder
 
     def add_index(self, table_name: str, index_name: str) -> IndexBuilder:
         """Add an index to a table."""
         index_builder = IndexBuilder(name=index_name, table_name=table_name)
 
-        def finalize_index():
-            operation = self._add_index_operation(index_builder)
-            self.operations.append(operation)
-
-        index_builder._finalize = finalize_index
+        self._queue_operation(
+            index_builder, lambda: self._add_index_operation(index_builder)
+        )
         return index_builder
 
     def drop_index(
@@ -489,9 +493,11 @@ class VisualMigrationBuilder:
         """
         require_force_drop(f"drop_index({index_name!r})", force_drop)
         if self.dialect == "mysql" and table_name:
-            sql_up = f"DROP INDEX {index_name} ON {table_name};"
+            sql_up = (
+                f"DROP INDEX {self._quote(index_name)} ON {self._quote(table_name)};"
+            )
         else:
-            sql_up = f"DROP INDEX {index_name};"
+            sql_up = f"DROP INDEX {self._quote(index_name)};"
 
         operation = MigrationOperation(
             operation_type=MigrationType.DROP_INDEX,
@@ -562,13 +568,50 @@ class VisualMigrationBuilder:
 
         return preview
 
+    def _create_table_operations(self, table_builder):
+        operations = [self._create_table_operation(table_builder)]
+        operations.extend(
+            self._add_index_operation(index) for index in table_builder.indexes
+        )
+        if table_builder._comment is not None:
+            if self.dialect == "sqlite":
+                raise ValueError("SQLite does not support table comments")
+            if self.dialect == "postgresql":
+                sql = f"COMMENT ON TABLE {self._quote(table_builder.name)} IS {self._literal(table_builder._comment)};"
+            else:
+                sql = f"ALTER TABLE {self._quote(table_builder.name)} COMMENT = {self._literal(table_builder._comment)};"
+            operations.append(
+                MigrationOperation(
+                    MigrationType.CREATE_TABLE,
+                    table_builder.name,
+                    "Set table comment",
+                    sql,
+                    "",
+                    {},
+                )
+            )
+        for column in table_builder.columns:
+            if column._comment is not None and self.dialect == "postgresql":
+                sql = f"COMMENT ON COLUMN {self._quote(table_builder.name)}.{self._quote(column.name)} IS {self._literal(column._comment)};"
+                operations.append(
+                    MigrationOperation(
+                        MigrationType.ADD_COLUMN,
+                        table_builder.name,
+                        "Set column comment",
+                        sql,
+                        "",
+                        {},
+                    )
+                )
+        return operations
+
     def _create_table_operation(
         self, table_builder: TableBuilder
     ) -> MigrationOperation:
         """Convert TableBuilder to CREATE TABLE operation."""
         table_def = self._table_builder_to_definition(table_builder)
-        sql_up = self._generate_create_table_sql(table_def)
-        sql_down = f"DROP TABLE IF EXISTS {table_builder.name};"
+        sql_up = self._generate_create_table_sql(table_def, table_builder.columns)
+        sql_down = f"DROP TABLE IF EXISTS {self._quote(table_builder.name)};"
 
         return MigrationOperation(
             operation_type=MigrationType.CREATE_TABLE,
@@ -587,10 +630,12 @@ class VisualMigrationBuilder:
     ) -> MigrationOperation:
         """Convert ColumnBuilder to ADD COLUMN operation."""
         column_def = column_builder.build()
-        column_sql = self._generate_column_sql(column_def)
+        column_sql = self._generate_column_sql(column_def, column_builder)
 
-        sql_up = f"ALTER TABLE {table_name} ADD COLUMN {column_sql};"
-        sql_down = f"ALTER TABLE {table_name} DROP COLUMN {column_builder.name};"
+        sql_up = f"ALTER TABLE {self._quote(table_name)} ADD COLUMN {column_sql};"
+        if column_builder._comment is not None and self.dialect == "postgresql":
+            sql_up += f"\nCOMMENT ON COLUMN {self._quote(table_name)}.{self._quote(column_builder.name)} IS {self._literal(column_builder._comment)};"
+        sql_down = f"ALTER TABLE {self._quote(table_name)} DROP COLUMN {self._quote(column_builder.name)};"
 
         return MigrationOperation(
             operation_type=MigrationType.ADD_COLUMN,
@@ -609,14 +654,30 @@ class VisualMigrationBuilder:
     ) -> MigrationOperation:
         """Convert ColumnBuilder to MODIFY COLUMN operation."""
         column_def = column_builder.build()
+        if any(
+            (
+                column_builder.is_primary_key,
+                column_builder.is_unique,
+                column_builder.foreign_key,
+                column_builder.check_constraint,
+                column_builder._auto_increment,
+            )
+        ):
+            raise ValueError("Constraint changes require explicit migration operations")
 
         if self.dialect == "postgresql":
             sql_up = self._postgresql_modify_column_sql(table_name, column_def)
+            if column_builder._comment is not None:
+                sql_up += f"\nCOMMENT ON COLUMN {self._quote(table_name)}.{self._quote(column_builder.name)} IS {self._literal(column_builder._comment)};"
         elif self.dialect == "mysql":
-            column_sql = self._generate_column_sql(column_def)
-            sql_up = f"ALTER TABLE {table_name} MODIFY COLUMN {column_sql};"
+            column_sql = self._generate_column_sql(column_def, column_builder)
+            sql_up = (
+                f"ALTER TABLE {self._quote(table_name)} MODIFY COLUMN {column_sql};"
+            )
         else:  # SQLite
-            sql_up = "-- SQLite does not support MODIFY COLUMN directly"
+            raise ValueError(
+                "SQLite column modification requires an explicit table rebuild"
+            )
 
         sql_down = "-- Cannot automatically rollback column modification"
 
@@ -637,9 +698,9 @@ class VisualMigrationBuilder:
         sql_up = self._generate_index_sql(index_builder)
 
         if self.dialect == "mysql":
-            sql_down = f"DROP INDEX {index_builder.name} ON {index_builder.table_name};"
+            sql_down = f"DROP INDEX {self._quote(index_builder.name)} ON {self._quote(index_builder.table_name)};"
         else:
-            sql_down = f"DROP INDEX {index_builder.name};"
+            sql_down = f"DROP INDEX {self._quote(index_builder.name)};"
 
         return MigrationOperation(
             operation_type=MigrationType.ADD_INDEX,
@@ -654,32 +715,51 @@ class VisualMigrationBuilder:
             },
         )
 
-    def _generate_create_table_sql(self, table_def: TableDefinition) -> str:
+    def _generate_create_table_sql(
+        self, table_def: TableDefinition, builders=None
+    ) -> str:
         """Generate CREATE TABLE SQL from TableDefinition."""
         columns_sql = []
-        for column in table_def.columns:
-            columns_sql.append(self._generate_column_sql(column))
+        for index, column in enumerate(table_def.columns):
+            columns_sql.append(
+                self._generate_column_sql(column, builders[index] if builders else None)
+            )
+        for constraint in table_def.constraints:
+            if constraint["type"] == "foreign_key":
+                action = constraint["on_delete"].upper()
+                if action not in {
+                    "CASCADE",
+                    "RESTRICT",
+                    "SET NULL",
+                    "SET DEFAULT",
+                    "NO ACTION",
+                }:
+                    raise ValueError("Unsupported foreign-key deletion action")
+                columns_sql.append(
+                    f"FOREIGN KEY ({self._quote(constraint['column'])}) REFERENCES {self._reference_sql(constraint['references'])} ON DELETE {action}"
+                )
+            elif constraint["type"] == "check":
+                columns_sql.append(
+                    f"CONSTRAINT {self._quote(constraint['name'])} CHECK ({constraint['condition']})"
+                )
+            else:
+                raise ValueError("Unsupported table constraint")
 
-        sql = f"CREATE TABLE {table_def.name} (\n"
+        sql = f"CREATE TABLE {self._quote(table_def.name)} (\n"
         sql += ",\n".join(f"    {col_sql}" for col_sql in columns_sql)
         sql += "\n);"
 
         return sql
 
-    def _generate_column_sql(self, column_def: ColumnDefinition) -> str:
+    def _generate_column_sql(self, column_def: ColumnDefinition, builder=None) -> str:
         """Generate column definition SQL."""
-        parts = [column_def.name, column_def.type]
+        parts = [self._quote(column_def.name), column_def.type]
 
         if not column_def.nullable:
             parts.append("NOT NULL")
 
         if column_def.default is not None:
-            if isinstance(
-                column_def.default, str
-            ) and not column_def.default.upper().startswith(("CURRENT_", "NOW()")):
-                parts.append(f"DEFAULT '{column_def.default}'")
-            else:
-                parts.append(f"DEFAULT {column_def.default}")
+            parts.append(f"DEFAULT {self._default_sql(column_def.default)}")
 
         if column_def.primary_key:
             parts.append("PRIMARY KEY")
@@ -688,20 +768,63 @@ class VisualMigrationBuilder:
             parts.append("UNIQUE")
 
         if column_def.auto_increment:
+            if column_def.type not in ("INTEGER", "BIGINT", "SMALLINT"):
+                raise ValueError("Auto-increment requires an integer column")
             if self.dialect == "postgresql":
-                # Replace INTEGER with SERIAL for PostgreSQL
-                if parts[1] == "INTEGER":
-                    parts[1] = "SERIAL"
+                parts[1] = {
+                    "INTEGER": "SERIAL",
+                    "BIGINT": "BIGSERIAL",
+                    "SMALLINT": "SMALLSERIAL",
+                }[column_def.type]
             elif self.dialect == "mysql":
                 parts.append("AUTO_INCREMENT")
+            else:
+                if column_def.type != "INTEGER" or not column_def.primary_key:
+                    raise ValueError(
+                        "SQLite auto-increment requires INTEGER PRIMARY KEY"
+                    )
+                # SQLite requires this immediately after PRIMARY KEY, including
+                # when the column also carries a UNIQUE constraint.
+                parts.insert(parts.index("PRIMARY KEY") + 1, "AUTOINCREMENT")
 
+        if column_def.foreign_key:
+            parts.append(f"REFERENCES {self._reference_sql(column_def.foreign_key)}")
+        if builder is not None:
+            if builder.check_constraint is not None:
+                parts.append(f"CHECK ({builder.check_constraint})")
+            if builder._comment is not None:
+                if self.dialect == "sqlite":
+                    raise ValueError("SQLite does not support column comments")
+                if self.dialect == "mysql":
+                    parts.append(f"COMMENT {self._literal(builder._comment)}")
         return " ".join(parts)
 
     def _generate_index_sql(self, index_builder: IndexBuilder) -> str:
         """Generate CREATE INDEX SQL."""
+        if not index_builder.columns:
+            raise ValueError("An index requires at least one column")
+        if self.dialect != "postgresql":
+            if index_builder.include_columns:
+                raise ValueError("Included index columns require PostgreSQL")
+            if index_builder.index_type not in {
+                IndexType.BTREE,
+                IndexType.UNIQUE,
+                IndexType.COMPOSITE,
+                IndexType.PARTIAL,
+            }:
+                raise ValueError("Unsupported index type for this dialect")
+            if self.dialect == "mysql" and index_builder.partial_condition:
+                raise ValueError("MySQL does not support partial indexes")
         if self.dialect == "postgresql":
-            unique_keyword = "UNIQUE " if index_builder._unique else ""
-            concurrently = "CONCURRENTLY "
+            unique_keyword = (
+                "UNIQUE "
+                if (
+                    index_builder._unique
+                    or index_builder.index_type == IndexType.UNIQUE
+                )
+                else ""
+            )
+            concurrently = ""  # Migration operations execute inside transactions.
 
             if index_builder.index_type == IndexType.HASH:
                 using_clause = "USING hash"
@@ -712,8 +835,8 @@ class VisualMigrationBuilder:
             else:
                 using_clause = ""
 
-            columns_str = ", ".join(index_builder.columns)
-            sql = f"CREATE {unique_keyword}INDEX {concurrently}{index_builder.name} ON {index_builder.table_name}"
+            columns_str = ", ".join(map(self._quote, index_builder.columns))
+            sql = f"CREATE {unique_keyword}INDEX {concurrently}{self._quote(index_builder.name)} ON {self._quote(index_builder.table_name)}"
 
             if using_clause:
                 sql += f" {using_clause}"
@@ -721,7 +844,7 @@ class VisualMigrationBuilder:
             sql += f" ({columns_str})"
 
             if index_builder.include_columns:
-                sql += f" INCLUDE ({', '.join(index_builder.include_columns)})"
+                sql += f" INCLUDE ({', '.join(map(self._quote, index_builder.include_columns))})"
 
             if index_builder.partial_condition:
                 sql += f" WHERE {index_builder.partial_condition}"
@@ -730,9 +853,19 @@ class VisualMigrationBuilder:
 
         else:
             # MySQL/SQLite
-            unique_keyword = "UNIQUE " if index_builder._unique else ""
-            columns_str = ", ".join(index_builder.columns)
-            sql = f"CREATE {unique_keyword}INDEX {index_builder.name} ON {index_builder.table_name} ({columns_str});"
+            unique_keyword = (
+                "UNIQUE "
+                if (
+                    index_builder._unique
+                    or index_builder.index_type == IndexType.UNIQUE
+                )
+                else ""
+            )
+            columns_str = ", ".join(map(self._quote, index_builder.columns))
+            sql = f"CREATE {unique_keyword}INDEX {self._quote(index_builder.name)} ON {self._quote(index_builder.table_name)} ({columns_str})"
+            if index_builder.partial_condition:
+                sql += f" WHERE {index_builder.partial_condition}"
+            sql += ";"
 
         return sql
 
@@ -744,29 +877,24 @@ class VisualMigrationBuilder:
 
         # Change data type
         statements.append(
-            f"ALTER TABLE {table_name} ALTER COLUMN {column_def.name} TYPE {column_def.type};"
+            f"ALTER TABLE {self._quote(table_name)} ALTER COLUMN {self._quote(column_def.name)} TYPE {column_def.type};"
         )
 
         # Change nullable
         if not column_def.nullable:
             statements.append(
-                f"ALTER TABLE {table_name} ALTER COLUMN {column_def.name} SET NOT NULL;"
+                f"ALTER TABLE {self._quote(table_name)} ALTER COLUMN {self._quote(column_def.name)} SET NOT NULL;"
             )
         else:
             statements.append(
-                f"ALTER TABLE {table_name} ALTER COLUMN {column_def.name} DROP NOT NULL;"
+                f"ALTER TABLE {self._quote(table_name)} ALTER COLUMN {self._quote(column_def.name)} DROP NOT NULL;"
             )
 
         # Change default
         if column_def.default is not None:
-            if isinstance(
-                column_def.default, str
-            ) and not column_def.default.upper().startswith("CURRENT_"):
-                default_val = f"'{column_def.default}'"
-            else:
-                default_val = column_def.default
+            default_val = self._default_sql(column_def.default)
             statements.append(
-                f"ALTER TABLE {table_name} ALTER COLUMN {column_def.name} SET DEFAULT {default_val};"
+                f"ALTER TABLE {self._quote(table_name)} ALTER COLUMN {self._quote(column_def.name)} SET DEFAULT {default_val};"
             )
 
         return "\n".join(statements)
@@ -795,11 +923,54 @@ class VisualMigrationBuilder:
 
         return table_def
 
+    def _queue_operation(self, builder, factory):
+        # Remember declaration position even when immediate operations follow.
+        position = len(self.operations) + len(self._pending_operations)
+        self._pending_operations.append((position, factory))
+        builder._finalize = self._finalize_pending_operations
+
     def _finalize_pending_operations(self):
-        """Finalize any pending operations from builders."""
-        # This would normally be handled by the builders themselves
-        # when their finalize methods are called, but this provides a safety net
-        pass
+        """Materialize fluent operations once, retaining failures for retry."""
+        operations = self.operations.copy()
+        offset = 0
+        for position, factory in self._pending_operations:
+            result = factory()
+            resolved = result if isinstance(result, list) else [result]
+            operations[position + offset : position + offset] = resolved
+            offset += len(resolved) - 1
+        self.operations[:] = operations
+        self._pending_operations.clear()
+
+    def _reference_sql(self, reference):
+        parts = reference.split(".")
+        if len(parts) != 2:
+            raise ValueError("Foreign-key reference must be table.column")
+        return f"{self._quote(parts[0])} ({self._quote(parts[1])})"
+
+    def _literal(self, value):
+        if not isinstance(value, str):
+            raise TypeError("SQL text literal must be a string")
+        if self.dialect == "mysql":
+            value = value.replace("\\", "\\\\")
+        return "'" + value.replace("'", "''") + "'"
+
+    def _default_sql(self, value):
+        if isinstance(value, str):
+            if value.upper() in {
+                "CURRENT_TIMESTAMP",
+                "CURRENT_DATE",
+                "CURRENT_TIME",
+                "NOW()",
+            }:
+                return value.upper()
+            return self._literal(value)
+        if isinstance(value, bool):
+            return "TRUE" if value else "FALSE"
+        if isinstance(value, (int, float)):
+            if isinstance(value, float) and not math.isfinite(value):
+                raise ValueError("Column defaults must be finite")
+            return str(value)
+        raise TypeError("Unsupported column default type")
 
 
 class MigrationScript:
