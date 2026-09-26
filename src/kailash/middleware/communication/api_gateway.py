@@ -240,15 +240,6 @@ class APIGateway:
         self.enable_docs = enable_docs
         self.enable_auth = enable_auth
 
-        # Initialize SDK nodes for gateway operations
-        self._init_sdk_nodes(database_url)
-
-        # Initialize core middleware components
-        self.agent_ui = AgentUIMiddleware(max_sessions=max_sessions)
-        self.realtime = RealtimeMiddleware(self.agent_ui)
-        self.schema_registry = DynamicSchemaRegistry()
-        self.node_registry = NodeRegistry()
-
         # Initialize auth manager if enabled
         if enable_auth:
             if auth_manager is None:
@@ -291,13 +282,16 @@ class APIGateway:
             # @app.on_event("startup")). Without this iteration, the custom
             # lifespan above replaces Starlette's _DefaultLifespan and
             # silently drops every router-registered hook (the #500 bug class).
-            await drive_router_lifespan_startup(app)
-            await self._log_startup()
-            yield
-            # Shutdown
-            logger.info("Shutting down gateway")
-            await drive_router_lifespan_shutdown(app)
-            await self._cleanup()
+            try:
+                await drive_router_lifespan_startup(app)
+                await self._log_startup()
+                try:
+                    yield
+                finally:
+                    logger.info("Shutting down gateway")
+                    await drive_router_lifespan_shutdown(app)
+            finally:
+                await self._cleanup()
 
         self.app = FastAPI(
             title=title,
@@ -355,6 +349,15 @@ class APIGateway:
         # is reported once rather than once per anonymous request that happens
         # to carry an X-API-Key header.
         self._api_key_unsupported_logged = False
+
+        # Authentication configuration can reject construction. Acquire runtime
+        # owners only after that validation succeeds so the caller never loses
+        # the handle needed to close a partially constructed gateway.
+        self._init_sdk_nodes(database_url)
+        self.agent_ui = AgentUIMiddleware(max_sessions=max_sessions)
+        self.realtime = RealtimeMiddleware(self.agent_ui)
+        self.schema_registry = DynamicSchemaRegistry()
+        self.node_registry = NodeRegistry()
 
         # Setup routes
         self._setup_routes()
@@ -875,6 +878,8 @@ class APIGateway:
                 await self.agent_ui.close_session(session_id)
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
+        finally:
+            self.agent_ui.close()
 
     def _setup_routes(self):
         """Setup all API routes."""
