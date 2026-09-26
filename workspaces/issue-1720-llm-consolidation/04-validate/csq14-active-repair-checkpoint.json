@@ -1,5 +1,5 @@
 {
-  "source_head": "8ed016700101794b3d43b5329a2e0496c988daf5",
+  "source_head": "15960d9478e327389413e3765e4284801b16fa8b",
   "promotion": {
     "pr": 2229,
     "remote_head": "ce4c9de676f1ab1e0a159cb8c273dcf2e47a2cb4",
@@ -96,7 +96,7 @@
       "strict_tests": 281,
       "review": "two clean independent security rounds plus literal identity corrective review",
       "source_first": "4ee0bda4c",
-      "status": "landed; source sibling clean and draining",
+      "status": "landed; source sibling drained",
       "source_final": "a1e2124dc",
       "merge": "71e371ce6"
     },
@@ -105,7 +105,7 @@
       "sha256": "ee20155dced185591b08a3316a11d579024444982fe669d96a51307eff4a1412",
       "strict_tests": 9,
       "existing_credential_tests": 41,
-      "status": "landed; merged interaction tests running",
+      "status": "landed; source sibling drained",
       "commit": "e4eedbf73",
       "review": "two clean independent scoped rounds"
     },
@@ -115,8 +115,38 @@
       "strict_tests": 381,
       "focused_tests": 26,
       "review": "two clean independent scoped rounds",
-      "status": "landed; merged interaction tests running",
+      "status": "landed; source sibling drained",
       "commit": "8ed016700101794b3d43b5329a2e0496c988daf5"
+    },
+    "mfa_diagnostics": {
+      "patch": "/tmp/csq14-mfa-delivery-logs-final.patch",
+      "sha256": "f5782d731e1695b091b2cc6ed6effd1edfec33b006d0980577a4c2317ec54f35",
+      "strict_tests": 403,
+      "review": "two independent scoped clean rounds;92reviewtests and publicdelivery/actorcontrol",
+      "source": "12188f730",
+      "merge": "5b4fae098",
+      "status": "landed and clean source sibling drained"
+    },
+    "security_path": {
+      "source": "69aa36db0",
+      "merge": "fae7559cd",
+      "patch_sha256": "95cfbb7aa4ca43b9a53ce3ca50c212a2781db821c4016be2558ac46bcba7019e",
+      "strict_tests": 110,
+      "platform_skips": 10,
+      "review": "two independent scoped correctness/adversarial rounds; root110 + reachedprefixcontrol",
+      "limits": "actualmacOS; no Windows runtime or filesystem race prevention claim",
+      "status": "landed; source sibling drained"
+    },
+    "python_diagnostics": {
+      "merge": "15960d9478e327389413e3765e4284801b16fa8b",
+      "strict_tests": 42,
+      "review": "two independent scoped rounds; final fixture budget delta independently verified",
+      "scope": "four automatic exception sinks only; public exceptions and caller-authored logging unchanged",
+      "evidence": [
+        "/tmp/csq14-python-independent-tests.log",
+        "/tmp/csq14-python-diagnostics-parent-tests.log",
+        "/tmp/csq14-python-diagnostics-parent-control.log"
+      ]
     }
   },
   "frozen": {
@@ -134,19 +164,12 @@
       ],
       "review": "forwarding-only correctness passed; security/whole-union NOT CLEAN: canonical timer and strict-boolean gaps",
       "status": "superseded by full runtime-control candidate"
-    },
-    "mfa_diagnostics": {
-      "patch": "/tmp/csq14-mfa-delivery-logs-final.patch",
-      "sha256": "f5782d731e1695b091b2cc6ed6effd1edfec33b006d0980577a4c2317ec54f35",
-      "strict_tests": 296,
-      "review": "independent archive rounds underway in csq14-mfa-review at8ed016700"
     }
   },
   "active": [
-    "MFA delivery diagnostic privacy in csq14-mfa-delivery-logs; independent archive review",
-    "shared security diagnostics/containment in csq14-security-path-diagnostics; gate author",
-    "repeat three whole-union reviews and full integrated gates/all configured hooks",
-    "pending nine CodeQL dismissal approvals"
+    "three final whole-union reviews",
+    "complete root/DataFlow suites and all configured all-files hooks",
+    "nine proposed CodeQL dismissals await explicit approval; none executed"
   ],
   "final_obligations": [
     "full integrated root regression",
@@ -156,7 +179,8 @@
     "consolidated push",
     "exact final head all required and test checks success",
     "separate approved promotion merge",
-    "drain landed clean siblings and update authorized vault"
+    "drain landed clean siblings and update authorized vault",
+    "three post-main union/tree-parity reviewer receipts after promotion merge"
   ],
   "limits": [
     "five inherited stashes held",
@@ -170,24 +194,24 @@
     "csq14-holistic-coverage",
     "csq14-holistic-security",
     "csq14-runtime-controls",
-    "csq14-auth-configuration"
-  ],
-  "review_worktrees": [
+    "csq14-auth-configuration",
+    "csq14-mfa-delivery-logs",
     "csq14-final-correctness",
     "csq14-final-security",
     "csq14-final-coverage",
-    "csq14-privacy-review"
+    "csq14-runtime-forwarding",
+    "csq14-privacy-review",
+    "csq14-mfa-review",
+    "csq14-security-path",
+    "csq14-python-exception-diagnostics"
   ],
-  "open_findings": [
-    {
-      "evidence": "/tmp/csq14-privacy-independent-errors.log",
-      "observed": "Node and AsyncTyped exception text emitted synthetic email; root fixed, independent verification pending"
-    },
-    {
-      "evidence": "/tmp/csq14-auth-config-security-revised-warn-inventory.json",
-      "observed": "MFA SMTP and email-setup diagnostic included synthetic address; assigned bounded privacy shard"
-    }
+  "review_worktrees": [
+    "csq14-security-path-review",
+    "csq14-final2-correctness",
+    "csq14-final2-security",
+    "csq14-final2-coverage"
   ],
+  "open_findings": [],
   "holistic_attempt": {
     "source": "51fcd96c0 plus forwarding569e68 overlay",
     "root_passed": 696,
@@ -204,5 +228,6 @@
       "/tmp/csq14-merged-config-runtime-privacy-tests.log",
       "/tmp/csq14-merged-dataflow-privacy-tests.log"
     ]
-  }
+  },
+  "review_overlay_backups": "/tmp/csq14-drained-review-overlays"
 }

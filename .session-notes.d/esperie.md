@@ -2,29 +2,27 @@
 
 ## Live repair checkpoint — supersedes earlier statuses
 
-Dev is `8ed016700`: canonical runtime controls and timer cleanup landed, including
-literal-boolean drift validation and bounded queue index names. The final combined
-selection passed 281 strict tests; reached spoof mutation failed all nine intended
-entry/evaluator cases. Independent correctness/security rounds are delivered.
-Bridge fixture isolation is committed as `a2f36b2ad`.
+Final source candidate is `15960d9478e327389413e3765e4284801b16fa8b`. Runtime controls/timer ownership,
+constructor/runtime-input separation, real DataFlow transactions/cache handling,
+gateway per-app authentication/resource ownership and canonical path checks are landed.
+Automatic Core/DataFlow, MFA and Python exception diagnostics omit payload values;
+public exception/result contracts and explicit caller-authored logging are preserved.
+All substantive repair shards have two delivered scoped review rounds, reached
+negative controls and retained test evidence. The latest selections include 281
+runtime, 381 configuration, 403 MFA, 110 security/path and 42 Python cases. These
+overlap and must not be added as a unique coverage total. Ten macOS resource-limit
+skips do not cover those Linux paths. No filesystem race prevention or Windows
+runtime claim is made. Completed implementation siblings are drained.
 
-Constructor/runtime-input separation landed as `8ed016700` (source `1050bc1d8`),
-with 381 strict passes, 26 focused passes and two clean scoped review rounds.
-Core/DataFlow privacy landed as `e4eedbf73`, with 31 DataFlow and 41 Core tests
-and two independent clean rounds. Combined integration passed 269 Core and nine
-DataFlow cases. Both clean runtime/configuration source siblings are drained.
-MFA delivery diagnostics and shared security-path diagnostics have separate
-root-created sibling lanes. The latter is verifying canonical containment as well
-as removing automatically logged payload values. These are open until their
-specific evidence is delivered; earlier holistic review attempts found issues and
-DO NOT count as clean convergence.
-
-D1 promotion approval persists. PR #2229 remains unpushed at `ce4c9de67`.
-Nine proposed CodeQL dismissals still require explicit approval; none was executed.
-Five stashes and uncertain historical refs remain held. Full combined suites,
-all configured all-files hooks including pytest-check, three parallel final union
-reviews, exact-head remote checks, and separate promotion merge remain required.
-No package publishing or whole-forest completion is authorized or claimed.
+Three final reviewers will assess the full promotion union and repair interfaces
+at this source; final root/DataFlow suites and every configured all-files hook,
+including pytest-check, remain OPEN. Historical greens do not cover this candidate.
+D1 promotion approval persists. PR #2229 remains at `ce4c9de67` until those gates pass.
+Nine proposed CodeQL dismissals await explicit approval; none was executed.
+Exact-head required checks and previously failing jobs must succeed before a
+separate merge operation. Three post-main union/tree-parity reviews remain due.
+Five stashes and 52 uncertain historical refs remain held. Package publishing,
+owner acceptance and whole-forest completion are not authorized or claimed.
 
 
 ## Next actions (standing authorization preserved)

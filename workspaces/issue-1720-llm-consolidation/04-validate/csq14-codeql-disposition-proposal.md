@@ -19,10 +19,10 @@ merging a failing promotion. Actual defects are being repaired separately.
 ## Evidence and limits
 
 Production references: `src/kailash/utils/url_credentials.py:501-565`,
-`packages/kailash-dataflow/src/dataflow/core/nodes.py:1048-1079`,
+`packages/kailash-dataflow/src/dataflow/core/nodes.py:1039-1086`,
 `packages/kailash-kaizen/src/kaizen/llm/presets.py:105-123`,
 `src/kailash/trust/plane/project.py:144-175`, and
-`src/kailash/security.py:1270-1295`.
+`src/kailash/security.py:1291-1317`.
 
 The source-pinned executable evidence is recorded in
 `/tmp/csq14-codeql-runtime-probe.log` and `/tmp/csq14-seven-alert-probes.log`.
