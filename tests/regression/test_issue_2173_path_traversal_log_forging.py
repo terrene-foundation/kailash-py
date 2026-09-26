@@ -94,10 +94,12 @@ def test_sensitive_directory_rejection_emits_exactly_one_line(captured, config):
     assert len(_emitted_lines(captured)) == 1
 
 
-def test_diagnostic_value_survives_flattening(captured, config):
-    """Flattening is not redaction: the operator still needs to see what was sent."""
-    with pytest.raises(PathTraversalError):
+def test_diagnostic_category_survives_without_private_path(captured, config):
+    """Keep the rejection category in logs and the path in the typed exception."""
+    with pytest.raises(PathTraversalError) as caught:
         validate_file_path("/tmp/../etc/passwd", config=config)
 
     output = captured.getvalue()
-    assert "etc/passwd" in output, "the rejected path must remain diagnosable"
+    assert "Path traversal attempt detected" in output
+    assert "etc/passwd" not in output
+    assert "/tmp/../etc/passwd" in str(caught.value)

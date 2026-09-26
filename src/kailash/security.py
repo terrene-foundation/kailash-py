@@ -129,7 +129,7 @@ try:
 except ImportError:  # pragma: no cover - Windows
     resource = None  # type: ignore[assignment]
 
-from kailash.utils.secure_logging import sanitize_log_value
+from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
 
 logger = logging.getLogger(__name__)
 
@@ -242,6 +242,22 @@ def set_security_config(config: SecurityConfig) -> None:
     _security_config = config
 
 
+def _canonical_file_path(value: str | Path) -> Path:
+    """Resolve existing ancestors strictly while permitting new output paths."""
+    candidate = Path(value).absolute()
+    missing = []
+    while True:
+        try:
+            resolved = candidate.resolve(strict=True)
+            return resolved.joinpath(*reversed(missing))
+        except FileNotFoundError:
+            # A dangling link is not an ordinary not-yet-created output path.
+            if candidate.is_symlink() or candidate.parent == candidate:
+                raise
+            missing.append(candidate.name)
+            candidate = candidate.parent
+
+
 def validate_file_path(
     file_path: str | Path,
     config: SecurityConfig | None = None,
@@ -253,10 +269,19 @@ def validate_file_path(
     Args:
         file_path: The file path to validate
         config: Security configuration (uses global if None)
-        operation: Description of the operation for logging
+        operation: Logged category: read, write, access, or other for custom values
 
     Returns:
         Validated and normalized Path object
+
+    Existing ancestors resolve strictly; missing output components may be
+    created by safe_open. Unresolvable symlinks and ancestors fail closed.
+    Protected roots and allowlist roots use the same canonical comparison.
+    The /var protection permits the platform temporary directory and /var/tmp
+    only when they resolve strictly below /var and the allowlist also permits
+    the candidate. This preserves temporary output on platforms whose system
+    temporary directory lives under /var. It does not exempt any other
+    protected root or prevent filesystem changes between validation and open.
 
     Raises:
         PathTraversalError: If path traversal attempt is detected
@@ -280,77 +305,73 @@ def validate_file_path(
 
     try:
         # Convert to Path and resolve to absolute path
-        path = Path(file_path).resolve()
+        path = _canonical_file_path(file_path)
 
         # Check for path traversal indicators
-        path_str = str(path)
+        normalized_path = Path(os.path.normcase(str(path)))
         if ".." in str(file_path):
             if config.enable_audit_logging:
-                logger.warning(
-                    "Path traversal attempt detected: %s -> %s",
-                    sanitize_log_value(file_path),
-                    sanitize_log_value(path),
-                )
+                logger.warning("Path traversal attempt detected")
             raise PathTraversalError(f"Path traversal attempt detected: {file_path}")
 
         # Check for access to sensitive system directories
         sensitive_dirs = ["/etc", "/var", "/usr", "/root", "/boot", "/sys", "/proc"]
-        if any(path_str.startswith(sensitive) for sensitive in sensitive_dirs):
+        for sensitive in sensitive_dirs:
+            boundary = Path(os.path.normcase(str(_canonical_file_path(sensitive))))
+            if not normalized_path.is_relative_to(boundary):
+                continue
+            if sensitive == "/var":
+                temp_roots = (tempfile.gettempdir(), "/var/tmp")
+                permitted_temp = False
+                for temp_root in temp_roots:
+                    temp_path = Path(
+                        os.path.normcase(str(_canonical_file_path(temp_root)))
+                    )
+                    if (
+                        temp_path != boundary
+                        and temp_path.is_relative_to(boundary)
+                        and normalized_path.is_relative_to(temp_path)
+                    ):
+                        permitted_temp = True
+                        break
+                if permitted_temp:
+                    continue
             if config.enable_audit_logging:
-                logger.warning(
-                    "Path traversal attempt detected: %s -> %s",
-                    sanitize_log_value(file_path),
-                    sanitize_log_value(path),
-                )
+                logger.warning("Path traversal attempt detected")
             raise PathTraversalError(f"Path traversal attempt detected: {file_path}")
 
         # Validate file extension
         if path.suffix and path.suffix.lower() not in config.allowed_file_extensions:
             if config.enable_audit_logging:
-                logger.warning(
-                    "File extension not allowed: %s in %s",
-                    sanitize_log_value(path.suffix),
-                    sanitize_log_value(path),
-                )
+                logger.warning("File extension not allowed")
             raise SecurityError(f"File extension not allowed: {path.suffix}")
 
         # Check if path is within allowed directories
         path_in_allowed_dir = False
         for allowed_dir in config.allowed_directories:
-            try:
-                allowed_path = Path(allowed_dir).resolve()
-                # Use more robust relative path checking
-                try:
-                    path.relative_to(allowed_path)
-                    path_in_allowed_dir = True
-                    break
-                except ValueError:
-                    # Try alternative method for compatibility
-                    if str(path).startswith(str(allowed_path)):
-                        path_in_allowed_dir = True
-                        break
-            except (ValueError, OSError):
-                # Handle cases where path resolution fails
-                if str(path).startswith(str(allowed_dir)):
-                    path_in_allowed_dir = True
-                    break
+            allowed_path = _canonical_file_path(allowed_dir)
+            normalized_root = os.path.normcase(str(allowed_path))
+            if normalized_path.is_relative_to(normalized_root):
+                path_in_allowed_dir = True
+                break
 
         if not path_in_allowed_dir:
             if config.enable_audit_logging:
-                logger.warning(
-                    "Path outside allowed directories: %s",
-                    sanitize_log_value(path),
-                )
+                logger.warning("Path outside allowed directories")
             raise SecurityError(f"Path outside allowed directories: {path}")
 
         if config.enable_audit_logging:
-            logger.info(f"File path validated for {operation}: {path}")
+            category = next(
+                (name for name in ("read", "write", "access") if operation == name),
+                "other",
+            )
+            logger.info("File path validated: operation=%s", category)
 
         return path
 
-    except (OSError, ValueError) as e:
+    except (OSError, ValueError, RuntimeError) as e:
         if config.enable_audit_logging:
-            logger.error(f"Path validation error: {e}")
+            logger.error("Path validation error: %s", safe_exception_frames(e))
         raise SecurityError(f"Invalid file path: {file_path}")
 
 
@@ -398,7 +419,7 @@ def safe_open(
         validated_path.parent.mkdir(parents=True, exist_ok=True)
 
     if config.enable_audit_logging:
-        logger.info(f"Opening file: {validated_path} (mode: {mode})")
+        logger.info("Opening validated file")
 
     return open(validated_path, mode, **kwargs)
 
@@ -442,13 +463,11 @@ def validate_command_string(command: str, config: SecurityConfig | None = None) 
     for pattern in dangerous_patterns:
         if re.search(pattern, command, re.IGNORECASE):
             if config.enable_audit_logging:
-                logger.warning(f"Command injection attempt detected: {command}")
+                logger.warning("Command injection attempt detected")
             raise CommandInjectionError(f"Potentially dangerous command: {command}")
 
     if config.enable_audit_logging:
-        logger.info(
-            f"Command validated: {command[:100]}{'...' if len(command) > 100 else ''}"
-        )
+        logger.info("Command validated")
 
     return command
 
@@ -798,8 +817,8 @@ def _get_cached_allowed_types() -> list[type]:
                 "not be resolved (%s: %s); values of those types will be rejected "
                 "by input sanitization.",
                 "/".join(probes),
-                type(exc).__name__,
-                exc,
+                safe_type_name(exc),
+                safe_exception_frames(exc),
             )
 
     frozen = tuple(allowed_types)
@@ -986,7 +1005,9 @@ def _enter_address_space_guard(limit: int) -> int | None:
             # every later guard believing a ceiling is in force — the sandbox
             # would be silently off for the life of the process.
             _address_space_requests.pop()
-            _log_address_space_unsupported(f"setrlimit(RLIMIT_AS) rejected: {exc}")
+            _log_address_space_unsupported(
+                "setrlimit(RLIMIT_AS) rejected: " + safe_exception_frames(exc)
+            )
             return None
         if _address_space_saved is None:
             _address_space_saved = (soft, hard)
@@ -1016,7 +1037,7 @@ def _exit_address_space_guard(ceiling: int) -> None:
                     "exited; the process stays at %s: %s",
                     target,
                     _address_space_applied,
-                    exc,
+                    safe_exception_frames(exc),
                 )
             else:
                 _address_space_applied = target
@@ -1036,7 +1057,7 @@ def _exit_address_space_guard(ceiling: int) -> None:
             "Could not restore RLIMIT_AS to %s after guarded execution; this "
             "process's address space stays capped: %s",
             _address_space_saved,
-            exc,
+            safe_exception_frames(exc),
         )
     else:
         _address_space_saved = None
@@ -1293,7 +1314,7 @@ def sanitize_input(
 
         if sanitized != value and config.enable_audit_logging:
             logger.warning(
-                f"Input sanitized ({context}): {value[:50]}... -> {sanitized[:50]}..."
+                "Input sanitized: length %d -> %d", len(value), len(sanitized)
             )
 
         return sanitized
@@ -1340,7 +1361,7 @@ def create_secure_temp_dir(
     temp_dir.chmod(0o700)
 
     if config.enable_audit_logging:
-        logger.info(f"Created secure temp directory: {temp_dir}")
+        logger.info("Created secure temp directory")
 
     return temp_dir
 
@@ -1388,8 +1409,6 @@ def validate_node_parameters(
         validated_params[clean_key] = validated_value
 
     if config.enable_audit_logging:
-        logger.info(
-            f"Node parameters validated ({context}): {list(validated_params.keys())}"
-        )
+        logger.info("Node parameters validated: count=%d", len(validated_params))
 
     return validated_params
