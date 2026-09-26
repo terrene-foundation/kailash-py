@@ -3462,14 +3462,17 @@ class NodeGenerator:
                             if count_only:
                                 # Return count result
                                 count_data = sql_result["result"]["data"]
-                                if isinstance(count_data, list) and len(count_data) > 0:
-                                    count_value = count_data[0]
-                                    if isinstance(count_value, dict):
-                                        count = count_value.get("count", 0)
-                                    else:
-                                        count = count_value
+                                if isinstance(count_data, list):
+                                    count_data = count_data[0] if count_data else None
+                                if isinstance(count_data, dict):
+                                    count = count_data.get(
+                                        "count",
+                                        count_data.get(
+                                            "COUNT(*)", count_data.get("count(*)", 0)
+                                        ),
+                                    )
                                 else:
-                                    count = 0
+                                    count = count_data if count_data is not None else 0
                                 return {"count": count}
                             else:
                                 # Return list result
@@ -3499,7 +3502,12 @@ class NodeGenerator:
                         f"List operation - cache_integration: {cache_integration}, enable_cache: {enable_cache}"
                     )
 
-                    if cache_integration and enable_cache:
+                    # Shared entries describe committed state. A transaction
+                    # must read its pinned connection and must not publish rows
+                    # that could later roll back. Resolve before cache lookup so
+                    # a malformed scope cannot hide behind a warm cache hit.
+                    scope_transaction = _resolve_scope_transaction(self)
+                    if cache_integration and enable_cache and scope_transaction is None:
                         # Use cache integration
                         logger.debug("List operation - Using cache integration")
                         result = await cache_integration.execute_with_cache(
