@@ -5,6 +5,8 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
+
 if TYPE_CHECKING:
     from kailash.workflow.cycle_state import CycleState
 
@@ -93,17 +95,26 @@ class ExpressionCondition(ConvergenceCondition):
 
         try:
             # Safe evaluation with restricted builtins
-            logger.debug(f"Evaluating expression: {self.expression}")
-            logger.debug(f"Context variables: {list(context.keys())}")
+            logger.debug("Evaluating convergence expression")
             logger.debug(
-                f"should_continue value: {context.get('should_continue', 'NOT FOUND')}"
+                "Convergence context prepared", extra={"variable_count": len(context)}
+            )
+            logger.debug(
+                "Convergence continuation input",
+                extra={"present": "should_continue" in context},
             )
             result = eval(self.expression, {"__builtins__": {}}, context)
-            logger.debug(f"Expression result: {result} -> {bool(result)}")
+            logger.debug(
+                "Convergence expression evaluated", extra={"converged": bool(result)}
+            )
             return bool(result)
         except Exception as e:
             logger.warning(
-                f"Expression evaluation failed: {e}. Expression: {self.expression}"
+                "Expression evaluation failed; terminating cycle",
+                extra={
+                    "error_type": safe_type_name(e),
+                    "error_frames": safe_exception_frames(e),
+                },
             )
             # On error, terminate cycle for safety
             return True
@@ -135,7 +146,13 @@ class CallbackCondition(ConvergenceCondition):
         try:
             return self.callback(results, cycle_state)
         except Exception as e:
-            logger.warning(f"Callback evaluation failed: {e}. Callback: {self.name}")
+            logger.warning(
+                "Callback evaluation failed; terminating cycle",
+                extra={
+                    "error_type": safe_type_name(e),
+                    "error_frames": safe_exception_frames(e),
+                },
+            )
             # On error, terminate cycle for safety
             return True
 
