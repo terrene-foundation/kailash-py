@@ -44,6 +44,30 @@ def gateway_secret(monkeypatch):
     monkeypatch.setenv("KAILASH_API_GATEWAY_SECRET", GATEWAY_SECRET)
 
 
+@pytest.fixture(autouse=True)
+def owned_gateway_resources(monkeypatch):
+    """Release each real gateway runtime and client created by the auth probes."""
+    from contextlib import ExitStack
+    from functools import wraps
+
+    with ExitStack() as cleanup:
+
+        def track(cls, close):
+            original = cls.__init__
+
+            @wraps(original)
+            def initialize(owner, *args, **kwargs):
+                original(owner, *args, **kwargs)
+                if type(owner) is cls:
+                    cleanup.callback(close, owner)
+
+            monkeypatch.setattr(cls, "__init__", initialize)
+
+        track(APIGateway, lambda gateway: gateway.agent_ui.close())
+        track(TestClient, lambda client: client.close())
+        yield
+
+
 def _client(gateway: APIGateway) -> TestClient:
     return TestClient(gateway.app)
 
