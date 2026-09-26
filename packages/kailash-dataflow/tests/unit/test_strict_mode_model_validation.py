@@ -366,23 +366,49 @@ def test_default_behavior_is_warn_mode(base):
 def test_existing_code_unaffected(base):
     """Test that existing code without strict mode is unaffected."""
 
-    # All these should work (backward compatible with warnings)
-    @model
-    class User(base):
-        __tablename__ = "users_compat_mode_1"
-        user_id = Column(Integer, primary_key=True)
+    # All these should work while preserving their specific validation warnings.
+    with pytest.warns(DataFlowValidationWarning) as caught:
 
-    @model
-    class Product(base):
-        __tablename__ = "products_compat_mode_1"
-        product_id = Column(Integer, primary_key=True)
-        created_at = Column(DateTime)
+        @model
+        class User(base):
+            __tablename__ = "users_compat_mode_1"
+            user_id = Column(Integer, primary_key=True)
 
-    @model
-    class Order(base):
-        __tablename__ = "orders_compat_mode_1"
-        id = Column(Integer, primary_key=True)
-        userName = Column(String)
+        @model
+        class Product(base):
+            __tablename__ = "products_compat_mode_1"
+            product_id = Column(Integer, primary_key=True)
+            created_at = Column(DateTime)
+
+        @model
+        class Order(base):
+            __tablename__ = "orders_compat_mode_1"
+            id = Column(Integer, primary_key=True)
+            userName = Column(String)
+
+    expected = [
+        "[VAL-003] Model 'User' primary key is named 'user_id'. DataFlow convention "
+        "recommends naming it 'id' for consistency with generated nodes. Consider "
+        "renaming to 'id'.",
+        "[VAL-003] Model 'Product' primary key is named 'product_id'. DataFlow "
+        "convention recommends naming it 'id' for consistency with generated nodes. "
+        "Consider renaming to 'id'.",
+        "[VAL-005] Model 'Product' defines 'created_at' field. DataFlow automatically "
+        "manages timestamp of record creation. Your definition may conflict with "
+        "auto-management. Consider removing it or using a different name.",
+        "[VAL-006] Field 'created_at' in model 'Product' uses DateTime without "
+        "timezone. This can cause subtle bugs in multi-timezone applications. "
+        "Consider using DateTime(timezone=True) or ensure UTC handling.",
+        "[VAL-007] Field 'userName' in model 'Order' uses String without length. "
+        "Unbounded strings can cause performance issues. Consider using "
+        "String(length) for bounded text or Text() for large content.",
+        "[VAL-008] Field 'userName' in model 'Order' uses camelCase. DataFlow "
+        "convention recommends snake_case for database fields. Consider renaming "
+        "to 'user_name'.",
+    ]
+    assert [(warning.category, str(warning.message)) for warning in caught] == [
+        (DataFlowValidationWarning, message) for message in expected
+    ]
 
     assert User is not None
     assert Product is not None

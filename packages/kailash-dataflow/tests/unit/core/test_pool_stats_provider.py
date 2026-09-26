@@ -30,8 +30,8 @@ from dataflow.core.pool_monitor import pool_stats_dict
 def _make_dataflow(url: str = "sqlite:///:memory:", **kwargs):
     """Create a minimal DataFlow instance for unit tests.
 
-    Uses auto_migrate=False and startup_validation=False to avoid
-    side-effects.  Connection pooling is disabled by default so that
+    Uses auto_migrate=False to avoid schema changes.
+    Connection pooling is disabled by default so that
     the DataFlow constructor does not attempt real pool creation.
 
     Yields the DataFlow inside a context manager so the underlying
@@ -42,7 +42,6 @@ def _make_dataflow(url: str = "sqlite:///:memory:", **kwargs):
 
     defaults = {
         "auto_migrate": False,
-        "startup_validation": False,
         "enable_connection_pooling": False,
     }
     defaults.update(kwargs)
