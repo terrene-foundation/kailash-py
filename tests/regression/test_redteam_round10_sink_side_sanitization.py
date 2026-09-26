@@ -36,21 +36,17 @@ except ImportError:  # pragma: no cover - only on a tree predating the fix
 
 
 def _raw_exception_type_lines(source):
-    """Find direct exception-name expressions outside public raised errors.
+    """Find raw exception-type expressions in direct logging-call arguments.
 
-    This is a conservative source check, not whole-program data-flow analysis.
-    A raise expression is excluded by its AST location, never by message text;
-    a nested logging call remains a sink even inside a raise expression.
+    This lexical audit recognizes logging method names and the existing
+    exception-variable spelling convention. It does not resolve aliases or
+    follow values through assignments. Public result dictionaries, returns,
+    and raised errors are not sinks; a logging call nested in any of them is.
     """
     import ast
     import re
 
     tree = ast.parse(source)
-    parents = {
-        child: parent
-        for parent in ast.walk(tree)
-        for child in ast.iter_child_nodes(parent)
-    }
     exception_name = re.compile(r"(?:e|.*(?:exc|err|error).*)", re.IGNORECASE)
     log_methods = {
         "debug",
@@ -63,35 +59,27 @@ def _raw_exception_type_lines(source):
         "log",
     }
     offenders = set()
-    for node in ast.walk(tree):
+    for call in ast.walk(tree):
         if not (
-            isinstance(node, ast.Attribute)
-            and node.attr == "__name__"
-            and isinstance(node.value, ast.Call)
-            and isinstance(node.value.func, ast.Name)
-            and node.value.func.id == "type"
-            and len(node.value.args) == 1
-            and isinstance(node.value.args[0], ast.Name)
-            and exception_name.fullmatch(node.value.args[0].id)
+            isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Attribute)
+            and call.func.attr in log_methods
         ):
             continue
-        parent = parents.get(node)
-        public_raise = False
-        while parent is not None:
-            if (
-                isinstance(parent, ast.Call)
-                and isinstance(parent.func, ast.Attribute)
-                and parent.func.attr in log_methods
-            ):
-                break
-            if isinstance(parent, ast.Raise):
-                public_raise = True
-                break
-            if isinstance(parent, ast.stmt):
-                break
-            parent = parents.get(parent)
-        if not public_raise:
-            offenders.add(node.lineno)
+        arguments = [*call.args, *(keyword.value for keyword in call.keywords)]
+        for argument in arguments:
+            for node in ast.walk(argument):
+                if (
+                    isinstance(node, ast.Attribute)
+                    and node.attr == "__name__"
+                    and isinstance(node.value, ast.Call)
+                    and isinstance(node.value.func, ast.Name)
+                    and node.value.func.id == "type"
+                    and len(node.value.args) == 1
+                    and isinstance(node.value.args[0], ast.Name)
+                    and exception_name.fullmatch(node.value.args[0].id)
+                ):
+                    offenders.add(node.lineno)
     return sorted(offenders)
 
 
@@ -104,6 +92,23 @@ def _raw_exception_type_lines(source):
         ('logger.error(f"{type(e).__name__}: {e}")', [1]),
         ("raise RuntimeError(logger.error(type(error).__name__))", [1]),
         ("logger.error(\n    type(exception).__name__\n)", [2]),
+        ('results[node_id] = {"error": str(e), "error_type": type(e).__name__}', []),
+        (
+            'logger.error("event", extra={"error": str(e), "error_type": type(e).__name__})',
+            [1],
+        ),
+        ('def result():\n    return {"error_type": type(error).__name__}', []),
+        ('public = f"{type(exc).__name__}: {exc}"', []),
+        (
+            'logger.error("event", extra={\n    "error_type": type(exc).__name__\n})',
+            [2],
+        ),
+        (
+            'raise RuntimeError(logger.error("event", extra={"error_type": type(e).__name__}))',
+            [1],
+        ),
+        ('logger.error("event", extra={"error_type": safe_type_name(exc)})', []),
+        ('name = type(exc).__name__\nlogger.error("%s", name)', []),
     ],
 )
 def test_raw_type_sweep_discriminates_public_errors_from_logs(source, expected):
@@ -172,13 +177,13 @@ class TestSinkSideTypeNameIsSanitized:
         and a future raw sink on any line containing the excused substring was
         excused too.
 
-        So the sink set is DISCOVERED: any module importing one of these helpers
-        is a sink by definition, which means a new sink file is covered the day
-        it is written. The pattern is variable-name-agnostic. The exclusion is
-        determined by an actual raised-error AST location, never shared message
-        text that could also occur in a logger call. And the walk asserts it actually visited files, so a moved tree
-        cannot pass vacuously -- the failure mode that made the old version
-        unable to red.
+        The candidate module set is discovered by helper use. Within it, the
+        lexical scanner checks direct arguments of calls named for logging
+        levels, including f-strings and keyword dictionaries. It retains the
+        exception-variable spelling convention; aliases and values copied
+        through assignments require separate review. Public returned or
+        raised errors do not become logs merely by sharing their expression.
+        The walk asserts it visited files so a moved tree cannot pass vacuously.
         """
         import pathlib
         import re
