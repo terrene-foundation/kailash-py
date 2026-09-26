@@ -33,6 +33,7 @@ import asyncio
 import logging
 import threading
 import time
+from decimal import Decimal
 
 import pytest
 
@@ -288,6 +289,12 @@ def test_sync_bridge_timeout_rejects_a_non_positive_bound():
     [
         ({"sync_bridge_timeout": 0}, ValueError, "sync_bridge_timeout"),
         ({"sync_bridge_timeout": -5}, ValueError, "sync_bridge_timeout"),
+        ({"sync_bridge_timeout": float("nan")}, ValueError, "sync_bridge_timeout"),
+        ({"sync_bridge_timeout": float("inf")}, ValueError, "sync_bridge_timeout"),
+        ({"sync_bridge_timeout": -float("inf")}, ValueError, "sync_bridge_timeout"),
+        ({"sync_bridge_timeout": 10**400}, ValueError, "sync_bridge_timeout"),
+        ({"sync_bridge_timeout": Decimal("1")}, TypeError, "must be an int or float"),
+        ({"sync_bridge_timeout": "1"}, TypeError, "must be an int or float"),
         ({"history_store": object()}, TypeError, "must expose a callable"),
     ],
 )
@@ -325,3 +332,52 @@ def test_valid_history_store_still_records_completed_nodes():
         runtime.execute(builder.build())
 
     assert [event.node_id for event in recorded] == ["completed"]
+
+
+@pytest.mark.parametrize("bound", [float("nan"), float("inf"), -float("inf"), 10**400])
+def test_sync_bridge_timeout_rejects_unusable_bounds(bound):
+    """Reject bounds that disable the deadline or overflow its join arithmetic."""
+    with pytest.raises(ValueError, match="finite positive"):
+        # Close an erroneously admitted runtime if the validation regresses.
+        with LocalRuntime(sync_bridge_timeout=bound):
+            pass
+
+
+@pytest.mark.parametrize("bound", [1, 0.25])
+def test_sync_bridge_timeout_preserves_finite_numeric_bounds(bound):
+    """Admitted integer and float bounds work in the actual join arithmetic."""
+    joins = []
+
+    class FinishedThread:
+        def join(self, timeout):
+            joins.append(timeout)
+
+        def is_alive(self):
+            return False
+
+    with LocalRuntime(sync_bridge_timeout=bound) as runtime:
+        local_runtime._join_sync_bridge(
+            FinishedThread(),
+            _NamedWorkflow("finished"),
+            timeout=runtime._sync_bridge_timeout,
+        )
+    assert joins == [bound]
+
+
+def test_configured_finite_bound_still_limits_real_bridge():
+    """The admitted public bound reaches the actual blocking-thread join."""
+    release = threading.Event()
+    thread = _blocked_thread(release)
+    try:
+        with LocalRuntime(sync_bridge_timeout=0.05) as runtime:
+            with pytest.raises(RuntimeExecutionError, match="finite_bound"):
+                local_runtime._join_sync_bridge(
+                    thread,
+                    _NamedWorkflow("finite_bound"),
+                    timeout=runtime._sync_bridge_timeout,
+                )
+            assert thread.is_alive()
+    finally:
+        release.set()
+        thread.join(timeout=5)
+    assert not thread.is_alive()
