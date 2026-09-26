@@ -10,6 +10,7 @@ import logging
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from kailash.analysis import ConditionalBranchAnalyzer
+from kailash.runtime.local import ContentAwareExecutionError
 from kailash.tracking import TaskManager
 from kailash.workflow.dag import WorkflowDAG
 from kailash.workflow.graph import Workflow
@@ -175,6 +176,8 @@ class HierarchicalSwitchExecutor:
 
                         # Process results
                         for (switch_id, _), result in zip(chunk, chunk_results):
+                            if isinstance(result, ContentAwareExecutionError):
+                                raise result
                             if isinstance(result, Exception):
                                 logger.error(
                                     f"Error executing switch {switch_id}: {result}"
@@ -332,6 +335,8 @@ class HierarchicalSwitchExecutor:
                 return None
 
         except Exception as e:
+            if isinstance(e, ContentAwareExecutionError):
+                raise
             logger.error(f"Error executing node {node_id}: {e}")
             return {"error": str(e)}
 

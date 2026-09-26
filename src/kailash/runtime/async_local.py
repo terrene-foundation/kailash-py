@@ -48,7 +48,10 @@ from kailash.runtime.durable import (
     resolve_tenant_id,
 )
 from kailash.runtime.execution_tracker import ExecutionTracker
-from kailash.runtime.local import LocalRuntime
+from kailash.runtime.local import (
+    ContentAwareExecutionError,
+    LocalRuntime,
+)
 from kailash.runtime.metrics import get_metrics_bridge
 from kailash.sdk_exceptions import (
     HardTimeLimitExceeded,
@@ -1485,9 +1488,12 @@ class AsyncLocalRuntime(LocalRuntime):
             # Execute node
             try:
                 result = node_instance.execute(**node_inputs)
+                self._check_node_result(node_id, result)
                 results[node_id] = result
                 node_outputs[node_id] = result
             except Exception as e:
+                if isinstance(e, ContentAwareExecutionError):
+                    raise
                 raise WorkflowExecutionError(
                     f"Node '{node_id}' execution failed: {e}"
                 ) from e
@@ -1625,6 +1631,7 @@ class AsyncLocalRuntime(LocalRuntime):
             return False
 
         cached_output = w1_tracker.get_output(node_id)
+        self._check_node_result(node_id, cached_output)
         # Mirror the sync runtime: dependents must receive the restored
         # output exactly as a fresh execution would have produced it.
         await tracker.record_result(node_id, cached_output, 0.0)
@@ -1706,6 +1713,7 @@ class AsyncLocalRuntime(LocalRuntime):
                         node_instance, inputs
                     )
 
+                self._check_node_result(node_id, result)
                 execution_time = time.time() - start_time
                 await tracker.record_result(node_id, result, execution_time)
 
@@ -1729,6 +1737,8 @@ class AsyncLocalRuntime(LocalRuntime):
                 logger.error(
                     f"Node '{node_id}' failed after {execution_time:.2f}s: {e}"
                 )
+                if isinstance(e, ContentAwareExecutionError):
+                    raise
                 raise WorkflowExecutionError(
                     f"Node '{node_id}' execution failed: {e}"
                 ) from e
@@ -1800,6 +1810,7 @@ class AsyncLocalRuntime(LocalRuntime):
                 # Execute sync node in thread pool
                 result = await self._execute_sync_node_in_thread(node_instance, inputs)
 
+                self._check_node_result(node_id, result)
                 execution_time = time.time() - start_time
                 await tracker.record_result(node_id, result, execution_time)
 
@@ -1825,6 +1836,8 @@ class AsyncLocalRuntime(LocalRuntime):
                 logger.error(
                     f"Sync node '{node_id}' failed after {execution_time:.2f}s: {e}"
                 )
+                if isinstance(e, ContentAwareExecutionError):
+                    raise
                 raise WorkflowExecutionError(
                     f"Sync node '{node_id}' execution failed: {e}"
                 ) from e
