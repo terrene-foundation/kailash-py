@@ -83,18 +83,8 @@ class TestApplicationSafeRenameStrategy:
 
         mock_conn = AsyncMock()
 
-        # In asyncpg, connection.transaction() returns an object with __aenter__ and __aexit__
-        # NOT a coroutine
-        class AsyncTransactionMock:
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, exc_type, exc_val, exc_tb):
-                return False
-
-        # The transaction method should return the context manager directly,
-        # not a coroutine that returns a context manager
-        mock_conn.transaction.return_value = AsyncTransactionMock()
+        # asyncpg.transaction() is a synchronous context-manager factory.
+        mock_conn.transaction = MagicMock(return_value=MagicMock())
 
         return mock_conn
 
@@ -241,6 +231,9 @@ class TestApplicationSafeRenameStrategy:
 
         assert len(create_calls) >= 1
         assert len(rename_calls) >= 1
+        transaction = mock_connection.transaction.return_value
+        transaction.__aenter__.assert_awaited_once()
+        transaction.__aexit__.assert_awaited_once_with(None, None, None)
 
     async def test_rollback_strategy_handles_failures_safely(
         self, application_safe_strategy, mock_connection

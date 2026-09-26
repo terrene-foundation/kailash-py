@@ -166,12 +166,18 @@ def async_safe_run(coro: Coroutine[Any, Any, T], timeout: Optional[float] = None
 
     # Check recursion depth with thread-safe counter
     with _global_depth_lock:
-        if _global_depth >= _MAX_RECURSION_DEPTH:
-            raise RuntimeError(
-                "async_safe_run() called recursively too many times. "
-                "This may indicate an infinite loop or circular dependency."
-            )
-        _global_depth += 1
+        rejected = _global_depth >= _MAX_RECURSION_DEPTH
+        if not rejected:
+            _global_depth += 1
+
+    if rejected:
+        # Closing a suspended coroutine runs user finally blocks, which may
+        # re-enter this bridge. Never run that cleanup under the depth lock.
+        coro.close()
+        raise RuntimeError(
+            "async_safe_run() called recursively too many times. "
+            "This may indicate an infinite loop or circular dependency."
+        )
 
     try:
         try:
@@ -227,17 +233,34 @@ def _run_in_thread_pool(
         Exception: Any exception raised by the coroutine
     """
     result_container = {"result": None, "exception": None}
+    ownership_lock = threading.Lock()
+    claimed = False
+    discarded = False
 
     def run_coro_in_new_loop():
         """Execute coroutine on a fresh transient event loop in this thread."""
+        nonlocal claimed
+        with ownership_lock:
+            if discarded:
+                return
+            claimed = True
         try:
             result_container["result"] = _run_on_new_loop(coro, timeout=timeout)
         except Exception as e:
             result_container["exception"] = e
 
     # Use thread pool for efficiency
-    pool = _get_thread_pool()
-    future: Future = pool.submit(run_coro_in_new_loop)
+    try:
+        pool = _get_thread_pool()
+        future: Future = pool.submit(run_coro_in_new_loop)
+    except BaseException:
+        # submit() can raise after enqueueing. A worker that already claimed
+        # the coroutine owns cleanup; otherwise disarm any queued callback.
+        with ownership_lock:
+            discarded = not claimed
+        if discarded:
+            coro.close()
+        raise
 
     # Wait for completion with optional timeout
     thread_timeout = (

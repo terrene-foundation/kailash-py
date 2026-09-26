@@ -37,6 +37,30 @@ WorkflowBuilder = _wf.WorkflowBuilder
 from dataflow import DataFlow
 
 
+@pytest.fixture
+def runtime():
+    """Own the runtime through execution and release it on every test exit."""
+    with LocalRuntime() as instance:
+        yield instance
+
+
+@pytest.fixture
+async def dataflow_factory(memory_test_suite):
+    """Create multiple standard unit instances and close each explicitly."""
+    instances = []
+
+    def create():
+        instance = memory_test_suite.dataflow_harness.create_dataflow()
+        instances.append(instance)
+        return instance
+
+    try:
+        yield create
+    finally:
+        for instance in reversed(instances):
+            await instance.close_async()
+
+
 class TestPackageInstallation:
     """Test DataFlow package installation and setup scenarios."""
 
@@ -65,7 +89,7 @@ class TestPackageInstallation:
             pytest.fail(f"Failed to import LocalRuntime: {e}")
 
     @patch("kailash.nodes.data.async_sql.AsyncSQLDatabaseNode.async_run")
-    def test_first_time_usage_scenario(self, mock_async_run):
+    def test_first_time_usage_scenario(self, mock_async_run, runtime, memory_dataflow):
         """Test the first-time user experience."""
         # Mock database operations
         mock_async_run.return_value = {
@@ -76,7 +100,7 @@ class TestPackageInstallation:
         # Simulate a new user following getting started guide
 
         # Step 1: Import DataFlow
-        db = DataFlow(database_url="postgresql://user:pass@localhost/test_db")
+        db = memory_dataflow
         assert db is not None
 
         # Step 2: Define first model
@@ -90,7 +114,6 @@ class TestPackageInstallation:
         workflow.add_node("FirstModelCreateNode", "first_create", {})
 
         # Step 4: Execute first workflow
-        runtime = LocalRuntime()
         parameters = {"first_create": {"name": "Hello DataFlow", "value": 42}}
         results, run_id = runtime.execute(workflow.build(), parameters=parameters)
 
@@ -100,7 +123,9 @@ class TestPackageInstallation:
         assert "first_create" in results
 
     @patch("kailash.nodes.data.async_sql.AsyncSQLDatabaseNode.async_run")
-    def test_database_dependencies_available(self, mock_async_run):
+    def test_database_dependencies_available(
+        self, mock_async_run, runtime, memory_dataflow
+    ):
         """Test that required database dependencies are available."""
         # Mock DB backend — this file's scope is DataFlow's public API shape
         # (@db.model, node generation, workflow composition). The async-sql
@@ -120,7 +145,7 @@ class TestPackageInstallation:
             pytest.fail("SQLite support not available")
 
         # Test that DataFlow can create SQLite-backed instance
-        db = DataFlow(database_url="postgresql://user:pass@localhost/test_db")
+        db = memory_dataflow
 
         @db.model
         class DependencyTest:
@@ -132,13 +157,12 @@ class TestPackageInstallation:
             "DependencyTestCreateNode", "test_deps", {"dep_id": 1, "dep_type": "sqlite"}
         )
 
-        runtime = LocalRuntime()
         results, run_id = runtime.execute(workflow.build())
 
         assert results is not None
 
     @patch("kailash.nodes.data.async_sql.AsyncSQLDatabaseNode.async_run")
-    def test_minimal_requirements_check(self, mock_async_run):
+    def test_minimal_requirements_check(self, mock_async_run, runtime, memory_dataflow):
         """Test that minimal system requirements are met."""
         # Mock database operations
         mock_async_run.return_value = {
@@ -151,7 +175,7 @@ class TestPackageInstallation:
         assert python_version >= (3, 8), f"Python {python_version} too old, need 3.8+"
 
         # Test basic functionality with minimal setup
-        db = DataFlow(database_url="postgresql://user:pass@localhost/test_db")
+        db = memory_dataflow
 
         @db.model
         class MinimalTest:
@@ -160,7 +184,6 @@ class TestPackageInstallation:
         workflow = WorkflowBuilder()
         workflow.add_node("MinimalTestCreateNode", "minimal", {})
 
-        runtime = LocalRuntime()
         parameters = {"minimal": {"test_value": "minimal_setup_works"}}
         results, run_id = runtime.execute(workflow.build(), parameters=parameters)
 
@@ -168,7 +191,7 @@ class TestPackageInstallation:
         assert results["minimal"]["test_value"] == "minimal_setup_works"
 
     @patch("kailash.nodes.data.async_sql.AsyncSQLDatabaseNode.async_run")
-    def test_configuration_free_setup(self, mock_async_run):
+    def test_configuration_free_setup(self, mock_async_run, runtime, memory_dataflow):
         """Test that DataFlow works without any configuration."""
         # Mock DB backend — see module docstring for scope note.
         mock_async_run.return_value = {
@@ -182,7 +205,7 @@ class TestPackageInstallation:
         }
 
         # Should work with a default database URL (no per-app config required)
-        db = DataFlow(database_url="postgresql://user:pass@localhost/test_db")
+        db = memory_dataflow
 
         @db.model
         class ConfigFreeTest:
@@ -202,16 +225,15 @@ class TestPackageInstallation:
             "ConfigFreeTestListNode", "auto_list", {"filter": {"auto_active": True}}
         )
 
-        runtime = LocalRuntime()
         results, run_id = runtime.execute(workflow.build())
 
         assert results is not None
         assert "auto_create" in results
         assert "auto_list" in results
 
-    def test_error_handling_for_new_users(self):
+    def test_error_handling_for_new_users(self, runtime, memory_dataflow):
         """Test error handling that new users might encounter."""
-        db = DataFlow()
+        db = memory_dataflow
 
         @db.model
         class ErrorTestModel:
@@ -229,8 +251,6 @@ class TestPackageInstallation:
             },
         )
 
-        runtime = LocalRuntime()
-
         # Should handle error gracefully or provide clear feedback
         try:
             results, run_id = runtime.execute(workflow.build())
@@ -245,7 +265,9 @@ class TestPackageInstallation:
             )
 
     @patch("kailash.nodes.data.async_sql.AsyncSQLDatabaseNode.async_run")
-    def test_progressive_complexity_support(self, mock_async_run):
+    def test_progressive_complexity_support(
+        self, mock_async_run, runtime, memory_dataflow
+    ):
         """Test that package supports progressive complexity."""
         # Mock database operations
         mock_async_run.return_value = {
@@ -254,7 +276,7 @@ class TestPackageInstallation:
         }
 
         # Level 1: Simple model and operation
-        db = DataFlow(database_url="postgresql://user:pass@localhost/test_db")
+        db = memory_dataflow
 
         @db.model
         class SimpleModel:
@@ -263,7 +285,6 @@ class TestPackageInstallation:
         workflow1 = WorkflowBuilder()
         workflow1.add_node("SimpleModelCreateNode", "simple", {})
 
-        runtime = LocalRuntime()
         parameters1 = {"simple": {"name": "Simple Test"}}
         results1, run_id1 = runtime.execute(workflow1.build(), parameters=parameters1)
         assert results1 is not None
@@ -300,7 +321,9 @@ class TestPackageInstallation:
         assert results3 is not None
 
     @patch("kailash.nodes.data.async_sql.AsyncSQLDatabaseNode.async_run")
-    def test_documentation_code_examples_work(self, mock_async_run):
+    def test_documentation_code_examples_work(
+        self, mock_async_run, runtime, memory_dataflow
+    ):
         """Test that code examples from documentation execute correctly."""
         # Mock database operations
         mock_async_run.return_value = {
@@ -314,7 +337,7 @@ class TestPackageInstallation:
         }
 
         # Test README example
-        db = DataFlow(database_url="postgresql://user:pass@localhost/test_db")
+        db = memory_dataflow
 
         @db.model
         class User:
@@ -325,7 +348,6 @@ class TestPackageInstallation:
         workflow = WorkflowBuilder()
         workflow.add_node("UserCreateNode", "create", {})
 
-        runtime = LocalRuntime()
         parameters = {"create": {"name": "Alice", "email": "alice@example.com"}}
         results, run_id = runtime.execute(workflow.build(), parameters=parameters)
 
@@ -341,7 +363,7 @@ class TestPackageInstallation:
         assert results2 is not None
 
     @patch("kailash.nodes.data.async_sql.AsyncSQLDatabaseNode.async_run")
-    def test_common_use_case_scenarios(self, mock_async_run):
+    def test_common_use_case_scenarios(self, mock_async_run, runtime, memory_dataflow):
         """Test common use case scenarios that new users try."""
         # Mock database operations
         mock_async_run.return_value = {
@@ -354,7 +376,7 @@ class TestPackageInstallation:
             },
         }
 
-        db = DataFlow(database_url="postgresql://user:pass@localhost/test_db")
+        db = memory_dataflow
 
         # Use case 1: User management
         @db.model
@@ -381,7 +403,6 @@ class TestPackageInstallation:
         # Test content publishing flow
         workflow.add_node("PostUpdateNode", "publish_post", {})
 
-        runtime = LocalRuntime()
         parameters = {
             "register": {
                 "username": "testuser",
@@ -404,7 +425,7 @@ class TestPackageInstallation:
         assert "publish_post" in results
 
     @patch("kailash.nodes.data.async_sql.AsyncSQLDatabaseNode.async_run")
-    def test_development_workflow_setup(self, mock_async_run):
+    def test_development_workflow_setup(self, mock_async_run, runtime, memory_dataflow):
         """Test typical development workflow setup."""
         # Mock database operations
         mock_async_run.return_value = {
@@ -418,7 +439,7 @@ class TestPackageInstallation:
         }
 
         # Test development database setup
-        db = DataFlow(database_url="postgresql://user:pass@localhost/test_db")
+        db = memory_dataflow
 
         @db.model
         class DevModel:
@@ -435,7 +456,6 @@ class TestPackageInstallation:
         # Test development query
         workflow.add_node("DevModelListNode", "dev_query", {})
 
-        runtime = LocalRuntime()
         parameters = {
             "dev_create": {
                 "dev_id": 1,
@@ -454,7 +474,9 @@ class TestPackageInstallation:
         assert "dev_query" in results
 
     @patch("kailash.nodes.data.async_sql.AsyncSQLDatabaseNode.async_run")
-    def test_performance_baseline_for_new_installations(self, mock_async_run):
+    def test_performance_baseline_for_new_installations(
+        self, mock_async_run, runtime, memory_dataflow
+    ):
         """Test that new installations meet performance baselines."""
         # Mock database operations
         mock_async_run.return_value = {
@@ -467,7 +489,7 @@ class TestPackageInstallation:
             },
         }
 
-        db = DataFlow(database_url="postgresql://user:pass@localhost/test_db")
+        db = memory_dataflow
 
         @db.model
         class PerformanceBaseline:
@@ -483,7 +505,6 @@ class TestPackageInstallation:
         workflow = WorkflowBuilder()
         workflow.add_node("PerformanceBaselineCreateNode", "perf_test", {})
 
-        runtime = LocalRuntime()
         parameters = {
             "perf_test": {
                 "perf_id": 1,
@@ -501,7 +522,7 @@ class TestPackageInstallation:
         assert results is not None
 
     @patch("kailash.nodes.data.async_sql.AsyncSQLDatabaseNode.async_run")
-    def test_environment_compatibility(self, mock_async_run):
+    def test_environment_compatibility(self, mock_async_run, runtime, memory_dataflow):
         """Test compatibility with different Python environments."""
         # Mock database operations
         mock_async_run.return_value = {
@@ -515,7 +536,7 @@ class TestPackageInstallation:
         }
 
         # Test that DataFlow works in current environment
-        db = DataFlow(database_url="postgresql://user:pass@localhost/test_db")
+        db = memory_dataflow
 
         @db.model
         class EnvironmentTest:
@@ -528,7 +549,6 @@ class TestPackageInstallation:
         workflow = WorkflowBuilder()
         workflow.add_node("EnvironmentTestCreateNode", "env_test", {})
 
-        runtime = LocalRuntime()
         parameters = {
             "env_test": {
                 "python_version": f"{sys.version_info.major}.{sys.version_info.minor}",
@@ -542,7 +562,7 @@ class TestPackageInstallation:
         assert results["env_test"]["test_result"] == "compatible"
 
     @patch("kailash.nodes.data.async_sql.AsyncSQLDatabaseNode.async_run")
-    def test_memory_usage_on_startup(self, mock_async_run):
+    def test_memory_usage_on_startup(self, mock_async_run, runtime, dataflow_factory):
         """Test that package doesn't use excessive memory on startup."""
         # Mock database operations
         mock_async_run.return_value = {
@@ -554,7 +574,7 @@ class TestPackageInstallation:
         instances = []
 
         for i in range(5):
-            db = DataFlow(database_url="postgresql://user:pass@localhost/test_db")
+            db = dataflow_factory()
 
             @db.model
             class MemoryTestModel:
@@ -567,7 +587,6 @@ class TestPackageInstallation:
         assert len(instances) == 5
 
         # Test that all instances work
-        runtime = LocalRuntime()
 
         for i, db_instance in enumerate(instances):
             workflow = WorkflowBuilder()
@@ -581,7 +600,7 @@ class TestPackageInstallation:
             assert results is not None
 
     @patch("kailash.nodes.data.async_sql.AsyncSQLDatabaseNode.async_run")
-    def test_graceful_degradation(self, mock_async_run):
+    def test_graceful_degradation(self, mock_async_run, runtime, memory_dataflow):
         """Test graceful degradation when optional features unavailable."""
         # Mock database operations
         mock_async_run.return_value = {
@@ -594,7 +613,7 @@ class TestPackageInstallation:
         }
 
         # Test basic functionality even if advanced features fail
-        db = DataFlow(database_url="postgresql://user:pass@localhost/test_db")
+        db = memory_dataflow
 
         @db.model
         class DegradationTest:
@@ -605,7 +624,6 @@ class TestPackageInstallation:
         workflow = WorkflowBuilder()
         workflow.add_node("DegradationTestCreateNode", "basic_op", {})
 
-        runtime = LocalRuntime()
         parameters = {
             "basic_op": {"basic_id": 1, "basic_data": "basic_functionality_works"}
         }
