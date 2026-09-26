@@ -259,18 +259,20 @@
     "csq14-mfa-review",
     "csq14-security-path",
     "csq14-python-exception-diagnostics",
-    "csq14-security-path-review"
+    "csq14-security-path-review",
+    "csq14-memory-cache-identity"
   ],
   "review_worktrees": [
     "csq14-final2-correctness",
     "csq14-final2-security",
     "csq14-final2-coverage",
-    "csq14-memory-cache-identity",
-    "csq14-sqlite-address-parity"
+    "csq14-sqlite-address-parity",
+    "csq14-final3-correctness"
   ],
   "open_findings": [
     "inconsistent relative/native SQLite file addresses across producers",
-    "draft normalized cache identity conflates real disk and memdb VFS databases; correction in progress"
+    "draft normalized cache identity conflates real disk and memdb VFS databases; correction in progress",
+    "Linux malformed UTF-8 native filenames produce distinct actual databases but a draft shared cache identity; admission repair in progress"
   ],
   "holistic_attempt": {
     "source": "51fcd96c0 plus forwarding569e68 overlay",

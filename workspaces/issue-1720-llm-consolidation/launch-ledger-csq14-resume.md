@@ -192,3 +192,12 @@ is authorized. The prior scoped approvals cover 11587, 11588, and 11594 only.
 All-files hooks, including pytest-check, remain required before the next push. The attempted
 `mac-mini` runner was rejected before execution; the corrected declared host is
 `esperie-mac-mini`. Never count the rejected launch as a gate run.
+
+## Current parallel lanes — 4fe79789f continuation
+
+| Lane / sibling | Branch | Task set | Agent roster | Status |
+| --- | --- | --- | --- | --- |
+| csq14-sqlite-address-parity | fix/csq14-sqlite-address-parity | Shared SQLite producers, URI admission, cache identity, native ownership | archive_checkpoint: implementing; ml_gate_recovery: consultation delivered, frozen review pending | Active, not frozen |
+| csq14-final3-correctness | detached 4fe79789f | Whole-union interface and assertion inventory preparation; later final-source review | ml_correctness_review: running | Preparation only; final SHA must be repinned |
+
+Root created the final3 sibling before dispatch. STEP0 requires resolved cwd/git-root equality and exact HEAD. Current SQLite Linux filename probe observed distinct rows `%FF` and `%FE` with `IDENTITIES_EQUAL True` at helper SHA256 b96af59bdf4b69a2b47951171326aadd8d7e0d18dda0fef02939a9e03acef42e; author is repairing malformed-encoding admission. No final clean verdict is recorded. Memory39ce source sibling was drained after exact file parity; backup `/tmp/csq14-drained-memory-identity-39ce/` remains. Five stashes remain unchanged.
