@@ -4013,6 +4013,7 @@ def _register_pool(pool_key: str, adapter: Any) -> None:
     # (issue #2211 review F2).
     _stamp_pool_loop(adapter)
     _PROCESS_POOL_REGISTRY[pool_key] = adapter
+    register_pool_drain_on_current_loop(adapter.disconnect)
     _ensure_reaper_started()
 
 
