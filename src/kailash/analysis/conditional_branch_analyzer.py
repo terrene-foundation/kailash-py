@@ -9,6 +9,7 @@ import logging
 from typing import Any, Dict, List, Optional, Set
 
 from kailash.nodes.logic.operations import MergeNode, SwitchNode
+from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
 from kailash.workflow.dag import WorkflowDAG
 from kailash.workflow.graph import Workflow
 
@@ -62,7 +63,9 @@ class ConditionalBranchAnalyzer:
                     logger.debug(f"Found SwitchNode: {node_id}")
 
             except (KeyError, AttributeError) as e:
-                logger.debug(f"Skipping node {node_id} - no valid instance: {e}")
+                logger.debug(
+                    f"Skipping node {node_id} - no valid instance: {safe_exception_frames(e)}"
+                )
                 continue
 
         self._switch_nodes = switch_nodes
@@ -174,7 +177,7 @@ class ConditionalBranchAnalyzer:
         to_process = set()
 
         # Process each switch result to find directly connected nodes
-        logger.debug(f"Processing switch results: {switch_results}")
+        logger.debug(f"Processing switch result count: {len(switch_results)}")
         for switch_id, port_results in switch_results.items():
             if switch_id not in branch_map:
                 logger.warning(f"Switch {switch_id} not found in branch map")
@@ -190,10 +193,10 @@ class ConditionalBranchAnalyzer:
                         reachable.update(direct_nodes)
                         to_process.update(direct_nodes)
                         logger.debug(
-                            f"Switch {switch_id} port {port} activated - added direct nodes: {direct_nodes}"
+                            f"Switch {switch_id} port activated - direct node count: {len(direct_nodes)}"
                         )
                 else:
-                    logger.debug(f"Switch {switch_id} port {port} NOT activated (None)")
+                    logger.debug(f"Switch {switch_id} port NOT activated (None)")
 
         # Now traverse the graph to find ALL downstream nodes from the activated branches
         # BUT: Don't traverse through switches - they control their own branches
@@ -291,7 +294,7 @@ class ConditionalBranchAnalyzer:
 
             return False
         except Exception as e:
-            logger.debug(f"Error detecting cycles: {e}")
+            logger.debug(f"Error detecting cycles: {safe_exception_frames(e)}")
             return False
 
     def _detect_cascading_switches(self, switch_nodes: List[str]) -> List[List[str]]:
@@ -483,7 +486,9 @@ class ConditionalBranchAnalyzer:
                 hierarchy_info["max_depth"] = 1
 
         except Exception as e:
-            logger.warning(f"Error analyzing switch hierarchies: {e}")
+            logger.warning(
+                f"Error analyzing switch hierarchies: {safe_exception_frames(e)}"
+            )
 
         return hierarchy_info
 
@@ -623,7 +628,9 @@ class ConditionalBranchAnalyzer:
             )
 
         except Exception as e:
-            logger.warning(f"Error creating hierarchical execution plan: {e}")
+            logger.warning(
+                f"Error creating hierarchical execution plan: {safe_exception_frames(e)}"
+            )
 
         return plan
 
@@ -657,7 +664,7 @@ class ConditionalBranchAnalyzer:
 
         except Exception as e:
             logger.warning(
-                f"Error getting reachable nodes from switch {switch_id}: {e}"
+                f"Error getting reachable nodes from switch {switch_id}: {safe_exception_frames(e)}"
             )
 
         return reachable
@@ -703,6 +710,8 @@ class ConditionalBranchAnalyzer:
                 strategy["strategy_type"] = "partial"
 
         except Exception as e:
-            logger.warning(f"Error determining merge strategy for {merge_id}: {e}")
+            logger.warning(
+                f"Error determining merge strategy for {merge_id}: {safe_exception_frames(e)}"
+            )
 
         return strategy

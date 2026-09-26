@@ -48,6 +48,8 @@ from collections import OrderedDict
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Tuple
 
+from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
+
 if TYPE_CHECKING:
     # Type-only imports — runtime imports stay lazy inside __init__ to
     # avoid circular-import risk and to keep cold-import cost low.
@@ -782,7 +784,7 @@ class LocalRuntime(
                             exception_classifier.add_retriable_exception(exc_class)
                         except (ValueError, KeyError) as e:
                             logger.warning(
-                                f"Could not add retriable exception: {exc_name}: {e}"
+                                f"Could not add retriable exception: {exc_name}: {safe_exception_frames(e)}"
                             )
 
                     # Add custom non-retriable exceptions
@@ -792,7 +794,7 @@ class LocalRuntime(
                             exception_classifier.add_non_retriable_exception(exc_class)
                         except (ValueError, KeyError) as e:
                             logger.warning(
-                                f"Could not add non-retriable exception: {exc_name}: {e}"
+                                f"Could not add non-retriable exception: {exc_name}: {safe_exception_frames(e)}"
                             )
 
                     # Add pattern-based rules
@@ -860,7 +862,7 @@ class LocalRuntime(
                             )
                         except Exception as e:
                             logger.warning(
-                                f"Could not register strategy for {exc_name}: {e}"
+                                f"Could not register strategy for {exc_name}: {safe_exception_frames(e)}"
                             )
 
                 self._enable_retry_coordination = True
@@ -869,7 +871,9 @@ class LocalRuntime(
                 )
 
             except ImportError as e:
-                logger.warning(f"Retry policy engine not available: {e}")
+                logger.warning(
+                    f"Retry policy engine not available: {safe_exception_frames(e)}"
+                )
 
         # Initialize pool coordinator immediately if persistent mode is enabled
         if self._persistent_mode:
@@ -1939,7 +1943,7 @@ class LocalRuntime(
                                                 pass
                             except Exception as e:
                                 logger.warning(
-                                    f"Error disposing AsyncSQL pools during shutdown: {e}"
+                                    f"Error disposing AsyncSQL pools during shutdown: {safe_exception_frames(e)}"
                                 )
                         else:
                             # Outer loop owns the pools; we cannot dispose
@@ -1999,7 +2003,7 @@ class LocalRuntime(
                                 _cleanup()
                         except Exception as e:
                             logger.warning(
-                                f"Error disposing SQL pools during shutdown: {e}"
+                                f"Error disposing SQL pools during shutdown: {safe_exception_frames(e)}"
                             )
 
                     # Close the loop
@@ -2014,8 +2018,7 @@ class LocalRuntime(
                 except Exception as e:
                     # Log error but don't raise - cleanup must succeed
                     logger.warning(
-                        f"Error during event loop cleanup for runtime {self._runtime_id}: {e}. "
-                        f"Force-closing loop."
+                        f"Error during event loop cleanup for runtime {self._runtime_id}: {safe_exception_frames(e)}. Force-closing loop."
                     )
                     # Force close even if cleanup fails
                     if not loop.is_closed():
@@ -2023,7 +2026,7 @@ class LocalRuntime(
                             loop.close()
                         except Exception as e2:
                             logger.error(
-                                f"Failed to force-close event loop for runtime {self._runtime_id}: {e2}"
+                                f"Failed to force-close event loop for runtime {self._runtime_id}: {safe_exception_frames(e2)}"
                             )
 
             # Clear reference
@@ -2322,7 +2325,7 @@ class LocalRuntime(
         if self.debug:
             logger.debug(
                 f"Exiting context manager for runtime {self._runtime_id} "
-                f"(exception: {exc_type.__name__ if exc_type else 'None'})"
+                f"(exception: {safe_type_name(exc_val) if exc_type else 'None'})"
             )
 
         # Use close() which handles ref counting and cleanup
@@ -2469,8 +2472,7 @@ class LocalRuntime(
                                         pass
                     except Exception as e:
                         logger.warning(
-                            f"Error disposing AsyncSQL pools during "
-                            f"_execute_sync teardown: {e}"
+                            f"Error disposing AsyncSQL pools during _execute_sync teardown: {safe_exception_frames(e)}"
                         )
                     try:
                         from kailash.nodes.data.sql import SQLDatabaseNode
@@ -2480,8 +2482,7 @@ class LocalRuntime(
                             _cleanup()
                     except Exception as e:
                         logger.warning(
-                            f"Error disposing SQL pools during "
-                            f"_execute_sync teardown: {e}"
+                            f"Error disposing SQL pools during _execute_sync teardown: {safe_exception_frames(e)}"
                         )
                 if loop:
                     loop.close()
@@ -2583,9 +2584,7 @@ class LocalRuntime(
                 except Exception as load_err:  # pragma: no cover — defensive
                     self.logger.warning(
                         "durable.checkpoint.load_failed",
-                        extra={
-                            "error_type": type(load_err).__name__,
-                        },
+                        extra={"error_type": safe_type_name(load_err)},
                     )
                     prior_blob = None
                 if prior_blob is not None:
@@ -2751,10 +2750,12 @@ class LocalRuntime(
                             )
                         except Exception as sa_err:
                             self.logger.warning(
-                                f"Failed to set search attributes: {sa_err}"
+                                f"Failed to set search attributes: {safe_exception_frames(sa_err)}"
                             )
                 except Exception as e:
-                    self.logger.warning(f"Failed to create task run: {e}")
+                    self.logger.warning(
+                        f"Failed to create task run: {safe_exception_frames(e)}"
+                    )
                     # Continue without tracking
 
             # === Signal/Query System ===
@@ -2816,7 +2817,7 @@ class LocalRuntime(
                                 if isinstance(e, ContentAwareExecutionError):
                                     raise
                                 self.logger.warning(
-                                    f"Conditional execution failed, falling back to standard execution: {e}"
+                                    f"Conditional execution failed, falling back to standard execution: {safe_exception_frames(e)}"
                                 )
                                 # Fallback to standard execution
                                 results = await self._execute_workflow_async(
@@ -2846,7 +2847,7 @@ class LocalRuntime(
                             if isinstance(e, ContentAwareExecutionError):
                                 raise
                             self.logger.warning(
-                                f"Conditional execution failed, falling back to standard execution: {e}"
+                                f"Conditional execution failed, falling back to standard execution: {safe_exception_frames(e)}"
                             )
                             # Fallback to standard execution
                             results = await self._execute_workflow_async(
@@ -2876,7 +2877,7 @@ class LocalRuntime(
                         if isinstance(e, ContentAwareExecutionError):
                             raise
                         self.logger.warning(
-                            f"Conditional execution failed, falling back to standard execution: {e}"
+                            f"Conditional execution failed, falling back to standard execution: {safe_exception_frames(e)}"
                         )
                         # Fallback to standard execution
                         results = await self._execute_workflow_async(
@@ -2928,7 +2929,9 @@ class LocalRuntime(
                 try:
                     task_manager.update_run_status(run_id, "completed")
                 except Exception as e:
-                    self.logger.warning(f"Failed to update run status: {e}")
+                    self.logger.warning(
+                        f"Failed to update run status: {safe_exception_frames(e)}"
+                    )
 
             # P0E-003: Persist deferred tracking data to SQLite (CARE audit record).
             # Passes RuntimeAuditGenerator events into the storage backend before flush
@@ -2954,7 +2957,7 @@ class LocalRuntime(
                         await node_instance.cleanup()
                     except Exception as cleanup_error:
                         self.logger.warning(
-                            f"Error during final cleanup of node {node_id}: {cleanup_error}"
+                            f"Error during final cleanup of node {node_id}: {safe_exception_frames(cleanup_error)}"
                         )
 
             # === Signal/Query System Cleanup ===
@@ -3267,7 +3270,7 @@ class LocalRuntime(
                         )
                 except Exception as e:
                     self.logger.warning(
-                        f"Failed to create task for node '{node_id}': {e}"
+                        f"Failed to create task for node '{node_id}': {safe_exception_frames(e)}"
                     )
 
             # OpenTelemetry tracing: per-node span (DETAILED+ level)
@@ -3302,7 +3305,7 @@ class LocalRuntime(
                 # cross-node parameter leaks while maintaining proper scoping
 
                 if self.debug:
-                    self.logger.debug(f"Node {node_id} inputs: {inputs}")
+                    self.logger.debug("Node %s inputs prepared", node_id)
 
                 # CONDITIONAL EXECUTION: Skip nodes that only receive None inputs from conditional routing
                 # Uses shared mixin method (ConditionalExecutionMixin._should_skip_conditional_node)
@@ -3310,9 +3313,7 @@ class LocalRuntime(
                     workflow, node_id, inputs, self._current_results
                 ):
                     if self.debug:
-                        self.logger.debug(
-                            f"DEBUG: Skipping {node_id} - inputs: {inputs}"
-                        )
+                        self.logger.debug("Skipping conditional node %s", node_id)
                     self.logger.info(
                         f"Skipping node {node_id} - all conditional inputs are None"
                     )
@@ -3390,7 +3391,9 @@ class LocalRuntime(
 
                         # Log the content-aware failure
                         self.logger.error(
-                            f"Content-aware failure detected in node {node_id}: {error_message}"
+                            "Content-aware failure detected in node %s: %s",
+                            node_id,
+                            safe_exception_frames(error),
                         )
 
                         # Update task status to failed if task manager exists
@@ -3507,7 +3510,7 @@ class LocalRuntime(
                                     "node_id_hash": hashlib.sha256(
                                         node_id.encode("utf-8")
                                     ).hexdigest()[:8],
-                                    "error_type": type(save_err).__name__,
+                                    "error_type": safe_type_name(save_err),
                                 },
                             )
 
@@ -3518,7 +3521,7 @@ class LocalRuntime(
                     await self._hook_registry.dispatch_async(_redacted_event)
 
                 if self.debug:
-                    self.logger.debug(f"Node {node_id} outputs: {outputs}")
+                    self.logger.debug("Node %s outputs available", node_id)
 
                 # Update task status with enhanced metrics
                 if task and task_manager:
@@ -3580,7 +3583,7 @@ class LocalRuntime(
                         await node_instance.cleanup()
                     except Exception as cleanup_error:
                         self.logger.warning(
-                            f"Error during node {node_id} cleanup: {cleanup_error}"
+                            f"Error during node {node_id} cleanup: {safe_exception_frames(cleanup_error)}"
                         )
 
             except Exception as e:
@@ -3588,7 +3591,7 @@ class LocalRuntime(
                 _tracer.end_span(_node_span, status="error", error=e)
 
                 failed_nodes.append(node_id)
-                self.logger.error(f"Node {node_id} failed: {e}", exc_info=self.debug)
+                self.logger.error(f"Node {node_id} failed: {safe_exception_frames(e)}")
 
                 # Execution audit trail: NODE_FAILED event
                 _node_fail_time = time.monotonic()
@@ -3625,7 +3628,7 @@ class LocalRuntime(
                         await node_instance.cleanup()
                     except Exception as cleanup_error:
                         self.logger.warning(
-                            f"Error during node {node_id} cleanup after failure: {cleanup_error}"
+                            f"Error during node {node_id} cleanup after failure: {safe_exception_frames(cleanup_error)}"
                         )
 
                 # Content-aware execution errors should always stop execution
@@ -3716,7 +3719,8 @@ class LocalRuntime(
                     _save_audit(enriched_events)
             except Exception as audit_err:
                 self.logger.warning(
-                    "Failed to persist execution audit trail: %s", audit_err
+                    "Failed to persist execution audit trail: %s",
+                    safe_exception_frames(audit_err),
                 )
 
         # Store audit events in workflow context for programmatic access
@@ -3783,15 +3787,13 @@ class LocalRuntime(
 
             if self.debug:
                 self.logger.debug(f"Processing edge {source_node_id} -> {node_id}")
-                self.logger.debug(f"  Edge data: {edge[2]}")
-                self.logger.debug(f"  Mapping: {mapping}")
+                self.logger.debug(f"  Edge metadata count: {len(edge[2])}")
+                self.logger.debug(f"  Mapping entry count: {len(mapping)}")
 
             if source_node_id in node_outputs:
                 source_outputs = node_outputs[source_node_id]
                 if self.debug:
-                    self.logger.debug(
-                        f"  Source outputs: {list(source_outputs.keys())}"
-                    )
+                    self.logger.debug(f"  Source output count: {len(source_outputs)}")
 
                 # Check if the source node failed
                 if isinstance(source_outputs, dict) and source_outputs.get("failed"):
@@ -3806,7 +3808,7 @@ class LocalRuntime(
                     )
                 except Exception as e:
                     self.logger.warning(
-                        f"Data validation failed for node '{source_node_id}': {e}"
+                        f"Data validation failed for node '{source_node_id}': {safe_exception_frames(e)}"
                     )
 
                 for source_key, target_key in mapping.items():
@@ -3819,14 +3821,14 @@ class LocalRuntime(
 
                         if self.debug:
                             self.logger.debug(f"  Navigating nested path: {source_key}")
-                            self.logger.debug(f"  Starting value: {value}")
+                            self.logger.debug("  Nested mapping traversal started")
 
                         for i, part in enumerate(parts):
                             if isinstance(value, dict) and part in value:
                                 value = value[part]
                                 if self.debug:
                                     self.logger.debug(
-                                        f"    Part '{part}' found, value type: {type(value)}"
+                                        f"    Part '{part}' found, value type: {safe_type_name(value)}"
                                     )
                             else:
                                 # Check if it's a direct key in source_outputs (for backwards compatibility)
@@ -3844,15 +3846,15 @@ class LocalRuntime(
                                             f"  MISSING: Nested path '{source_key}' - failed at part '{part}'"
                                         )
                                         self.logger.debug(
-                                            f"    Current value type: {type(value)}"
+                                            f"    Current value type: {safe_type_name(value)}"
                                         )
                                         if isinstance(value, dict):
                                             self.logger.debug(
-                                                f"    Available keys: {list(value.keys())}"
+                                                f"    Available key count: {len(value)}"
                                             )
                                     self.logger.warning(
                                         f"Source output '{source_key}' not found in node '{source_node_id}'. "
-                                        f"Available outputs: {list(source_outputs.keys())}"
+                                        f"Available output count: {len(source_outputs)}"
                                     )
                                     break
 
@@ -3872,7 +3874,7 @@ class LocalRuntime(
                                 inputs[target_key] = value
                                 if self.debug:
                                     self.logger.debug(
-                                        f"  MAPPED: {source_key} -> {target_key} (type: {type(value)})"
+                                        f"  MAPPED: {source_key} -> {target_key} (type: {safe_type_name(value)})"
                                     )
                     else:
                         # Simple key mapping
@@ -3893,16 +3895,16 @@ class LocalRuntime(
                                 inputs[target_key] = value
                                 if self.debug:
                                     self.logger.debug(
-                                        f"  MAPPED: {source_key} -> {target_key} (type: {type(value)})"
+                                        f"  MAPPED: {source_key} -> {target_key} (type: {safe_type_name(value)})"
                                     )
                         else:
                             if self.debug:
                                 self.logger.debug(
-                                    f"  MISSING: {source_key} not in {list(source_outputs.keys())}"
+                                    f"  MISSING: {source_key}; available output count: {len(source_outputs)}"
                                 )
                             self.logger.warning(
                                 f"Source output '{source_key}' not found in node '{source_node_id}'. "
-                                f"Available outputs: {list(source_outputs.keys())}"
+                                f"Available output count: {len(source_outputs)}"
                             )
             else:
                 if self.debug:
@@ -4050,7 +4052,9 @@ class LocalRuntime(
                     raise WorkflowExecutionError(error_msg) from e
                 elif self.connection_validation == "warn":
                     # Warn mode: log enhanced warning and continue with unvalidated inputs
-                    self.logger.warning(error_msg)
+                    self.logger.warning(
+                        "Node input validation failed: %s", safe_exception_frames(e)
+                    )
                     # Continue with original inputs
         else:
             # Record mode bypass for metrics
@@ -4247,7 +4251,9 @@ class LocalRuntime(
             if isinstance(e, PermissionError):
                 raise
             # Log but don't fail on access control errors
-            self.logger.warning(f"Access control check failed: {e}")
+            self.logger.warning(
+                f"Access control check failed: {safe_exception_frames(e)}"
+            )
 
     def _log_audit_event(self, event_type: str, event_data: dict[str, Any]) -> None:
         """Log audit events using enterprise audit logging (synchronous)."""
@@ -4271,7 +4277,7 @@ class LocalRuntime(
             self.logger.info(f"AUDIT: {event_type} - {event_data}")
         except Exception as e:
             # Audit logging failures shouldn't stop execution
-            self.logger.warning(f"Audit logging failed: {e}")
+            self.logger.warning(f"Audit logging failed: {safe_exception_frames(e)}")
 
     def _flush_deferred_storage_sqlite(
         self, deferred_storage: Any, log_warning: bool = True
@@ -4315,7 +4321,10 @@ class LocalRuntime(
                 deferred_storage.flush_to_filesystem()
         except Exception as exc:
             if log_warning:
-                self.logger.warning("Failed to persist deferred tracking data: %s", exc)
+                self.logger.warning(
+                    "Failed to persist deferred tracking data: %s",
+                    safe_exception_frames(exc),
+                )
 
     async def _log_audit_event_async(
         self, event_type: str, event_data: dict[str, Any]
@@ -4351,7 +4360,7 @@ class LocalRuntime(
             self.logger.info(f"AUDIT: {event_type} - {event_data}")
         except Exception as e:
             # Audit logging failures shouldn't stop execution
-            self.logger.warning(f"Audit logging failed: {e}")
+            self.logger.warning(f"Audit logging failed: {safe_exception_frames(e)}")
 
     async def execute_node_with_enterprise_features(
         self, node, node_id: str, inputs: dict[str, Any], **execution_kwargs
@@ -4430,7 +4439,9 @@ class LocalRuntime(
                         _node_fn, **inputs
                     )
             except Exception as e:
-                logger.error(f"Enterprise node execution failed for {node_id}: {e}")
+                logger.error(
+                    f"Enterprise node execution failed for {node_id}: {safe_exception_frames(e)}"
+                )
                 raise
 
         elif self._retry_policy_engine:
@@ -4441,7 +4452,9 @@ class LocalRuntime(
                     _node_fn, **inputs
                 )
             except Exception as e:
-                logger.error(f"Retry policy node execution failed for {node_id}: {e}")
+                logger.error(
+                    f"Retry policy node execution failed for {node_id}: {safe_exception_frames(e)}"
+                )
                 raise
 
         elif self._circuit_breaker:
@@ -4451,7 +4464,7 @@ class LocalRuntime(
                 node_result = await self._circuit_breaker.call(_node_fn, **inputs)
             except Exception as e:
                 logger.error(
-                    f"Circuit breaker node execution failed for {node_id}: {e}"
+                    f"Circuit breaker node execution failed for {node_id}: {safe_exception_frames(e)}"
                 )
                 raise
 
@@ -4466,7 +4479,9 @@ class LocalRuntime(
                 else:
                     node_result = node.execute(**inputs)
             except Exception as e:
-                logger.error(f"Standard node execution failed for {node_id}: {e}")
+                logger.error(
+                    f"Standard node execution failed for {node_id}: {safe_exception_frames(e)}"
+                )
                 raise
 
         # Post-execution resource monitoring
@@ -4590,7 +4605,9 @@ class LocalRuntime(
             else:
                 return {"user_context": str(self.user_context)}
         except Exception as e:
-            self.logger.warning(f"Failed to serialize user context: {e}")
+            self.logger.warning(
+                f"Failed to serialize user context: {safe_exception_frames(e)}"
+            )
             return {"user_context": str(self.user_context)}
 
     def _process_workflow_parameters(
@@ -4923,9 +4940,11 @@ class LocalRuntime(
             if isinstance(e, ContentAwareExecutionError):
                 raise
             # Enhanced error logging with fallback reasoning
-            self.logger.error(f"Error in conditional execution approach: {e}")
+            self.logger.error(
+                f"Error in conditional execution approach: {safe_exception_frames(e)}"
+            )
             if fallback_reason:
-                self.logger.warning(f"Fallback reason: {fallback_reason}")
+                self.logger.warning("Conditional fallback reason recorded")
 
             # Log performance impact before fallback (mixin signature: workflow, error, context)
             context = {
@@ -4954,7 +4973,9 @@ class LocalRuntime(
                 return fallback_results
 
             except Exception as fallback_error:
-                self.logger.error(f"Fallback execution also failed: {fallback_error}")
+                self.logger.error(
+                    f"Fallback execution also failed: {safe_exception_frames(fallback_error)}"
+                )
                 # If both conditional and fallback fail, re-raise the original error
                 raise e from fallback_error
 
@@ -5143,13 +5164,15 @@ class LocalRuntime(
 
                     all_phase1_results[node_id] = result
                     self.logger.debug(
-                        f"Node {node_id} completed with result keys: {list(result.keys()) if isinstance(result, dict) else type(result)}"
+                        f"Node {node_id} completed with result field count: {len(result) if isinstance(result, dict) else 0}"
                     )
 
                 except Exception as e:
                     if isinstance(e, ContentAwareExecutionError):
                         raise
-                    self.logger.error(f"Error executing node {node_id}: {e}")
+                    self.logger.error(
+                        f"Error executing node {node_id}: {safe_exception_frames(e)}"
+                    )
                     # Continue with other nodes
                     all_phase1_results[node_id] = {
                         "error": str(e),
@@ -5172,7 +5195,9 @@ class LocalRuntime(
         except Exception as e:
             if isinstance(e, ContentAwareExecutionError):
                 raise
-            self.logger.error(f"Error in switch execution phase: {e}")
+            self.logger.error(
+                f"Error in switch execution phase: {safe_exception_frames(e)}"
+            )
             return all_phase1_results
 
     async def _execute_pruned_plan(
@@ -5315,7 +5340,9 @@ class LocalRuntime(
                 except Exception as e:
                     if isinstance(e, ContentAwareExecutionError):
                         raise
-                    self.logger.error(f"Error executing remaining node {node_id}: {e}")
+                    self.logger.error(
+                        f"Error executing remaining node {node_id}: {safe_exception_frames(e)}"
+                    )
                     # Continue with other nodes or stop based on error handling
                     if self._should_stop_on_error(workflow, node_id):
                         raise
@@ -5334,7 +5361,9 @@ class LocalRuntime(
         except Exception as e:
             if isinstance(e, ContentAwareExecutionError):
                 raise
-            self.logger.error(f"Error in pruned plan execution: {e}")
+            self.logger.error(
+                f"Error in pruned plan execution: {safe_exception_frames(e)}"
+            )
             return remaining_results
 
     def _check_node_result(self, node_id: str, result: Any) -> None:
@@ -5460,7 +5489,9 @@ class LocalRuntime(
 
             except Exception as e:
                 # Handle retry policy engine errors (shouldn't happen in normal operation)
-                logger.error(f"Retry policy engine error for node {node_id}: {e}")
+                logger.error(
+                    f"Retry policy engine error for node {node_id}: {safe_exception_frames(e)}"
+                )
                 # Fall back to direct execution
                 if self.enable_async and hasattr(node_instance, "execute_async"):
                     outputs = await node_instance.execute_async(**node_inputs)
@@ -5635,7 +5666,9 @@ class LocalRuntime(
             self._execution_plan_cache[cache_key] = execution_plan
 
         except Exception as e:
-            self.logger.warning(f"Error creating cached execution plan: {e}")
+            self.logger.warning(
+                f"Error creating cached execution plan: {safe_exception_frames(e)}"
+            )
             # P0C-002: Fallback to cached topological order
             execution_plan = workflow.get_execution_order()
 
@@ -5678,7 +5711,7 @@ class LocalRuntime(
             return hashlib.md5(combined_key.encode()).hexdigest()
 
         except Exception as e:
-            self.logger.warning(f"Error creating cache key: {e}")
+            self.logger.warning(f"Error creating cache key: {safe_exception_frames(e)}")
             # Fallback to simple key
             return f"{workflow.workflow_id}_{hash(str(switch_results))}"
 
@@ -5986,7 +6019,9 @@ class LocalRuntime(
             )
 
         except Exception as e:
-            self.logger.warning(f"Error during runtime optimization: {e}")
+            self.logger.warning(
+                f"Error during runtime optimization: {safe_exception_frames(e)}"
+            )
             optimization_result["error"] = str(e)
 
         return optimization_result
@@ -6182,7 +6217,7 @@ class LocalRuntime(
             )
 
         except Exception as e:
-            logger.error(f"Failed to start persistent mode: {e}")
+            logger.error(f"Failed to start persistent mode: {safe_exception_frames(e)}")
             raise RuntimeError(f"Failed to start persistent mode: {e}") from e
 
     async def shutdown_gracefully(self, timeout: int = 30) -> None:
@@ -6218,7 +6253,7 @@ class LocalRuntime(
                 "Resource cleanup timed out, some resources may not be properly cleaned"
             )
         except Exception as e:
-            logger.warning(f"Error during resource cleanup: {e}")
+            logger.warning(f"Error during resource cleanup: {safe_exception_frames(e)}")
 
         # Mark as shutdown
         self._is_persistent_started = False
@@ -6316,7 +6351,9 @@ class LocalRuntime(
                     self._resource_monitor.get_connection_count()
                 )
             except Exception as e:
-                logger.warning(f"Failed to get resource metrics: {e}")
+                logger.warning(
+                    f"Failed to get resource metrics: {safe_exception_frames(e)}"
+                )
 
         # Add runtime monitor data if available
         if self._runtime_monitor and hasattr(
@@ -6326,7 +6363,9 @@ class LocalRuntime(
                 runtime_metrics = self._runtime_monitor.get_aggregated_metrics()
                 performance.update(runtime_metrics)
             except Exception as e:
-                logger.warning(f"Failed to get runtime metrics: {e}")
+                logger.warning(
+                    f"Failed to get runtime metrics: {safe_exception_frames(e)}"
+                )
 
         return {
             "resources": resources,
@@ -6360,7 +6399,9 @@ class LocalRuntime(
                     health_status["status"] = "degraded"
                     health_status["details"]["violations"] = violations
             except Exception as e:
-                logger.warning(f"Failed to check resource violations: {e}")
+                logger.warning(
+                    f"Failed to check resource violations: {safe_exception_frames(e)}"
+                )
                 health_status["status"] = "unknown"
                 health_status["details"]["error"] = str(e)
 
@@ -6382,7 +6423,9 @@ class LocalRuntime(
                 ):
                     health_status["status"] = "degraded"
             except Exception as e:
-                logger.warning(f"Failed to run health checks: {e}")
+                logger.warning(
+                    f"Failed to run health checks: {safe_exception_frames(e)}"
+                )
 
         return health_status
 
@@ -6461,12 +6504,16 @@ class LocalRuntime(
             logger.debug("Persistent resources initialized successfully")
 
         except ImportError as e:
-            logger.error(f"Failed to import persistent mode dependencies: {e}")
+            logger.error(
+                f"Failed to import persistent mode dependencies: {safe_exception_frames(e)}"
+            )
             raise RuntimeError(
                 f"Persistent mode dependencies not available: {e}"
             ) from e
         except Exception as e:
-            logger.error(f"Failed to initialize persistent resources: {e}")
+            logger.error(
+                f"Failed to initialize persistent resources: {safe_exception_frames(e)}"
+            )
             raise
 
     @property
@@ -6536,4 +6583,4 @@ class LocalRuntime(
             logger.debug("Resource cleanup completed")
 
         except Exception as e:
-            logger.warning(f"Error during resource cleanup: {e}")
+            logger.warning(f"Error during resource cleanup: {safe_exception_frames(e)}")

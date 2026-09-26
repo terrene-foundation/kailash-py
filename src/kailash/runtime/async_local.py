@@ -63,6 +63,7 @@ from kailash.sdk_exceptions import (
 )
 from kailash.tracking import TaskManager, TaskStatus
 from kailash.utils.finalizer import warn_unclosed
+from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +205,9 @@ class ExecutionContext:
                     await conn.disconnect()
                 logger.debug(f"Released connection: {conn_id}")
             except Exception as e:
-                logger.warning(f"Error releasing connection {conn_id}: {e}")
+                logger.warning(
+                    f"Error releasing connection {conn_id}: {safe_exception_frames(e)}"
+                )
 
         self.connections.clear()
 
@@ -247,7 +250,11 @@ class ExecutionContext:
             if isinstance(result, Exception) and not isinstance(
                 result, asyncio.CancelledError
             ):
-                logger.warning(f"Task {i} raised error during cancellation: {result}")
+                logger.warning(
+                    "Task %s raised error during cancellation: %s",
+                    i,
+                    safe_exception_frames(result),
+                )
 
         logger.info("All tasks cancelled successfully")
 
@@ -268,13 +275,17 @@ class ExecutionContext:
             # Cancel running tasks first
             await self.cancel_all_tasks()
         except Exception as e:
-            logger.warning(f"Error cancelling tasks during cleanup: {e}")
+            logger.warning(
+                f"Error cancelling tasks during cleanup: {safe_exception_frames(e)}"
+            )
 
         try:
             # Release connections
             await self.release_connections()
         except Exception as e:
-            logger.warning(f"Error releasing connections during cleanup: {e}")
+            logger.warning(
+                f"Error releasing connections during cleanup: {safe_exception_frames(e)}"
+            )
 
         self._cleaned_up = True
         logger.debug("ExecutionContext cleanup complete")
@@ -716,7 +727,7 @@ class AsyncLocalRuntime(LocalRuntime):
                             "node_id_hash": hashlib.sha256(
                                 node_id.encode("utf-8")
                             ).hexdigest()[:8],
-                            "error_type": type(save_err).__name__,
+                            "error_type": safe_type_name(save_err),
                         },
                     )
 
@@ -1032,7 +1043,7 @@ class AsyncLocalRuntime(LocalRuntime):
                     except Exception as load_err:  # pragma: no cover — defensive
                         logger.warning(
                             "durable.checkpoint.load_failed",
-                            extra={"error_type": type(load_err).__name__},
+                            extra={"error_type": safe_type_name(load_err)},
                         )
                         prior_blob = None
                     if prior_blob is not None:
@@ -1189,7 +1200,7 @@ class AsyncLocalRuntime(LocalRuntime):
                 raise
 
             except Exception as e:
-                logger.error(f"Workflow execution failed: {e}")
+                logger.error(f"Workflow execution failed: {safe_exception_frames(e)}")
                 context.metrics.error_count += 1
                 raise WorkflowExecutionError(f"Async execution failed: {e}") from e
 
@@ -1224,7 +1235,9 @@ class AsyncLocalRuntime(LocalRuntime):
                 try:
                     await context.cleanup()
                 except Exception as cleanup_error:
-                    logger.warning(f"Error during context cleanup: {cleanup_error}")
+                    logger.warning(
+                        f"Error during context cleanup: {safe_exception_frames(cleanup_error)}"
+                    )
         finally:
             if cancellable is not None:
                 await cancellable.disarm_async()
@@ -1372,7 +1385,9 @@ class AsyncLocalRuntime(LocalRuntime):
             try:
                 await asyncio.gather(*tasks, return_exceptions=False)
             except Exception as e:
-                logger.error(f"Level {level.level} execution failed: {e}")
+                logger.error(
+                    f"Level {level.level} execution failed: {safe_exception_frames(e)}"
+                )
                 raise
 
         return tracker.get_result()
@@ -1575,7 +1590,7 @@ class AsyncLocalRuntime(LocalRuntime):
                     inputs.update(value)
                 else:
                     logger.warning(
-                        f"Node-specific parameter for '{node_id}' is not a dict: {type(value)}"
+                        f"Node-specific parameter for '{node_id}' is not a dict: {safe_type_name(value)}"
                     )
             elif key not in node_ids_in_graph:
                 # ✅ Include workflow-level parameters (not meant for specific nodes)
@@ -1787,7 +1802,7 @@ class AsyncLocalRuntime(LocalRuntime):
                 execution_time = time.time() - start_time
                 await tracker.record_error(node_id, e)
                 logger.error(
-                    f"Node '{node_id}' failed after {execution_time:.2f}s: {e}"
+                    f"Node '{node_id}' failed after {execution_time:.2f}s: {safe_exception_frames(e)}"
                 )
                 if isinstance(e, ContentAwareExecutionError):
                     raise
@@ -1803,7 +1818,7 @@ class AsyncLocalRuntime(LocalRuntime):
                         await _cleanup()
                     except Exception as cleanup_error:
                         logger.warning(
-                            f"Error during node '{node_id}' cleanup: {cleanup_error}"
+                            f"Error during node '{node_id}' cleanup: {safe_exception_frames(cleanup_error)}"
                         )
 
     async def _execute_sync_node_async(
@@ -1886,7 +1901,7 @@ class AsyncLocalRuntime(LocalRuntime):
                 execution_time = time.time() - start_time
                 await tracker.record_error(node_id, e)
                 logger.error(
-                    f"Sync node '{node_id}' failed after {execution_time:.2f}s: {e}"
+                    f"Sync node '{node_id}' failed after {execution_time:.2f}s: {safe_exception_frames(e)}"
                 )
                 if isinstance(e, ContentAwareExecutionError):
                     raise
@@ -1934,7 +1949,7 @@ class AsyncLocalRuntime(LocalRuntime):
                     inputs.update(value)
                 else:
                     logger.warning(
-                        f"Node-specific parameter for '{node_id}' is not a dict: {type(value)}"
+                        f"Node-specific parameter for '{node_id}' is not a dict: {safe_type_name(value)}"
                     )
             elif key not in node_ids_in_graph:
                 # ✅ Include workflow-level parameters (not meant for specific nodes)
@@ -2065,7 +2080,9 @@ class AsyncLocalRuntime(LocalRuntime):
                 self.thread_pool.shutdown(wait=True)
                 logger.debug("Thread pool shutdown successfully")
             except Exception as e:
-                logger.warning(f"Error shutting down thread pool: {e}")
+                logger.warning(
+                    f"Error shutting down thread pool: {safe_exception_frames(e)}"
+                )
             finally:
                 self.thread_pool = None
 
@@ -2075,7 +2092,9 @@ class AsyncLocalRuntime(LocalRuntime):
                 await self.resource_registry.cleanup()
                 logger.debug("Resource registry cleaned up")
             except Exception as e:
-                logger.warning(f"Error cleaning up resource registry: {e}")
+                logger.warning(
+                    f"Error cleaning up resource registry: {safe_exception_frames(e)}"
+                )
 
         # Dispose connection pools
         try:
@@ -2115,7 +2134,9 @@ class AsyncLocalRuntime(LocalRuntime):
                         except Exception:
                             pass
         except Exception as e:
-            logger.warning(f"Error disposing AsyncSQL pools during cleanup: {e}")
+            logger.warning(
+                f"Error disposing AsyncSQL pools during cleanup: {safe_exception_frames(e)}"
+            )
         try:
             from kailash.nodes.data.sql import SQLDatabaseNode
 
@@ -2123,7 +2144,9 @@ class AsyncLocalRuntime(LocalRuntime):
             if _cleanup is not None:
                 _cleanup()
         except Exception as e:
-            logger.warning(f"Error disposing SQL pools during cleanup: {e}")
+            logger.warning(
+                f"Error disposing SQL pools during cleanup: {safe_exception_frames(e)}"
+            )
 
         # Clean up semaphore reference
         if hasattr(self, "_semaphore"):
@@ -2174,7 +2197,9 @@ class AsyncLocalRuntime(LocalRuntime):
                         self._semaphore = None
                     self._cleaned_up = True
             except Exception as e:
-                logger.warning(f"Error during AsyncLocalRuntime.close(): {e}")
+                logger.warning(
+                    f"Error during AsyncLocalRuntime.close(): {safe_exception_frames(e)}"
+                )
                 # Fallback: at least kill thread pool
                 if hasattr(self, "thread_pool") and self.thread_pool:
                     self.thread_pool.shutdown(wait=False)

@@ -43,6 +43,8 @@ import logging
 import threading
 from typing import Awaitable, Callable, Dict, List
 
+from kailash.utils.secure_logging import safe_type_name
+
 logger = logging.getLogger(__name__)
 
 # Marker attribute stamped by the bridge onto every transient loop it
@@ -172,7 +174,7 @@ async def drain_loop_pools(loop: asyncio.AbstractEventLoop) -> None:
             # credential-bearing DSN (rules/security.md, observability 6.3).
             logger.debug(
                 "loop_pool_registry.drain.error",
-                extra={"loop_id": id(loop), "error_type": type(exc).__name__},
+                extra={"loop_id": id(loop), "error_type": safe_type_name(exc)},
             )
 
     logger.debug(

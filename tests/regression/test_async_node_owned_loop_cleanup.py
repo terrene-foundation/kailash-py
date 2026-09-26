@@ -354,3 +354,51 @@ async def test_caller_cancellation_waits_for_owned_drains_and_still_propagates(
         if not task.done():
             task.cancel()
         await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_hostile_drain_exception_type_cannot_forge_log_records(monkeypatch):
+    import io
+    import json
+
+    stream = io.StringIO()
+    records = []
+    events = []
+    hostile = type("Injected\nERROR counterfeit", (Exception,), {})
+
+    class Capture(logging.StreamHandler):
+        def emit(self, record):
+            if record.msg == "loop_pool_registry.drain.error":
+                records.append(dict(record.__dict__))
+                super().emit(record)
+
+    async def failed():
+        events.append("failed")
+        raise hostile("drain-person@example.invalid")
+
+    async def later():
+        events.append("later")
+
+    loop = asyncio.get_running_loop()
+    monkeypatch.setattr(loop, loop_pool_registry.BRIDGE_LOOP_ATTR, True, raising=False)
+    logger = loop_pool_registry.logger
+    handler = Capture(stream)
+    handler.setFormatter(logging.Formatter("%(message)s %(error_type)s"))
+    previous = logger.level
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(handler)
+    try:
+        loop_pool_registry.register_pool_drain_on_current_loop(failed)
+        loop_pool_registry.register_pool_drain_on_current_loop(later)
+        await loop_pool_registry.drain_loop_pools(loop)
+    finally:
+        logger.removeHandler(handler)
+        logger.setLevel(previous)
+    assert events == ["failed", "later"]
+    assert id(loop) not in loop_pool_registry._registry
+    assert len(records) == 1
+    assert records[0]["error_type"] == "Injected?ERROR?counterfeit"
+    assert records[0]["exc_info"] is None
+    assert len(stream.getvalue().splitlines()) == 1
+    assert "drain-person@example.invalid" not in json.dumps(records, default=str)
+    assert "drain-person@example.invalid" not in stream.getvalue()
