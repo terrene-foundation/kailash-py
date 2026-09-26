@@ -598,28 +598,31 @@ def test_checkpoint_locks_lru_eviction_at_bound():
     from kailash.runtime.local import MAX_CHECKPOINT_LOCKS, LocalRuntime
 
     runtime = LocalRuntime()
+    try:
 
-    # Use a small synthetic cap by inserting (bound + 50) keys; the
-    # accessor's eviction loop runs against the production bound.  The
-    # test verifies (a) eviction triggers, (b) the count caps at the
-    # bound, (c) the oldest entry is the one evicted.
-    first_key = "run_first"
-    runtime._get_or_create_checkpoint_lock(first_key)
+        # Use a small synthetic cap by inserting (bound + 50) keys; the
+        # accessor's eviction loop runs against the production bound.  The
+        # test verifies (a) eviction triggers, (b) the count caps at the
+        # bound, (c) the oldest entry is the one evicted.
+        first_key = "run_first"
+        runtime._get_or_create_checkpoint_lock(first_key)
 
-    # Fill exactly to the bound — eviction has not triggered yet.
-    for i in range(MAX_CHECKPOINT_LOCKS - 1):
-        runtime._get_or_create_checkpoint_lock(f"run_{i}")
-    assert len(runtime._checkpoint_locks) == MAX_CHECKPOINT_LOCKS
-    assert first_key in runtime._checkpoint_locks
+        # Fill exactly to the bound — eviction has not triggered yet.
+        for i in range(MAX_CHECKPOINT_LOCKS - 1):
+            runtime._get_or_create_checkpoint_lock(f"run_{i}")
+        assert len(runtime._checkpoint_locks) == MAX_CHECKPOINT_LOCKS
+        assert first_key in runtime._checkpoint_locks
 
-    # One more entry MUST evict the oldest (first_key was inserted
-    # before any of the run_N keys and never re-accessed).
-    runtime._get_or_create_checkpoint_lock("run_overflow")
-    assert len(runtime._checkpoint_locks) == MAX_CHECKPOINT_LOCKS
-    assert (
-        first_key not in runtime._checkpoint_locks
-    ), "LRU MUST evict the oldest entry once bound is exceeded"
-    assert "run_overflow" in runtime._checkpoint_locks
+        # One more entry MUST evict the oldest (first_key was inserted
+        # before any of the run_N keys and never re-accessed).
+        runtime._get_or_create_checkpoint_lock("run_overflow")
+        assert len(runtime._checkpoint_locks) == MAX_CHECKPOINT_LOCKS
+        assert (
+            first_key not in runtime._checkpoint_locks
+        ), "LRU MUST evict the oldest entry once bound is exceeded"
+        assert "run_overflow" in runtime._checkpoint_locks
+    finally:
+        runtime.close()
 
 
 def test_checkpoint_locks_lru_promotes_active_runs():
@@ -634,24 +637,27 @@ def test_checkpoint_locks_lru_promotes_active_runs():
     from kailash.runtime.local import MAX_CHECKPOINT_LOCKS, LocalRuntime
 
     runtime = LocalRuntime()
-    active_key = "run_active"
-    active_lock = runtime._get_or_create_checkpoint_lock(active_key)
+    try:
+        active_key = "run_active"
+        active_lock = runtime._get_or_create_checkpoint_lock(active_key)
 
-    # Fill the dict, but PROMOTE the active key periodically so it
-    # stays MRU and survives eviction.
-    for i in range(MAX_CHECKPOINT_LOCKS):
-        runtime._get_or_create_checkpoint_lock(f"run_other_{i}")
-        if i % 100 == 0:
-            promoted = runtime._get_or_create_checkpoint_lock(active_key)
-            # Same lock object — accessor returns the existing entry,
-            # never replaces it.
-            assert promoted is active_lock
+        # Fill the dict, but PROMOTE the active key periodically so it
+        # stays MRU and survives eviction.
+        for i in range(MAX_CHECKPOINT_LOCKS):
+            runtime._get_or_create_checkpoint_lock(f"run_other_{i}")
+            if i % 100 == 0:
+                promoted = runtime._get_or_create_checkpoint_lock(active_key)
+                # Same lock object — accessor returns the existing entry,
+                # never replaces it.
+                assert promoted is active_lock
 
-    # Even though we inserted MAX_CHECKPOINT_LOCKS+1 distinct keys
-    # total (the original + every iteration), the active key MUST
-    # still be in the dict because promotion kept it MRU.
-    assert active_key in runtime._checkpoint_locks
-    assert len(runtime._checkpoint_locks) == MAX_CHECKPOINT_LOCKS
+        # Even though we inserted MAX_CHECKPOINT_LOCKS+1 distinct keys
+        # total (the original + every iteration), the active key MUST
+        # still be in the dict because promotion kept it MRU.
+        assert active_key in runtime._checkpoint_locks
+        assert len(runtime._checkpoint_locks) == MAX_CHECKPOINT_LOCKS
+    finally:
+        runtime.close()
 
 
 def test_decode_checkpoint_payload_rejects_corrupt_blob():
