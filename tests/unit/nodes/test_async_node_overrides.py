@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
+from kailash.nodes.base import NodeParameter
 from kailash.nodes.base_async import AsyncNode
 from kailash.security import SecurityConfig
 
@@ -24,8 +25,10 @@ class ConcreteAsyncNode(AsyncNode):
     """Concrete AsyncNode implementation for testing async overrides."""
 
     def get_parameters(self):
-        """Return empty parameter schema for testing."""
-        return {}
+        """Declare the input echoed by the execution test."""
+        return {
+            "test_param": NodeParameter(name="test_param", type=str, required=False)
+        }
 
     async def async_run(self, **kwargs):
         """Simple async implementation for testing."""
@@ -235,6 +238,7 @@ class TestAsyncOverridesIntegration:
 
         # Should complete successfully
         assert result["result"] == "success"
+        assert result["test_param"] == "value"
 
     @pytest.mark.asyncio
     async def test_multiple_nodes_concurrent_execution_with_logging(self):

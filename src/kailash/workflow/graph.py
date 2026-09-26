@@ -1123,7 +1123,7 @@ class Workflow:
                 node_inputs = {}
 
                 # Add config values
-                node_inputs.update(node_instance.config)
+                node_inputs.update(node_instance._get_execution_config())
 
                 # Get inputs from connected nodes
                 for edge in self.graph.in_edges(node_id, data=True):

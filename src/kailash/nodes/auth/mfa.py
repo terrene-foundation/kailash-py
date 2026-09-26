@@ -503,6 +503,12 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 description="Device information for trusted device management",
                 required=False,
             ),
+            "auth_context": NodeParameter(
+                name="auth_context",
+                type=dict,
+                description="Device and location context displayed in a push challenge; not actor authority",
+                required=False,
+            ),
             "user_data": NodeParameter(
                 name="user_data",
                 type=dict,

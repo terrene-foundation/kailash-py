@@ -227,7 +227,7 @@ class AsyncNode(
             self.logger.info(f"Executing node {self.id} asynchronously")
 
             # Merge runtime inputs with config (runtime inputs take precedence)
-            merged_inputs = {**self.config, **runtime_inputs}
+            merged_inputs = {**self._get_execution_config(), **runtime_inputs}
 
             # Resolve ${param} templates in merged parameters (v0.9.30)
             # This enables dynamic parameter injection in nested configurations
@@ -239,7 +239,9 @@ class AsyncNode(
             if "config" in merged_inputs and isinstance(merged_inputs["config"], dict):
                 # Extract nested config
                 nested_config = merged_inputs["config"]
-                merged_inputs.update(nested_config)
+                for key, value in nested_config.items():
+                    if key not in runtime_inputs:
+                        merged_inputs[key] = value
                 # Don't remove the config key as some nodes might need it
 
             # Validate inputs

@@ -3981,7 +3981,7 @@ class LocalRuntime(
 
                 # Merge node config with inputs before validation (matches node.execute behavior)
                 # This ensures connection validation considers both runtime inputs AND node configuration
-                merged_inputs = {**node_instance.config, **inputs}
+                merged_inputs = {**node_instance._get_execution_config(), **inputs}
 
                 # Handle nested config case (same as in node.execute)
                 if "config" in merged_inputs and isinstance(
