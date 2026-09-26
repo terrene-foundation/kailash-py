@@ -1212,7 +1212,7 @@ class CyclicWorkflowExecutor:
 
         # Merge node config with inputs
         # Order: config < initial_parameters < connection inputs
-        merged_inputs = {**node.config}
+        merged_inputs = node._get_execution_config()
 
         # Add initial parameters if available
         # For cycle nodes, initial parameters should be available throughout all iterations

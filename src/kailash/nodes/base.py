@@ -196,11 +196,10 @@ class Node(ABC):
     _env_cache: dict[str, str | None] = {}
 
     # Init-capture machinery — see __init_subclass__ below.
-    # Names here are NEVER captured into self.config from a subclass __init__'s
-    # bound parameters. They are either internal-routing keys (`_node_id`),
-    # NodeMetadata-derived (`name`, `description`, `version`, `author`, `tags`,
-    # `metadata`), or framework-private (`config` itself, `*args`, `**kwargs`).
-    # `name` IS captured separately via NodeMetadata; `description` likewise.
+    # Names here are NEVER captured from a subclass constructor: internal
+    # routing, the separately handled metadata object, and variadic arguments.
+    # Named metadata fields (e.g. name) remain in constructor serialization;
+    # _get_execution_config includes them only when declared as inputs.
     _INIT_CAPTURE_EXCLUDE: frozenset[str] = frozenset(
         {
             "self",
@@ -309,6 +308,13 @@ class Node(ABC):
                 # item-assignment operations below, which require a mapping.
                 return
 
+            # Serialization keeps constructor state, but execution must not
+            # reinterpret constructor-only options as runtime inputs. Merge
+            # provenance across inherited constructor wrappers as well.
+            captured = self.__dict__.setdefault("_constructor_config_keys", set())
+            captured.update(
+                name for name in param_names_to_capture if name in bound.arguments
+            )
             for name in param_names_to_capture:
                 if name in self.config:
                     # Subclass already forwarded this via **kwargs; preserve.
@@ -920,6 +926,27 @@ class Node(ABC):
                     f"Failed to get node parameters for validation: {e}"
                 ) from e
         return self._cached_params
+
+    def _get_execution_config(self) -> dict[str, Any]:
+        """Return input defaults, retaining constructor state only for serialization.
+
+        A captured constructor argument remains an input when the node's
+        parameter schema declares it. Unknown unconsumed configuration stays
+        visible to validation; explicit runtime inputs are merged by callers
+        afterwards and therefore never bypass unknown-parameter checks.
+        """
+        parameters = self._get_cached_parameters()
+        declared = set(parameters) | self._SPECIAL_PARAMS
+        for parameter in parameters.values():
+            declared.update(parameter.auto_map_from)
+            if parameter.workflow_alias:
+                declared.add(parameter.workflow_alias)
+        constructor_keys = self.__dict__.get("_constructor_config_keys", ())
+        return {
+            name: value
+            for name, value in self.config.items()
+            if name not in constructor_keys or name in declared
+        }
 
     def validate_inputs(self, **kwargs) -> dict[str, Any]:
         r"""Validate runtime inputs against node requirements.
@@ -1536,7 +1563,7 @@ class Node(ABC):
             self.logger.info(f"Executing node {self.id}")
 
             # Merge runtime inputs with config (runtime inputs take precedence)
-            merged_inputs = {**self.config, **runtime_inputs}
+            merged_inputs = {**self._get_execution_config(), **runtime_inputs}
 
             # Resolve ${param} templates in merged parameters (v0.9.30)
             # This enables dynamic parameter injection in nested configurations
@@ -2163,7 +2190,7 @@ class AsyncTypedNode(TypedNode):
             self.logger.info(f"Executing async node {self.id}")
 
             # Merge runtime inputs with config (runtime inputs take precedence)
-            merged_inputs = {**self.config, **runtime_inputs}
+            merged_inputs = {**self._get_execution_config(), **runtime_inputs}
 
             # Handle nested config case (same as base Node)
             if "config" in merged_inputs and isinstance(merged_inputs["config"], dict):

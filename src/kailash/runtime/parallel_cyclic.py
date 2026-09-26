@@ -545,7 +545,7 @@ class ParallelCyclicRuntime:
         inputs = {}
 
         # Start with node configuration
-        inputs.update(node_instance.config)
+        inputs.update(node_instance._get_execution_config())
 
         # Add connected inputs from other nodes
         for edge in workflow.graph.in_edges(node_id, data=True):

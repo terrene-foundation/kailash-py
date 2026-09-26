@@ -18,6 +18,7 @@ from unittest.mock import patch
 
 import pytest
 
+from kailash.nodes.base import NodeParameter
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 from kailash.security import SecurityConfig
@@ -28,7 +29,16 @@ class ConcreteTestAsyncNode(AsyncNode):
     """Concrete AsyncNode for testing."""
 
     def get_parameters(self):
-        return {}
+        return {
+            name: NodeParameter(name=name, type=kind, required=False)
+            for name, kind in {
+                "default_param": str,
+                "step": int,
+                "nested_param": str,
+                "level2": dict,
+                "test_param": str,
+            }.items()
+        }
 
     async def async_run(self, **kwargs):
         await asyncio.sleep(0.001)
@@ -70,6 +80,7 @@ class TestAsyncNodeSyncExecution:
         result = node.execute()
 
         assert result["result"] == "success"
+        assert result["default_param"] == "default_value"
 
     def test_execute_sync_error_handling(self):
         """Test error handling in sync execution."""
@@ -273,6 +284,7 @@ class TestAsyncNodeWorkflowIntegration:
 
         assert len(results) == 3
         assert all(r["result"] == "success" for r in results)
+        assert [r["step"] for r in results] == [0, 1, 2]
 
     @pytest.mark.asyncio
     async def test_async_node_with_large_dataset(self):
@@ -299,6 +311,8 @@ class TestAsyncNodeWorkflowIntegration:
         result = await node.execute_async()
 
         assert result["result"] == "success"
+        assert result["nested_param"] == "nested_value"
+        assert result["level2"] == {"level3": "deep_value"}
 
 
 class TestAsyncNodeMixinIntegration:
@@ -442,5 +456,6 @@ class TestAsyncNodePerformance:
         node_dict = node.to_dict()
 
         assert result["result"] == "success"
+        assert result["test_param"] == "value"
         assert isinstance(params, dict)
         assert isinstance(node_dict, dict)
