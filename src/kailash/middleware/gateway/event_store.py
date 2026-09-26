@@ -18,6 +18,8 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Union
 
+from kailash.utils.secure_logging import safe_exception_frames, sanitize_log_value
+
 logger = logging.getLogger(__name__)
 
 
@@ -173,7 +175,7 @@ class EventStore:
             logger.info(
                 "EventStore: auto-creating SQLite backend at %s "
                 "(from KAILASH_EVENT_STORE_PATH)",
-                env_path,
+                sanitize_log_value(env_path),
             )
             return SqliteEventStoreBackend(db_path=env_path)
 
@@ -229,8 +231,10 @@ class EventStore:
                 self._flush_in_progress = False
 
         logger.debug(
-            f"Appended event {event.event_type.value} for request {request_id} "
-            f"(seq: {sequence})"
+            "Appended event %s for request %s (seq: %s)",
+            sanitize_log_value(event.event_type.value),
+            sanitize_log_value(request_id),
+            sequence,
         )
 
         return event
@@ -343,7 +347,7 @@ class EventStore:
         self._projection_handlers[name] = handler
         self._projections[name] = initial_state or {}
 
-        logger.info(f"Registered projection: {name}")
+        logger.info("Registered projection: %s", sanitize_log_value(name))
 
     def get_projection(self, name: str) -> Optional[Dict[str, Any]]:
         """Get current projection state."""
@@ -365,7 +369,10 @@ class EventStore:
 
             except Exception as e:
                 logger.error(
-                    f"Projection {name} failed for event {event.event_id}: {e}"
+                    "Projection %s failed for event %s: %s",
+                    sanitize_log_value(name),
+                    sanitize_log_value(event.event_id),
+                    safe_exception_frames(e),
                 )
 
     async def _flush_buffer(self) -> None:
@@ -412,7 +419,7 @@ class EventStore:
                     await self._flush_buffer()
                 break
             except Exception as e:
-                logger.error(f"Flush error: {e}")
+                logger.error("Flush error: %s", safe_exception_frames(e))
 
     async def _store_events(self, events: List[RequestEvent]) -> None:
         """Store events in backend."""
@@ -430,7 +437,7 @@ class EventStore:
                 await self.storage_backend.append(key, request_events)  # type: ignore[reportOptionalMemberAccess]
 
         except Exception as e:
-            logger.error(f"Failed to store events: {e}")
+            logger.error("Failed to store events: %s", safe_exception_frames(e))
 
     async def _load_from_storage(
         self,
@@ -461,7 +468,11 @@ class EventStore:
             return events
 
         except Exception as e:
-            logger.error(f"Failed to load events for {request_id}: {e}")
+            logger.error(
+                "Failed to load events for %s: %s",
+                sanitize_log_value(request_id),
+                safe_exception_frames(e),
+            )
             return []
 
     def get_stats(self) -> Dict[str, Any]:
