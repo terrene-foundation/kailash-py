@@ -51,7 +51,7 @@ def require_force_drop(method_label: str, force_drop: bool) -> None:
     vector; the caller is responsible for sanitising ``method_label`` if it
     includes caller-supplied strings.
     """
-    if not force_drop:
+    if force_drop is not True:
         raise DropRefusedError(
             f"{method_label} refused — pass force_drop=True to acknowledge "
             f"data loss is irreversible (see rules/dataflow-identifier-safety.md "
