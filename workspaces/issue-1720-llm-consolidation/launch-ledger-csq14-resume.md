@@ -89,3 +89,35 @@ Agents respectivelyml_gate_recovery/archive_checkpoint/ml_correctness_review.
 Each reviews thewhole ce4c9de67...13687209e union with absoluteAST/grepsweeps
 and boundedactualnegativecontrols; no latestshardonlyreview. Parent final
 CIselections running; all-filehookobligation remainsopen beforepush.
+
+## Final corrections landed; CodeQL investigation
+
+The source import scanner now prunes vendor descendants relative to each source root,
+then uses a Unicode-aware candidate filter before semantic AST checks. The independent
+reference covered the same 4,866 files; scan time decreased from 26.306s to 4.286s.
+Commit 7c85f6a2e, merge 78b3a35fb; two clean review rounds and five reached mutations.
+
+The optional aiohttp import guard names `pip install 'kailash[server]'` and chains the
+missing-module cause. Commit a1ba6c826; 13 strict tests, source-origin opposite control,
+and two independent clean rounds. No scanner allowlist changed.
+
+The bridge deadline rejects non-finite, non-positive, unrepresentable, or unsupported
+bounds before runtime resources are acquired. Supported int/float values normalize once
+to float; None remains unbounded. Commit c8b2377fb, merge 8f77625056e37ffd993d803a3cddd473408e0a08.
+23 strict tests, five reached admission mutations, actual public-path timeout forwarding
+mutation, and two independent correctness/security rounds passed.
+
+Integrated gate at 13687209e: DataFlow 3,484 unit passes / 31 skips; 812 regression
+passes / 6 skips / 181 deselections. Root: 3,017 passes, two failures, 3 skips,
+24 deselections; the import scan timeout and optional import failure are repaired above.
+These skips and deselections are not coverage. Full root rerun is active at 8f77625056e37ffd993d803a3cddd473408e0a08.
+
+CodeQL check 108304848821 failed on ce4c9de67 with "265 new alerts including 10 high
+severity security vulnerabilities". This is the scanner's report, not a confirmed exploit
+count. Current analysis 1842994026 has 2,253 results; previous 1838845444 has three.
+Exact membership and dispositions are being independently verified. No new alert dismissal
+is authorized. The prior scoped approvals cover 11587, 11588, and 11594 only.
+
+All-files hooks, including pytest-check, remain required before the next push. The attempted
+`mac-mini` runner was rejected before execution; the corrected declared host is
+`esperie-mac-mini`. Never count the rejected launch as a gate run.

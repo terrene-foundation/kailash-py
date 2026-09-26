@@ -2,9 +2,9 @@
 
 ## Next actions (standing authorization preserved)
 
-1. PR #2229 refreshed at ce4c9de67; CI exposed DataFlow unit 3 failures/56 warnings and root regression 3 failures/64 warnings. Allfive repair lanes are now landed through13687209e; three isolated holistic reviewers and final CI gates are active (see .wave-tracker.d/esperie.md). Finish full hooks and exact CI gates, then consolidated repair push, then merge after exact-head required checks AND every previously failing test job pass. If live state is MERGED, this D1 directive is discharged. D1 is already approved; advisory type backlog #73 is excluded.
+1. PR #2229 remains open at ce4c9de67. The CI repairs and three final review fixes are landed through 8f77625056e37ffd993d803a3cddd473408e0a08. Root regression is rerunning at that source. DataFlow full unit and regression gates passed at 13687209e. A fresh live read also found the required CodeQL check failed, reporting "265 new alerts"; its scan contains 2,253 results versus three in the prior analysis. Three reviewers are investigating scan provenance, exact alert membership, and actual security behavior. Do not mistake Analyze Python success for CodeQL success. Finish repairs and all configured hooks before a consolidated push. Merge only after all required checks and every previously failing test job pass on the exact final head. D1 approval persists; advisory type backlog #73 is excluded.
    Revalidate: `gh pr view 2229 --json state,headRefOid,mergeStateStatus`.
-2. Land every completed branch in dev and remove its clean worktree immediately. All implementation siblings are drained; three detached holistic-review siblings remain until reviews finish. No PR or CI trigger for dev.
+2. Every completed implementation branch has landed in dev and its clean sibling has been removed. Three detached holistic review siblings remain for the CodeQL investigation. Preserve them until the corresponding review is delivered.
    Revalidate: `git worktree list --porcelain` and `git for-each-ref refs/heads refs/remotes`.
 3. Preserve the five inherited stashes. Never restore/drop them without the user's decision. Rejected recovery was deleted and NEVER merged; the approved stale draft was deleted with its landing receipt.
    Revalidate: `git stash list` (five held entries), and archived disposition below.
@@ -143,3 +143,35 @@ remainsred untilnextpush. Finalsourcegates running /tmp/csq14-integrated-ci-gate
 (root3.12 regression + DataFlow3.11 unit/regression), fullall-filehooks next.
 Three readonly holisticreviewtrees namedcsq14-holistic-{correctness,security,coverage}
 are atsourcefreeze; drain afterdeliveredreviews. No implementationbranches remain.
+
+## Final review corrections and live CodeQL gate
+
+The source import scanner now prunes vendor descendants relative to each source root,
+then uses a Unicode-aware candidate filter before semantic AST checks. The independent
+reference covered the same 4,866 files; scan time decreased from 26.306s to 4.286s.
+Commit 7c85f6a2e, merge 78b3a35fb; two clean review rounds and five reached mutations.
+
+The optional aiohttp import guard names `pip install 'kailash[server]'` and chains the
+missing-module cause. Commit a1ba6c826; 13 strict tests, source-origin opposite control,
+and two independent clean rounds. No scanner allowlist changed.
+
+The bridge deadline rejects non-finite, non-positive, unrepresentable, or unsupported
+bounds before runtime resources are acquired. Supported int/float values normalize once
+to float; None remains unbounded. Commit c8b2377fb, merge 8f77625056e37ffd993d803a3cddd473408e0a08.
+23 strict tests, five reached admission mutations, actual public-path timeout forwarding
+mutation, and two independent correctness/security rounds passed.
+
+Integrated gate at 13687209e: DataFlow 3,484 unit passes / 31 skips; 812 regression
+passes / 6 skips / 181 deselections. Root: 3,017 passes, two failures, 3 skips,
+24 deselections; the import scan timeout and optional import failure are repaired above.
+These skips and deselections are not coverage. Full root rerun is active at 8f77625056e37ffd993d803a3cddd473408e0a08.
+
+CodeQL check 108304848821 failed on ce4c9de67 with "265 new alerts including 10 high
+severity security vulnerabilities". This is the scanner's report, not a confirmed exploit
+count. Current analysis 1842994026 has 2,253 results; previous 1838845444 has three.
+Exact membership and dispositions are being independently verified. No new alert dismissal
+is authorized. The prior scoped approvals cover 11587, 11588, and 11594 only.
+
+All-files hooks, including pytest-check, remain required before the next push. The attempted
+`mac-mini` runner was rejected before execution; the corrected declared host is
+`esperie-mac-mini`. Never count the rejected launch as a gate run.
