@@ -39,6 +39,7 @@ import contextvars
 import hashlib
 import json
 import logging
+import math
 import sys
 import threading
 import time
@@ -495,7 +496,7 @@ class LocalRuntime(
             enable_connection_sharing: Whether to enable connection pool sharing across runtime instances.
             max_concurrent_workflows: Maximum number of concurrent workflows in persistent mode.
             connection_pool_size: Default size for connection pools.
-            sync_bridge_timeout: Optional hard bound, in seconds, on the
+            sync_bridge_timeout: Optional finite positive hard bound, in float-representable seconds, on the
                 sync->async bridge join (issue #2081). ``execute()`` called
                 from inside a running event loop runs the workflow on a worker
                 thread and waits for it. Default ``None`` waits indefinitely —
@@ -508,15 +509,30 @@ class LocalRuntime(
                 ``RuntimeExecutionError`` naming the workflow.
 
         Raises:
-            ValueError: If ``sync_bridge_timeout`` is set and not positive.
+            TypeError: If ``sync_bridge_timeout`` is neither an int, float, nor None.
+            ValueError: If a configured ``sync_bridge_timeout`` is non-positive,
+                non-finite, or outside the representable float range.
         """
         # Reject invalid configuration before parent initialization or resource
         # ownership: failed construction cannot hand the caller a runtime to close.
-        if sync_bridge_timeout is not None and sync_bridge_timeout <= 0:
-            raise ValueError(
-                "sync_bridge_timeout must be a positive number of seconds or "
-                f"None (got {sync_bridge_timeout!r})"
-            )
+        if sync_bridge_timeout is not None:
+            if not isinstance(sync_bridge_timeout, (int, float)):
+                raise TypeError("sync_bridge_timeout must be an int or float, or None")
+            try:
+                # Normalize once so admitted values match the join's float arithmetic.
+                sync_bridge_timeout = float(sync_bridge_timeout)
+                valid_timeout = (
+                    math.isfinite(sync_bridge_timeout) and sync_bridge_timeout > 0
+                )
+            except OverflowError:
+                # An integer beyond float range cannot reach the join arithmetic.
+                valid_timeout = False
+            if not valid_timeout:
+                raise ValueError(
+                    "sync_bridge_timeout must be a finite positive number of seconds "
+                    "representable as a float, or "
+                    f"None (got {sync_bridge_timeout!r})"
+                )
         if history_store is not None:
             record_event = getattr(history_store, "record_event", None)
             if not callable(record_event):
