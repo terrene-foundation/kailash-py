@@ -186,8 +186,10 @@ async def test_a_slow_bridge_is_not_silent_at_the_real_call_site(caplog, monkeyp
     workflow = builder.build()
     workflow.name = "issue_2081_slow_workflow"
 
-    runtime = LocalRuntime()
-    with caplog.at_level(logging.WARNING, logger="kailash.runtime.local"):
+    with (
+        LocalRuntime() as runtime,
+        caplog.at_level(logging.WARNING, logger="kailash.runtime.local"),
+    ):
         results, _run_id = runtime.execute(workflow)
 
     assert results, "the workflow must still complete — this is not a deadline"
@@ -237,37 +239,37 @@ async def test_execute_from_inside_a_running_loop_does_not_hang_forever():
     workflow = builder.build()
     workflow.name = "issue_2081_blocking_workflow"
 
-    runtime = LocalRuntime(sync_bridge_timeout=1)
+    with LocalRuntime(sync_bridge_timeout=1) as runtime:
 
-    started = time.monotonic()
-    with pytest.raises(RuntimeExecutionError, match="issue_2081_blocking_workflow"):
-        runtime.execute(workflow)
-    elapsed = time.monotonic() - started
+        started = time.monotonic()
+        with pytest.raises(RuntimeExecutionError, match="issue_2081_blocking_workflow"):
+            runtime.execute(workflow)
+        elapsed = time.monotonic() - started
 
-    assert elapsed < 20, (
-        f"execute() took {elapsed:.1f}s against a 1s sync_bridge_timeout — the "
-        "bridge join is still unbounded (#2081)"
-    )
-    # The abandoned bridge thread is a daemon, so it cannot wedge interpreter
-    # shutdown once we have given up on it. If it were not, the whole pytest
-    # process would block at exit for the remainder of the node's sleep.
-    bridges = [
-        t
-        for t in threading.enumerate()
-        if t.name.startswith("kailash-sync-bridge-issue_2081")
-    ]
-    assert bridges, "precondition: the abandoned bridge thread is still running"
-    assert all(t.daemon for t in bridges), (
-        "an abandoned bridge thread MUST be a daemon; a non-daemon one is "
-        "joined by threading._shutdown at interpreter exit, which re-creates "
-        "the unbounded wait at process teardown"
-    )
-    # Drain before returning. The daemon assertion above is what pins the
-    # product behaviour; leaving the thread running would additionally leak
-    # this test's process-wide memory ceiling into whatever runs next.
-    for bridge in bridges:
-        bridge.join(timeout=30)
-        assert not bridge.is_alive(), "abandoned bridge thread failed to drain"
+        assert elapsed < 20, (
+            f"execute() took {elapsed:.1f}s against a 1s sync_bridge_timeout — the "
+            "bridge join is still unbounded (#2081)"
+        )
+        # The abandoned bridge thread is a daemon, so it cannot wedge interpreter
+        # shutdown once we have given up on it. If it were not, the whole pytest
+        # process would block at exit for the remainder of the node's sleep.
+        bridges = [
+            t
+            for t in threading.enumerate()
+            if t.name.startswith("kailash-sync-bridge-issue_2081")
+        ]
+        assert bridges, "precondition: the abandoned bridge thread is still running"
+        assert all(t.daemon for t in bridges), (
+            "an abandoned bridge thread MUST be a daemon; a non-daemon one is "
+            "joined by threading._shutdown at interpreter exit, which re-creates "
+            "the unbounded wait at process teardown"
+        )
+        # Drain before returning. The daemon assertion above is what pins the
+        # product behaviour; leaving the thread running would additionally leak
+        # this test's process-wide memory ceiling into whatever runs next.
+        for bridge in bridges:
+            bridge.join(timeout=30)
+            assert not bridge.is_alive(), "abandoned bridge thread failed to drain"
 
 
 def test_sync_bridge_timeout_rejects_a_non_positive_bound():
@@ -277,4 +279,49 @@ def test_sync_bridge_timeout_rejects_a_non_positive_bound():
     with pytest.raises(ValueError, match="sync_bridge_timeout"):
         LocalRuntime(sync_bridge_timeout=-5)
     # None is the documented default and must remain accepted.
-    assert LocalRuntime(sync_bridge_timeout=None)._sync_bridge_timeout is None
+    with LocalRuntime(sync_bridge_timeout=None) as runtime:
+        assert runtime._sync_bridge_timeout is None
+
+
+@pytest.mark.parametrize(
+    "kwargs, error, message",
+    [
+        ({"sync_bridge_timeout": 0}, ValueError, "sync_bridge_timeout"),
+        ({"sync_bridge_timeout": -5}, ValueError, "sync_bridge_timeout"),
+        ({"history_store": object()}, TypeError, "must expose a callable"),
+    ],
+)
+def test_invalid_configuration_precedes_resource_initialization(
+    monkeypatch, kwargs, error, message
+):
+    def reject_resource_initialization(self, *args, **kwargs):
+        pytest.fail("invalid configuration reached resource initialization")
+
+    monkeypatch.setattr(
+        local_runtime.BaseRuntime, "__init__", reject_resource_initialization
+    )
+    with pytest.raises(error, match=message):
+        LocalRuntime(**kwargs)
+
+
+def test_valid_history_store_still_records_completed_nodes():
+    from types import SimpleNamespace
+
+    from kailash.nodes.transform.formatters import ChunkTextExtractorNode
+    from kailash.workflow.builder import WorkflowBuilder
+
+    recorded = []
+
+    async def record_event(event):
+        recorded.append(event)
+
+    builder = WorkflowBuilder()
+    builder.add_node(
+        ChunkTextExtractorNode.__name__, "completed", {"chunks": [{"content": "42"}]}
+    )
+    with LocalRuntime(
+        history_store=SimpleNamespace(record_event=record_event)
+    ) as runtime:
+        runtime.execute(builder.build())
+
+    assert [event.node_id for event in recorded] == ["completed"]

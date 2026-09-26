@@ -510,6 +510,22 @@ class LocalRuntime(
         Raises:
             ValueError: If ``sync_bridge_timeout`` is set and not positive.
         """
+        # Reject invalid configuration before parent initialization or resource
+        # ownership: failed construction cannot hand the caller a runtime to close.
+        if sync_bridge_timeout is not None and sync_bridge_timeout <= 0:
+            raise ValueError(
+                "sync_bridge_timeout must be a positive number of seconds or "
+                f"None (got {sync_bridge_timeout!r})"
+            )
+        if history_store is not None:
+            record_event = getattr(history_store, "record_event", None)
+            if not callable(record_event):
+                raise TypeError(
+                    "LocalRuntime(history_store=...): the history_store "
+                    "must expose a callable 'record_event(event)' coroutine "
+                    "matching the WorkflowHistoryStore protocol."
+                )
+
         # Initialize parent classes (BaseRuntime + CycleExecutionMixin)
         # Pass ALL configuration to BaseRuntime for unified initialization
         super().__init__(
@@ -951,11 +967,6 @@ class LocalRuntime(
         # Issue #2081: None keeps the historical wait-forever semantics, but
         # the join is now sliced so a stuck bridge emits a stack every
         # SYNC_BRIDGE_WATCHDOG_INTERVAL instead of failing silently.
-        if sync_bridge_timeout is not None and sync_bridge_timeout <= 0:
-            raise ValueError(
-                "sync_bridge_timeout must be a positive number of seconds or "
-                f"None (got {sync_bridge_timeout!r})"
-            )
         self._sync_bridge_timeout = sync_bridge_timeout
         self._hook_registry = NodeCompletionHookRegistry()
         # W2 auto-subscribe: when a history store is provided, register
@@ -966,13 +977,6 @@ class LocalRuntime(
         # facade ``history_store=`` kwarg lands its production call site
         # in the same shard as the kwarg's wiring.
         if history_store is not None:
-            record_event = getattr(history_store, "record_event", None)
-            if not callable(record_event):
-                raise TypeError(
-                    "LocalRuntime(history_store=...): the history_store "
-                    "must expose a callable 'record_event(event)' coroutine "
-                    "matching the WorkflowHistoryStore protocol."
-                )
             self._hook_registry.register(record_event)
         # Per-run asyncio.Lock for parallel-node checkpoint atomicity.
         # LocalRuntime executes nodes sequentially in

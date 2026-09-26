@@ -35,6 +35,8 @@ wire. It is the TABLE that is empty, not the function that is gone.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from kaizen.providers.registry import PROVIDERS, get_provider
@@ -109,4 +111,15 @@ def test_get_provider_remains_exported() -> None:
     import kaizen.providers as providers
 
     assert "get_provider" in providers.__all__
-    assert callable(providers.get_provider)
+    message = (
+        "Importing get_provider from kaizen.providers is deprecated and will be "
+        "removed in a future release (#1720); import from kaizen.providers.registry "
+        "instead."
+    )
+    with pytest.warns(DeprecationWarning, match=re.escape(message)) as caught:
+        alias = providers.get_provider
+    assert [(warning.category, str(warning.message)) for warning in caught] == [
+        (DeprecationWarning, message)
+    ]
+    assert alias is get_provider
+    assert callable(alias)

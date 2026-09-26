@@ -161,10 +161,11 @@ def test_execute_workflow_sync_raises_on_leaf_node_failure():
         max_attempts=2,
     )
 
-    runtime = worker._get_runtime()
-
     # The user-meaningful exception type MUST survive past the SDK wrapper.
-    with pytest.raises(ZeroDivisionError, match="intentional"):
+    with (
+        worker._get_runtime() as runtime,
+        pytest.raises(ZeroDivisionError, match="intentional"),
+    ):
         worker._execute_workflow_sync(runtime, task)
 
 
@@ -182,8 +183,8 @@ def test_execute_workflow_sync_succeeds_when_no_node_fails():
         max_attempts=2,
     )
 
-    runtime = worker._get_runtime()
-    results = worker._execute_workflow_sync(runtime, task)
+    with worker._get_runtime() as runtime:
+        results = worker._execute_workflow_sync(runtime, task)
 
     # Successful execution returns the runtime's results dict — no failed
     # payloads — and no exception escapes.
