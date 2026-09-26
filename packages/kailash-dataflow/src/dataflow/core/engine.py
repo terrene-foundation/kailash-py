@@ -29,6 +29,7 @@ from typing import (
     Type,
     Union,
 )
+from uuid import uuid4
 
 if TYPE_CHECKING:
     from .audit_integration import AuditIntegration
@@ -784,6 +785,16 @@ class DataFlow(DataFlowEventMixin):
         # TSG-201: Initialize event bus for write-event emission
         self._init_events()
 
+        # Establish the real memory-database identity before cache consumers.
+        # A fresh nonce prevents stale shared-cache entries surviving id() reuse.
+        self._memory_db_uri: Optional[str] = None
+        if self.config.database.url in (
+            ":memory:",
+            "sqlite:///:memory:",
+            "sqlite://:memory:",
+        ):
+            self._memory_db_uri = f"file:df_mem_{uuid4().hex}?mode=memory&cache=shared"
+
         # TSG-104: Wire cache configuration into Express
         _express_cache_ttl = getattr(self.config, "cache_ttl", 300)
         # bool() coerces the Any-typed config attr / Optional[bool] fallback to
@@ -877,15 +888,9 @@ class DataFlow(DataFlowEventMixin):
         # instance — a shared-cache memory DB is destroyed the moment its last
         # connection closes, so without the anchor the schema would vanish
         # between operations. The anchor never runs queries.
-        self._memory_db_uri: Optional[str] = None
-        if self.config.database.url in (
-            ":memory:",
-            "sqlite:///:memory:",
-            "sqlite://:memory:",
-        ):
+        if self._memory_db_uri is not None:
             import sqlite3
 
-            self._memory_db_uri = f"file:df_mem_{id(self):x}?mode=memory&cache=shared"
             self._memory_connection = sqlite3.connect(
                 self._memory_db_uri, uri=True, check_same_thread=False
             )
@@ -1743,7 +1748,11 @@ class DataFlow(DataFlowEventMixin):
             # not retroactively change it (DataFlow URLs are set at init).
             db_conf = getattr(self.config, "database", None)
             db_res = resolve_db_identity(
-                url=getattr(db_conf, "url", None),
+                url=(
+                    f"sqlite:///{self._memory_db_uri}"
+                    if self._memory_db_uri is not None
+                    else getattr(db_conf, "url", None)
+                ),
                 host=getattr(db_conf, "host", None),
                 port=getattr(db_conf, "port", None),
                 dbname=getattr(db_conf, "database", None),
@@ -10835,26 +10844,28 @@ class DataFlow(DataFlowEventMixin):
                 context="PostgreSQL",
             )
             return connection, False
-        elif db_url.startswith("sqlite://") or db_url == ":memory:":
+        elif db_url.startswith(("sqlite://", "file:")) or db_url == ":memory:":
             import aiosqlite
 
-            if db_url == ":memory:":
-                # Use URI shared-cache so multiple connections see the same
-                # in-memory database (each aiosqlite.connect(":memory:") would
-                # create a SEPARATE database otherwise). Issue #1502: __init__
-                # sets self._memory_db_uri for every bare-:memory: instance, so
-                # this reuses that canonical name; the `is None` fallback only
-                # fires on the degraded path where __init__ did not resolve one.
+            from dataflow.adapters.sqlite import SQLiteAdapter
+
+            if db_url in {":memory:", "sqlite:///:memory:", "sqlite://:memory:"}:
+                # All anonymous aliases belong to this instance's shared database.
+                # Match the constructor's nonce policy on degraded init paths too.
                 if self._memory_db_uri is None:
                     self._memory_db_uri = (
-                        f"file:df_mem_{id(self):x}?mode=memory&cache=shared"
+                        f"file:df_mem_{uuid4().hex}?mode=memory&cache=shared"
                     )
-                memory_uri = self._memory_db_uri
-                return await aiosqlite.connect(memory_uri, uri=True), False
-            else:
-                # Extract file path from sqlite:///path/to/file.db
-                file_path = db_url.replace("sqlite:///", "/")
-                return await aiosqlite.connect(file_path), False
+            # Reuse the adapter's URL/URI contract, including relative paths and
+            # native file: options. This unconnected adapter owns no resources;
+            # the returned standalone connection remains owned by this caller.
+            adapter = SQLiteAdapter(self._memory_db_uri or db_url)
+            return (
+                await aiosqlite.connect(
+                    adapter.database_path, **adapter._connect_kwargs
+                ),
+                False,
+            )
         else:
             # Enhanced error with catalog-based solutions (DF-401)
             if ErrorEnhancer is not None:
@@ -12280,8 +12291,8 @@ class DataFlow(DataFlowEventMixin):
             logger.warning(
                 "Using SQLite :memory: database for testing. Production requires PostgreSQL."
             )
-            # Show detailed async limitation warning if in async context
-            warn_sqlite_async_limitation(url)
+            # DataFlow rewrites this alias to one owned shared-cache URI;
+            # the raw anonymous-memory isolation advisory does not apply.
             return True
 
         # SQLite's own URI-filename form (https://sqlite.org/uri.html):

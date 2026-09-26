@@ -97,11 +97,13 @@ def is_postgresql(url: Optional[str]) -> bool:
 def is_sqlite(url: Optional[str]) -> bool:
     """Check if a database URL is for SQLite.
 
-    Recognizes schemes: sqlite://, sqlite+aiosqlite://, etc.
+    Recognizes SQLite URL schemes, the memory alias, and native file URIs.
     """
     if not url:
         return False
-    return url.lower().startswith("sqlite://") or url.lower().startswith("sqlite+")
+    return url == ":memory:" or url.lower().startswith(
+        ("sqlite://", "sqlite+", "file:")
+    )
 
 
 def is_mysql(url: Optional[str]) -> bool:

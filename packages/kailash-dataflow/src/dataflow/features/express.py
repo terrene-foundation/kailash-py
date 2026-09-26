@@ -163,6 +163,11 @@ class DataFlowExpress:
         # ``database_url`` attribute on the DataFlow instance.
         _db_cfg = getattr(self._db, "config", None)
         _db_url = getattr(getattr(_db_cfg, "database", None), "url", None)
+        # The configured memory alias denotes a distinct database per owner.
+        # Read only stored state: a duck-typed owner need not expose this field.
+        memory_uri = vars(self._db).get("_memory_db_uri")
+        if memory_uri is not None:
+            _db_url = f"sqlite:///{memory_uri}"
         express_db_instance = express_db_instance_fingerprint(_db_url)
         if express_db_instance is None:
             logger.warning(

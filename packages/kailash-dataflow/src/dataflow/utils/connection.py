@@ -75,6 +75,9 @@ class ConnectionManager:
         """Resolve the effective database URL."""
         if self._url_override:
             return self._url_override
+        memory_uri = vars(self.dataflow).get("_memory_db_uri")
+        if memory_uri is not None:
+            return memory_uri
         config = self.dataflow.config
         url = config.database.get_connection_url(config.environment)
         if not isinstance(url, str):
