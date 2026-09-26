@@ -33,7 +33,11 @@ from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security.audit_log import AuditLogNode
 from kailash.nodes.security.security_event import SecurityEventNode
 from kailash.sdk_exceptions import NodeExecutionError
-from kailash.utils.secure_logging import redact_mapping
+from kailash.utils.secure_logging import (
+    redact_mapping,
+    safe_exception_frames,
+    safe_type_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1042,8 +1046,10 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             # device_info) used to raise out of execute(), contradicting the
             # node's own result-dict contract that every other failure honours
             # (issue #2026). The detail is logged, not returned.
-            self.log_with_context(
-                "ERROR", f"MFA operation {action} failed on invalid input: {e!r}"
+            logger.error(
+                "mfa.invalid_input type=%s frames=%s",
+                safe_type_name(e),
+                safe_exception_frames(e),
             )
             return {
                 "success": False,
@@ -1183,9 +1189,10 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             # Deny, and say why -- a silent None here would be indistinguishable
             # from a correctly rejected session (`rules/zero-tolerance.md`
             # Rule 3).
-            self.log_with_context(
-                "ERROR",
-                f"MFA actor resolver raised {type(exc).__name__}; denying.",
+            logger.error(
+                "mfa.actor_resolution_failed type=%s frames=%s",
+                safe_type_name(exc),
+                safe_exception_frames(exc),
             )
             actor = None
 
@@ -1431,12 +1438,12 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 # transport seam, which fails closed when nothing is bound.
                 _send_sms(user_phone, f"Your verification code: {verification_code}")
         except MFADeliveryError as e:
-            # Log the detail; do NOT return it. Provider exceptions routinely
-            # carry the recipient address/number, which would disclose the
-            # enrolled destination to the caller (issue #2026).
-            self.log_with_context(
-                "ERROR",
-                f"SMS setup failed for user {log_safe(user_id, 64)}: {e}",
+            # Provider exception bodies can contain the enrolled destination;
+            # retain only structural diagnostics in logs (issue #2026).
+            logger.error(
+                "mfa.sms_setup_failed type=%s frames=%s",
+                safe_type_name(e),
+                safe_exception_frames(e),
             )
             # Roll back the half-enrolment, as the email path does: leaving it
             # in place let a failed setup permanently replace a victim's
@@ -1499,8 +1506,10 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         try:
             delivered = self._send_email_code(user_email, verification_code, user_id)
         except MFADeliveryError as e:
-            self.log_with_context(
-                "ERROR", f"Email setup failed for user {user_id}: {e}"
+            logger.error(
+                "mfa.email_setup_failed type=%s frames=%s",
+                safe_type_name(e),
+                safe_exception_frames(e),
             )
             self.user_mfa_data[user_id]["methods"].pop("email", None)
             self.user_mfa_data[user_id].pop("temp_email_code", None)
@@ -1695,7 +1704,11 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         except Exception as e:
             # Fail closed: an undelivered challenge must not be reported as sent.
             self.push_challenges.pop(challenge_id, None)
-            self.log_with_context("ERROR", f"Failed to send push notification: {e}")
+            logger.error(
+                "mfa.push_delivery_failed type=%s frames=%s",
+                safe_type_name(e),
+                safe_exception_frames(e),
+            )
             raise MFADeliveryError(f"Failed to send push notification: {e}") from e
 
         if response.status_code != 200:
@@ -1707,9 +1720,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 f"Push provider rejected the challenge (HTTP {response.status_code})"
             )
 
-        self.log_with_context(
-            "INFO", f"Push challenge sent to device {device.get('device_id')}"
-        )
+        logger.info("mfa.push_delivered")
         return {
             "success": True,
             "challenge_id": challenge_id,
@@ -2234,7 +2245,11 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             totp = pyotp.TOTP(secret)
             return totp.verify(code)
         except Exception as e:
-            self.log_with_context("WARNING", f"TOTP verification error: {e}")
+            logger.warning(
+                "mfa.totp_verification_failed type=%s frames=%s",
+                safe_type_name(e),
+                safe_exception_frames(e),
+            )
             return False
 
     def _verify_sms_code(self, user_id: str, code: str) -> bool:
@@ -2621,7 +2636,11 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
             return f"data:image/png;base64,{img_str}"
         except Exception as e:
-            self.log_with_context("WARNING", f"QR code generation failed: {e}")
+            logger.warning(
+                "mfa.qr_generation_failed type=%s frames=%s",
+                safe_type_name(e),
+                safe_exception_frames(e),
+            )
             return ""
 
     def _send_sms_code(self, phone: str, code: str, user_id: str) -> bool:
@@ -2648,11 +2667,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         else:
             # No provider bound: say so at WARNING. This previously logged
             # "SMS code sent", which was false.
-            self.log_with_context(
-                "WARNING",
-                f"No SMS provider configured; no code was delivered to "
-                f"the enrolled destination for user {user_id}",
-            )
+            logger.warning("mfa.sms_transport_unconfigured; no code delivered")
 
         # Store code for verification (in production, use secure storage)
         # Note: No lock needed here as this is called within locked context
@@ -2692,11 +2707,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         else:
             # No provider bound: say so at WARNING. This previously logged
             # "Email code sent", which was false.
-            self.log_with_context(
-                "WARNING",
-                f"No email provider configured; no code was delivered to "
-                f"{self._mask_email(email)} for user {user_id}",
-            )
+            logger.warning("mfa.email_transport_unconfigured; no code delivered")
 
         # Store code for verification (in production, use secure storage)
         # Note: No lock needed here as this is called within locked context
@@ -2732,13 +2743,19 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 to=phone,
             )
             masked = "the enrolled destination"
-            self.log_with_context(
-                "INFO", f"SMS sent via Twilio to {masked} (SID: {message.sid})"
+            logger.info(
+                "mfa.sms_delivered destination=%s response_present=%s",
+                masked,
+                message is not None,
             )
         except Exception as e:
             # Fail closed. Swallowing this made the caller report
             # "verification_sent": True for a code the user never got.
-            self.log_with_context("ERROR", f"Failed to send SMS via Twilio: {e}")
+            logger.error(
+                "mfa.sms_delivery_failed type=%s frames=%s",
+                safe_type_name(e),
+                safe_exception_frames(e),
+            )
             raise MFADeliveryError(f"Failed to send SMS via Twilio: {e}") from e
 
     def _smtp_send(self, email: Optional[str], subject: str, body: str) -> None:
@@ -2746,7 +2763,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
         The single SMTP transport, shared by code delivery and recovery-token
         delivery. ``body`` is credential-bearing and is never logged; the
-        recipient is logged masked.
+        recipient is omitted from diagnostics.
 
         Raises:
             MFADeliveryError: Delivery failed.
@@ -2777,13 +2794,15 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             server.send_message(msg)
             server.quit()
 
-            self.log_with_context(
-                "INFO", f"Email sent via SMTP to {self._mask_email(email)}"
-            )
+            logger.info("mfa.email_delivered")
         except Exception as e:
             # Fail closed. Swallowing this made the caller report
             # "verification_sent": True for a code the user never got.
-            self.log_with_context("ERROR", f"Failed to send email via SMTP: {e}")
+            logger.error(
+                "mfa.email_delivery_failed type=%s frames=%s",
+                safe_type_name(e),
+                safe_exception_frames(e),
+            )
             raise MFADeliveryError(f"Failed to send email via SMTP: {e}") from e
 
     @staticmethod
@@ -2955,7 +2974,11 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         except (AttributeError, TypeError, ValueError) as e:
             # Narrow: a broad `except Exception` here hid the fact that the
             # sink was None behind a warning that looked transient.
-            self.log_with_context("WARNING", f"Failed to audit MFA operation: {e}")
+            logger.warning(
+                "mfa.audit_operation_failed type=%s frames=%s",
+                safe_type_name(e),
+                safe_exception_frames(e),
+            )
 
     def validate_session(self, session_id: str) -> Dict[str, Any]:
         """Validate MFA session.
@@ -3216,7 +3239,11 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     )
             except Exception as e:
                 # Don't fail the main operation if audit logging fails
-                logger.warning(f"Audit logging failed: {e}")
+                logger.warning(
+                    "mfa.audit_flush_failed type=%s frames=%s",
+                    safe_type_name(e),
+                    safe_exception_frames(e),
+                )
 
     def _initiate_recovery(
         self,
@@ -3337,8 +3364,10 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 recovery_method, destination, recovery_token, user_id
             )
         except MFADeliveryError as e:
-            self.log_with_context(
-                "ERROR", f"Recovery delivery failed for user {user_id}: {e}"
+            logger.error(
+                "mfa.recovery_delivery_failed type=%s frames=%s",
+                safe_type_name(e),
+                safe_exception_frames(e),
             )
             return {
                 "success": False,
@@ -3403,10 +3432,8 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         if recovery_method == "admin":
             # Operator-mediated channel; the token is retrieved from
             # recovery_requests by an authorised operator, never echoed here.
-            self.log_with_context(
-                "WARNING",
-                f"Admin MFA recovery issued for user {user_id}; the token must "
-                "be retrieved by an authorised operator.",
+            logger.warning(
+                "mfa.recovery_admin_issued; token requires authorised operator retrieval"
             )
             return True
 
@@ -3414,17 +3441,13 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             if not (self.email_provider and self.email_provider.get("smtp_host")):
                 return False
             self._smtp_send(destination, "Account recovery", body)
-            self.log_with_context(
-                "INFO", f"Recovery token delivered by email for user {user_id}"
-            )
+            logger.info("mfa.recovery_email_delivered")
             return True
 
         if not (self.sms_provider and self.sms_provider.get("service") == "twilio"):
             return False
         self._twilio_send(destination, body)
-        self.log_with_context(
-            "INFO", f"Recovery token delivered by SMS for user {user_id}"
-        )
+        logger.info("mfa.recovery_sms_delivered")
         return True
 
     def _disable_all_mfa(self, user_id: str) -> Dict[str, Any]:
