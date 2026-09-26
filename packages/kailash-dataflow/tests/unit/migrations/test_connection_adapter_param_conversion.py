@@ -129,23 +129,42 @@ class FakeAsyncExecuteQuery:
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture
+def adapter_factory():
+    """Retain and close constructor-owned runtimes after dispatch substitutions."""
+    owned = []
+
+    def create(dataflow):
+        adapter = ConnectionManagerAdapter(dataflow)
+        owned.append((adapter, adapter._runtime))
+        return adapter
+
+    yield create
+
+    for adapter, runtime in reversed(owned):
+        # Some tests replace dispatch with a resource-free deterministic runtime.
+        # Restore the retained owner so the public close releases its reference.
+        adapter._runtime = runtime
+        adapter.close()
+
+
 class TestConnectionManagerAdapter:
     """Test ConnectionManagerAdapter for MigrationLockManager integration."""
 
-    def test_adapter_initialization(self):
+    def test_adapter_initialization(self, adapter_factory):
         """Test ConnectionManagerAdapter initializes correctly."""
         fake_dataflow = FakeDataFlow("postgresql://localhost/test")
 
-        adapter = ConnectionManagerAdapter(fake_dataflow)
+        adapter = adapter_factory(fake_dataflow)
 
         assert adapter.dataflow == fake_dataflow
         assert not adapter._transaction_started
         assert adapter._parameter_style == "postgresql"  # Default for PostgreSQL URL
 
-    def test_adapter_parameter_format_conversion(self):
+    def test_adapter_parameter_format_conversion(self, adapter_factory):
         """Test parameter placeholder conversion from %s to $1, $2, etc."""
         fake_dataflow = FakeDataFlow("postgresql://localhost/test")
-        adapter = ConnectionManagerAdapter(fake_dataflow)
+        adapter = adapter_factory(fake_dataflow)
 
         # Test SQL with %s placeholders
         sql = "INSERT INTO test_table (col1, col2) VALUES (%s, %s)"
@@ -157,10 +176,10 @@ class TestConnectionManagerAdapter:
         assert converted_sql == expected_sql
         assert converted_params == params
 
-    def test_adapter_parameter_format_no_conversion_needed(self):
+    def test_adapter_parameter_format_no_conversion_needed(self, adapter_factory):
         """Test parameter conversion when no %s placeholders exist."""
         fake_dataflow = FakeDataFlow("sqlite:///:memory:")
-        adapter = ConnectionManagerAdapter(fake_dataflow)
+        adapter = adapter_factory(fake_dataflow)
 
         sql = "SELECT * FROM test_table"
         params = None
@@ -171,10 +190,10 @@ class TestConnectionManagerAdapter:
         assert converted_params == params
 
     @pytest.mark.asyncio
-    async def test_execute_query_basic(self):
+    async def test_execute_query_basic(self, adapter_factory):
         """Test basic query execution through adapter."""
         fake_dataflow = FakeDataFlow("sqlite:///:memory:")
-        adapter = ConnectionManagerAdapter(fake_dataflow)
+        adapter = adapter_factory(fake_dataflow)
 
         # Replace adapter.execute_query with a deterministic protocol-satisfying
         # callable (a plain class, not a synthetic patch helper).
@@ -187,10 +206,10 @@ class TestConnectionManagerAdapter:
         assert result == [{"success": True}]
 
     @pytest.mark.asyncio
-    async def test_execute_query_with_parameter_conversion(self):
+    async def test_execute_query_with_parameter_conversion(self, adapter_factory):
         """Test query execution with parameter format conversion."""
         fake_dataflow = FakeDataFlow("sqlite:///:memory:")
-        adapter = ConnectionManagerAdapter(fake_dataflow)
+        adapter = adapter_factory(fake_dataflow)
 
         # Replace adapter._runtime with a deterministic runtime that returns
         # success for empty results (DML operations).
@@ -211,10 +230,10 @@ class TestConnectionManagerAdapter:
         assert result == [{"success": True}]
 
     @pytest.mark.asyncio
-    async def test_execute_query_dml_result_handling(self):
+    async def test_execute_query_dml_result_handling(self, adapter_factory):
         """Test DML operation result handling - empty results should return success."""
         fake_dataflow = FakeDataFlow("sqlite:///:memory:")
-        adapter = ConnectionManagerAdapter(fake_dataflow)
+        adapter = adapter_factory(fake_dataflow)
 
         fake_runtime = FakeAsyncRuntime(
             return_value=({"query_execution": {"result": []}}, None)
@@ -227,10 +246,10 @@ class TestConnectionManagerAdapter:
         assert result == [{"success": True}]
 
     @pytest.mark.asyncio
-    async def test_execute_query_select_result_handling(self):
+    async def test_execute_query_select_result_handling(self, adapter_factory):
         """Test SELECT operation result handling - return actual results."""
         fake_dataflow = FakeDataFlow("sqlite:///:memory:")
-        adapter = ConnectionManagerAdapter(fake_dataflow)
+        adapter = adapter_factory(fake_dataflow)
 
         expected_results = [{"id": 1, "name": "test"}]
 
@@ -248,10 +267,10 @@ class TestConnectionManagerAdapter:
         assert result == expected_results
 
     @pytest.mark.asyncio
-    async def test_transaction_operations(self):
+    async def test_transaction_operations(self, adapter_factory):
         """Test transaction begin, commit, and rollback operations."""
         fake_dataflow = FakeDataFlow("sqlite:///:memory:")
-        adapter = ConnectionManagerAdapter(fake_dataflow)
+        adapter = adapter_factory(fake_dataflow)
 
         fake_runtime = FakeAsyncRuntime(
             return_value=({"begin_transaction": {"result": "success"}}, None)
@@ -301,10 +320,10 @@ class TestConnectionManagerAdapter:
 class TestParameterConversionEdgeCases:
     """Test edge cases for parameter conversion."""
 
-    def test_multiple_parameter_conversion(self):
+    def test_multiple_parameter_conversion(self, adapter_factory):
         """Test conversion with many parameters."""
         fake_dataflow = FakeDataFlow("postgresql://localhost/test")
-        adapter = ConnectionManagerAdapter(fake_dataflow)
+        adapter = adapter_factory(fake_dataflow)
 
         sql = "INSERT INTO test (a, b, c, d, e) VALUES (%s, %s, %s, %s, %s)"
         params = [1, 2, 3, 4, 5]
@@ -315,10 +334,10 @@ class TestParameterConversionEdgeCases:
         assert converted_sql == expected_sql
         assert converted_params == params
 
-    def test_mixed_sql_with_other_placeholders(self):
+    def test_mixed_sql_with_other_placeholders(self, adapter_factory):
         """Test conversion doesn't affect other SQL constructs."""
         fake_dataflow = FakeDataFlow("postgresql://localhost/test")
-        adapter = ConnectionManagerAdapter(fake_dataflow)
+        adapter = adapter_factory(fake_dataflow)
 
         sql = "SELECT * FROM test WHERE field = %s AND other_field LIKE '%%pattern%%'"
         params = ["value"]
@@ -331,10 +350,10 @@ class TestParameterConversionEdgeCases:
         assert converted_sql == expected_sql
         assert converted_params == params
 
-    def test_no_parameters(self):
+    def test_no_parameters(self, adapter_factory):
         """Test with None parameters."""
         fake_dataflow = FakeDataFlow("sqlite:///:memory:")
-        adapter = ConnectionManagerAdapter(fake_dataflow)
+        adapter = adapter_factory(fake_dataflow)
 
         sql = "SELECT * FROM test"
         params = None
@@ -344,10 +363,10 @@ class TestParameterConversionEdgeCases:
         assert converted_sql == sql
         assert converted_params is None
 
-    def test_empty_parameters_list(self):
+    def test_empty_parameters_list(self, adapter_factory):
         """Test with empty parameters list."""
         fake_dataflow = FakeDataFlow("postgresql://localhost/test")
-        adapter = ConnectionManagerAdapter(fake_dataflow)
+        adapter = adapter_factory(fake_dataflow)
 
         sql = "SELECT * FROM test WHERE id = %s"  # Has placeholder but empty params
         params = []
