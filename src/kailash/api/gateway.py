@@ -107,11 +107,13 @@ from ..utils.proxy_guard import (
     reject_unsafe_proxy_path,
     resolve_proxy_auth_dependency,
 )
+from ..utils.secure_logging import safe_exception_frames, sanitize_log_value
 from ..utils.server_auth import (
     install_server_auth_middleware,
     mounted_subapp_auth_kwargs,
     resolve_server_auth,
 )
+from ..utils.url_credentials import mask_error_text
 from ..workflow import Workflow
 from .workflow_api import WorkflowAPI
 
@@ -244,7 +246,11 @@ class WorkflowAPIGateway:
         @asynccontextmanager
         async def lifespan(app: FastAPI):
             # Startup
-            logger.info(f"Starting {title} v{version}")
+            logger.info(
+                "Starting %s v%s",
+                sanitize_log_value(title),
+                sanitize_log_value(version),
+            )
             # S2 (#712): drive router.on_startup hooks (e.g. consumer
             # @app.on_event("startup")). Custom lifespan replaces Starlette's
             # _DefaultLifespan; without this iteration consumer hooks
@@ -330,7 +336,11 @@ class WorkflowAPIGateway:
                 return "healthy"
             return "unhealthy"
         except Exception as exc:
-            logger.warning(f"Proxy health check failed for {reg.name}: {exc}")
+            logger.warning(
+                "Proxy health check failed for %s: %s",
+                sanitize_log_value(reg.name),
+                safe_exception_frames(exc),
+            )
             return "unreachable"
 
     async def _check_mcp_health(self, name: str, server: Any) -> str:
@@ -351,7 +361,11 @@ class WorkflowAPIGateway:
                     result = await result
                 return "healthy" if result else "unhealthy"
         except Exception as exc:
-            logger.warning(f"MCP health check failed for {name}: {exc}")
+            logger.warning(
+                "MCP health check failed for %s: %s",
+                sanitize_log_value(name),
+                safe_exception_frames(exc),
+            )
             return "unhealthy"
         return "unknown"
 
@@ -362,10 +376,9 @@ class WorkflowAPIGateway:
                 workflow_api.close()
             except Exception as exc:  # pragma: no cover - teardown best-effort
                 logger.debug(
-                    "Error closing WorkflowAPI for '%s': %s: %s",
-                    name,
-                    type(exc).__name__,
-                    exc,
+                    "Error closing WorkflowAPI for '%s': %s",
+                    sanitize_log_value(name),
+                    safe_exception_frames(exc),
                 )
         self._workflow_apis = {}
 
@@ -494,7 +507,7 @@ class WorkflowAPIGateway:
                         )
 
             except Exception as e:
-                logger.error(f"WebSocket error: {e}")
+                logger.error("WebSocket error: %s", safe_exception_frames(e))
             finally:
                 sender_task.cancel()
                 for wf_name in subscribed_workflows:
@@ -508,9 +521,8 @@ class WorkflowAPIGateway:
                     # so a close that fails for an UNexpected reason is still
                     # visible (zero-tolerance.md Rule 3).
                     logger.debug(
-                        "Error closing gateway WebSocket: %s: %s",
-                        type(exc).__name__,
-                        exc,
+                        "Error closing gateway WebSocket: %s",
+                        safe_exception_frames(exc),
                     )
 
         # ---------- MCP tool REST endpoints ----------
@@ -565,7 +577,10 @@ class WorkflowAPIGateway:
                     return {"success": True, "result": result}
                 except Exception as exc:
                     logger.error(
-                        f"MCP tool '{tool_name}' on server '{server_name}' failed: {exc}"
+                        "MCP tool '%s' on server '%s' failed: %s",
+                        sanitize_log_value(tool_name),
+                        sanitize_log_value(server_name),
+                        safe_exception_frames(exc),
                     )
                     return Response(
                         content='{"error": "Tool execution failed"}',
@@ -631,7 +646,7 @@ class WorkflowAPIGateway:
             tags=tags or [],
         )
 
-        logger.info(f"Registered embedded workflow: {name}")
+        logger.info("Registered embedded workflow: %s", sanitize_log_value(name))
 
     def set_auth_manager(self, auth_manager: Any) -> None:
         """Attach an authentication manager to this gateway.
@@ -663,7 +678,7 @@ class WorkflowAPIGateway:
         self._auth_manager = auth_manager
         logger.info(
             "gateway.auth_manager_set",
-            extra={"auth_manager": type(auth_manager).__name__},
+            extra={"auth_manager": sanitize_log_value(type(auth_manager).__name__)},
         )
 
     def declare_external_auth(self, reason: str) -> None:
@@ -690,7 +705,7 @@ class WorkflowAPIGateway:
         self._external_auth_reason = reason.strip()
         logger.warning(
             "gateway.external_auth_declared",
-            extra={"reason": self._external_auth_reason},
+            extra={"reason": sanitize_log_value(self._external_auth_reason)},
         )
 
     def proxy_workflow(
@@ -853,7 +868,10 @@ class WorkflowAPIGateway:
             if unsafe_reason is not None:
                 logger.warning(
                     "gateway.proxy.path_rejected",
-                    extra={"workflow": name, "reason": unsafe_reason},
+                    extra={
+                        "workflow": sanitize_log_value(name),
+                        "reason": sanitize_log_value(unsafe_reason),
+                    },
                 )
                 return Response(
                     content=json.dumps(
@@ -865,7 +883,8 @@ class WorkflowAPIGateway:
 
             if not path_matches_allowlist(path, path_allowlist):
                 logger.warning(
-                    "gateway.proxy.path_not_allowed", extra={"workflow": name}
+                    "gateway.proxy.path_not_allowed",
+                    extra={"workflow": sanitize_log_value(name)},
                 )
                 return Response(
                     content=json.dumps({"error": "Not found"}),
@@ -880,7 +899,8 @@ class WorkflowAPIGateway:
             safe_path_match = SAFE_FORWARD_PATH_RE.fullmatch(path)
             if safe_path_match is None:
                 logger.warning(
-                    "gateway.proxy.path_charset_rejected", extra={"workflow": name}
+                    "gateway.proxy.path_charset_rejected",
+                    extra={"workflow": sanitize_log_value(name)},
                 )
                 return Response(
                     content=json.dumps(
@@ -962,7 +982,7 @@ class WorkflowAPIGateway:
                     logger.warning(
                         "gateway.proxy.response_too_large",
                         extra={
-                            "workflow": name,
+                            "workflow": sanitize_log_value(name),
                             "max_response_bytes": max_response_bytes,
                         },
                     )
@@ -998,11 +1018,10 @@ class WorkflowAPIGateway:
                 # log stream (py/log-injection); a forged newline there can
                 # fabricate whole log entries for anything reading the file.
                 logger.error(
-                    "Proxy request for workflow %s to backend %s failed: %s: %s",
-                    name,
-                    backend,
-                    type(exc).__name__,
-                    exc,
+                    "Proxy request for workflow %s to backend %s failed: %s",
+                    sanitize_log_value(name),
+                    sanitize_log_value(mask_error_text(backend)),
+                    safe_exception_frames(exc),
                 )
                 return Response(
                     content='{"error": "Backend unreachable"}',
@@ -1010,7 +1029,11 @@ class WorkflowAPIGateway:
                     media_type="application/json",
                 )
 
-        logger.info(f"Registered proxied workflow: {name} -> {proxy_url}")
+        logger.info(
+            "Registered proxied workflow: %s -> %s",
+            sanitize_log_value(name),
+            sanitize_log_value(mask_error_text(proxy_url)),
+        )
 
     def register_mcp_server(self, name: str, mcp_server: Any):
         """Register an MCP server and expose its tools as REST endpoints.
@@ -1024,7 +1047,7 @@ class WorkflowAPIGateway:
 
         self.mcp_servers[name] = mcp_server
 
-        logger.info(f"Registered MCP server: {name}")
+        logger.info("Registered MCP server: %s", sanitize_log_value(name))
 
     async def publish_workflow_event(self, workflow_name: str, event: dict[str, Any]):
         """Publish an event to all WebSocket subscribers of a workflow.

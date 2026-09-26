@@ -35,6 +35,8 @@ except ImportError:  # Python < 3.11
 
 from datetime import datetime
 
+from kailash.utils.secure_logging import safe_exception_frames, sanitize_log_value
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -171,7 +173,7 @@ class EventBus:
                 except asyncio.QueueFull:
                     logger.warning(
                         "Dropping event %s for a subscriber (queue full)",
-                        event.event_id,
+                        sanitize_log_value(event.event_id),
                     )
         return notified
 
@@ -249,13 +251,14 @@ async def emit_governance_event(
         await event_bus.publish(event)
         logger.debug(
             "Emitted governance event: type=%s role=%s",
-            event_type.value,
-            source_role_address,
+            sanitize_log_value(event_type.value),
+            sanitize_log_value(source_role_address),
         )
         return event
-    except Exception:
-        logger.exception(
-            "Failed to emit governance event: type=%s -- continuing without event",
-            event_type.value,
+    except Exception as exc:
+        logger.error(
+            "Failed to emit governance event: type=%s -- continuing without event: %s",
+            sanitize_log_value(event_type.value),
+            safe_exception_frames(exc),
         )
         return None
