@@ -33,8 +33,10 @@ and DataFlow suites, every all-files hook including pytest-check, and three
 whole-union reviews remain OPEN. Authorized per-commit pytest-check skips remain
 tracked here until that complete all-files gate passes. No push has occurred.
 
-D1 promotion approval persists. PR #2229 remote head remains ce4c9de67. Nine
-proposed CodeQL dismissals await explicit approval; none was executed. Required
+D1 promotion approval persists. PR #2229 remote head remains ce4c9de67. All nine
+CodeQL false-positive dismissals were explicitly approved and executed on
+2026-09-26, with independent GitHub readback; exact receipts are in
+`04-validate/csq14-codeql-disposition-receipt.json`. Required
 exact-head checks and every previously failing test job must pass before the
 separate merge command. Three post-main union/tree-parity reviews remain due.
 Preserve five stashes and 52 uncertain refs. No publishing, owner acceptance,

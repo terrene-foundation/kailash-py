@@ -6,17 +6,7 @@
     "D1_approved": true,
     "publishing_authorized": false
   },
-  "pending_dismissal_approval": [
-    11595,
-    11596,
-    11466,
-    11467,
-    10866,
-    5153,
-    131,
-    133,
-    6082
-  ],
+  "pending_dismissal_approval": [],
   "landed": {
     "sso_privacy": {
       "source": "9d9b00450",
@@ -213,7 +203,7 @@
     "direct diagnostic scanner a1ccc979 applied uncommitted",
     "planner positive-fixture warning review",
     "final full suites/hooks and three union reviews after source freezes",
-    "nine proposed CodeQL dismissals await explicit approval; none executed"
+    "separate shared SQLite file-address parsing parity shard in csq14-sqlite-address-parity; memory39ce baseline remains separate"
   ],
   "final_obligations": [
     "full integrated root regression",
@@ -294,5 +284,21 @@
       "pytest_passed": 4897
     },
     "status": "not clean; findings repaired, rerun required after all current source changes"
+  },
+  "codeql_dismissals": {
+    "approved_ids": [
+      11595,
+      11596,
+      11466,
+      11467,
+      10866,
+      5153,
+      131,
+      133,
+      6082
+    ],
+    "state": "all dismissed as false positive; independent API reads confirmed",
+    "receipt": "workspaces/issue-1720-llm-consolidation/04-validate/csq14-codeql-disposition-receipt.json",
+    "required_checks_waived": false
   }
 }

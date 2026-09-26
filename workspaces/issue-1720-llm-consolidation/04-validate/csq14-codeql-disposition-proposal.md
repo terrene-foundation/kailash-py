@@ -1,8 +1,10 @@
 # Nine scoped CodeQL disposition proposals
 
-No dismissals have been made. The recovered approval covers only alerts 11587,
-11588 and 11594; these nine additional dispositions require an explicit decision.
-This revised proposal supersedes the pending eight-alert question by adding 6082.
+The user approved all nine dispositions on 2026-09-26, superseding the earlier
+eight-alert approval. All nine were dismissed as false positives and independently
+re-read from GitHub as dismissed at 06:12 UTC. Exact comments, URLs and timestamps
+are recorded in `csq14-codeql-disposition-receipt.json`. Earlier approvals for
+11587, 11588 and 11594 remain separate.
 The proposal does not waive CodeQL, change queries, alter scan scope, or authorize
 merging a failing promotion. Actual defects are being repaired separately.
 
