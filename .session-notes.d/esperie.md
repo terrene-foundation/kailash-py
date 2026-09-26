@@ -1,5 +1,32 @@
 # CSQ 14 continuation — final promotion gate, 2026-09-26
 
+## Live repair checkpoint — supersedes earlier statuses
+
+Dev is `8ed016700`: canonical runtime controls and timer cleanup landed, including
+literal-boolean drift validation and bounded queue index names. The final combined
+selection passed 281 strict tests; reached spoof mutation failed all nine intended
+entry/evaluator cases. Independent correctness/security rounds are delivered.
+Bridge fixture isolation is committed as `a2f36b2ad`.
+
+Constructor/runtime-input separation landed as `8ed016700` (source `1050bc1d8`),
+with 381 strict passes, 26 focused passes and two clean scoped review rounds.
+Core/DataFlow privacy landed as `e4eedbf73`, with 31 DataFlow and 41 Core tests
+and two independent clean rounds. Combined integration passed 269 Core and nine
+DataFlow cases. Both clean runtime/configuration source siblings are drained.
+MFA delivery diagnostics and shared security-path diagnostics have separate
+root-created sibling lanes. The latter is verifying canonical containment as well
+as removing automatically logged payload values. These are open until their
+specific evidence is delivered; earlier holistic review attempts found issues and
+DO NOT count as clean convergence.
+
+D1 promotion approval persists. PR #2229 remains unpushed at `ce4c9de67`.
+Nine proposed CodeQL dismissals still require explicit approval; none was executed.
+Five stashes and uncertain historical refs remain held. Full combined suites,
+all configured all-files hooks including pytest-check, three parallel final union
+reviews, exact-head remote checks, and separate promotion merge remain required.
+No package publishing or whole-forest completion is authorized or claimed.
+
+
 ## Next actions (standing authorization preserved)
 
 Current continuation checkpoint supersedes the historical gate statuses below:

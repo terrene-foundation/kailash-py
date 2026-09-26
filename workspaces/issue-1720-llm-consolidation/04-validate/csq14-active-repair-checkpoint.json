@@ -1,5 +1,5 @@
 {
-  "source_head": "51fcd96c003587ce6ca16ba56cde799e135850b4",
+  "source_head": "8ed016700101794b3d43b5329a2e0496c988daf5",
   "promotion": {
     "pr": 2229,
     "remote_head": "ce4c9de676f1ab1e0a159cb8c273dcf2e47a2cb4",
@@ -80,6 +80,43 @@
       "source": "ec9e5adea",
       "merge": "ec9e5adea",
       "merged_logging_tests": 38
+    },
+    "bridge_fixture": {
+      "patch": "/tmp/csq14-bridge-node-final.patch",
+      "sha256": "9b05a7665470c05f8816a3126f3d925935d0b5ee365379d82b6a9faef30c19c0",
+      "strict_tests": 23,
+      "existing_named_assertions_preserved": 11,
+      "control": "nonblocking run reached delays 3.0 and 5.0; two intended failures",
+      "warning_inventory": "expected watchdog records only",
+      "review": "two clean independent rounds",
+      "commit": "a2f36b2ad"
+    },
+    "runtime_controls": {
+      "branch": "fix/csq14-runtime-control-contract",
+      "strict_tests": 281,
+      "review": "two clean independent security rounds plus literal identity corrective review",
+      "source_first": "4ee0bda4c",
+      "status": "landed; source sibling clean and draining",
+      "source_final": "a1e2124dc",
+      "merge": "71e371ce6"
+    },
+    "dataflow_log_privacy": {
+      "patch": "/tmp/csq14-dataflow-log-final.patch",
+      "sha256": "ee20155dced185591b08a3316a11d579024444982fe669d96a51307eff4a1412",
+      "strict_tests": 9,
+      "existing_credential_tests": 41,
+      "status": "landed; merged interaction tests running",
+      "commit": "e4eedbf73",
+      "review": "two clean independent scoped rounds"
+    },
+    "auth_configuration": {
+      "source": "1050bc1d8",
+      "patch_sha256": "f7c7e2a3c97ab377094bb2c530a325d59a676ab71fe978a8d4a5595e9def3948",
+      "strict_tests": 381,
+      "focused_tests": 26,
+      "review": "two clean independent scoped rounds",
+      "status": "landed; merged interaction tests running",
+      "commit": "8ed016700101794b3d43b5329a2e0496c988daf5"
     }
   },
   "frozen": {
@@ -95,12 +132,20 @@
         "idempotency",
         "forced_drift"
       ],
-      "review": "two independent reviewers active; third whole-union coverage review active"
+      "review": "forwarding-only correctness passed; security/whole-union NOT CLEAN: canonical timer and strict-boolean gaps",
+      "status": "superseded by full runtime-control candidate"
+    },
+    "mfa_diagnostics": {
+      "patch": "/tmp/csq14-mfa-delivery-logs-final.patch",
+      "sha256": "f5782d731e1695b091b2cc6ed6effd1edfec33b006d0980577a4c2317ec54f35",
+      "strict_tests": 296,
+      "review": "independent archive rounds underway in csq14-mfa-review at8ed016700"
     }
   },
   "active": [
-    "runtime compatibility option forwarding: bounded separate sibling at e7c1085; canonical options previously dropped",
-    "final whole-union review and integrated gates",
+    "MFA delivery diagnostic privacy in csq14-mfa-delivery-logs; independent archive review",
+    "shared security diagnostics/containment in csq14-security-path-diagnostics; gate author",
+    "repeat three whole-union reviews and full integrated gates/all configured hooks",
     "pending nine CodeQL dismissal approvals"
   ],
   "final_obligations": [
@@ -123,11 +168,41 @@
     "csq14-async-content",
     "csq14-async-node-owner",
     "csq14-holistic-coverage",
-    "csq14-holistic-security"
+    "csq14-holistic-security",
+    "csq14-runtime-controls",
+    "csq14-auth-configuration"
   ],
   "review_worktrees": [
     "csq14-final-correctness",
     "csq14-final-security",
-    "csq14-final-coverage"
-  ]
+    "csq14-final-coverage",
+    "csq14-privacy-review"
+  ],
+  "open_findings": [
+    {
+      "evidence": "/tmp/csq14-privacy-independent-errors.log",
+      "observed": "Node and AsyncTyped exception text emitted synthetic email; root fixed, independent verification pending"
+    },
+    {
+      "evidence": "/tmp/csq14-auth-config-security-revised-warn-inventory.json",
+      "observed": "MFA SMTP and email-setup diagnostic included synthetic address; assigned bounded privacy shard"
+    }
+  ],
+  "holistic_attempt": {
+    "source": "51fcd96c0 plus forwarding569e68 overlay",
+    "root_passed": 696,
+    "dataflow_passed": 279,
+    "dataflow_live_postgres_deselected": 1,
+    "converged": false,
+    "warnings": "intentional records inventoried; nonintentional findings routed, not ignored"
+  },
+  "merged_interaction_tests": {
+    "core": 269,
+    "dataflow": 9,
+    "source": "8ed016700",
+    "logs": [
+      "/tmp/csq14-merged-config-runtime-privacy-tests.log",
+      "/tmp/csq14-merged-dataflow-privacy-tests.log"
+    ]
+  }
 }

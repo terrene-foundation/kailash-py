@@ -35,8 +35,8 @@ or Windows ACLs. The HTML checks establish removal of tag delimiters, not safety
 in every possible HTML/JavaScript context.
 
 Alert 6082 evidence is `/tmp/csq14-finalizer-disposition-proof.log`, using actual
-`src/kailash/runtime/async_local.py:2124-2151` and
-`src/kailash/runtime/local.py:2198-2227`. This establishes the warning-only
+`src/kailash/runtime/async_local.py:2189-2220` and
+`src/kailash/runtime/local.py:2200-2229`. This establishes the warning-only
 replacement contract; deterministic cleanup remains the caller's responsibility.
 
 The latest full scan has 2,253 results. GitHub's required findings check reports
