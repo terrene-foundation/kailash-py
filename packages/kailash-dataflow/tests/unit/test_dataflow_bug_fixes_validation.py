@@ -162,7 +162,10 @@ class TestDataFlowBugFixesValidation:
 
         node_instance.logger.debug.assert_called_once_with(
             "nodes.failed_to_extract_tdd_connection_info",
-            extra={"error": "Simulated error accessing host"},
+            extra={"error_type": "RuntimeError"},
+        )
+        assert "Simulated error accessing host" not in repr(
+            node_instance.logger.debug.call_args
         )
 
     def test_bug_012_fix_works_in_practice(self, memory_dataflow):
@@ -284,7 +287,10 @@ class TestDataFlowBugFixesValidation:
 
         node_instance.logger.debug.assert_called_once_with(
             "nodes.failed_to_extract_tdd_connection_info",
-            extra={"error": "Network error accessing server_hostname"},
+            extra={"error_type": "ConnectionError"},
+        )
+        assert "Network error accessing server_hostname" not in repr(
+            node_instance.logger.debug.call_args
         )
 
     def test_fixes_preserve_existing_functionality(self, memory_dataflow):
