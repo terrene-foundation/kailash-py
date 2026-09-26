@@ -624,6 +624,34 @@ def test_parallel_borrowed_disabled_owner_keeps_wrapper_cycle_mode():
         owner.close()
 
 
+def test_parallel_wrappers_share_owner_without_sharing_attempt_policy():
+    from concurrent.futures import ThreadPoolExecutor
+
+    owner = LocalRuntime(enable_cycles=False)
+    wrappers = [ParallelCyclicRuntime(runtime=owner) for _ in range(2)]
+    wrappers[0].cyclic_executor.safety_manager.set_global_limits(timeout=0.001)
+    workflows = [build(SlowTick), build(SlowTick)]
+    try:
+        with owner, ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [
+                executor.submit(w.execute, wf[0]) for w, wf in zip(wrappers, workflows)
+            ]
+            results = [future.result(timeout=5)[0] for future in futures]
+        assert [wf[1].calls for wf in workflows] == [1, 2]
+        assert [wf[2].calls for wf in workflows] == [0, 1]
+        assert results[0]["tick"] == {"result": {"n": 1}}
+        assert results[1]["consume"] == {"result": {"n": 2}}
+        assert owner.enable_cycles is False
+        assert not hasattr(owner, "cyclic_executor")
+        assert all(
+            w.cyclic_executor.safety_manager.active_cycles == {} for w in wrappers
+        )
+    finally:
+        for wrapper in wrappers:
+            wrapper.close()
+        owner.close()
+
+
 @pytest.mark.parametrize("foreign", [False, True])
 def test_wrapper_policy_is_consumed_before_nested_public_execution(foreign):
     owner = LocalRuntime(enable_cycles=True)

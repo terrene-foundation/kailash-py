@@ -1028,64 +1028,10 @@ class AsyncLocalRuntime(LocalRuntime):
             # Add inputs to context
             context.variables.update(inputs)
 
-            # === W1: Durable execution — shape-drift check + checkpoint context ===
-            # Compute the fingerprint once, build the checkpoint key, and run
-            # the shape-drift gate BEFORE any node executes.  The same
-            # invariants apply here as in LocalRuntime._execute_async — the
-            # per-node hot path below will emit + persist + dispatch events
-            # using the values stashed onto the context.
-            workflow_fingerprint = compute_workflow_fingerprint(workflow)
-            tenant_id = resolve_tenant_id(self)
-            checkpoint_key: Optional[str] = None
-            execution_tracker: Optional[ExecutionTracker] = None
-            if idempotency_key is not None:
-                checkpoint_key = build_checkpoint_key(
-                    workflow_fingerprint,
-                    idempotency_key,
-                    inputs if isinstance(inputs, dict) else None,
-                    tenant_id=tenant_id,
-                )
-                if self._checkpoint_store is not None:
-                    try:
-                        prior_blob = await self._checkpoint_store.load(checkpoint_key)
-                    except Exception as load_err:  # pragma: no cover — defensive
-                        logger.warning(
-                            "durable.checkpoint.load_failed",
-                            extra={"error_type": safe_type_name(load_err)},
-                        )
-                        prior_blob = None
-                    if prior_blob is not None:
-                        stored_payload = decode_checkpoint_payload(prior_blob)
-                        check_shape_drift_or_raise(
-                            idempotency_key=idempotency_key,
-                            stored_payload=stored_payload,
-                            current_fingerprint=workflow_fingerprint,
-                            force_resume_with_drift=force_resume_with_drift,
-                        )
-                        execution_tracker = ExecutionTracker.from_dict(
-                            stored_payload.get("tracker", {})
-                        )
-
-            # Stash durable-execution context as ATTRIBUTES on the
-            # ExecutionContext (not ``variables``) so the per-node input
-            # sanitiser never treats them as user-supplied parameters.  The
-            # attribute path is initialised on every ExecutionContext (see
-            # ExecutionContext.__init__) so a None default is always present.
-            context._w1_workflow_fingerprint = workflow_fingerprint
-            context._w1_checkpoint_key = checkpoint_key
-            context._w1_tenant_id = tenant_id
-            context._w1_idempotency_key = idempotency_key
-            context._w1_run_id = run_id
-            context._w1_cancellation_token = _attempt_token
-            context._w1_execution_tracker = (
-                execution_tracker
-                if execution_tracker is not None
-                else ExecutionTracker()
-            )
-
             # CARE-017: Get effective trust context and set up propagation
             effective_trust_ctx = self._get_effective_trust_context()
             trust_token = None
+            preparing_checkpoint = False
 
             try:
                 # Set trust context in ContextVar if available
@@ -1109,6 +1055,66 @@ class AsyncLocalRuntime(LocalRuntime):
                             raise WorkflowExecutionError(
                                 "Trust verification denied workflow execution"
                             )
+                preparing_checkpoint = True
+                # === W1: Durable execution — shape-drift check + checkpoint context ===
+                # Compute the fingerprint once, build the checkpoint key, and run
+                # the shape-drift gate BEFORE any node executes.  The same
+                # invariants apply here as in LocalRuntime._execute_async — the
+                # per-node hot path below will emit + persist + dispatch events
+                # using the values stashed onto the context.
+                workflow_fingerprint = compute_workflow_fingerprint(workflow)
+                tenant_id = resolve_tenant_id(self)
+                checkpoint_key: Optional[str] = None
+                execution_tracker: Optional[ExecutionTracker] = None
+                if idempotency_key is not None:
+                    checkpoint_key = build_checkpoint_key(
+                        workflow_fingerprint,
+                        idempotency_key,
+                        inputs if isinstance(inputs, dict) else None,
+                        tenant_id=tenant_id,
+                    )
+                    if self._checkpoint_store is not None:
+                        try:
+                            prior_blob = await self._checkpoint_store.load(
+                                checkpoint_key
+                            )
+                        except Exception as load_err:  # pragma: no cover — defensive
+                            logger.warning(
+                                "durable.checkpoint.load_failed",
+                                extra={"error_type": safe_type_name(load_err)},
+                            )
+                            prior_blob = None
+                        if prior_blob is not None:
+                            stored_payload = decode_checkpoint_payload(prior_blob)
+                            check_shape_drift_or_raise(
+                                idempotency_key=idempotency_key,
+                                stored_payload=stored_payload,
+                                current_fingerprint=workflow_fingerprint,
+                                force_resume_with_drift=force_resume_with_drift,
+                            )
+                            execution_tracker = ExecutionTracker.from_dict(
+                                stored_payload.get("tracker", {})
+                            )
+
+                # Stash durable-execution context as ATTRIBUTES on the
+                # ExecutionContext (not ``variables``) so the per-node input
+                # sanitiser never treats them as user-supplied parameters.  The
+                # attribute path is initialised on every ExecutionContext (see
+                # ExecutionContext.__init__) so a None default is always present.
+                context._w1_workflow_fingerprint = workflow_fingerprint
+                context._w1_checkpoint_key = checkpoint_key
+                context._w1_tenant_id = tenant_id
+                context._w1_idempotency_key = idempotency_key
+                context._w1_run_id = run_id
+                context._w1_cancellation_token = _attempt_token
+                context._w1_execution_tracker = (
+                    execution_tracker
+                    if execution_tracker is not None
+                    else ExecutionTracker()
+                )
+
+                preparing_checkpoint = False
+
                 # P0 Component 1: Timeout Protection
                 # Wrap execution with timeout if configured
                 if self.execution_timeout and self.execution_timeout > 0:
@@ -1205,6 +1211,9 @@ class AsyncLocalRuntime(LocalRuntime):
                 raise
 
             except Exception as e:
+                if preparing_checkpoint:
+                    # Preparation errors keep their original public identity.
+                    raise
                 logger.error(f"Workflow execution failed: {safe_exception_frames(e)}")
                 context.metrics.error_count += 1
                 if _is_retry_observer_failure(e):

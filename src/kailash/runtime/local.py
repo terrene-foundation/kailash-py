@@ -953,6 +953,7 @@ class LocalRuntime(
         self._persistent_loop: Optional[asyncio.AbstractEventLoop] = None
         self._loop_thread: Optional[threading.Thread] = None
         self._loop_lock = threading.Lock()  # Protect loop creation/cleanup
+        self._persistent_execution_lock = threading.Lock()
         self._ref_count = 1  # Creator holds first reference
         self._is_context_managed = False  # Track if using context manager
         self._cleanup_registered = False  # Track if atexit cleanup registered
@@ -1296,6 +1297,7 @@ class LocalRuntime(
         _metrics_bridge = get_metrics_bridge()
         _metrics_workflow_name = getattr(workflow, "name", "") or ""
         _metrics_start_time = time.perf_counter()
+        persistent_admitted = False
 
         try:
             try:
@@ -1303,8 +1305,13 @@ class LocalRuntime(
                     loop = asyncio.get_running_loop()
                 except RuntimeError:
                     loop = None
-                if loop is not None:
-                    # If we're in an event loop, run synchronously instead
+                if loop is None:
+                    persistent_admitted = self._persistent_execution_lock.acquire(
+                        blocking=False
+                    )
+                if loop is not None or not persistent_admitted:
+                    # A running caller loop or occupied persistent loop uses
+                    # the existing independently owned bridge, without waiting.
                     if effective_trust_ctx is not None:
                         from kailash.runtime.trust.context import runtime_trust_context
 
@@ -1332,26 +1339,7 @@ class LocalRuntime(
 
                     # CARE-017: Verify workflow trust before execution (async path)
                     if effective_trust_ctx is not None:
-                        from kailash.runtime.trust.context import (
-                            TrustVerificationMode,
-                            runtime_trust_context,
-                        )
-
-                        # Run verification before execution if verifier is configured
-                        if (
-                            self._trust_verification_mode
-                            != TrustVerificationMode.DISABLED
-                            and self._trust_verifier is not None
-                        ):
-                            allowed = loop.run_until_complete(
-                                self._verify_workflow_trust(
-                                    workflow, effective_trust_ctx
-                                )
-                            )
-                            if not allowed:
-                                raise WorkflowExecutionError(
-                                    "Trust verification denied workflow execution"
-                                )
+                        from kailash.runtime.trust.context import runtime_trust_context
 
                         # Run the async execution in the persistent loop with trust context
                         with runtime_trust_context(effective_trust_ctx):
@@ -1415,6 +1403,8 @@ class LocalRuntime(
 
             return results
         finally:
+            if persistent_admitted:
+                self._persistent_execution_lock.release()
             # Issue #1708 W1f: record the canonical workflow RED triple.
             # `sys.exc_info()` inside a `finally` attached to the same
             # `try` frame that is unwinding reports the in-flight exception
@@ -2403,6 +2393,17 @@ class LocalRuntime(
         # mirroring stdlib ``asyncio.to_thread`` semantics (#1200).
         _caller_ctx = contextvars.copy_context()
 
+        async def execute_in_bridge():
+            return await self._execute_async(
+                workflow=workflow,
+                task_manager=task_manager,
+                parameters=parameters,
+                cancellation_token=cancellation_token,
+                search_attributes=search_attributes,
+                idempotency_key=idempotency_key,
+                force_resume_with_drift=force_resume_with_drift,
+            )
+
         def run_in_thread():
             """Run async execution in separate thread."""
             loop = None
@@ -2410,17 +2411,7 @@ class LocalRuntime(
                 # Create new event loop in thread
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                result = loop.run_until_complete(
-                    self._execute_async(
-                        workflow=workflow,
-                        task_manager=task_manager,
-                        parameters=parameters,
-                        cancellation_token=cancellation_token,
-                        search_attributes=search_attributes,
-                        idempotency_key=idempotency_key,
-                        force_resume_with_drift=force_resume_with_drift,
-                    )
-                )
+                result = loop.run_until_complete(execute_in_bridge())
                 result_container.append(result)
             except BaseException as e:
                 exception_container.append(e)
@@ -2564,6 +2555,18 @@ class LocalRuntime(
             PermissionError: If access control denies execution.
         """
         cyclic_executor = self._cycle_executor_for_attempt()
+        from kailash.runtime.trust.context import TrustVerificationMode
+
+        trust_context = self._get_effective_trust_context()
+        if (
+            trust_context is not None
+            and self._trust_verification_mode != TrustVerificationMode.DISABLED
+            and self._trust_verifier is not None
+        ):
+            if not await self._verify_workflow_trust(workflow, trust_context):
+                raise WorkflowExecutionError(
+                    "Trust verification denied workflow execution"
+                )
         # Extract kwargs for backward compatibility
         _validate_force_resume_with_drift(kwargs.get("force_resume_with_drift", False))
         task_manager: TaskManager | None = kwargs.get("task_manager")
