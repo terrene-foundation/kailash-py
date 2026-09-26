@@ -11,9 +11,9 @@ BUG SCENARIO:
 - But intl_premium_processor is incorrectly executing (false_output path)
 """
 
-from unittest.mock import MagicMock, Mock
+import logging
+from unittest.mock import Mock
 
-import networkx as nx
 import pytest
 
 from kailash.analysis.conditional_branch_analyzer import ConditionalBranchAnalyzer
@@ -29,8 +29,7 @@ class TestNestedConditionalExecutionBug:
     def setup_method(self):
         """Set up test workflow that reproduces the bug."""
         # Create the exact scenario from the validation script
-        self.workflow = Mock(spec=Workflow)
-        self.workflow.graph = nx.DiGraph()
+        self.workflow = Workflow("nested-conditionals", "Nested conditional test")
 
         # Add nodes to graph
         nodes = [
@@ -46,7 +45,9 @@ class TestNestedConditionalExecutionBug:
             "aggregator",
         ]
 
-        for node_id in nodes:
+        # Deliberately avoid topological insertion order: a fallback to the
+        # node list must not masquerade as a successful planner traversal.
+        for node_id in reversed(nodes):
             if "switch" in node_id:
                 node_instance = Mock(spec=SwitchNode)
             else:
@@ -101,6 +102,14 @@ class TestNestedConditionalExecutionBug:
 
         for source, target, edge_data in edges:
             self.workflow.graph.add_edge(source, target, **edge_data)
+
+    def _assert_complete_topological_order(self, plan):
+        assert set(plan) == set(self.workflow.graph.nodes())
+        positions = {node: index for index, node in enumerate(plan)}
+        assert all(
+            positions[source] < positions[target]
+            for source, target in self.workflow.graph.edges()
+        )
 
     def test_conditional_branch_analyzer_identifies_switch_nodes(self):
         """Test that ConditionalBranchAnalyzer correctly identifies SwitchNodes."""
@@ -222,70 +231,59 @@ class TestNestedConditionalExecutionBug:
                 f"Reachable nodes: {reachable_nodes}"
             )
 
-    def test_dynamic_execution_planner_creates_correct_plan(self):
+    def test_dynamic_execution_planner_creates_correct_plan(self, caplog):
         """Test that DynamicExecutionPlanner creates correct execution plan."""
-        from unittest.mock import patch
-
         planner = DynamicExecutionPlanner(self.workflow)
 
-        # Mock topological sort to return predictable order
-        with patch("networkx.topological_sort") as mock_topo:
-            mock_topo.return_value = [
-                "data_source",
-                "user_type_switch",
-                "premium_validator",
-                "basic_validator",
-                "region_switch",
-                "us_premium_processor",
-                "intl_premium_processor",
-                "basic_processor",
-                "basic_support",
-                "aggregator",
-            ]
+        # Premium US scenario switch results
+        switch_results = {
+            "user_type_switch": {
+                "true_output": {"user_type": "premium"},
+                "false_output": None,
+            },
+            "region_switch": {
+                "true_output": {"region": "US"},
+                "false_output": None,
+            },
+        }
 
-            # Premium US scenario switch results
-            switch_results = {
-                "user_type_switch": {
-                    "true_output": {"user_type": "premium"},
-                    "false_output": None,
-                },
-                "region_switch": {
-                    "true_output": {"region": "US"},
-                    "false_output": None,
-                },
-            }
+        execution_plan = planner.create_execution_plan(switch_results)
 
-            execution_plan = planner.create_execution_plan(switch_results)
+        # BUG CHECK: intl_premium_processor should NOT be in execution plan
+        assert "intl_premium_processor" not in execution_plan, (
+            f"BUG: intl_premium_processor should not be in execution plan for Premium US scenario. "
+            f"Execution plan: {execution_plan}"
+        )
 
-            # BUG CHECK: intl_premium_processor should NOT be in execution plan
-            assert "intl_premium_processor" not in execution_plan, (
-                f"BUG: intl_premium_processor should not be in execution plan for Premium US scenario. "
+        # Verify expected nodes are in execution plan
+        expected_in_plan = [
+            "data_source",
+            "user_type_switch",
+            "premium_validator",
+            "region_switch",
+            "us_premium_processor",
+            "aggregator",
+        ]
+
+        for expected_node in expected_in_plan:
+            assert expected_node in execution_plan, (
+                f"Expected node {expected_node} should be in execution plan. "
                 f"Execution plan: {execution_plan}"
             )
 
-            # Verify expected nodes are in execution plan
-            expected_in_plan = [
-                "data_source",
-                "user_type_switch",
-                "premium_validator",
-                "region_switch",
-                "us_premium_processor",
-                "aggregator",
-            ]
+        # Verify unreachable nodes are NOT in execution plan
+        unreachable_nodes = ["basic_validator", "basic_processor", "basic_support"]
+        for unreachable_node in unreachable_nodes:
+            assert unreachable_node not in execution_plan, (
+                f"Unreachable node {unreachable_node} should not be in execution plan. "
+                f"Execution plan: {execution_plan}"
+            )
 
-            for expected_node in expected_in_plan:
-                assert expected_node in execution_plan, (
-                    f"Expected node {expected_node} should be in execution plan. "
-                    f"Execution plan: {execution_plan}"
-                )
-
-            # Verify unreachable nodes are NOT in execution plan
-            unreachable_nodes = ["basic_validator", "basic_processor", "basic_support"]
-            for unreachable_node in unreachable_nodes:
-                assert unreachable_node not in execution_plan, (
-                    f"Unreachable node {unreachable_node} should not be in execution plan. "
-                    f"Execution plan: {execution_plan}"
-                )
+        self._assert_complete_topological_order(
+            planner._get_all_nodes_topological_order()
+        )
+        assert execution_plan == expected_in_plan
+        assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
 
     def test_execution_plan_validation_passes_for_correct_plan(self):
         """Test that execution plan validation passes for correctly generated plans."""
@@ -350,7 +348,7 @@ class TestNestedConditionalExecutionBug:
         assert "user_type_switch" in hierarchy_info["independent_switches"]
         assert "region_switch" in hierarchy_info["independent_switches"]
 
-    def test_edge_case_empty_switch_results(self):
+    def test_edge_case_empty_switch_results(self, caplog):
         """Test handling of empty switch results."""
         analyzer = ConditionalBranchAnalyzer(self.workflow)
         planner = DynamicExecutionPlanner(self.workflow)
@@ -366,8 +364,10 @@ class TestNestedConditionalExecutionBug:
         assert len(execution_plan) == len(
             self.workflow.graph.nodes()
         ), "With empty switch results, all nodes should be in execution plan"
+        self._assert_complete_topological_order(execution_plan)
+        assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
 
-    def test_edge_case_invalid_switch_results(self):
+    def test_edge_case_invalid_switch_results(self, caplog):
         """Test handling of invalid switch results."""
         analyzer = ConditionalBranchAnalyzer(self.workflow)
         planner = DynamicExecutionPlanner(self.workflow)
@@ -386,11 +386,11 @@ class TestNestedConditionalExecutionBug:
         assert isinstance(
             execution_plan, list
         ), "Should return list even with invalid results"
+        self._assert_complete_topological_order(execution_plan)
+        assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
 
     def test_bug_scenario_detailed_analysis(self):
         """Detailed analysis of the exact bug scenario that's happening."""
-        from unittest.mock import patch
-
         analyzer = ConditionalBranchAnalyzer(self.workflow)
 
         # Create the exact switch results from our validation script
