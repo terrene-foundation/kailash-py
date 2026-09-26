@@ -1,17 +1,22 @@
-# CSQ 14 continuation — 2026-09-26
+# CSQ14 final integration — 2026-09-26
 
-Prior slot14 thread: `01a0d8a0-e67b-7dc2-8628-1e1bfbbd3eca`.
-All newly dispatched implementation lanes are landed and drained. No active sub-agent.
+Sourcefreeze13687209eec7eaf440b9171f4a49f6110bcfdca5. Allimplementationlanes
+landed anddrained;3readonlyholisticreviewers active. Existing PR2229stillce4c9de67.
 
-| Lane | Branch | Task set | Agent roster | State |
-| --- | --- | --- | --- | --- |
-| ML gate | `fix/csq14-ml-seed` (removed) | Seed unit isolation, original six-file gate, reached controls | ml_gate_recovery: delivered; ml_correctness_review: two clean rounds; archive_checkpoint: two clean adversarial rounds | Landed6fa357a1b, drained |
-| Archive evidence | `docs/csq14-archive-recovery` (removed) | Five recovered reports, full52-ref inventory, conservative dispositions | archive_checkpoint: delivered; ml_correctness_review: clean; root: independent verification | Landed6d5e34e35, drained |
-| Integration | `dev` | Final all-files hooks, consolidated PR2229 push, exact-head checks and approved merge | root: active | Local gates passed at fe791935c; exact promotion-head checks next |
+| Lane | Landed merge | State |
+| --- | --- | --- |
+| MLseed | 6fa357a1b | Drained,237strictpasses |
+| Archiveevidence | 6d5e34e35 | Drained,uncertainrefsretained |
+| Dependency/classfixtures | dfcddfe7e | Reviewed74strictpasses |
+| R1auth | 7fc46af2b | Drained,2cleanrounds |
+| D1unitfixtures | dddf90871 | Drained,2cleanrounds |
+| D3regressioncleanup | 30cbafa19 | Drained,2cleanrounds |
+| D2ownership | 70af3a787 | Drained,2cleanrounds |
+| R2runtime | 13687209e | Draining,2cleanrounds |
 
-Only primary checkout remains. Five stashes and historical refs remain held.
-D1 and advisory-type exception already approved. Package publication is separate.
-Original completed Core5371 and full configured hooks at709759a38 recovered from log;
-new ML237 strict gate passes. Final all-files hooks including pytest-check passed at fe791935c.
-Do not resume old session's agent addresses; they are historical, not active lanes.
-Full receipts: workspaces/issue-1720-llm-consolidation/04-validate/csq14-*.
+Detachedreviewers: ml_gate_recovery correctness; archive_checkpoint security;
+ml_correctness_review coverage. Each sibling under
+/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-holistic-<lens>.
+Parentruns3exactCIselections onLinux in2separatevenvs andfullconfiguredhooks.
+Push consolidated dev+promotion onlyaftergates; readexactheadchecks separately
+fromalreadyapprovedmerge. Fivehistoricalstashes anduncertainrefsheld.

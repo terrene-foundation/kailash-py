@@ -1,0 +1,31 @@
+{
+  "source_commit": "322b40365",
+  "merge_commit": "13687209e",
+  "positive": "220 strict tests; finalpuretransformcallback1strictpass;8warning+3runtimecontrols",
+  "reviewer": "ml_correctness_review",
+  "clean_rounds": 2,
+  "logs": [
+    "/tmp/csq14-r2-final-gate.log",
+    "/tmp/csq14-r2-controls.log",
+    "/tmp/csq14-r2-runtime-controls.log",
+    "/tmp/csq14-r2-reviewed-pure-test.log",
+    "/tmp/csq14-r2-reviewed-pure-probe.log"
+  ],
+  "controls": [
+    "Invalidconfiguration neverreachesBaseRuntime init",
+    "Historycallback singlelookup/delivery preserved",
+    "Lostsubscription fails actualtest",
+    "Closefailure propagates",
+    "Alllegacyexpectedwarnings exact; extra/missing rejected",
+    "Revisedfixture WARN_PLUS0 andPYTHON_WARNINGS0"
+  ],
+  "limit": "Macplatform memoryguardwarning is intentional existingcontract; finalnewhistoryfixture usespuretransform, productionsecurityunchanged",
+  "root_review": "Final two source/contract passes and actual reached-control evidence inspected; earlier reproduced findings fixed before clean rounds.",
+  "log_sha256": {
+    "/tmp/csq14-r2-final-gate.log": "044a21f9d444d93af975149f15d9a35050f537e8bc6f2e5345a5016a5e4372bd",
+    "/tmp/csq14-r2-controls.log": "efd348e671e9367282801abc080ee38767098fdefa32811a2a7eeca7dde0654c",
+    "/tmp/csq14-r2-runtime-controls.log": "add007fd5268361fc7aa20f5146d01eaf7d69bedfe89fc8acac24b4fd79786d7",
+    "/tmp/csq14-r2-reviewed-pure-test.log": "fddb54808b015e2779e743f601f64ae38b7b89da28af4325b934990d8623e7eb",
+    "/tmp/csq14-r2-reviewed-pure-probe.log": "3da2b35c30206adf99f5e659e5ceb5c32668bcde3e8e8aa8703f4fc1e8d75e64"
+  }
+}

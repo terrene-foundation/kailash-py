@@ -1,0 +1,30 @@
+{
+  "source_commit": "19af410b8",
+  "merge_commit": "7fc46af2b",
+  "files": 5,
+  "positive": "98 passed on aiohttp3.14.3 and3.12.4 with -Werror",
+  "reviewer": "archive_checkpoint",
+  "clean_rounds": 2,
+  "controls": [
+    "All3alias removals rejected",
+    "All3wrongidentity mutations rejected",
+    "Real HTTP body/query spoof denied",
+    "Foreignmodule warning survives; filtermodule removal rejected",
+    "Actual producer rename changes discovered roster",
+    "Mappedmetadata/linklocal/public distinguished"
+  ],
+  "logs": [
+    "/tmp/csq14-r1-independent-3143.log",
+    "/tmp/csq14-r1-independent-3124.log",
+    "/tmp/csq14-r1-absolute-sweep.log",
+    "/tmp/csq14-aiohttp-alias-control.log"
+  ],
+  "limit": "Changed auth identity storage and regression reason/roster scope; not full DNS audit",
+  "log_sha256": {
+    "/tmp/csq14-r1-independent-3143.log": "5709680f9378042dbad06049a40d7b4b02cbbc3614b5a6846d818b517863221a",
+    "/tmp/csq14-r1-independent-3124.log": "c3b070d142a5fad10ea36e9f1585729deac7840983ba9f9e8eb153d50f6334eb",
+    "/tmp/csq14-r1-absolute-sweep.log": "aaf5682e465c72ce8dd86f315b031a69f89fa49c5a68ecc0ae2ac242a22a071d",
+    "/tmp/csq14-aiohttp-alias-control.log": "9775dd8f83c68fe734295cae68bf07b0d72160807e3282af93a9eeeb0bc601e4"
+  },
+  "root_review": "Two source/contract passes; actual producer and reached-control evidence inspected. D1 earlier dead-branch finding fixed before clean rounds."
+}

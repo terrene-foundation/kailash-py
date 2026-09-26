@@ -1,0 +1,28 @@
+{
+  "source_commit": "bc877787b",
+  "merge_commit": "70af3a787",
+  "positive": "115 strict tests passed;12reached mutations rejected",
+  "reviewer": "ml_gate_recovery",
+  "clean_rounds": 2,
+  "logs": [
+    "/tmp/csq14-d2-independent-recheck.log",
+    "/tmp/csq14-d2-cancellation-review.log",
+    "/tmp/csq14-d2-independent-suite.log",
+    "/tmp/csq14-lifecycle-mutations-reentrant-setup.log"
+  ],
+  "controls": [
+    "Reentrant rejection deadlockFalse, counter restored",
+    "Original failedsetup ownerclose1 and nativeSQLiteclosed",
+    "Actual taskcancel afterallocatedcomponents closes bothowners",
+    "Reached cleanup omission leavesbothopen andisrejected",
+    "Pre-return SQLite/Postgres cleanup controls rejectomission"
+  ],
+  "limit": "NativeSQLite plus mockedPGprotocol; realPG not credited",
+  "root_review": "Final two source/contract passes and actual reached-control evidence inspected; earlier reproduced findings fixed before clean rounds.",
+  "log_sha256": {
+    "/tmp/csq14-d2-independent-recheck.log": "2132554b6133daf75fb767bf2f849b331ea19ef62002ef8839a9e1264609f969",
+    "/tmp/csq14-d2-cancellation-review.log": "ffd6bcd3f563df90acf7d516fae9582487a84b3585aa11b3b0c4f3efd8904a58",
+    "/tmp/csq14-d2-independent-suite.log": "ec0d294b1e092ab3910b9eae25bc41d0508503dde2ff5e4f1af0b6b27a331d32",
+    "/tmp/csq14-lifecycle-mutations-reentrant-setup.log": "080d6c551475eaf450f2433bac2f14e3ff634485fffca4d49fc69e1fcad96870"
+  }
+}

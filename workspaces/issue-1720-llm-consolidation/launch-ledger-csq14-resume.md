@@ -57,3 +57,35 @@ represented as having passed.
 Obligation discharged: full configured all-files hooks including `pytest-check` passed
 at `fe791935c`; `git diff --exit-code` passed. See `04-validate/csq14-final-hooks-receipt.json`.
 Only evidence/continuity documents changed after that gate.
+
+## New repair dispatch after refreshed CI
+
+ (head ce4c9de67)
+
+DataFlow unit job: 3 failed, 3469 passed, 31 skipped, 56 warnings.
+Root regression job: 3 failed, 3000 passed, 4 skipped, 24 deselected, 64 warnings.
+Other completed workflows pass; CodeQL still pending at observation. No merge yet.
+
+| Active lane | Agent | Branch / sibling suffix | Scope |
+| --- | --- | --- | --- |
+| D1 | ml_gate_recovery | fix/csq14-dataflow-gate / csq14-dataflow-gate | Constructor fixture, configuration, expected warnings |
+| D2 | archive_checkpoint | test/csq14-dataflow-lifecycle / csq14-dataflow-lifecycle | Coroutine rejection cleanup, lifecycle fixtures |
+| R1 | ml_correctness_review | fix/csq14-root-regression / csq14-root-regression | Capability producer inventory and proxy assertion contracts |
+
+All siblings under /Users/esperie/repos/kailash/build/.kailash-py-wt/.
+Root owns test dependency declaration and remaining root-regression warning triage.
+Every new repair needs negative controls, reviews, local parity, then a consolidated push.
+
+R2 active: ml_gate_recovery now also owns frozen-D1-independent six-file root warning repair in sibling csq14-root-warning-contracts, branch test/csq14-root-warning-contracts. R1 additionally owns compatible aiohttp typed request-key migration across all three success paths. Four active siblings; three agents. CodeQL passed; two test jobs remain blockers.
+
+Final-hook obligation reopened for refreshed CI repairs. Per-commit pytest-check may be skipped only with explicit body receipt; rerun complete all-files hooks including pytest-check before nextpromotionpush. D3 regression fixture cleanup active in sibling csq14-dataflow-regression-cleanup, branch test/csq14-dataflow-regression-cleanup, ml_correctness_review owns; original CI DataFlow regression812passed,6skipped,181deselected, but stricter warning run exposed caller-ownedruntime leaks now underrepair.
+
+## Final source freeze and holistic dispatch
+
+Allfive CI-repair implementationlanes landed through13687209e and drained.
+Three detachedsiblingscsq14-holistic-correctness/security/coverage created byroot
+at13687209e beforedispatch; eachprompt requiresresolvedSTEP0 andsourcepin.
+Agents respectivelyml_gate_recovery/archive_checkpoint/ml_correctness_review.
+Each reviews thewhole ce4c9de67...13687209e union with absoluteAST/grepsweeps
+and boundedactualnegativecontrols; no latestshardonlyreview. Parent final
+CIselections running; all-filehookobligation remainsopen beforepush.

@@ -2,9 +2,9 @@
 
 ## Next actions (standing authorization preserved)
 
-1. Local gates are complete. Update PR #2229 to the consolidated dev checkpoint once, then merge after exact-head required checks AND every previously failing test job pass. If live state is MERGED, this D1 directive is discharged. D1 is already approved; advisory type backlog #73 is excluded.
+1. PR #2229 refreshed at ce4c9de67; CI exposed DataFlow unit 3 failures/56 warnings and root regression 3 failures/64 warnings. Allfive repair lanes are now landed through13687209e; three isolated holistic reviewers and final CI gates are active (see .wave-tracker.d/esperie.md). Finish full hooks and exact CI gates, then consolidated repair push, then merge after exact-head required checks AND every previously failing test job pass. If live state is MERGED, this D1 directive is discharged. D1 is already approved; advisory type backlog #73 is excluded.
    Revalidate: `gh pr view 2229 --json state,headRefOid,mergeStateStatus`.
-2. Land every completed branch in dev and remove its clean worktree immediately. Only the primary checkout remains; there are no completed implementation siblings to retain. No PR or CI trigger for dev.
+2. Land every completed branch in dev and remove its clean worktree immediately. All implementation siblings are drained; three detached holistic-review siblings remain until reviews finish. No PR or CI trigger for dev.
    Revalidate: `git worktree list --porcelain` and `git for-each-ref refs/heads refs/remotes`.
 3. Preserve the five inherited stashes. Never restore/drop them without the user's decision. Rejected recovery was deleted and NEVER merged; the approved stale draft was deleted with its landing receipt.
    Revalidate: `git stash list` (five held entries), and archived disposition below.
@@ -35,7 +35,7 @@ pytest configuration cleanup `658d97de4`, watchdog `772f12c64` (merge `03efa7c48
 and Black assertion formatting `db9565623`.
 All implementation worktrees and branches were drained after landing.
 Formatter repair is landed as `e30256691`, with two clean correctness/security rounds; remote promotion still
-points to `28602f1a0` until a single validated consolidated push. Refresh live refs before acting.
+points to `ce4c9de67` until the validated CI-repair push. Refresh live refs before acting.
 
 The final formatter repair sets `combine_as_imports` and consistent first-party namespaces
 in four active configs. Actual old settings produced five Black/isort two-state cycles and
@@ -132,3 +132,14 @@ Final all-files hooks, including the checkpoint-skipped pytest-check, passed at 
 See csq14-final-hooks-receipt.json. Only evidence/continuity documents changed afterward.
 PR still had old 28602f1a0 at this receipt; query its current head/state before acting.
 The required vault sweep/wrapup pair was written and will be restamped after promotion.
+
+## Refreshed CI repair source freeze
+
+Sourcefreeze13687209e: rootfixture/dependencydfcddfe7e, R1auth7fc46af2b,
+D1unitfixturesdddf90871, D3regressioncleanup30cbafa19, D2ownership70af3a787,
+R2earlyruntimevalidation13687209e. Allfive lanes have2cleanreviews; exact
+receipts csq14-{d1,d2,d3,r1,r2}-repair-review.json. OriginalcurrentCIheadce4
+remainsred untilnextpush. Finalsourcegates running /tmp/csq14-integrated-ci-gates.log
+(root3.12 regression + DataFlow3.11 unit/regression), fullall-filehooks next.
+Three readonly holisticreviewtrees namedcsq14-holistic-{correctness,security,coverage}
+are atsourcefreeze; drain afterdeliveredreviews. No implementationbranches remain.
