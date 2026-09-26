@@ -363,7 +363,9 @@ class TestPackageInstallation:
         assert results2 is not None
 
     @patch("kailash.nodes.data.async_sql.AsyncSQLDatabaseNode.async_run")
-    def test_common_use_case_scenarios(self, mock_async_run, runtime, memory_dataflow):
+    def test_common_use_case_scenarios(
+        self, mock_async_run, runtime, file_dataflow, caplog
+    ):
         """Test common use case scenarios that new users try."""
         # Mock database operations
         mock_async_run.return_value = {
@@ -376,7 +378,7 @@ class TestPackageInstallation:
             },
         }
 
-        db = memory_dataflow
+        db = file_dataflow
 
         # Use case 1: User management
         @db.model
@@ -392,6 +394,14 @@ class TestPackageInstallation:
             content: str
             author_id: int
             published: bool = False
+
+        # Update nodes inspect existing physical columns; use the standard file
+        # fixture and real DDL/catalog instead of an unsupported memory catalog.
+        assert db.create_tables_sync("sqlite")
+        schema = db.discover_schema(use_real_inspection=True)
+        assert {"title", "content", "author_id", "published"} <= {
+            column["name"] for column in schema["posts"]["columns"]
+        }
 
         # Test user registration flow
         workflow = WorkflowBuilder()
@@ -423,6 +433,11 @@ class TestPackageInstallation:
         assert "register" in results
         assert "create_post" in results
         assert "publish_post" in results
+        assert not any(
+            record.getMessage()
+            == "engine.unexpected_error_during_async_schema_discovery"
+            for record in caplog.records
+        )
 
     @patch("kailash.nodes.data.async_sql.AsyncSQLDatabaseNode.async_run")
     def test_development_workflow_setup(self, mock_async_run, runtime, memory_dataflow):

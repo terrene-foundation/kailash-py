@@ -33,11 +33,33 @@ source for literal substrings.
 
 from __future__ import annotations
 
+import logging
+from copy import copy
+
 import pytest
 
 from kailash.runtime.distributed import TaskMessage, Worker, _unwrap_node_failure
 from kailash.sdk_exceptions import NodeExecutionError
+from kailash.security import get_security_config, set_security_config
 from kailash.workflow.builder import WorkflowBuilder
+
+
+@pytest.fixture
+def worker_security_config(caplog):
+    """Retry classification exercises real code, without a memory-limit contract."""
+    caplog.set_level(logging.WARNING, logger="kailash.security")
+    previous = get_security_config()
+    config = copy(previous)
+    config.memory_limit = None
+    set_security_config(config)
+    try:
+        yield config
+        assert not any(
+            "Memory limit is NOT enforced" in record.getMessage()
+            for record in caplog.get_records("call")
+        )
+    finally:
+        set_security_config(previous)
 
 
 def _failing_workflow(code: str):
@@ -146,7 +168,7 @@ def test_unwrap_handles_self_referential_chain_without_infinite_loop():
 
 
 @pytest.mark.regression
-def test_execute_workflow_sync_raises_on_leaf_node_failure():
+def test_execute_workflow_sync_raises_on_leaf_node_failure(worker_security_config):
     """LocalRuntime swallows leaf failures; the Worker MUST re-raise."""
 
     worker = Worker(redis_url="redis://localhost:6380", concurrency=1)
@@ -170,7 +192,7 @@ def test_execute_workflow_sync_raises_on_leaf_node_failure():
 
 
 @pytest.mark.regression
-def test_execute_workflow_sync_succeeds_when_no_node_fails():
+def test_execute_workflow_sync_succeeds_when_no_node_fails(worker_security_config):
     """Success path stays untouched: no failed payloads, no raise."""
 
     worker = Worker(redis_url="redis://localhost:6380", concurrency=1)
