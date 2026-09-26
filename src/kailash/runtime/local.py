@@ -2814,7 +2814,15 @@ class LocalRuntime(
                                     workflow_context=workflow_context,
                                 )
                             except Exception as e:
-                                if isinstance(e, ContentAwareExecutionError):
+                                if isinstance(
+                                    e,
+                                    (
+                                        ContentAwareExecutionError,
+                                        WorkflowCancelledError,
+                                        SoftTimeLimitExceeded,
+                                        HardTimeLimitExceeded,
+                                    ),
+                                ):
                                     raise
                                 self.logger.warning(
                                     f"Conditional execution failed, falling back to standard execution: {safe_exception_frames(e)}"
@@ -2844,7 +2852,15 @@ class LocalRuntime(
                                 workflow_context=workflow_context,
                             )
                         except Exception as e:
-                            if isinstance(e, ContentAwareExecutionError):
+                            if isinstance(
+                                e,
+                                (
+                                    ContentAwareExecutionError,
+                                    WorkflowCancelledError,
+                                    SoftTimeLimitExceeded,
+                                    HardTimeLimitExceeded,
+                                ),
+                            ):
                                 raise
                             self.logger.warning(
                                 f"Conditional execution failed, falling back to standard execution: {safe_exception_frames(e)}"
@@ -2874,7 +2890,15 @@ class LocalRuntime(
                             workflow_context=workflow_context,
                         )
                     except Exception as e:
-                        if isinstance(e, ContentAwareExecutionError):
+                        if isinstance(
+                            e,
+                            (
+                                ContentAwareExecutionError,
+                                WorkflowCancelledError,
+                                SoftTimeLimitExceeded,
+                                HardTimeLimitExceeded,
+                            ),
+                        ):
                             raise
                         self.logger.warning(
                             f"Conditional execution failed, falling back to standard execution: {safe_exception_frames(e)}"
@@ -3066,7 +3090,14 @@ class LocalRuntime(
             if _signal_key:
                 self._workflow_signals.pop(_signal_key, None)
 
-            if isinstance(e, ContentAwareExecutionError):
+            if isinstance(
+                e,
+                (
+                    ContentAwareExecutionError,
+                    SoftTimeLimitExceeded,
+                    HardTimeLimitExceeded,
+                ),
+            ):
                 raise
             # Wrap other errors in RuntimeExecutionError
             raise RuntimeExecutionError(
@@ -4937,7 +4968,15 @@ class LocalRuntime(
             return results
 
         except Exception as e:
-            if isinstance(e, ContentAwareExecutionError):
+            if isinstance(
+                e,
+                (
+                    ContentAwareExecutionError,
+                    WorkflowCancelledError,
+                    SoftTimeLimitExceeded,
+                    HardTimeLimitExceeded,
+                ),
+            ):
                 raise
             # Enhanced error logging with fallback reasoning
             self.logger.error(
@@ -4959,25 +4998,11 @@ class LocalRuntime(
                 "Falling back to normal execution approach due to conditional execution failure"
             )
 
-            try:
-                # Execute fallback with additional monitoring
-                fallback_results, _ = await self._execute_async(
-                    workflow=workflow,
-                    parameters=parameters,
-                    task_manager=task_manager,
-                )
-
-                # Track fallback usage for monitoring (mixin signature: workflow, reason)
-                self._track_fallback_usage(workflow, fallback_reason or str(e))
-
-                return fallback_results
-
-            except Exception as fallback_error:
-                self.logger.error(
-                    f"Fallback execution also failed: {safe_exception_frames(fallback_error)}"
-                )
-                # If both conditional and fallback fail, re-raise the original error
-                raise e from fallback_error
+            # The dispatch owner already holds this attempt's context, tracker,
+            # cancellation and checkpoint wiring. Re-entering _execute_async here
+            # selects this same optimization again and recursively retries it.
+            self._track_fallback_usage(workflow, fallback_reason or str(e))
+            raise
 
     async def _execute_switch_nodes(
         self,

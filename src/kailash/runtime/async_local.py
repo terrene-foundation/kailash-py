@@ -1121,21 +1121,9 @@ class AsyncLocalRuntime(LocalRuntime):
 
                 logger.info(f"Workflow execution completed in {total_time:.2f}s")
 
-                # Extract plain results dict
-                # Conditional approach (skip_branches mode) returns plain dict, other methods return tracker wrapper
-                if (
-                    self._has_conditional_patterns(workflow)
-                    and self.conditional_execution == "skip_branches"
-                ):
-                    results = (
-                        tracker_result  # Already plain dict from conditional execution
-                    )
-                else:
-                    results = (
-                        tracker_result.get("results", {})
-                        if isinstance(tracker_result, dict)
-                        else tracker_result
-                    )
+                # Every internal strategy returns the tracker wrapper, including
+                # conditional success and the standard conditional fallback.
+                results = tracker_result.get("results", {})
 
                 # #912 Shard 6: post-completion poll for hard-deadline-fired-
                 # after-success (Shard 2 invariant 5). Even when the workflow
@@ -1260,58 +1248,71 @@ class AsyncLocalRuntime(LocalRuntime):
             logger.info(
                 "Conditional workflow with skip_branches mode detected, using conditional execution"
             )
-            # Use inherited conditional execution from ConditionalExecutionMixin
-            tracker_result = await self._execute_conditional_approach(
-                workflow=workflow,
-                parameters=inputs,
-                task_manager=None,
-                run_id=run_id,
-                workflow_context=None,
+            try:
+                results = await self._execute_conditional_approach(
+                    workflow=workflow,
+                    parameters=inputs,
+                    task_manager=None,
+                    run_id=run_id,
+                    workflow_context=None,
+                )
+                return {"results": results}
+            except (
+                ContentAwareExecutionError,
+                WorkflowCancelledError,
+                SoftTimeLimitExceeded,
+                HardTimeLimitExceeded,
+            ):
+                raise
+            except Exception as error:
+                logger.warning(
+                    "Conditional optimization failed; using standard execution: %s",
+                    safe_exception_frames(error),
+                )
+
+        # Regular execution path
+        # Analyze workflow if enabled
+        execution_plan = None
+        if self.analyzer:
+            execution_plan = self.analyzer.analyze(workflow)
+            logger.info(
+                f"Execution plan: {execution_plan.max_concurrent_nodes} max concurrent, "
+                f"{len(execution_plan.execution_levels)} levels"
+            )
+
+        # W1: when durable execution wiring is active, force the
+        # node-level async path (mixed workflow) so per-node hooks
+        # fire.  The sync-only fallback (``_execute_sync_workflow``)
+        # bypasses ``_execute_sync_node_async`` and would silently
+        # swallow every NodeCompletionEvent — exactly the orphan
+        # failure mode this routing override prevents.
+        w1_active = (
+            self._checkpoint_after_each_node
+            or self._hook_registry.subscriber_count > 0
+            or getattr(context, "_w1_idempotency_key", None) is not None
+        )
+
+        # Choose execution strategy based on analysis
+        if execution_plan and execution_plan.is_fully_async:
+            tracker_result = await self._execute_fully_async_workflow(
+                workflow, context, execution_plan
+            )
+        elif execution_plan and execution_plan.has_async_nodes:
+            tracker_result = await self._execute_mixed_workflow(
+                workflow, context, execution_plan
+            )
+        elif w1_active:
+            # Force the mixed-workflow path so the per-node async
+            # entry point fires.  When the analyzer hasn't classified
+            # any nodes as async, treat them all as sync — they go
+            # through _execute_sync_node_async (thread pool) which
+            # IS a W1-emit caller.
+            synthetic_plan = self._build_w1_sync_only_plan(workflow)
+            tracker_result = await self._execute_mixed_workflow(
+                workflow, context, synthetic_plan
             )
         else:
-            # Regular execution path
-            # Analyze workflow if enabled
-            execution_plan = None
-            if self.analyzer:
-                execution_plan = self.analyzer.analyze(workflow)
-                logger.info(
-                    f"Execution plan: {execution_plan.max_concurrent_nodes} max concurrent, "
-                    f"{len(execution_plan.execution_levels)} levels"
-                )
-
-            # W1: when durable execution wiring is active, force the
-            # node-level async path (mixed workflow) so per-node hooks
-            # fire.  The sync-only fallback (``_execute_sync_workflow``)
-            # bypasses ``_execute_sync_node_async`` and would silently
-            # swallow every NodeCompletionEvent — exactly the orphan
-            # failure mode this routing override prevents.
-            w1_active = (
-                self._checkpoint_after_each_node
-                or self._hook_registry.subscriber_count > 0
-                or getattr(context, "_w1_idempotency_key", None) is not None
-            )
-
-            # Choose execution strategy based on analysis
-            if execution_plan and execution_plan.is_fully_async:
-                tracker_result = await self._execute_fully_async_workflow(
-                    workflow, context, execution_plan
-                )
-            elif execution_plan and execution_plan.has_async_nodes:
-                tracker_result = await self._execute_mixed_workflow(
-                    workflow, context, execution_plan
-                )
-            elif w1_active:
-                # Force the mixed-workflow path so the per-node async
-                # entry point fires.  When the analyzer hasn't classified
-                # any nodes as async, treat them all as sync — they go
-                # through _execute_sync_node_async (thread pool) which
-                # IS a W1-emit caller.
-                synthetic_plan = self._build_w1_sync_only_plan(workflow)
-                tracker_result = await self._execute_mixed_workflow(
-                    workflow, context, synthetic_plan
-                )
-            else:
-                tracker_result = await self._execute_sync_workflow(workflow, context)
+            tracker_result = await self._execute_sync_workflow(workflow, context)
 
         return tracker_result
 
