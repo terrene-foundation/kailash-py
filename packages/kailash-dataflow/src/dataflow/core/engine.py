@@ -631,7 +631,8 @@ class DataFlow(DataFlowEventMixin):
                     "use managed :memory: or a named file: URI with mode=memory&cache=shared "
                     "(memdb VFS requires an absolute name)."
                 )
-        _memory_kind = sqlite_memory_uri_kind(self.config.database.url or "")
+        _memory_database_url = self.config.database.url or ""
+        _memory_kind = sqlite_memory_uri_kind(_memory_database_url)
 
         self._models = {}
         self._registered_models = {}  # Track registered models for compatibility
@@ -824,7 +825,7 @@ class DataFlow(DataFlowEventMixin):
         elif _memory_kind == "shared":
             # Retain a native URI, including explicit driver options, for all
             # producers. The anchor below owns its lifetime across DDL steps.
-            self._memory_db_uri = sqlite_sqlalchemy_url(self.config.database.url)[
+            self._memory_db_uri = sqlite_sqlalchemy_url(_memory_database_url)[
                 len("sqlite:///") :
             ]
 
@@ -1789,6 +1790,7 @@ class DataFlow(DataFlowEventMixin):
             # construction; a URL set on the config after construction does
             # not retroactively change it (DataFlow URLs are set at init).
             db_conf = getattr(self.config, "database", None)
+            db_url = getattr(db_conf, "url", None)
             from kailash.utils.sqlite_url import sqlite_cache_identity_url
 
             db_res = resolve_db_identity(
@@ -1797,10 +1799,10 @@ class DataFlow(DataFlowEventMixin):
                     if self._memory_db_uri is not None
                     else (
                         sqlite_cache_identity_url(
-                            vars(self).get("_sqlite_database_url") or db_conf.url
+                            vars(self).get("_sqlite_database_url") or db_url
                         )
-                        if isinstance(getattr(db_conf, "url", None), str)
-                        else getattr(db_conf, "url", None)
+                        if isinstance(db_url, str)
+                        else db_url
                     )
                 ),
                 host=getattr(db_conf, "host", None),
@@ -2946,9 +2948,8 @@ class DataFlow(DataFlowEventMixin):
             elif is_sqlite_url(database_url) or database_url.endswith(".db"):
                 import sqlite3
 
-                if self._memory_db_uri is not None:
-                    conn = self._open_sqlite_connection(database_url)
-                elif database_url in (":memory:", "sqlite:///:memory:"):
+                conn = self._open_sqlite_connection(database_url)
+                if conn is None:
                     # Bare in-memory with no shared URI — cannot verify against
                     # committed state without reopening a different empty DB.
                     logger.warning(
@@ -2958,8 +2959,6 @@ class DataFlow(DataFlowEventMixin):
                     # Issue #2206: STRUCTURAL — a retry reopens the same
                     # different-empty-DB and returns the identical verdict.
                     return None, "unverifiable-backend"
-                else:
-                    conn = self._open_sqlite_connection(database_url)
                 try:
                     cur = conn.execute(
                         "SELECT name FROM sqlite_master "
@@ -3207,11 +3206,15 @@ class DataFlow(DataFlowEventMixin):
         """
         import sqlite3
 
+        from kailash.utils.sqlite_url import (
+            sqlite_connection_target,
+            sqlite_memory_uri_kind,
+        )
+
         if self._memory_db_uri is not None:
             database_url = self._memory_db_uri
-        elif database_url in (":memory:", "sqlite:///:memory:", "sqlite://:memory:"):
+        elif sqlite_memory_uri_kind(database_url) == "anonymous":
             return None
-        from kailash.utils.sqlite_url import sqlite_connection_target
 
         path, options = sqlite_connection_target(database_url)
         return sqlite3.connect(path, **{"check_same_thread": False, **options})
