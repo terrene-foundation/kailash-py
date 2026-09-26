@@ -9,9 +9,11 @@ import inspect
 import logging
 import os
 import re
+import sys
 import threading
 import time
 import warnings
+from contextlib import asynccontextmanager
 from copy import deepcopy
 from datetime import datetime
 from typing import (
@@ -1635,14 +1637,13 @@ class DataFlow(DataFlowEventMixin):
             if is_postgresql:
                 # Use async connection for PostgreSQL
                 try:
-                    connection = await self._get_async_database_connection()
-                    if connection is None:
-                        # In existing_schema_mode, be more lenient
-                        return self._existing_schema_mode
+                    async with self._async_database_connection_scope() as connection:
+                        if connection is None:
+                            # In existing_schema_mode, be more lenient.
+                            return self._existing_schema_mode
 
-                    # For async connections, try a simple validation
-                    # The connection manager handles the actual validation
-                    return True
+                        # Successful acquisition validates the connection.
+                        return True
                 except Exception as async_error:
                     logger.debug(
                         f"PostgreSQL async connection test failed: {async_error}"
@@ -10752,6 +10753,39 @@ class DataFlow(DataFlowEventMixin):
 
         return connection_context()
 
+    @asynccontextmanager
+    async def _async_database_connection_scope(self):
+        """Release temporary connections without closing TDD-owned handles."""
+        connection, borrowed = await self._acquire_async_database_connection()
+        try:
+            yield connection
+        finally:
+            if connection is not None and not borrowed:
+                completion = asyncio.ensure_future(connection.close())
+                active_error = sys.exc_info()[1]
+                cancellation = (
+                    active_error
+                    if isinstance(active_error, asyncio.CancelledError)
+                    else None
+                )
+                while not completion.done():
+                    try:
+                        await asyncio.shield(completion)
+                    except asyncio.CancelledError as exc:
+                        # Finish owned disposal before propagating a new cancel.
+                        cancellation = exc
+                    except Exception:
+                        # Read the close failure below without losing a cancel.
+                        break
+                try:
+                    completion.result()
+                except BaseException as close_error:
+                    if cancellation is not None:
+                        raise cancellation from close_error
+                    raise
+                if cancellation is not None:
+                    raise cancellation
+
     async def _get_async_database_connection(self) -> Any:
         """Get async database connection for validation or testing.
 
@@ -10761,6 +10795,11 @@ class DataFlow(DataFlowEventMixin):
         the configured backend, e.g. asyncpg ``conn.fetch`` vs aiosqlite
         ``conn.execute``).
         """
+        connection, _ = await DataFlow._acquire_async_database_connection(self)
+        return connection
+
+    async def _acquire_async_database_connection(self) -> Tuple[Any, bool]:
+        """Return the connection and whether its lifecycle belongs to TDD."""
         # Check if we're in TDD mode and have a test context
         from ..testing.tdd_support import (
             get_database_manager,
@@ -10772,11 +10811,11 @@ class DataFlow(DataFlowEventMixin):
             test_context = get_test_context()
             if test_context and test_context.connection:
                 # Return existing test connection for isolation
-                return test_context.connection
+                return test_context.connection, True
             elif test_context:
                 # Get connection through TDD infrastructure
                 db_manager = get_database_manager()
-                return await db_manager.get_test_connection(test_context)
+                return await db_manager.get_test_connection(test_context), True
 
         # Default production behavior - create new connection
         db_url = self.config.database.url
@@ -10789,12 +10828,13 @@ class DataFlow(DataFlowEventMixin):
 
             if db_url.startswith("postgresql://"):
                 db_url = db_url.replace("postgresql://", "")
-            return await open_credentialed_connection(
+            connection = await open_credentialed_connection(
                 asyncpg,
                 f"postgresql://{db_url}",
                 credential_provider=self.config.database.credential_provider,
                 context="PostgreSQL",
             )
+            return connection, False
         elif db_url.startswith("sqlite://") or db_url == ":memory:":
             import aiosqlite
 
@@ -10810,11 +10850,11 @@ class DataFlow(DataFlowEventMixin):
                         f"file:df_mem_{id(self):x}?mode=memory&cache=shared"
                     )
                 memory_uri = self._memory_db_uri
-                return await aiosqlite.connect(memory_uri, uri=True)
+                return await aiosqlite.connect(memory_uri, uri=True), False
             else:
                 # Extract file path from sqlite:///path/to/file.db
                 file_path = db_url.replace("sqlite:///", "/")
-                return await aiosqlite.connect(file_path)
+                return await aiosqlite.connect(file_path), False
         else:
             # Enhanced error with catalog-based solutions (DF-401)
             if ErrorEnhancer is not None:
@@ -11496,54 +11536,52 @@ class DataFlow(DataFlowEventMixin):
         logger.debug("Test table cleanup called")
 
         try:
-            # Get database connection
-            conn = await self._get_async_database_connection()
-            assert conn is not None, "could not acquire async database connection"
+            async with self._async_database_connection_scope() as conn:
+                assert conn is not None, "could not acquire async database connection"
 
-            # Clean up any tables that look like test tables
-            test_table_patterns = [
-                "connection_tests%",
-                "test_%",
-                "%_test_%",
-                "load_test%",
-                "bulk_item%",
-                "article%",
-            ]
+                # Clean up any tables that look like test tables
+                test_table_patterns = [
+                    "connection_tests%",
+                    "test_%",
+                    "%_test_%",
+                    "load_test%",
+                    "bulk_item%",
+                    "article%",
+                ]
 
-            for pattern in test_table_patterns:
-                try:
-                    # Use PostgreSQL-specific query to find and drop test tables
-                    result = await conn.fetch(
-                        """
-                        SELECT schemaname, tablename
-                        FROM pg_tables
-                        WHERE schemaname = 'public'
-                        AND tablename LIKE $1
-                    """,
-                        pattern.lower(),
-                    )
+                for pattern in test_table_patterns:
+                    try:
+                        # Use PostgreSQL-specific query to find and drop test tables
+                        result = await conn.fetch(
+                            """
+                            SELECT schemaname, tablename
+                            FROM pg_tables
+                            WHERE schemaname = 'public'
+                            AND tablename LIKE $1
+                        """,
+                            pattern.lower(),
+                        )
 
-                    for row in result:
-                        table_name = row["tablename"]
-                        if table_name:  # Ensure table_name is not None or empty
-                            try:
-                                await conn.execute(
-                                    f'DROP TABLE IF EXISTS "{table_name}" CASCADE'
-                                )
-                                logger.debug(
-                                    "engine.dropped_test_table",
-                                    extra={"table_name": table_name},
-                                )
-                            except Exception as e:
-                                logger.debug(
-                                    f"Failed to drop test table {table_name}: {e}"
-                                )
-                except Exception as e:
-                    logger.debug(
-                        f"Failed to query test tables with pattern {pattern}: {e}"
-                    )
+                        for row in result:
+                            table_name = row["tablename"]
+                            if table_name:  # Ensure table_name is not None or empty
+                                try:
+                                    await conn.execute(
+                                        f'DROP TABLE IF EXISTS "{table_name}" CASCADE'
+                                    )
+                                    logger.debug(
+                                        "engine.dropped_test_table",
+                                        extra={"table_name": table_name},
+                                    )
+                                except Exception as e:
+                                    logger.debug(
+                                        f"Failed to drop test table {table_name}: {e}"
+                                    )
+                    except Exception as e:
+                        logger.debug(
+                            f"Failed to query test tables with pattern {pattern}: {e}"
+                        )
 
-            await conn.close()
         except Exception as e:
             logger.debug("engine.test_table_cleanup_failed", extra={"error": str(e)})
             # Don't raise - cleanup failures shouldn't break tests
