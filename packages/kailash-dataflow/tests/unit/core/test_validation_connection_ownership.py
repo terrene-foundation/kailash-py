@@ -13,9 +13,13 @@ from dataflow.testing import tdd_support
 
 
 @pytest.fixture
-async def db(monkeypatch):
+async def db(monkeypatch, request):
     monkeypatch.delenv("DATAFLOW_TDD_MODE", raising=False)
-    database = DataFlow("sqlite:///:memory:", auto_migrate=False, test_mode=False)
+    database = DataFlow(
+        getattr(request, "param", "sqlite:///:memory:"),
+        auto_migrate=False,
+        test_mode=False,
+    )
     try:
         yield database
     finally:
@@ -59,6 +63,9 @@ async def test_scope_closes_only_owned_real_connection(
 
 
 @pytest.mark.parametrize("lazy", [False, True])
+@pytest.mark.parametrize(
+    "db", ["postgresql://ownership@localhost:5432/ownership"], indirect=True
+)
 async def test_validation_keeps_tdd_manager_connection(db, monkeypatch, lazy):
     connection = await aiosqlite.connect(":memory:")
     context = SimpleNamespace(connection=None if lazy else connection)
@@ -66,24 +73,23 @@ async def test_validation_keeps_tdd_manager_connection(db, monkeypatch, lazy):
     monkeypatch.setenv("DATAFLOW_TDD_MODE", "true")
     monkeypatch.setattr(tdd_support, "_current_test_context", context)
     monkeypatch.setattr(tdd_support, "get_database_manager", lambda: manager)
-    with monkeypatch.context() as config:
-        config.setattr(db.config.database, "url", "postgresql://localhost/ownership")
-        try:
-            assert await db._validate_database_connection() is True
-            async with connection.execute("SELECT 3") as cursor:
-                assert await cursor.fetchone() == (3,)
-            assert manager.get_test_connection.await_count == int(lazy)
-        finally:
-            await connection.close()
+    try:
+        assert await db._validate_database_connection() is True
+        async with connection.execute("SELECT 3") as cursor:
+            assert await cursor.fetchone() == (3,)
+        assert manager.get_test_connection.await_count == int(lazy)
+    finally:
+        await connection.close()
 
 
+@pytest.mark.parametrize(
+    "db", ["postgresql://ownership@localhost:5432/ownership"], indirect=True
+)
 async def test_validation_closes_new_postgresql_handle(db, monkeypatch):
     connection = SimpleNamespace(close=AsyncMock())
     opener = AsyncMock(return_value=connection)
     monkeypatch.setattr(engine, "open_credentialed_connection", opener)
-    with monkeypatch.context() as config:
-        config.setattr(db.config.database, "url", "postgresql://localhost/ownership")
-        assert await db._validate_database_connection() is True
+    assert await db._validate_database_connection() is True
     opener.assert_awaited_once()
     connection.close.assert_awaited_once()
 
@@ -192,6 +198,9 @@ async def test_connection_only_wrapper_leaves_lifecycle_to_caller(db, monkeypatc
         (False, 2, "validation"),
     ],
 )
+@pytest.mark.parametrize(
+    "db", ["postgresql://ownership@localhost:5432/ownership"], indirect=True
+)
 async def test_cancel_wins_over_owned_close_failure(
     db, monkeypatch, body_cancel, new_cancels, entrypoint
 ):
@@ -214,9 +223,6 @@ async def test_cancel_wins_over_owned_close_failure(
         AsyncMock(return_value=(connection, False)),
     )
 
-    old_url = db.config.database.url
-    db.config.database.url = "postgresql://localhost/ownership"
-
     async def drive():
         if entrypoint == "validation":
             return await db._validate_database_connection()
@@ -225,8 +231,8 @@ async def test_cancel_wins_over_owned_close_failure(
                 raise body_error
 
     task = asyncio.create_task(drive())
-    await started.wait()
     try:
+        await asyncio.wait_for(started.wait(), timeout=5)
         for _ in range(new_cancels):
             task.cancel("caller cancelled")
             await asyncio.sleep(0)
@@ -240,7 +246,6 @@ async def test_cancel_wins_over_owned_close_failure(
         with pytest.raises(ValueError, match="no active connection"):
             await connection.execute("SELECT 1")
     finally:
-        db.config.database.url = old_url
         release.set()
         await asyncio.gather(task, return_exceptions=True)
         await original_close()

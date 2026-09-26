@@ -109,9 +109,13 @@ class TestSQLiteTransactionDel:
         # Simulate a connection was acquired but never committed or rolled back
         txn.connection = object()
 
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            txn.__del__()
+        try:
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                txn.__del__()
+        finally:
+            # The manual finalizer call consumed this test-owned fake handle.
+            txn.connection = None
 
         resource_warnings = [
             w for w in caught if issubclass(w.category, ResourceWarning)
@@ -126,9 +130,13 @@ class TestSQLiteTransactionDel:
         txn = SQLiteTransaction(adapter)
         txn.connection = object()
 
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            txn.__del__()
+        try:
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                txn.__del__()
+        finally:
+            # The manual finalizer call consumed this test-owned fake handle.
+            txn.connection = None
 
         resource_warnings = [
             w for w in caught if issubclass(w.category, ResourceWarning)
@@ -181,9 +189,13 @@ class TestSQLiteTransactionDel:
         fake_conn = FakeConnection()
         txn.connection = fake_conn
 
-        with warnings.catch_warnings(record=True):
-            warnings.simplefilter("always")
-            txn.__del__()
+        try:
+            with warnings.catch_warnings(record=True):
+                warnings.simplefilter("always")
+                txn.__del__()
+        finally:
+            # The manual finalizer call consumed this test-owned fake handle.
+            txn.connection = None
 
         assert not fake_conn._conn.rollback_called, (
             "__del__ must not call _conn.rollback() -- it is blocking database "
