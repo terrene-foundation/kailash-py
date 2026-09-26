@@ -1,0 +1,251 @@
+{
+  "recovery_validation": {
+    "head": "709759a385ae5950fdeab2eda739718dddfb75e3",
+    "scope": "Historical artifact recovery and the specifically listed fresh structural checks. No new SDK execution, HTTP, Docker, CI, package publication, or runtime-security certification.",
+    "prior_runtime_results": "Not-Run in this recovery. Results inside prior_session_report were recorded by the prior session; source hashes were rechecked, but runtime assertions were not rerun.",
+    "ref_deletion_authorized": false,
+    "verdict": "Pass",
+    "verified": "Ref tip, merge base, eleven archived blobs and seven receipt ancestors checked. Removing only the diagnostic fixture reproduces the base AST; deleting a baseline async function rejects equality.",
+    "limitation": "Prior semantic dispositions are preserved as historical judgments; this recovery does not independently certify their current behavior or the architecture presentation. Local absolute root redacted to dot."
+  },
+  "source_report_sha256": "aeb66a9edbb072edb311f4a3373d03b77cce2a2db2efef8defda6225ff1dbd2d",
+  "prior_session_report": {
+    "scope": "Exactly eleven incidental unmatched paths on named archived diagnostic branch; no source/ref mutations, no test or CI launch.",
+    "root": ".",
+    "head": "709759a385ae5950fdeab2eda739718dddfb75e3",
+    "ref": "refs/archive/2026-08-21/debug/issue-1010-phase-a-prime-linux",
+    "tip": "cface915007d3a8d631671cbfa561cb8708cf47c",
+    "merge_base": "4075918d4427b98d0df933196be1718ea77716fc",
+    "ran": true,
+    "spec_context": {
+      "specs/testing-tiers.md": "Tier 2 real infrastructure, fixtures explicitly close DataFlow; finalizers warning-only.",
+      "specs/dataflow-core.md": "Per-loop caches and explicit owned/shared resource lifecycle; no behavioral changes proposed."
+    },
+    "receipt_ancestry": "All seven listed landed receipts verified ancestors of pinned HEAD.",
+    "already_retained_journal_receipt": "4cd59052d74496b705f1b915b08b6bfe83e6173d",
+    "files": [
+      {
+        "path": ".github/workflows/unified-ci.yml",
+        "archived_blob": "0426c9f0613b32ef7703108cea74c7c1739682f5",
+        "lines": 333,
+        "disposition": "superseded_one_off_diagnostic_workflow",
+        "evidence": [
+          "Adds debug/* trigger and exact debug-branch-only DATAFLOW_DIAGNOSE_FINALIZE=1/faulthandler capture plus temporary log upload.",
+          "Current workflow comments explicitly record #1010/#1002 setsid closure; normal pytest invocation replaces diagnostic wrapper."
+        ],
+        "receipts": [
+          "a9bc2c7c82c6587fca97acc128bb8c2b6547719d",
+          "512fc4a5ee90a19d2b60baf806acf3cc20305067",
+          "c627777706e6272abade6cd67f8cce10b0d07e28"
+        ]
+      },
+      {
+        "path": ".session-notes",
+        "archived_blob": "4052b1a591dd6836b06687cd8aa2aa49afc86290",
+        "lines": 112,
+        "disposition": "superseded_historical_handoff_notes",
+        "evidence": [
+          "- **`setsid` wrapper** at `.github/workflows/unified-ci.yml:251-289`",
+          "  Shard 2 \u2192 3 \u2192 4a \u2192 4b \u2192 release/v2.9.8.",
+          "- **`architecture-presentation/`** workspace remains on HOLD across",
+          "  full closure) + release-prep PR cuts v2.9.8.",
+          "> \"Verify on CI: remove the setsid wrapper from",
+          "wrapper. Release-prep cuts v2.9.8.",
+          "release). Re-enumerate at start of release/v2.9.8 cycle per template"
+        ],
+        "receipts": [
+          "512fc4a5ee90a19d2b60baf806acf3cc20305067",
+          "c627777706e6272abade6cd67f8cce10b0d07e28"
+        ],
+        "limit": "Adjudication covers historical CI/lifecycle status and unpublished-draft pointers, not fresh revalidation of every broad hypothesis in handoff prose."
+      },
+      {
+        "path": "packages/kailash-dataflow/tests/conftest.py",
+        "archived_blob": "eec573e54972fa3c505c1a7064f9d1855808ad4a",
+        "lines": 1172,
+        "disposition": "superseded_gated_forensic_fixture",
+        "evidence": [
+          "Removing only _issue_1010_finalize_diagnostics makes entire archived AST equal merge-base AST.",
+          "Gate: if os.getenv(\"DATAFLOW_DIAGNOSE_FINALIZE\") != \"1\": yield; return.",
+          "Current conftest retains explicit connection closure and _patch_aiosqlite_worker_threads_daemon, whose source cites diagnostic CI run 25906188360."
+        ],
+        "negative_control": "Deleting a baseline AsyncFunctionDef after diagnostic removal makes comparator reject.",
+        "receipts": [
+          "a8b54a97836ce11d552c879375f63b91b7bfede5",
+          "a9bc2c7c82c6587fca97acc128bb8c2b6547719d"
+        ]
+      },
+      {
+        "path": "packages/kailash-dataflow/uv.lock",
+        "archived_blob": "aaa7370a9593dbaa942c64e3660415bf4e2c6dd7",
+        "lines": 2994,
+        "disposition": "superseded_historical_dependency_resolution",
+        "evidence": {
+          "merge_base": {
+            "package_count": 152,
+            "selected": {
+              "kailash": "2.13.4",
+              "kailash-dataflow": "2.7.9"
+            }
+          },
+          "archive": {
+            "package_count": 109,
+            "selected": {
+              "kailash": "2.21.0",
+              "kailash-dataflow": "2.9.7",
+              "pytest-timeout": "2.4.0"
+            }
+          },
+          "current": {
+            "package_count": 112,
+            "selected": {
+              "kailash": "2.65.0",
+              "kailash-dataflow": "2.20.1",
+              "pytest-timeout": "2.4.0"
+            }
+          }
+        },
+        "receipts": [
+          "fb9c11962e63c1670135a2f088ccf70785dfa829",
+          "4e7ef9ba0b9f04b8ed6449155356e4b2f9808f2a"
+        ],
+        "limit": "No resolver/install rerun; current lock preserves pytest-timeout 2.4.0, the sole newly added package in archived graph."
+      },
+      {
+        "path": "pytestdebug.log",
+        "archived_blob": "738f3932f651e7510e4ea20871c0433b5fcb15f5",
+        "lines": 3015,
+        "disposition": "historical_generated_collection_trace",
+        "evidence": [
+          "versions pytest-8.4.2, python-3.13.7.final.0",
+          "args=('packages/kailash-dataflow/tests/unit/test_derived_model.py', '--collect-only', '-q', '--debug')",
+          "  pytest_cmdline_main [hook]",
+          "      config: <_pytest.config.Config object at 0x1071278c0>",
+          "    pytest_plugin_registered [hook]",
+          "        manager: <_pytest.config.PytestPluginManager object at 0x107125010>",
+          "    finish pytest_plugin_registered --> [] [hook]"
+        ],
+        "limit": "Historical pytest --collect-only --debug output; not executable test coverage or a fresh CI result."
+      },
+      {
+        "path": "workspaces/architecture-presentation/ARCHITECTURE.md",
+        "archived_blob": "f26a5f04608cb01815d9748cf5f9071a539c5855",
+        "lines": 451,
+        "disposition": "unique_unpublished_presentation_draft_retained_only_in_archive",
+        "evidence": [
+          "451-line architecture presentation, version snapshot Core 2.20.3 and roadmap quarters 2026-Q3 through 2027-Q2.",
+          "Archived root .session-notes: architecture-presentation/ workspace remains on HOLD.",
+          "Archived issue-979 notes explicitly preserve architecture-presentation workspace on HOLD.",
+          "Includes presentation talking points, cost/capacity assertions and future slide-production notes."
+        ],
+        "limit": "No landing receipt found for this draft. Its product, performance and security assertions were not certified; unpublished historical content is not a production defect or approved implementation contract. Keep archive reference; no automatic restore advised."
+      },
+      {
+        "path": "workspaces/issue-1002-aiosqlite-fixture-cleanup/.journal-skipped.log",
+        "archived_blob": "51ec63b9bc6a6a90e0d3e77fb5e3e1bbd5060065",
+        "lines": 22,
+        "disposition": "historical_generated_hook_bookkeeping",
+        "evidence": {
+          "first_two_lines": [
+            "2026-05-14T13:05:18.419Z <journal-skip>commit=b0ba53ef3d89 reason=merge-commit subject=\"Merge pull request #1004 from terrene-foundation/fix/issue-1002-shard1-high-concentration-cleanup\"</journal-skip>",
+            "2026-05-14T13:05:18.420Z <journal-skip>commit=3393a64f68a8 reason=fix-routine subject=\"fix(dataflow): close inline DataFlow in tests/unit/test_cache_invalidation_bug.py (#1002)\"</journal-skip>"
+          ],
+          "last_two_lines": [
+            "2026-05-14T20:02:38.379Z <journal-skip>commit=5b67811bf7b5 reason=fix-routine subject=\"fix(dataflow): close inline DataFlow in tests/unit/{lazy_connection,upsert_conflict,architecture,2026_001_fixes} (#1002)\"</journal-skip>",
+            "2026-05-14T20:02:38.380Z <journal-skip>commit=b4020e91e42c reason=fix-routine subject=\"fix(dataflow): close inline DataFlow in tests/unit/{context_aware,upsert,engine_errors} (#1002)\"</journal-skip>"
+          ]
+        },
+        "limit": "Skipped-journal bookkeeping is retained by archive; not unique executable behavior. Four actual journal entries from this ref were separately landed.",
+        "receipts": [
+          "4cd59052d74496b705f1b915b08b6bfe83e6173d"
+        ]
+      },
+      {
+        "path": "workspaces/issue-1002-aiosqlite-fixture-cleanup/.session-notes",
+        "archived_blob": "842fc94552bfb9d841019ddd68bdc89cef43b343",
+        "lines": 64,
+        "disposition": "superseded_historical_handoff_notes",
+        "evidence": [
+          "kailash-dataflow 2.9.8 shipped (PyPI verified, clean-venv install confirmed",
+          "`__version__ == \"2.9.8\"`). Issues #1000 + #1002 stay OPEN \u2014 full closure",
+          "**issue #1010**. PR #1008 (Shard 4b setsid removal) closed without merge",
+          "> \"Verify on CI: remove the setsid wrapper from",
+          "**Trees** this session: shipped Shards 1-3 + 4a + v2.9.8 partial-closure",
+          "- Shard 4b setsid removal \u2014 anchor: `briefs/00-brief.md:5-7` verbatim above."
+        ],
+        "receipts": [
+          "512fc4a5ee90a19d2b60baf806acf3cc20305067",
+          "c627777706e6272abade6cd67f8cce10b0d07e28"
+        ],
+        "limit": "Adjudication covers historical CI/lifecycle status and unpublished-draft pointers, not fresh revalidation of every broad hypothesis in handoff prose."
+      },
+      {
+        "path": "workspaces/issue-912-task-time-limits/.journal-skipped.log",
+        "archived_blob": "604f02bd5809971588a3a4494bc9507043c7b7d1",
+        "lines": 5,
+        "disposition": "historical_generated_hook_bookkeeping",
+        "evidence": {
+          "first_two_lines": [
+            "2026-05-13T10:51:31.931Z <journal-skip>commit=21ba8e6a641a reason=docs-routine subject=\"docs(deploy): record kailash 2.21.0 release deployment\"</journal-skip>",
+            "2026-05-13T10:51:31.931Z <journal-skip>commit=c8606e272b2f reason=merge-commit subject=\"Merge pull request #978 from terrene-foundation/release/v2.21.0\"</journal-skip>"
+          ],
+          "last_two_lines": [
+            "2026-05-13T10:51:31.932Z <journal-skip>commit=bdf54b6e6b84 reason=merge-commit subject=\"Merge pull request #977 from terrene-foundation/revert/968-dataflow-unit-ci-gate\"</journal-skip>",
+            "2026-05-13T10:51:31.932Z <journal-skip>commit=7909d813f194 reason=no-match subject=\"Revert \"Merge pull request #968 from terrene-foundation/feat/issue-898-shard2-dataflow-unit-ci-gate\"\"</journal-skip>"
+          ]
+        },
+        "limit": "Skipped-journal bookkeeping is retained by archive; not unique executable behavior. Four actual journal entries from this ref were separately landed.",
+        "receipts": [
+          "4cd59052d74496b705f1b915b08b6bfe83e6173d"
+        ]
+      },
+      {
+        "path": "workspaces/issue-979-dataflow-unit-triage/.journal-skipped.log",
+        "archived_blob": "57395b1ff65f2fd0b968532c9de45ed185e8e582",
+        "lines": 67,
+        "disposition": "historical_generated_hook_bookkeeping",
+        "evidence": {
+          "first_two_lines": [
+            "2026-05-14T00:37:18.882Z <journal-skip>commit=d655038e9b8c reason=merge-commit subject=\"Merge pull request #987 from terrene-foundation/release/v2.9.3\"</journal-skip>",
+            "2026-05-14T00:37:18.882Z <journal-skip>commit=50cb5c825270 reason=no-match subject=\"release(kailash-dataflow): cut 2.9.3 \u2014 S3 fabric tier + conftest refinement\"</journal-skip>"
+          ],
+          "last_two_lines": [
+            "2026-05-14T11:09:28.014Z <journal-skip>commit=9dd8db58917d reason=merge-commit subject=\"Merge pull request #994 from terrene-foundation/release/v2.9.6\"</journal-skip>",
+            "2026-05-14T11:09:28.014Z <journal-skip>commit=ce8bdd435f08 reason=no-match subject=\"release(kailash-dataflow): cut 2.9.6 \u2014 S6 of #979 final shard\"</journal-skip>"
+          ]
+        },
+        "limit": "Skipped-journal bookkeeping is retained by archive; not unique executable behavior. Four actual journal entries from this ref were separately landed.",
+        "receipts": [
+          "4cd59052d74496b705f1b915b08b6bfe83e6173d"
+        ]
+      },
+      {
+        "path": "workspaces/issue-979-dataflow-unit-triage/.session-notes",
+        "archived_blob": "b558b53a03b45d71055905a418ff3034a264af99",
+        "lines": 69,
+        "disposition": "superseded_historical_handoff_notes",
+        "evidence": [
+          "CI setsid wrapper REMAINS protecting a different root cause. Follow-up",
+          "scope). After PR #1001 merges, cut `release/v2.9.7` per `rules/git.md`",
+          "   the [2.9.7] entry to write in the `release/v2.9.7` branch",
+          "  still running when /wrapup invoked. DataFlow Tier-1 (setsid-wrapped)",
+          "- `release/v2.9.7` branch NOT cut. CHANGELOG entry NOT written.",
+          "  workspace on HOLD; pytestdebug.log; two .journal-skipped.log files).",
+          "- DO NOT remove the `setsid` wrapper from `.github/workflows/unified-ci.yml`",
+          "- DO NOT cut `release/v2.9.7` from a `feat/`/`fix/` branch \u2014 `release/v*`"
+        ],
+        "receipts": [
+          "512fc4a5ee90a19d2b60baf806acf3cc20305067",
+          "c627777706e6272abade6cd67f8cce10b0d07e28"
+        ],
+        "limit": "Adjudication covers historical CI/lifecycle status and unpublished-draft pointers, not fresh revalidation of every broad hypothesis in handoff prose."
+      }
+    ],
+    "conclusion": "No missing executable contract established in these eleven paths. The architecture presentation remains unique unpublished historical content, explicitly retained in archive rather than mislabeled landed. No archive deletion or implementation authorized by this audit.",
+    "limits": [
+      "Historical commit messages supply landing/CI receipts, not independently rerun historical CI.",
+      "No certification of all DataFlow lifecycle behavior, dependency resolution, or presentation product/security/benchmark assertions.",
+      "No generalization to other archived refs or unmatched paths."
+    ]
+  }
+}

@@ -140,7 +140,10 @@
         "f68af4194 debug(dataflow): route diagnostics to on-disk file + disable pytest capture",
         "cface9150 debug(ci): rename diagnostic branch references for Phase A-prime"
       ],
-      "retention_status": "diagnostics-superseded-baggage-unverified"
+      "retention_status": "diagnostics-superseded-baggage-unverified",
+      "recovery_followups": [
+        "csq13-debug-1010-incidental-adjudication.json"
+      ]
     },
     {
       "ref": "refs/archive/2026-08-21/dev",
@@ -326,7 +329,10 @@
         "Observed overlap with current runtime cleanup recovery, but did not treat different implementations or absent old files as behavioral equivalence."
       ],
       "remaining": "Remaining contracts not re-derived:0b020abd9 context-aware Python sanitization,5f0a931de Python variable persistence,77d85299b/f36b10e91 Docker runtime threading, plus broad2025doc/skills replacements. Surface exceeds bounded multi-invariant review; retain archive, no blind merge.",
-      "retention_status": "unresolved"
+      "retention_status": "unresolved",
+      "recovery_followups": [
+        "csq13-devex-archive-adjudication.json"
+      ]
     },
     {
       "ref": "refs/archive/2026-08-21/fix/2070-logging-hook-redaction-defeat",
@@ -766,7 +772,12 @@
       ],
       "retention_status": "unverified-large-mixed-snapshot",
       "bounded_followup": "csq13-scrap-trust-adjudication.json",
-      "remaining": "Named envelope.py and auth/chain.py are retained then deliberately hardened/superseded with ancestor receipts and actual controls. Remaining271snapshot paths are not adjudicated by this bounded follow-up; retain mixed archive."
+      "remaining": "Named envelope.py and auth/chain.py are retained then deliberately hardened/superseded with ancestor receipts and actual controls. Remaining271snapshot paths are not adjudicated by this bounded follow-up; retain mixed archive.",
+      "recovery_followups": [
+        "csq13-scrap-ast-retention.json",
+        "csq13-scrap-import-normalized-retention.json",
+        "csq13-scrap-nonimport-retention.json"
+      ]
     },
     {
       "ref": "refs/archive/2026-08-21/sync/main-with-dataflow-v0.4.3-release",
@@ -805,5 +816,8 @@
       "retention_status": "landed-equivalent"
     }
   ],
-  "followup_reviewed_head": "db9565623dd03620e03869fc63e4d51c9ceedd67"
+  "followup_reviewed_head": "db9565623dd03620e03869fc63e4d51c9ceedd67",
+  "recovery_reviewed_head": "709759a385ae5950fdeab2eda739718dddfb75e3",
+  "recovery_verification": "csq14-archive-recovery-verification.json",
+  "recovery_scope": "Recovered prior reports with explicit fresh structural checks; original archive-wide dispositions are not upgraded by source identity or import-insensitive candidate matches."
 }

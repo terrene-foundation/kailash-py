@@ -1,0 +1,238 @@
+{
+  "recovery_validation": {
+    "head": "709759a385ae5950fdeab2eda739718dddfb75e3",
+    "scope": "Historical artifact recovery and the specifically listed fresh structural checks. No new SDK execution, HTTP, Docker, CI, package publication, or runtime-security certification.",
+    "prior_runtime_results": "Not-Run in this recovery. Results inside prior_session_report were recorded by the prior session; source hashes were rechecked, but runtime assertions were not rerun.",
+    "ref_deletion_authorized": false,
+    "verdict": "Pass",
+    "verified": "All seven exact ancestor/path/blob receipts, differing parent blobs, six source hashes, superseding-commit ancestry and two native awaited AST callsites checked. Wrong-method AST control rejected."
+  },
+  "source_report_sha256": "d1a2e2ab0ee6a0257c3aaff937e137671b39a970a9f5b3c8989b67ed5a87afde",
+  "prior_session_report": {
+    "scope": "Four named archived implementation contracts only; source reads and actual local Python executor/runtime probes. No Docker launch or API HTTP integration run.",
+    "head_at_final_read": "709759a385ae5950fdeab2eda739718dddfb75e3",
+    "verdict": "No missing implementation found within the four audited contracts. Exact source versions landed in current ancestry; current intent retained with explicit later supersessions.",
+    "spec_quotes": {
+      "specs/core-nodes.md:87": "MUST be stateless -- no side effects between runs",
+      "specs/core-runtime.md:210": "Returns: tuple[dict[str, Any], str] -- (results_dict, run_id)",
+      "specs/core-runtime.md:342": "Auto-detects runtime context when context=None (default). Checks for a running event loop to decide between async and sync."
+    },
+    "rows": [
+      {
+        "archived_commit": "0b020abd9",
+        "disposition": "retained intent; old partial HTML stripping superseded",
+        "current_properties": [
+          "CodeExecutor.execute_code and execute_function both use context=python_exec",
+          "Shell metacharacters preserved in both actual executor paths",
+          "python_exec now passes strings through after validation; not an HTML output sanitizer"
+        ],
+        "superseding_commit": "5b3ce05d7",
+        "source_locations": [
+          "src/kailash/security.py:1229",
+          "src/kailash/nodes/code/python.py:541",
+          "src/kailash/nodes/code/python.py:693"
+        ],
+        "probe": "context_preservation",
+        "exact_ancestor_receipts": [
+          {
+            "archived_commit": "0b020abd9",
+            "path": "src/kailash/security.py",
+            "blob": "6f266bbf44c65e3aac94916dcf316bf1b48f136a",
+            "exact_content_ancestor_receipts": [
+              {
+                "ancestor": "cb50071d65a989f0ab3ff14ca83dfb70bf9c3a16",
+                "blob": "6f266bbf44c65e3aac94916dcf316bf1b48f136a",
+                "parent_blob": "f9a975196375ce74f48699703fe8fa540c3d2c34",
+                "parent_differs": true
+              }
+            ]
+          },
+          {
+            "archived_commit": "0b020abd9",
+            "path": "src/kailash/nodes/code/python.py",
+            "blob": "b265174185b468ade11a34d92c2dc0cdbe55870c",
+            "exact_content_ancestor_receipts": [
+              {
+                "ancestor": "cb50071d65a989f0ab3ff14ca83dfb70bf9c3a16",
+                "blob": "b265174185b468ade11a34d92c2dc0cdbe55870c",
+                "parent_blob": "fb600a114bd48f460cb8d0c42b658e4467285dbd",
+                "parent_differs": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "archived_commit": "5f0a931de",
+        "disposition": "retained isolation",
+        "current_properties": [
+          "Fresh local namespace per execution",
+          "Runtime input preparation merges into per-execution inputs without mutating node configuration",
+          "Repeated same-node and same-workflow calls forget omitted prior optional values"
+        ],
+        "source_locations": [
+          "src/kailash/nodes/code/python.py:620",
+          "src/kailash/nodes/code/python.py:653",
+          "src/kailash/runtime/local.py:3884"
+        ],
+        "probe": "variable_isolation",
+        "negative_control": "Injecting PERSISTED_CONTROL into the isolated workflow node config makes the next omitted-parameter execution return PERSISTED_CONTROL; unmutated configuration returns NOT_SET.",
+        "exact_ancestor_receipts": [
+          {
+            "archived_commit": "5f0a931de",
+            "path": "src/kailash/nodes/code/python.py",
+            "blob": "e00b7c0868891c0e8dc21b4852fc16fa775f03f3",
+            "exact_content_ancestor_receipts": [
+              {
+                "ancestor": "559231f72c889028c89b36a08803570deaa22ce0",
+                "blob": "e00b7c0868891c0e8dc21b4852fc16fa775f03f3",
+                "parent_blob": "b265174185b468ade11a34d92c2dc0cdbe55870c",
+                "parent_differs": true
+              }
+            ]
+          },
+          {
+            "archived_commit": "5f0a931de",
+            "path": "src/kailash/runtime/local.py",
+            "blob": "7aafc39080e8d5a0b58951175aa9a224ab56a1b3",
+            "exact_content_ancestor_receipts": [
+              {
+                "ancestor": "559231f72c889028c89b36a08803570deaa22ce0",
+                "blob": "7aafc39080e8d5a0b58951175aa9a224ab56a1b3",
+                "parent_blob": "a5b383a0b4cce6c122af796486b20c9e7e08a7a6",
+                "parent_differs": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "archived_commit": "77d85299b",
+        "disposition": "retained async default and explicit runtime selection; factory default superseded by context auto-detection",
+        "current_properties": [
+          "WorkflowAPI defaults to owned AsyncLocalRuntime",
+          "Both API execution paths await native async method; explicitly supplied sync runtime uses to_thread",
+          "get_runtime supports explicit async/sync plus current default auto-context selection"
+        ],
+        "superseding_factory_commit": "e61e2cdf3",
+        "source_locations": [
+          "src/kailash/api/workflow_api.py:223",
+          "src/kailash/api/workflow_api.py:438",
+          "src/kailash/api/workflow_api.py:656",
+          "src/kailash/runtime/__init__.py"
+        ],
+        "ast_callsites": [
+          {
+            "function": "_execute_sync",
+            "lines": [
+              439
+            ]
+          },
+          {
+            "function": "_execute_stream",
+            "lines": [
+              657
+            ]
+          }
+        ],
+        "probe": "runtime_threading",
+        "exact_ancestor_receipts": [
+          {
+            "archived_commit": "77d85299b",
+            "path": "src/kailash/api/workflow_api.py",
+            "blob": "4c72a3187a9236eac60a8952186fd3e9019eb557",
+            "exact_content_ancestor_receipts": [
+              {
+                "ancestor": "b9c14177bc278e7c7c484927b4b71bf57c6ca9c9",
+                "blob": "4c72a3187a9236eac60a8952186fd3e9019eb557",
+                "parent_blob": "d7e623ae4d50812a8dcdbd1c6799599f8636e42a",
+                "parent_differs": true
+              }
+            ]
+          },
+          {
+            "archived_commit": "77d85299b",
+            "path": "src/kailash/runtime/__init__.py",
+            "blob": "c676197176d8f21995055c49570fa2244afbefd7",
+            "exact_content_ancestor_receipts": [
+              {
+                "ancestor": "b9c14177bc278e7c7c484927b4b71bf57c6ca9c9",
+                "blob": "c676197176d8f21995055c49570fa2244afbefd7",
+                "parent_blob": "fee2517bd5d949e176bcedb03d3c0f72456d2ad7",
+                "parent_differs": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "archived_commit": "f36b10e91",
+        "disposition": "retained native async overrides; current return contract is tuple",
+        "current_properties": [
+          "execute rejects invocation from a running loop with actionable RuntimeError",
+          "execute_async delegates to native async workflow execution",
+          "Actual connected nodes return 84 via execute_workflow_async and execute_async; owned pool closes and caller loop remains open"
+        ],
+        "source_locations": [
+          "src/kailash/runtime/async_local.py:722",
+          "src/kailash/runtime/async_local.py:810",
+          "src/kailash/runtime/async_local.py:850",
+          "src/kailash/runtime/async_local.py:1997"
+        ],
+        "probe": "runtime_threading",
+        "exact_ancestor_receipts": [
+          {
+            "archived_commit": "f36b10e91",
+            "path": "src/kailash/runtime/async_local.py",
+            "blob": "0a47e90e139682a135d9bde7b9a54c3208ac7f75",
+            "exact_content_ancestor_receipts": [
+              {
+                "ancestor": "2809fa708edca34f336a161d3a5840821cff6574",
+                "blob": "0a47e90e139682a135d9bde7b9a54c3208ac7f75",
+                "parent_blob": "52154050bcee02d366ddfbf11715787408828ef4",
+                "parent_differs": true
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "actual_probe_results": {
+      "context_preservation": {
+        "execute_code": true,
+        "execute_function": true,
+        "shell_negative_control": true,
+        "superseding_python_passthrough": true
+      },
+      "variable_isolation": {
+        "same_node": true,
+        "same_workflow_runtime": true,
+        "config_unchanged": true,
+        "old_config_mutation_control_detected": true
+      },
+      "runtime_threading": {
+        "active_loop_sync_bridge_rejected": true,
+        "native_async_two_connected_nodes_42_to84": true,
+        "execute_async_alias_42_to84": true,
+        "owned_pool_closed_caller_loop_open": true,
+        "factory_sync_async_auto_context": true,
+        "scope": "No Docker launch; ordinary synchronous node workers are allowed. Does not claim zero worker threads."
+      }
+    },
+    "api_ast_control": "Two native awaited execution callsites found; replacing their method with wrong_bridge in an in-memory AST copy yields zero hits. This verifies wiring, not API HTTP behavior.",
+    "source_sha256": {
+      "src/kailash/api/workflow_api.py": "9d9ae3da3a4f3a4c8984c3dd6960f99fa17d3155f321f50536561175934b4058",
+      "src/kailash/nodes/code/python.py": "518407458fae1ce6fe1238b35bf396bcdb9ec5604a2f8cf35690a73f13fd12eb",
+      "src/kailash/runtime/__init__.py": "5a839a3b1dc006ad2afc77180927ffa59a2a8de98e00d709eba75c4c414c8927",
+      "src/kailash/runtime/async_local.py": "0237d007ce37bdbd92b3ac08650806023f71254fc39f34d9ffc9251e683006ab",
+      "src/kailash/runtime/local.py": "1f187fdc2273a6bc02edbbf2fb6138d6a1dcbd304a6a36448b0052794121dc9a",
+      "src/kailash/security.py": "ce1990be914857f182c5aeeaa7dd357e7f5b0a723895aeb16d466d53eb50393d"
+    },
+    "limitations": [
+      "WorkflowAPI comments/log still say no thread creation. Current async runtime permits worker threads for sync nodes; no claim of zero worker threads or Docker seccomp compatibility is made.",
+      "Old unmatched MCP test and test infrastructure blobs are outside this four-contract audit and were not restored.",
+      "Initial probe construction omitted PythonCodeNode name and failed; corrected standalone rerun exit0 printed CURRENT_FOUR_CONTRACT_PROBES_PASS."
+    ],
+    "mutation_controls": "Only isolated in-memory graph config and in-memory source string changed. No repository files, refs or held stashes modified."
+  }
+}
