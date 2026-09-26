@@ -136,8 +136,14 @@ def test_transactions_commit_read_their_writes_and_rollback_on_failure(utility, 
     assert failures[0] == "nodes.create_operation_failed"
     assert len(failures) == 3
     assert all(
-        "op_1" in message and "UNIQUE constraint failed" in message
+        "op_1" in message and "ContentAwareExecutionError@" in message
         for message in failures[1:]
+    )
+    assert all("UNIQUE constraint failed" not in message for message in failures)
+    assert all(
+        private not in repr(record.__dict__)
+        for record in caplog.records
+        for private in ("Bob", "Duplicate")
     )
     with closing(sqlite3.connect(path)) as connection:
         assert connection.execute(
