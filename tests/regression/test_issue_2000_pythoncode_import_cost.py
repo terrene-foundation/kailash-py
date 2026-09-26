@@ -37,6 +37,23 @@ from kailash.security import SecurityError, _get_cached_allowed_types, sanitize_
 HEAVY_MODULES = ("torch", "sklearn", "scipy", "pandas")
 
 
+@pytest.fixture(autouse=True)
+def namespace_security_config():
+    """Namespace probes do not request a platform-dependent memory bound."""
+    from kailash.security import (
+        SecurityConfig,
+        get_security_config,
+        set_security_config,
+    )
+
+    previous = get_security_config()
+    set_security_config(SecurityConfig(memory_limit=None))
+    try:
+        yield
+    finally:
+        set_security_config(previous)
+
+
 def _run_in_cold_interpreter(body: str) -> subprocess.CompletedProcess:
     """Execute ``body`` in a fresh interpreter with this session's sys.path.
 
@@ -63,8 +80,11 @@ class TestNoHeavyImportsOnNodeExecution:
         proc = _run_in_cold_interpreter(
             """
             from kailash.runtime.local import LocalRuntime
+            from kailash.security import SecurityConfig, set_security_config
             from kailash.workflow.builder import WorkflowBuilder
 
+            # This cold-process probe measures imports, not memory enforcement.
+            set_security_config(SecurityConfig(memory_limit=None))
             wf = WorkflowBuilder()
             wf.add_node("PythonCodeNode", "n0", {"code": "result = {'ok': True}"})
             with LocalRuntime() as rt:
