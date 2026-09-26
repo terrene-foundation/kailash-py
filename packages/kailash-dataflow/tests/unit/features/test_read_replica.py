@@ -18,10 +18,40 @@ Tests:
 
 from __future__ import annotations
 
+import sqlite3
+
 import pytest
 
 from dataflow import DataFlow
 from dataflow.utils.connection import ConnectionManager
+
+
+def _seed_target(path, marker):
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute("CREATE TABLE proof(value TEXT)")
+        connection.execute("INSERT INTO proof VALUES (?)", (marker,))
+        connection.commit()
+    finally:
+        connection.close()
+
+
+async def _assert_manager_reads_target(manager, expected_path, marker):
+    from dataflow.adapters.sqlite import SQLiteAdapter
+
+    adapter = SQLiteAdapter(manager._get_db_url())
+    try:
+        await adapter.connect()
+        assert await adapter.execute_query("SELECT value FROM proof") == [
+            {"value": marker}
+        ]
+        databases = await adapter.execute_query("PRAGMA database_list")
+        assert next(row["file"] for row in databases if row["name"] == "main") == str(
+            expected_path
+        )
+    finally:
+        await adapter.disconnect()
+
 
 # ---------------------------------------------------------------------------
 # Single-adapter default (backward compat)
@@ -41,17 +71,28 @@ def test_single_adapter_default():
 # ---------------------------------------------------------------------------
 
 
-def test_dual_adapter_creation():
-    """When read_url is provided, two connection managers are created."""
+@pytest.mark.asyncio
+async def test_dual_adapter_creation(tmp_path, monkeypatch):
+    """Read owner retains its original physical target after CWD changes."""
+    monkeypatch.chdir(tmp_path)
+    expected_path = tmp_path / "read_replica.db"
+    _seed_target(expected_path, "replica owner")
+    later = tmp_path / "later"
+    later.mkdir()
+    _seed_target(later / "read_replica.db", "wrong later owner")
     with DataFlow(
         database_url="sqlite:///:memory:",
         read_url="sqlite:///read_replica.db",
         auto_migrate=False,
     ) as db:
-        assert db._read_url == "sqlite:///read_replica.db"
+        assert db._read_url == f"sqlite:///{expected_path}"
         assert db._read_connection_manager is not None
         assert isinstance(db._read_connection_manager, ConnectionManager)
         assert db._read_connection_manager is not db._connection_manager
+        monkeypatch.chdir(later)
+        await _assert_manager_reads_target(
+            db._read_connection_manager, expected_path, "replica owner"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -106,11 +147,20 @@ def test_single_adapter_routing():
 # ---------------------------------------------------------------------------
 
 
-def test_connection_manager_url_override():
-    """ConnectionManager with url_override uses the override URL."""
+@pytest.mark.asyncio
+async def test_connection_manager_url_override(tmp_path, monkeypatch):
+    """Explicit override retains its file instead of the primary memory owner."""
+    monkeypatch.chdir(tmp_path)
+    expected_path = tmp_path / "override.db"
+    _seed_target(expected_path, "override owner")
+    later = tmp_path / "later"
+    later.mkdir()
+    _seed_target(later / "override.db", "wrong later owner")
     with DataFlow(database_url="sqlite:///:memory:", auto_migrate=False) as db:
         cm = ConnectionManager(db, url_override="sqlite:///override.db")
-        assert cm._url_override == "sqlite:///override.db"
+        assert cm._url_override == f"sqlite:///{expected_path}"
+        monkeypatch.chdir(later)
+        await _assert_manager_reads_target(cm, expected_path, "override owner")
 
 
 def test_connection_manager_pool_size_override():

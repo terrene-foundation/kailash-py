@@ -1,6 +1,7 @@
 """Signal waits validate canonical inputs before consuming real queued messages."""
 
 import asyncio
+import logging
 from pathlib import Path
 
 import pytest
@@ -105,6 +106,9 @@ async def test_constructor_defaults_and_runtime_override_preserve_output(nested)
 
 
 async def test_default_unknown_parameter_warning_is_retained(caplog):
+    # DataFlow deliberately raises this process-global logger to ERROR. Scope
+    # this emission contract to WARNING and let caplog restore caller settings.
+    caplog.set_level(logging.WARNING, logger="kailash.nodes.base")
     node = SignalWaitNode(signal_name="event", timeout=1.0)
     channel = SignalChannel()
     node.set_workflow_context("signal_channel", channel)

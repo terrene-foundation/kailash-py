@@ -156,7 +156,7 @@ class TestMakePoolStatsProvider:
     # 4. SQLite adapter with _pool_stats
     # -----------------------------------------------------------------------
 
-    def test_provider_reads_sqlite_pool_stats(self):
+    def test_provider_reads_sqlite_pool_stats(self, tmp_path, monkeypatch):
         """Mock an adapter with a _pool_stats attribute that exposes
         active_connections and idle_connections.
 
@@ -164,8 +164,14 @@ class TestMakePoolStatsProvider:
         to be truthy before it reaches the _pool_stats branch.  For SQLite
         adapters, _pool is typically the aiosqlite connection object (truthy)
         but lacks asyncpg/QueuePool methods."""
+        monkeypatch.chdir(tmp_path)
+        expected_url = f"sqlite:///{tmp_path / 'test.db'}"
         with _make_dataflow(url="sqlite:///test.db") as df:
+            assert df.config.database.url == "sqlite:///test.db"
             provider = df._make_pool_stats_provider(pool_size=5, max_overflow=2)
+            later = tmp_path / "later"
+            later.mkdir()
+            monkeypatch.chdir(later)
 
             pool_stats_obj = SimpleNamespace(active_connections=2, idle_connections=3)
 
@@ -177,7 +183,7 @@ class TestMakePoolStatsProvider:
             mock_adapter.connection_pool = None
             mock_adapter._pool = sqlite_pool  # truthy, no asyncpg/QueuePool methods
 
-            shared_pools = {"sqlite:///test.db": (mock_adapter, 1)}
+            shared_pools = {expected_url: (mock_adapter, 1)}
 
             with patch(
                 "kailash.nodes.data.async_sql.AsyncSQLDatabaseNode._shared_pools",
