@@ -35,6 +35,81 @@ except ImportError:  # pragma: no cover - only on a tree predating the fix
         return type(obj).__name__
 
 
+def _raw_exception_type_lines(source):
+    """Find direct exception-name expressions outside public raised errors.
+
+    This is a conservative source check, not whole-program data-flow analysis.
+    A raise expression is excluded by its AST location, never by message text;
+    a nested logging call remains a sink even inside a raise expression.
+    """
+    import ast
+    import re
+
+    tree = ast.parse(source)
+    parents = {
+        child: parent
+        for parent in ast.walk(tree)
+        for child in ast.iter_child_nodes(parent)
+    }
+    exception_name = re.compile(r"(?:e|.*(?:exc|err|error).*)", re.IGNORECASE)
+    log_methods = {
+        "debug",
+        "info",
+        "warning",
+        "warn",
+        "error",
+        "critical",
+        "exception",
+        "log",
+    }
+    offenders = set()
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Attribute)
+            and node.attr == "__name__"
+            and isinstance(node.value, ast.Call)
+            and isinstance(node.value.func, ast.Name)
+            and node.value.func.id == "type"
+            and len(node.value.args) == 1
+            and isinstance(node.value.args[0], ast.Name)
+            and exception_name.fullmatch(node.value.args[0].id)
+        ):
+            continue
+        parent = parents.get(node)
+        public_raise = False
+        while parent is not None:
+            if (
+                isinstance(parent, ast.Call)
+                and isinstance(parent.func, ast.Attribute)
+                and parent.func.attr in log_methods
+            ):
+                break
+            if isinstance(parent, ast.Raise):
+                public_raise = True
+                break
+            if isinstance(parent, ast.stmt):
+                break
+            parent = parents.get(parent)
+        if not public_raise:
+            offenders.add(node.lineno)
+    return sorted(offenders)
+
+
+@pytest.mark.parametrize(
+    "source, expected",
+    [
+        ('logger.error("%s", type(exc).__name__)', [1]),
+        ('logger.debug("event", extra={"error_type": type(last_err).__name__})', [1]),
+        ('raise NodeExecutionError(f"{type(e).__name__}: {e}") from e', []),
+        ('logger.error(f"{type(e).__name__}: {e}")', [1]),
+        ("raise RuntimeError(logger.error(type(error).__name__))", [1]),
+        ("logger.error(\n    type(exception).__name__\n)", [2]),
+    ],
+)
+def test_raw_type_sweep_discriminates_public_errors_from_logs(source, expected):
+    assert _raw_exception_type_lines(source) == expected
+
+
 class TestSinkSideTypeNameIsSanitized:
     """F1: `safe_type_name` closes the raw sibling-field channel."""
 
@@ -100,8 +175,8 @@ class TestSinkSideTypeNameIsSanitized:
         So the sink set is DISCOVERED: any module importing one of these helpers
         is a sink by definition, which means a new sink file is covered the day
         it is written. The pattern is variable-name-agnostic. The exclusion is
-        keyed on `file:line` content, not a substring that could excuse unrelated
-        lines. And the walk asserts it actually visited files, so a moved tree
+        determined by an actual raised-error AST location, never shared message
+        text that could also occur in a logger call. And the walk asserts it actually visited files, so a moved tree
         cannot pass vacuously -- the failure mode that made the old version
         unable to red.
         """
@@ -110,26 +185,6 @@ class TestSinkSideTypeNameIsSanitized:
 
         root = pathlib.Path(__file__).resolve().parents[2] / "src" / "kailash"
         helper_use = re.compile(r"safe_exception_frames|safe_type_name")
-        # Exception-ish variable names, NOT every `type(x).__name__`: a
-        # TypeError message about a wrong-typed ARGUMENT ("expected int,
-        # got %s") is a different class and widening to it would flag every
-        # such message in the tree.
-        # (Phrasing note: the pygrep hook `python-use-type-annotations` matches
-        # a comment-hash followed by the word it guards, with no trailing
-        # punctuation required -- so this says "TypeError message" rather than
-        # spelling that phrase out. Quoting the literal here tripped the hook.) Deliberately broader than the six names
-        # the first version matched -- `last_exc` was invisible to those and
-        # two live log sinks in scheduler.py were missed as a result.
-        raw_type_name = re.compile(
-            r"type\(\s*\w*(exc|err|error)\w*\s*\)\.__name__|type\(\s*e\s*\)\.__name__",
-            re.IGNORECASE,
-        )
-
-        # Excused by EXACT text, not by file or substring: an exception MESSAGE
-        # (not a log record) that separately embeds the full `{e}` -- owned by
-        # the runtime-hot-path shard.
-        excused = {"f\"Node '{self.id}' execution failed: {type(e).__name__}: {e}\""}
-
         scanned, offenders = 0, []
         for path in sorted(root.rglob("*.py")):
             if path.name == "secure_logging.py":
@@ -138,11 +193,11 @@ class TestSinkSideTypeNameIsSanitized:
             if not helper_use.search(text):
                 continue  # not a sink
             scanned += 1
-            for number, line in enumerate(text.splitlines(), start=1):
-                if raw_type_name.search(line) and line.strip() not in excused:
-                    offenders.append(
-                        f"{path.relative_to(root)}:{number}: {line.strip()[:70]}"
-                    )
+            lines = text.splitlines()
+            for number in _raw_exception_type_lines(text):
+                offenders.append(
+                    f"{path.relative_to(root)}:{number}: {lines[number - 1].strip()[:70]}"
+                )
 
         # Without this the sweep passes vacuously on a moved or renamed tree.
         assert (

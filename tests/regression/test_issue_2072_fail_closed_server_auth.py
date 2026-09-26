@@ -1217,14 +1217,19 @@ def test_websocket_unexpected_receive_failure_is_reported(
 
 @pytest.mark.parametrize("server_type", ["basic", "enterprise"])
 def test_websocket_cancellation_closes_transport(authed_env, caplog, server_type):
+    from starlette.routing import WebSocketRoute
     from starlette.websockets import WebSocket, WebSocketState
 
     from kailash.servers.gateway import create_gateway
 
     server = create_gateway(server_type=server_type)
-    endpoint = next(
-        route.endpoint for route in server.app.routes if route.path == "/ws"
-    )
+    endpoints = [
+        route.endpoint
+        for route in server.app.routes
+        if isinstance(route, WebSocketRoute) and route.path == "/ws"
+    ]
+    assert len(endpoints) == 1
+    endpoint = endpoints[0]
 
     async def drive():
         incoming = asyncio.Queue()
