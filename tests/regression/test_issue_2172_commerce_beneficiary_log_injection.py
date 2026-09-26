@@ -19,18 +19,14 @@ forged at FORMAT time, so ``caplog`` shows exactly one ``LogRecord`` either way
 and counting records cannot discriminate. These tests attach a real
 ``StreamHandler`` with a real ``Formatter`` and read the rendered text.
 
-**What "defeated" means here.** ``sanitize_log_value`` is explicitly NOT a
-redaction step -- it flattens structure and bounds length, and the attacker's
-TEXT survives inline on purpose, because it is usually the only diagnostic
-there is. So "the payload substring is absent" is the WRONG assertion: it fails
-on a correct fix. The discriminating property is that no emitted LINE STARTS a
-new record. That is what is asserted below, and on the unfixed code it is
-exactly what fails.
+Commerce diagnostics omit the financial counterparty identifier entirely,
+including at DEBUG. The commerce tests therefore require the fixed diagnostic
+and reject identifier disclosure as well as forged records. Sibling diagnostic
+values remain sanitized: control characters and length are bounded while their
+non-sensitive text stays available. Their assertions still require that text.
 
-Lazy ``%s`` arguments are NOT themselves a barrier -- the record is still
-formatted at emit time, so an unsanitized ``%s`` argument injects just as an
-f-string does. ``sanitize_log_value`` is the entire defence; the lazy form is
-a cost and style fix that these tests deliberately do not rely on.
+Lazy ``%s`` arguments are not an injection barrier: formatting happens at emit
+time. The tests inspect the rendered stream for both privacy and structure.
 """
 
 import io
@@ -121,17 +117,23 @@ def _assert_no_forged_record(probe: _StreamProbe, expect_substring: str) -> None
     )
 
 
-class TestCommerceBeneficiaryIsSanitized:
+class TestCommerceBeneficiaryIsPrivate:
     """The headline site: ``commerce.py`` attribution-missing record."""
 
-    def test_attacker_chosen_beneficiary_cannot_forge_a_record(self):
+    @pytest.mark.parametrize("beneficiary", [INJECTION, "finance-person@example.test"])
+    def test_beneficiary_is_omitted_from_debug_record(self, beneficiary):
         dimension = CommerceConstraint()
         parsed = dimension.parse({"attribution_required": True})
 
         with _StreamProbe("kailash.trust.constraints.commerce") as probe:
-            result = dimension.check(parsed, {"beneficiary_id": INJECTION})
+            result = dimension.check(parsed, {"beneficiary_id": beneficiary})
 
-        _assert_no_forged_record(probe, "org-1")
+        _assert_no_forged_record(probe, "Attribution required but no chain provided")
+        assert beneficiary not in probe.text
+        assert probe.text == (
+            "DEBUG:kailash.trust.constraints.commerce:"
+            "Attribution required but no chain provided\n"
+        )
         # The branch is benign: the log line is incidental, not a verdict.
         assert result.satisfied is True
 
@@ -141,33 +143,30 @@ class TestCommerceBeneficiaryIsSanitized:
         parsed = dimension.parse({"attribution_required": True})
 
         with _StreamProbe("kailash.trust.constraints.commerce") as probe:
-            dimension.check(parsed, {"beneficiary_id": "B" * 5_000_000})
+            result = dimension.check(parsed, {"beneficiary_id": "B" * 5_000_000})
 
-        # Unfixed, this emitted 5,000,100 characters. The bound is 128 chars of
-        # value plus the fixed prefix; 512 leaves room for the prefix without
-        # asserting on its exact wording.
+        _assert_no_forged_record(probe, "Attribution required but no chain provided")
+        assert result.satisfied is True
+        # The fixed diagnostic carries no identifier, regardless of its length.
         assert (
             len(probe.text) < 512
         ), f"unbounded value reached the log: {len(probe.text)} chars emitted"
 
     def test_benign_absent_attribution_does_not_log_the_party_at_info(self):
-        """#2172 secondary call: the identifier is DEBUG, not INFO.
-
-        The branch is benign -- ``check`` returns satisfied=True either way --
-        so an INFO record would write a financial counterparty identifier into
-        default-enabled logs for a condition that triggers no enforcement.
-        """
+        """The benign diagnostic stays below the default INFO threshold."""
         dimension = CommerceConstraint()
         parsed = dimension.parse({"attribution_required": True})
 
         with _StreamProbe(
             "kailash.trust.constraints.commerce", level=logging.INFO
         ) as probe:
-            dimension.check(parsed, {"beneficiary_id": "org-001"})
+            result = dimension.check(
+                parsed, {"beneficiary_id": "finance-person@example.test"}
+            )
 
+        assert result.satisfied is True
         assert probe.lines == [], (
-            "the beneficiary identifier was emitted at INFO or above: "
-            f"{probe.lines!r}"
+            "the benign diagnostic was emitted at INFO or above: " f"{probe.lines!r}"
         )
 
 
