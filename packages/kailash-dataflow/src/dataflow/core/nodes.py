@@ -62,7 +62,6 @@ from .exceptions import (  # Issue #1519/#1520: typed conflict-target error prop
     UpsertConflictTargetError,
     is_conflict_target_error as _is_conflict_target_error,
 )
-from .logging_config import mask_sensitive_values  # Phase 7: Sensitive value masking
 
 
 def _resolve_scope_transaction(node: Any) -> Optional[Any]:
@@ -333,12 +332,17 @@ def convert_datetime_fields(data_dict: dict, model_fields: dict, logger) -> dict
                 parsed_dt = datetime.fromisoformat(field_value.replace("Z", "+00:00"))
                 data_dict[field_name] = parsed_dt
                 logger.debug(
-                    f"Auto-converted datetime string '{field_value}' to datetime object for field '{field_name}'"
+                    "nodes.datetime.converted",
+                    extra={"field": sanitize_log_value(field_name)},
                 )
             except (ValueError, AttributeError) as e:
                 # If parsing fails, leave as-is and let database handle it
                 logger.warning(
-                    f"Failed to parse datetime string '{field_value}' for field '{field_name}': {e}"
+                    "nodes.datetime.invalid",
+                    extra={
+                        "field": sanitize_log_value(field_name),
+                        "error_type": type(e).__name__,
+                    },
                 )
 
     return data_dict
@@ -851,14 +855,17 @@ class NodeGenerator:
                         interceptor.inject_tenant_conditions(query, params)
                     )
                     _logger.debug(
-                        f"Tenant isolation applied: tenant_id={tenant_id}, "
-                        f"table={table_name}, original_query={query[:80]}..."
+                        "nodes.tenant_isolation_applied",
+                        extra={"table": sanitize_log_value(table_name)},
                     )
                     return modified_query, modified_params
                 except Exception as e:
                     _logger.error(
-                        f"Failed to apply tenant isolation for {self.model_name}: {e}. "
-                        f"Refusing to execute unfiltered query — potential cross-tenant data leak."
+                        "nodes.tenant_isolation_failed",
+                        extra={
+                            "model": sanitize_log_value(self.model_name),
+                            "error_type": type(e).__name__,
+                        },
                     )
                     raise RuntimeError(
                         f"Tenant isolation failed for {self.model_name}: {e}. "
@@ -1691,8 +1698,11 @@ class NodeGenerator:
                 logger = logging.getLogger(__name__)
                 # ADR-002: Changed from WARNING to DEBUG - this is diagnostic tracing, not a problem
                 logger.debug(
-                    f"DataFlow Node {self.model_name}{self.operation.title()}Node"
-                    f" - received kwargs: {mask_sensitive_values(str(kwargs))}"
+                    "nodes.inputs_received",
+                    extra={
+                        "model": sanitize_log_value(self.model_name),
+                        "parameter_count": len(kwargs),
+                    },
                 )
 
                 # Ensure table exists before any database operations (lazy table creation)
@@ -1734,19 +1744,21 @@ class NodeGenerator:
                             logger.error(
                                 "nodes.ensure_table_exists_failed_ddl_propagating",
                                 extra={
-                                    "model_name": self.model_name,
-                                    "error": str(e),
+                                    "model_name": sanitize_log_value(self.model_name),
+                                    "error_type": type(e).__name__,
                                 },
                             )
                             raise
                         logger.error(
-                            f"Error ensuring table exists for model {self.model_name}: {e}"
+                            "nodes.ensure_table_exists_failed",
+                            extra={
+                                "model_name": sanitize_log_value(self.model_name),
+                                "error_type": type(e).__name__,
+                            },
                         )
                         # Continue anyway - the database operation might still work
 
-                logger.debug(
-                    f"Run called with kwargs: {mask_sensitive_values(str(kwargs))}"
-                )
+                logger.debug("nodes.run", extra={"parameter_count": len(kwargs)})
 
                 # TDD mode: Override connection string if test context available
                 if (
@@ -2067,7 +2079,8 @@ class NodeGenerator:
                         # ADR-002: Changed from WARNING to DEBUG - SQLite result tracing
                         if database_type == "sqlite":
                             logger.debug(
-                                "nodes.sqlite_insert_result", extra={"result": result}
+                                "nodes.sqlite_insert_result",
+                                extra={"has_result": result is not None},
                             )
 
                         if result and "result" in result and "data" in result["result"]:
@@ -2077,9 +2090,7 @@ class NodeGenerator:
                             if isinstance(row, dict) and "lastrowid" in row:
                                 # SQLite returns lastrowid for INSERT operations
                                 # ADR-002: Changed from WARNING to DEBUG - SQLite result tracing
-                                logger.debug(
-                                    f"SQLite lastrowid found directly: {row['lastrowid']}"
-                                )
+                                logger.debug("nodes.sqlite.generated_id_found")
                                 record_id = row["lastrowid"]
                                 # Use user-provided id if available, otherwise lastrowid
                                 if "id" in kwargs:
@@ -2172,9 +2183,7 @@ class NodeGenerator:
                                 if isinstance(data, dict) and "lastrowid" in data:
                                     # SQLite returns lastrowid for INSERT operations
                                     # ADR-002: Changed from WARNING to DEBUG - SQLite result tracing
-                                    logger.debug(
-                                        f"SQLite lastrowid found: {data['lastrowid']}"
-                                    )
+                                    logger.debug("nodes.sqlite.generated_id_found")
                                     created_record = {"id": data["lastrowid"], **kwargs}
                                     # Invalidate cache after successful create
                                     cache_integration = getattr(
@@ -2266,7 +2275,11 @@ class NodeGenerator:
                         # sanitize_db_error, so the $11 detection below still fires.
                         original_error = sanitize_db_error(str(e))
                         logger.debug(
-                            f"CREATE {self.model_name} failed with error: {original_error}"
+                            "nodes.create_failed",
+                            extra={
+                                "model": sanitize_log_value(self.model_name),
+                                "error_type": type(e).__name__,
+                            },
                         )
 
                         # Check for parameter mismatch error
@@ -2380,7 +2393,10 @@ class NodeGenerator:
 
                                 except Exception as retry_error:
                                     logger.debug(
-                                        f"DATAFLOW PARAM $11 FIX: Retry with type cast failed: {retry_error}"
+                                        "nodes.create_type_cast_retry_failed",
+                                        extra={
+                                            "error_type": type(retry_error).__name__
+                                        },
                                     )
                                     # Continue with normal error handling
 
@@ -2408,7 +2424,14 @@ class NodeGenerator:
                                 f"Note: DataFlow auto-completes fields with defaults.\n"
                                 f"Actual error: {original_error}"
                             )
-                            logger.error(error_msg)
+                            logger.error(
+                                "nodes.create_parameter_mismatch",
+                                extra={
+                                    "expected_count": len(expected_fields),
+                                    "actual_count": len(actual_fields),
+                                    "provided_count": len(provided_fields),
+                                },
+                            )
                         else:
                             # Issue #1552: log + return the SANITIZED driver
                             # error (one value for both surfaces) so a constraint
@@ -2558,9 +2581,7 @@ class NodeGenerator:
                                 deleted_at = row.get("deleted_at")
                                 if deleted_at is not None:
                                     # Record is soft-deleted, treat as not found
-                                    logger.debug(
-                                        f"soft_delete auto-filter: Record {record_id} is soft-deleted, treating as not found"
-                                    )
+                                    logger.debug("nodes.soft_deleted_record_filtered")
                                     row = None  # Continue to "not found" handling below
 
                             if row:
@@ -3159,9 +3180,8 @@ class NodeGenerator:
                     # a space AND bounds the length; the FLATTEN is the half that
                     # closes the hole -- a length bound alone leaves it open.
                     logger.debug(
-                        f"DELETE: table={table_name}, "
-                        f"id={sanitize_log_value(record_id)}, "
-                        f"query={sanitize_log_value(query)}"
+                        "nodes.delete.execute",
+                        extra={"table": sanitize_log_value(table_name)},
                     )
 
                     # Get or create cached AsyncSQLDatabaseNode for connection pooling
@@ -3184,7 +3204,9 @@ class NodeGenerator:
                         validate_queries=False,
                         transaction_mode="auto",  # Ensure auto-commit for delete operations
                     )
-                    logger.debug("nodes.delete_result", extra={"result": result})
+                    logger.debug(
+                        "nodes.delete_result", extra={"has_result": result is not None}
+                    )
 
                     # Check if delete was successful
                     if result and "result" in result:
@@ -3301,11 +3323,15 @@ class NodeGenerator:
                     # Debug logging
                     logger.debug(
                         "nodes.list_operation_filter_dict",
-                        extra={"filter_dict": filter_dict},
+                        extra={"filter_count": len(filter_dict)},
                     )
-                    logger.debug("nodes.list_operation_sort", extra={"sort": sort})
                     logger.debug(
-                        "nodes.list_operation_order_by", extra={"order_by": order_by}
+                        "nodes.list_operation_sort",
+                        extra={"sort_configured": sort is not None},
+                    )
+                    logger.debug(
+                        "nodes.list_operation_order_by",
+                        extra={"order_by_configured": order_by is not None},
                     )
 
                     # Use QueryBuilder if filters are provided
@@ -3428,12 +3454,10 @@ class NodeGenerator:
                         )
 
                         # Debug logging
+                        logger.debug("nodes.list_operation_executing_query")
                         logger.debug(
-                            "nodes.list_operation_executing_query",
-                            extra={"query": query},
-                        )
-                        logger.debug(
-                            "nodes.list_operation_with_params", extra={"params": params}
+                            "nodes.list_operation_with_params",
+                            extra={"parameter_count": len(params)},
                         )
                         logger.debug(
                             "nodes.list_operation_connection",
@@ -3499,7 +3523,11 @@ class NodeGenerator:
                         self.dataflow_instance, "_cache_integration", None
                     )
                     logger.debug(
-                        f"List operation - cache_integration: {cache_integration}, enable_cache: {enable_cache}"
+                        "nodes.list_operation_cache_config",
+                        extra={
+                            "cache_available": cache_integration is not None,
+                            "cache_enabled": bool(enable_cache),
+                        },
                     )
 
                     # Shared entries describe committed state. A transaction
@@ -3521,7 +3549,7 @@ class NodeGenerator:
                         )
                         logger.debug(
                             "nodes.list_operation_cache_result",
-                            extra={"result": result},
+                            extra={"has_result": result is not None},
                         )
                         return result
                     else:
@@ -3530,7 +3558,7 @@ class NodeGenerator:
                         result = await execute_query()
                         logger.debug(
                             "nodes.list_operation_direct_result",
-                            extra={"result": result},
+                            extra={"has_result": result is not None},
                         )
                         return result
 
@@ -3555,7 +3583,8 @@ class NodeGenerator:
                                 if isinstance(parsed, dict):
                                     kwargs_fixed[param_name] = parsed
                                     logger.debug(
-                                        f"Converted string literal '{kwargs_fixed[param_name]}' to dict for parameter '{param_name}'"
+                                        "nodes.json_parameter_decoded",
+                                        extra={"parameter": param_name},
                                     )
                             except (json.JSONDecodeError, ValueError):
                                 # If parsing fails, try direct conversion for simple cases like '{}'
@@ -3578,12 +3607,11 @@ class NodeGenerator:
                             if isinstance(parsed, list):
                                 kwargs_fixed["conflict_on"] = parsed
                                 logger.debug(
-                                    f"Converted conflict_on from JSON string to list: {parsed}"
+                                    "nodes.conflict_columns_decoded",
+                                    extra={"column_count": len(parsed)},
                                 )
                         except (json.JSONDecodeError, ValueError):
-                            logger.warning(
-                                f"Failed to parse conflict_on as JSON: {kwargs_fixed['conflict_on']}"
-                            )
+                            logger.warning("nodes.conflict_columns_invalid_json")
 
                     # Validate conflict_on is not an empty list
                     if "conflict_on" in kwargs_fixed and isinstance(
@@ -4214,7 +4242,7 @@ class NodeGenerator:
                     # Debug logging
                     logger.debug(
                         "nodes.count_operation_filter_dict",
-                        extra={"filter_dict": filter_dict},
+                        extra={"filter_count": len(filter_dict)},
                     )
 
                     # Use QueryBuilder if filters are provided
@@ -4285,11 +4313,10 @@ class NodeGenerator:
                     db_type = ConnectionParser.detect_database_type(connection_string)
 
                     # Debug logging
+                    logger.debug("nodes.count_operation_executing_query")
                     logger.debug(
-                        "nodes.count_operation_executing_query", extra={"query": query}
-                    )
-                    logger.debug(
-                        "nodes.count_operation_with_params", extra={"params": params}
+                        "nodes.count_operation_with_params",
+                        extra={"parameter_count": len(params)},
                     )
                     logger.debug(
                         "nodes.count_operation_database_type",
@@ -4315,7 +4342,7 @@ class NodeGenerator:
 
                     logger.debug(
                         "nodes.count_operation_result_from_sql",
-                        extra={"result": result},
+                        extra={"has_result": result is not None},
                     )
 
                     # Extract count from result
@@ -4368,7 +4395,8 @@ class NodeGenerator:
                                 if isinstance(parsed, dict):
                                     kwargs_fixed[param_name] = parsed
                                     logger.debug(
-                                        f"Converted string literal '{kwargs_fixed[param_name]}' to dict for parameter '{param_name}'"
+                                        "nodes.json_parameter_decoded",
+                                        extra={"parameter": param_name},
                                     )
                             except (json.JSONDecodeError, ValueError):
                                 # If parsing fails, try direct conversion for simple cases like '{}'
@@ -4874,7 +4902,7 @@ class NodeGenerator:
                         # FIXED Bug 011: Use self.logger instead of logger
                         self.logger.debug(
                             "nodes.failed_to_extract_tdd_connection_info",
-                            extra={"error": str(e)},
+                            extra={"error_type": type(e).__name__},
                         )
                         return None
 

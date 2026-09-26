@@ -37,7 +37,7 @@ from kailash.sdk_exceptions import (
     NodeExecutionError,
     NodeValidationError,
 )
-from kailash.utils.secure_logging import redact_mapping
+from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
 
 # ADR-002: Module-level logger for node registration messages
 _logger = logging.getLogger(__name__)
@@ -429,7 +429,9 @@ class Node(ABC):
             except Exception as e:
                 # If get_parameters() fails, log but continue with safe defaults
                 self.logger.debug(
-                    f"Could not get parameter definitions during init: {e}"
+                    "node.parameters_unavailable: %s (at %s)",
+                    safe_type_name(e),
+                    safe_exception_frames(e),
                 )
                 defined_params = set()
                 self._temp_param_definitions = {}
@@ -1561,24 +1563,12 @@ class Node(ABC):
 
             # Validate inputs
             validated_inputs = self.validate_inputs(**merged_inputs)
-            # REDACTED (#2167). This logged EVERY node's full validated input
-            # dict, so any credential parameter -- `auth_password`, `api_key`,
-            # `secret_key`, a connection string -- reached the log in clear text,
-            # for every node in the SDK rather than one. Surfaced by the #2167
-            # http.py regression test, which caught `auth_password` here after the
-            # http-level leak beside it was already fixed. DEBUG is not a defence:
-            # debug logging is routinely enabled in staging and shipped to an
-            # aggregator. Keys are preserved so the diagnostic still says which
-            # inputs bound.
-            # Guarded: `redact_mapping` walks the whole input structure, and this
-            # runs on EVERY node execution. Passing it as a lazy `%s` arg is not
-            # enough -- the call itself would still evaluate before `debug()` is
-            # entered. `isEnabledFor` keeps the cost at zero when DEBUG is off.
+            # Ordinary fields can contain personal data. Retain only the
+            # number of bound inputs, never their keys or values.
             if self.logger.isEnabledFor(logging.DEBUG):
                 self.logger.debug(
-                    "Validated inputs for %s: %s",
-                    self.id,
-                    redact_mapping(validated_inputs),
+                    "node.inputs_validated",
+                    extra={"input_count": len(validated_inputs)},
                 )
 
             # Execute node logic with progress context
@@ -1607,7 +1597,12 @@ class Node(ABC):
             raise
         except Exception as e:
             # Wrap any other exception in NodeExecutionError
-            self.logger.error(f"Node {self.id} execution failed: {e}", exc_info=True)
+            self.logger.error(
+                "Node %s execution failed: %s (at %s)",
+                self.id,
+                safe_type_name(e),
+                safe_exception_frames(e),
+            )
             raise NodeExecutionError(
                 f"Node '{self.id}' execution failed: {type(e).__name__}: {e}"
             ) from e
@@ -2174,24 +2169,12 @@ class AsyncTypedNode(TypedNode):
 
             # Validate inputs (includes port validation and setting port values)
             validated_inputs = self.validate_inputs(**merged_inputs)
-            # REDACTED (#2167). This logged EVERY node's full validated input
-            # dict, so any credential parameter -- `auth_password`, `api_key`,
-            # `secret_key`, a connection string -- reached the log in clear text,
-            # for every node in the SDK rather than one. Surfaced by the #2167
-            # http.py regression test, which caught `auth_password` here after the
-            # http-level leak beside it was already fixed. DEBUG is not a defence:
-            # debug logging is routinely enabled in staging and shipped to an
-            # aggregator. Keys are preserved so the diagnostic still says which
-            # inputs bound.
-            # Guarded: `redact_mapping` walks the whole input structure, and this
-            # runs on EVERY node execution. Passing it as a lazy `%s` arg is not
-            # enough -- the call itself would still evaluate before `debug()` is
-            # entered. `isEnabledFor` keeps the cost at zero when DEBUG is off.
+            # Ordinary fields can contain personal data. Retain only the
+            # number of bound inputs, never their keys or values.
             if self.logger.isEnabledFor(logging.DEBUG):
                 self.logger.debug(
-                    "Validated inputs for async node %s: %s",
-                    self.id,
-                    redact_mapping(validated_inputs),
+                    "node.async_inputs_validated",
+                    extra={"input_count": len(validated_inputs)},
                 )
 
             # Execute async node logic with progress context
@@ -2221,7 +2204,10 @@ class AsyncTypedNode(TypedNode):
         except Exception as e:
             # Wrap any other exception in NodeExecutionError
             self.logger.error(
-                f"Async node {self.id} execution failed: {e}", exc_info=True
+                "Async node %s execution failed: %s (at %s)",
+                self.id,
+                safe_type_name(e),
+                safe_exception_frames(e),
             )
             raise NodeExecutionError(
                 f"Async node '{self.id}' execution failed: {type(e).__name__}: {e}"

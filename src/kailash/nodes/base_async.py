@@ -244,7 +244,10 @@ class AsyncNode(
 
             # Validate inputs
             validated_inputs = self.validate_inputs(**merged_inputs)
-            self.logger.debug(f"Validated inputs for {self.id}: {validated_inputs}")
+            self.logger.debug(
+                "node.async_inputs_validated",
+                extra={"input_count": len(validated_inputs)},
+            )
 
             # Execute node logic asynchronously
             outputs = await self.async_run(**validated_inputs)
@@ -369,7 +372,8 @@ class AsyncNode(
             if self.security_config.enable_audit_logging:  # type: ignore[reportAttributeAccessIssue]
                 await asyncio.to_thread(
                     self.logger.debug,
-                    f"Inputs validated for {self.__class__.__name__}: {list(validated_inputs.keys())}",
+                    "node.security_inputs_validated count=%d",
+                    len(validated_inputs),
                 )
 
             return validated_inputs
@@ -383,7 +387,9 @@ class AsyncNode(
                     if self.security_config.enable_audit_logging:  # type: ignore[reportAttributeAccessIssue]
                         await asyncio.to_thread(
                             self.logger.error,
-                            f"Security validation failed for {self.__class__.__name__}: {e}",
+                            "node.security_validation_failed: %s (at %s)",
+                            safe_type_name(e),
+                            safe_exception_frames(e),
                         )
                     raise
             except ImportError:
@@ -395,7 +401,9 @@ class AsyncNode(
             ):
                 await asyncio.to_thread(
                     self.logger.error,
-                    f"Unexpected validation error for {self.__class__.__name__}: {e}",
+                    "node.validation_failed: %s (at %s)",
+                    safe_type_name(e),
+                    safe_exception_frames(e),
                 )
             raise
 
@@ -435,7 +443,7 @@ class AsyncNode(
     async def log_error_with_traceback(
         self, error: Exception, operation: str = "unknown"
     ) -> None:
-        """Log an error with full traceback information (async override).
+        """Log an error with exception type and frame locations (async override).
 
         Overrides LoggingMixin.log_error_with_traceback to prevent blocking.
 
@@ -443,14 +451,11 @@ class AsyncNode(
             error: Exception that occurred
             operation: Operation that failed
         """
-        import traceback
-
         await self.log_with_context(
             "error",
             f"Operation failed: {operation}",
             error_type=safe_type_name(error),
-            error_message=str(error),
-            traceback=traceback.format_exc(),
+            traceback=safe_exception_frames(error),
         )
 
     async def log_info(self, message: str, **extra) -> None:
@@ -492,7 +497,7 @@ class AsyncNode(
 
         if error:
             log_data["error_type"] = safe_type_name(error)
-            log_data["error_message"] = str(error)
+            log_data["error_frames"] = safe_exception_frames(error)
 
         await asyncio.to_thread(self.logger.error, message, extra=log_data)
 
