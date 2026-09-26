@@ -68,6 +68,7 @@ from kailash.runtime.durable import (
     NodeCompletionCallback,
     NodeCompletionEvent,
     NodeCompletionHookRegistry,
+    _validate_force_resume_with_drift,
     build_checkpoint_key,
     check_shape_drift_or_raise,
     compute_workflow_fingerprint,
@@ -1205,6 +1206,7 @@ class LocalRuntime(
         # Validate the typed time-limit kwargs at the entry point so caller
         # bugs (negative values, soft >= hard, NaN/Inf) raise loudly here,
         # not later from a timer thread (per #912 Shard 1 + Shard 6).
+        _validate_force_resume_with_drift(force_resume_with_drift)
         _validate_limits(soft_time_limit, time_limit)
 
         # Emit deprecation warning for non-context-managed usage.
@@ -1459,6 +1461,7 @@ class LocalRuntime(
             WorkflowCancelledError: If cancellation is requested.
             PermissionError: If access control denies execution.
         """
+        _validate_force_resume_with_drift(force_resume_with_drift)
         return await self._execute_async(
             workflow=workflow,
             task_manager=task_manager,
@@ -2363,6 +2366,7 @@ class LocalRuntime(
             WorkflowCancelledError: If cancellation is requested.
         """
         # Create new event loop for sync execution
+        _validate_force_resume_with_drift(force_resume_with_drift)
         import threading
 
         result_container = []
@@ -2539,6 +2543,7 @@ class LocalRuntime(
             PermissionError: If access control denies execution.
         """
         # Extract kwargs for backward compatibility
+        _validate_force_resume_with_drift(kwargs.get("force_resume_with_drift", False))
         task_manager: TaskManager | None = kwargs.get("task_manager")
         parameters: dict[str, dict[str, Any]] | dict[str, Any] | None = kwargs.get(
             "parameters"
@@ -2548,9 +2553,7 @@ class LocalRuntime(
         search_attributes: dict[str, Any] | None = kwargs.get("search_attributes")
         # W1: durable-execution kwargs
         idempotency_key: Optional[str] = kwargs.get("idempotency_key")
-        force_resume_with_drift: bool = bool(
-            kwargs.get("force_resume_with_drift", False)
-        )
+        force_resume_with_drift: bool = kwargs.get("force_resume_with_drift", False)
 
         if not workflow:
             raise RuntimeExecutionError("No workflow provided")

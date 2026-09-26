@@ -38,6 +38,7 @@ from kailash.runtime._time_limits import (
 from kailash.runtime.cancellation import CancellationToken
 from kailash.runtime.durable import (
     NodeCompletionEvent,
+    _validate_force_resume_with_drift,
     build_checkpoint_key,
     check_shape_drift_or_raise,
     compute_workflow_fingerprint,
@@ -722,6 +723,17 @@ class AsyncLocalRuntime(LocalRuntime):
         if self._hook_registry.subscriber_count > 0:
             await self._hook_registry.dispatch_async(redacted)
 
+    @staticmethod
+    def _validate_compatibility_controls(**controls: Any) -> None:
+        """Reject LocalRuntime controls the native async engine cannot honor."""
+        unsupported = [name for name, value in controls.items() if value is not None]
+        if unsupported:
+            raise TypeError(
+                "AsyncLocalRuntime does not support execution controls: "
+                + ", ".join(unsupported)
+                + "; use LocalRuntime for these controls or omit them"
+            )
+
     def execute(
         self,
         workflow,
@@ -743,8 +755,13 @@ class AsyncLocalRuntime(LocalRuntime):
 
         Args:
             workflow: Workflow to execute
-            task_manager: Optional task manager for tracking
+            task_manager: LocalRuntime compatibility argument; must be None.
             parameters: Input parameters for the workflow
+            cancellation_token: LocalRuntime compatibility argument; must be None.
+            search_attributes: LocalRuntime compatibility argument; must be None.
+            kwargs: Forwarded to execute_workflow_async, including context,
+                idempotency_key and force_resume_with_drift. Unsupported options
+                raise TypeError before workflow execution.
             soft_time_limit: Optional advisory deadline in seconds (#912).
                 Raises :class:`~kailash.sdk_exceptions.SoftTimeLimitExceeded`
                 when reached; user code MAY catch and exit cleanly.
@@ -778,6 +795,12 @@ class AsyncLocalRuntime(LocalRuntime):
         # #912 Shard 1: validate typed time-limit kwargs at the entry point.
         _validate_limits(soft_time_limit, time_limit)
 
+        self._validate_compatibility_controls(
+            task_manager=task_manager,
+            cancellation_token=cancellation_token,
+            search_attributes=search_attributes,
+        )
+
         # Check if we're already in an event loop
         try:
             loop = asyncio.get_running_loop()
@@ -795,7 +818,15 @@ class AsyncLocalRuntime(LocalRuntime):
                 raise
             # Otherwise it's the "no running loop" error - proceed with asyncio.run()
             inputs = parameters if parameters else {}
-            result = asyncio.run(self.execute_workflow_async(workflow, inputs=inputs))
+            result = asyncio.run(
+                self.execute_workflow_async(
+                    workflow,
+                    inputs=inputs,
+                    soft_time_limit=soft_time_limit,
+                    time_limit=time_limit,
+                    **kwargs,
+                )
+            )
 
             # extract_workflow_async returns Tuple[Dict, str]
             if isinstance(result, tuple):
@@ -823,19 +854,32 @@ class AsyncLocalRuntime(LocalRuntime):
         """
         Execute workflow asynchronously (for LocalRuntime compatibility).
 
-        This method provides compatibility with LocalRuntime's execute_async()
-        interface while using AsyncLocalRuntime's execution engine.
+        This method preserves LocalRuntime's tuple return interface while using
+        AsyncLocalRuntime's execution engine. Non-None task_manager,
+        cancellation_token, execution_tracker and search_attributes are rejected
+        because this engine does not implement those execution controls.
 
         Args:
             workflow: Workflow to execute
-            task_manager: Optional task manager for tracking
+            task_manager: LocalRuntime compatibility argument; must be None.
             parameters: Input parameters for the workflow
+            cancellation_token: LocalRuntime compatibility argument; must be None.
+            search_attributes: LocalRuntime compatibility argument; must be None.
+            kwargs: Forwarded to execute_workflow_async, including context,
+                idempotency_key and force_resume_with_drift. Unsupported options
+                raise TypeError before workflow execution.
 
         Returns:
             Tuple of (results dict, run_id)
         """
+        self._validate_compatibility_controls(
+            task_manager=task_manager,
+            cancellation_token=cancellation_token,
+            execution_tracker=execution_tracker,
+            search_attributes=search_attributes,
+        )
         inputs = parameters if parameters else {}
-        result = await self.execute_workflow_async(workflow, inputs=inputs)
+        result = await self.execute_workflow_async(workflow, inputs=inputs, **kwargs)
 
         # execute_workflow_async returns Tuple[Dict, str]
         if isinstance(result, tuple):
@@ -919,6 +963,7 @@ class AsyncLocalRuntime(LocalRuntime):
                 ...  # save partial work, exit cleanly
         """
         # #912 Shard 1: validate typed time-limit kwargs at the entry point.
+        _validate_force_resume_with_drift(force_resume_with_drift)
         _validate_limits(soft_time_limit, time_limit)
 
         # #912 Shard 6: arm asyncio-task-based deadlines around the
@@ -941,241 +986,248 @@ class AsyncLocalRuntime(LocalRuntime):
                 time_limit=time_limit,
             )
 
-        start_time = time.time()
-
-        # Issue #1708 W1f: canonical workflow RED (Rate/Errors/Duration) via
-        # the OTel MetricsBridge, mirroring LocalRuntime.execute(). Bounded
-        # {workflow.name} label only — NEVER workflow_id (the per-build UUID
-        # cardinality bomb Wave 1d fixed). Recorded once, in the `finally`
-        # block below, on BOTH the success and exception path.
-        _metrics_bridge = get_metrics_bridge()
-        _metrics_workflow_name = getattr(workflow, "name", "") or ""
-
-        # Generate run_id for tracking (consistent with LocalRuntime)
-        run_id = f"run_{int(time.time() * 1000)}"
-
-        # Create execution context
-        if context is None:
-            context = ExecutionContext(resource_registry=self.resource_registry)
-
-        # Add inputs to context
-        context.variables.update(inputs)
-
-        # === W1: Durable execution — shape-drift check + checkpoint context ===
-        # Compute the fingerprint once, build the checkpoint key, and run
-        # the shape-drift gate BEFORE any node executes.  The same
-        # invariants apply here as in LocalRuntime._execute_async — the
-        # per-node hot path below will emit + persist + dispatch events
-        # using the values stashed onto the context.
-        workflow_fingerprint = compute_workflow_fingerprint(workflow)
-        tenant_id = resolve_tenant_id(self)
-        checkpoint_key: Optional[str] = None
-        execution_tracker: Optional[ExecutionTracker] = None
-        if idempotency_key is not None:
-            checkpoint_key = build_checkpoint_key(
-                workflow_fingerprint,
-                idempotency_key,
-                inputs if isinstance(inputs, dict) else None,
-                tenant_id=tenant_id,
-            )
-            if self._checkpoint_store is not None:
-                try:
-                    prior_blob = await self._checkpoint_store.load(checkpoint_key)
-                except Exception as load_err:  # pragma: no cover — defensive
-                    logger.warning(
-                        "durable.checkpoint.load_failed",
-                        extra={"error_type": type(load_err).__name__},
-                    )
-                    prior_blob = None
-                if prior_blob is not None:
-                    stored_payload = decode_checkpoint_payload(prior_blob)
-                    check_shape_drift_or_raise(
-                        idempotency_key=idempotency_key,
-                        stored_payload=stored_payload,
-                        current_fingerprint=workflow_fingerprint,
-                        force_resume_with_drift=force_resume_with_drift,
-                    )
-                    execution_tracker = ExecutionTracker.from_dict(
-                        stored_payload.get("tracker", {})
-                    )
-
-        # Stash durable-execution context as ATTRIBUTES on the
-        # ExecutionContext (not ``variables``) so the per-node input
-        # sanitiser never treats them as user-supplied parameters.  The
-        # attribute path is initialised on every ExecutionContext (see
-        # ExecutionContext.__init__) so a None default is always present.
-        context._w1_workflow_fingerprint = workflow_fingerprint
-        context._w1_checkpoint_key = checkpoint_key
-        context._w1_tenant_id = tenant_id
-        context._w1_idempotency_key = idempotency_key
-        context._w1_run_id = run_id
-        context._w1_execution_tracker = (
-            execution_tracker if execution_tracker is not None else ExecutionTracker()
-        )
-
-        # CARE-017: Get effective trust context and set up propagation
-        effective_trust_ctx = self._get_effective_trust_context()
-        trust_token = None
-
+        # Timers cover preparation as well as execution. Every early context,
+        # checkpoint or drift exit must finish the same owned timer tasks.
         try:
-            # Set trust context in ContextVar if available
-            if effective_trust_ctx is not None:
-                from kailash.runtime.trust.context import (
-                    TrustVerificationMode,
-                    _runtime_trust_context,
+            start_time = time.time()
+
+            # Issue #1708 W1f: canonical workflow RED (Rate/Errors/Duration) via
+            # the OTel MetricsBridge, mirroring LocalRuntime.execute(). Bounded
+            # {workflow.name} label only — NEVER workflow_id (the per-build UUID
+            # cardinality bomb Wave 1d fixed). Recorded once, in the `finally`
+            # block below, on BOTH the success and exception path.
+            _metrics_bridge = get_metrics_bridge()
+            _metrics_workflow_name = getattr(workflow, "name", "") or ""
+
+            # Generate run_id for tracking (consistent with LocalRuntime)
+            run_id = f"run_{int(time.time() * 1000)}"
+
+            # Create execution context
+            if context is None:
+                context = ExecutionContext(resource_registry=self.resource_registry)
+
+            # Add inputs to context
+            context.variables.update(inputs)
+
+            # === W1: Durable execution — shape-drift check + checkpoint context ===
+            # Compute the fingerprint once, build the checkpoint key, and run
+            # the shape-drift gate BEFORE any node executes.  The same
+            # invariants apply here as in LocalRuntime._execute_async — the
+            # per-node hot path below will emit + persist + dispatch events
+            # using the values stashed onto the context.
+            workflow_fingerprint = compute_workflow_fingerprint(workflow)
+            tenant_id = resolve_tenant_id(self)
+            checkpoint_key: Optional[str] = None
+            execution_tracker: Optional[ExecutionTracker] = None
+            if idempotency_key is not None:
+                checkpoint_key = build_checkpoint_key(
+                    workflow_fingerprint,
+                    idempotency_key,
+                    inputs if isinstance(inputs, dict) else None,
+                    tenant_id=tenant_id,
                 )
-
-                trust_token = _runtime_trust_context.set(effective_trust_ctx)
-
-                # Verify workflow trust before execution
-                if (
-                    self._trust_verification_mode != TrustVerificationMode.DISABLED
-                    and self._trust_verifier is not None
-                ):
-                    allowed = await self._verify_workflow_trust(
-                        workflow, effective_trust_ctx
-                    )
-                    if not allowed:
-                        raise WorkflowExecutionError(
-                            "Trust verification denied workflow execution"
+                if self._checkpoint_store is not None:
+                    try:
+                        prior_blob = await self._checkpoint_store.load(checkpoint_key)
+                    except Exception as load_err:  # pragma: no cover — defensive
+                        logger.warning(
+                            "durable.checkpoint.load_failed",
+                            extra={"error_type": type(load_err).__name__},
                         )
-            # P0 Component 1: Timeout Protection
-            # Wrap execution with timeout if configured
-            if self.execution_timeout and self.execution_timeout > 0:
-                logger.debug(f"Executing with timeout={self.execution_timeout}s")
-                tracker_result = await asyncio.wait_for(
-                    self._execute_workflow_internal(workflow, inputs, context, run_id),
-                    timeout=self.execution_timeout,
-                )
-            else:
-                tracker_result = await self._execute_workflow_internal(
-                    workflow, inputs, context, run_id
-                )
+                        prior_blob = None
+                    if prior_blob is not None:
+                        stored_payload = decode_checkpoint_payload(prior_blob)
+                        check_shape_drift_or_raise(
+                            idempotency_key=idempotency_key,
+                            stored_payload=stored_payload,
+                            current_fingerprint=workflow_fingerprint,
+                            force_resume_with_drift=force_resume_with_drift,
+                        )
+                        execution_tracker = ExecutionTracker.from_dict(
+                            stored_payload.get("tracker", {})
+                        )
 
-            # Update total execution time
-            total_time = time.time() - start_time
-            context.metrics.total_duration = total_time
-
-            logger.info(f"Workflow execution completed in {total_time:.2f}s")
-
-            # Extract plain results dict
-            # Conditional approach (skip_branches mode) returns plain dict, other methods return tracker wrapper
-            if (
-                self._has_conditional_patterns(workflow)
-                and self.conditional_execution == "skip_branches"
-            ):
-                results = (
-                    tracker_result  # Already plain dict from conditional execution
-                )
-            else:
-                results = (
-                    tracker_result.get("results", {})
-                    if isinstance(tracker_result, dict)
-                    else tracker_result
-                )
-
-            # #912 Shard 6: post-completion poll for hard-deadline-fired-
-            # after-success (Shard 2 invariant 5). Even when the workflow
-            # returned cleanly, the asyncio timer task may have set the
-            # hard flag — the kill is non-negotiable.
-            if cancellable is not None:
-                if cancellable.hard_deadline_reached:
-                    raise HardTimeLimitExceeded(
-                        f"workflow exceeded hard time limit "
-                        f"(time_limit={cancellable.time_limit}s + "
-                        f"grace_seconds={cancellable.grace_seconds}s)"
-                    )
-                if (
-                    _attempt_token is not None
-                    and _attempt_token.is_cancelled
-                    and cancellable.soft_time_limit is not None
-                ):
-                    raise SoftTimeLimitExceeded(
-                        f"workflow exceeded soft time limit "
-                        f"(soft_time_limit={cancellable.soft_time_limit}s)"
-                    )
-
-            # P0 Component 1: Return tuple (results, run_id) for consistency
-            # This matches LocalRuntime.execute() return structure
-            return (results, run_id)
-
-        except asyncio.TimeoutError:
-            # P0 Component 1: Task cancellation on timeout
-            logger.error(f"Workflow execution timeout after {self.execution_timeout}s")
-            context.metrics.error_count += 1
-            # Cancel running tasks
-            await context.cancel_all_tasks()
-            raise  # Re-raise TimeoutError
-
-        except WorkflowCancelledError as cancel_exc:
-            # #912 Shard 6: classify time-limit cancellations into the
-            # subclass that names the deadline. The runtime observed
-            # our token cancelled and raised; if our timers were armed,
-            # classify.
-            context.metrics.error_count += 1
-            if cancellable is not None:
-                classified = _TimeLimitClassifier(cancellable).classify(cancel_exc)
-                if classified is not cancel_exc:
-                    raise classified from cancel_exc
-            raise
-
-        except (SoftTimeLimitExceeded, HardTimeLimitExceeded):
-            # #912 Shard 6: typed deadline exceptions MUST propagate
-            # untouched. Without this catch-and-re-raise above the
-            # broad `except Exception`, the time-limit raise would
-            # be swallowed and re-wrapped as WorkflowExecutionError —
-            # callers could not catch the typed exception that the
-            # docstring promises.
-            context.metrics.error_count += 1
-            raise
-
-        except WorkflowExecutionError:
-            # Re-raise WorkflowExecutionError without wrapping (includes trust verification errors)
-            context.metrics.error_count += 1
-            raise
-
-        except Exception as e:
-            logger.error(f"Workflow execution failed: {e}")
-            context.metrics.error_count += 1
-            raise WorkflowExecutionError(f"Async execution failed: {e}") from e
-
-        finally:
-            # Issue #1708 W1f: record the canonical workflow RED triple.
-            # `sys.exc_info()` inside a `finally` attached to the same
-            # `try` frame that is unwinding reports the in-flight exception
-            # (or `(None, None, None)` on a clean return) — this single
-            # check point observes BOTH the success path (`return (results,
-            # run_id)` above) and every exception path (timeout, cancelled,
-            # time-limit, or generic) without duplicating the recording
-            # call at every `except` clause.
-            _metrics_success = sys.exc_info()[0] is None
-            _metrics_bridge.record_workflow_execution(
-                _metrics_workflow_name,
-                time.time() - start_time,
-                success=_metrics_success,
+            # Stash durable-execution context as ATTRIBUTES on the
+            # ExecutionContext (not ``variables``) so the per-node input
+            # sanitiser never treats them as user-supplied parameters.  The
+            # attribute path is initialised on every ExecutionContext (see
+            # ExecutionContext.__init__) so a None default is always present.
+            context._w1_workflow_fingerprint = workflow_fingerprint
+            context._w1_checkpoint_key = checkpoint_key
+            context._w1_tenant_id = tenant_id
+            context._w1_idempotency_key = idempotency_key
+            context._w1_run_id = run_id
+            context._w1_execution_tracker = (
+                execution_tracker
+                if execution_tracker is not None
+                else ExecutionTracker()
             )
-            # #912 Shard 6: always release the asyncio timer tasks. Safe
-            # to call on the no-limits path (cancellable is None then).
-            if cancellable is not None:
-                cancellable.disarm()
 
-            # CARE-017: Reset trust context token
-            if trust_token is not None:
-                from kailash.runtime.trust.context import _runtime_trust_context
+            # CARE-017: Get effective trust context and set up propagation
+            effective_trust_ctx = self._get_effective_trust_context()
+            trust_token = None
 
-                _runtime_trust_context.reset(trust_token)
-
-            # BYOK hardening: clear credential store after execution completes
-            from kailash.workflow.credentials import get_credential_store
-
-            get_credential_store().clear()
-
-            # P0 Component 1: Cleanup guarantees
-            # Always cleanup connections and resources
             try:
-                await context.cleanup()
-            except Exception as cleanup_error:
-                logger.warning(f"Error during context cleanup: {cleanup_error}")
+                # Set trust context in ContextVar if available
+                if effective_trust_ctx is not None:
+                    from kailash.runtime.trust.context import (
+                        TrustVerificationMode,
+                        _runtime_trust_context,
+                    )
+
+                    trust_token = _runtime_trust_context.set(effective_trust_ctx)
+
+                    # Verify workflow trust before execution
+                    if (
+                        self._trust_verification_mode != TrustVerificationMode.DISABLED
+                        and self._trust_verifier is not None
+                    ):
+                        allowed = await self._verify_workflow_trust(
+                            workflow, effective_trust_ctx
+                        )
+                        if not allowed:
+                            raise WorkflowExecutionError(
+                                "Trust verification denied workflow execution"
+                            )
+                # P0 Component 1: Timeout Protection
+                # Wrap execution with timeout if configured
+                if self.execution_timeout and self.execution_timeout > 0:
+                    logger.debug(f"Executing with timeout={self.execution_timeout}s")
+                    tracker_result = await asyncio.wait_for(
+                        self._execute_workflow_internal(
+                            workflow, inputs, context, run_id
+                        ),
+                        timeout=self.execution_timeout,
+                    )
+                else:
+                    tracker_result = await self._execute_workflow_internal(
+                        workflow, inputs, context, run_id
+                    )
+
+                # Update total execution time
+                total_time = time.time() - start_time
+                context.metrics.total_duration = total_time
+
+                logger.info(f"Workflow execution completed in {total_time:.2f}s")
+
+                # Extract plain results dict
+                # Conditional approach (skip_branches mode) returns plain dict, other methods return tracker wrapper
+                if (
+                    self._has_conditional_patterns(workflow)
+                    and self.conditional_execution == "skip_branches"
+                ):
+                    results = (
+                        tracker_result  # Already plain dict from conditional execution
+                    )
+                else:
+                    results = (
+                        tracker_result.get("results", {})
+                        if isinstance(tracker_result, dict)
+                        else tracker_result
+                    )
+
+                # #912 Shard 6: post-completion poll for hard-deadline-fired-
+                # after-success (Shard 2 invariant 5). Even when the workflow
+                # returned cleanly, the asyncio timer task may have set the
+                # hard flag — the kill is non-negotiable.
+                if cancellable is not None:
+                    if cancellable.hard_deadline_reached:
+                        raise HardTimeLimitExceeded(
+                            f"workflow exceeded hard time limit "
+                            f"(time_limit={cancellable.time_limit}s + "
+                            f"grace_seconds={cancellable.grace_seconds}s)"
+                        )
+                    if (
+                        _attempt_token is not None
+                        and _attempt_token.is_cancelled
+                        and cancellable.soft_time_limit is not None
+                    ):
+                        raise SoftTimeLimitExceeded(
+                            f"workflow exceeded soft time limit "
+                            f"(soft_time_limit={cancellable.soft_time_limit}s)"
+                        )
+
+                # P0 Component 1: Return tuple (results, run_id) for consistency
+                # This matches LocalRuntime.execute() return structure
+                return (results, run_id)
+
+            except asyncio.TimeoutError:
+                # P0 Component 1: Task cancellation on timeout
+                logger.error(
+                    f"Workflow execution timeout after {self.execution_timeout}s"
+                )
+                context.metrics.error_count += 1
+                # Cancel running tasks
+                await context.cancel_all_tasks()
+                raise  # Re-raise TimeoutError
+
+            except WorkflowCancelledError as cancel_exc:
+                # #912 Shard 6: classify time-limit cancellations into the
+                # subclass that names the deadline. The runtime observed
+                # our token cancelled and raised; if our timers were armed,
+                # classify.
+                context.metrics.error_count += 1
+                if cancellable is not None:
+                    classified = _TimeLimitClassifier(cancellable).classify(cancel_exc)
+                    if classified is not cancel_exc:
+                        raise classified from cancel_exc
+                raise
+
+            except (SoftTimeLimitExceeded, HardTimeLimitExceeded):
+                # #912 Shard 6: typed deadline exceptions MUST propagate
+                # untouched. Without this catch-and-re-raise above the
+                # broad `except Exception`, the time-limit raise would
+                # be swallowed and re-wrapped as WorkflowExecutionError —
+                # callers could not catch the typed exception that the
+                # docstring promises.
+                context.metrics.error_count += 1
+                raise
+
+            except WorkflowExecutionError:
+                # Re-raise WorkflowExecutionError without wrapping (includes trust verification errors)
+                context.metrics.error_count += 1
+                raise
+
+            except Exception as e:
+                logger.error(f"Workflow execution failed: {e}")
+                context.metrics.error_count += 1
+                raise WorkflowExecutionError(f"Async execution failed: {e}") from e
+
+            finally:
+                # Issue #1708 W1f: record the canonical workflow RED triple.
+                # `sys.exc_info()` inside a `finally` attached to the same
+                # `try` frame that is unwinding reports the in-flight exception
+                # (or `(None, None, None)` on a clean return) — this single
+                # check point observes BOTH the success path (`return (results,
+                # run_id)` above) and every exception path (timeout, cancelled,
+                # time-limit, or generic) without duplicating the recording
+                # call at every `except` clause.
+                _metrics_success = sys.exc_info()[0] is None
+                _metrics_bridge.record_workflow_execution(
+                    _metrics_workflow_name,
+                    time.time() - start_time,
+                    success=_metrics_success,
+                )
+                # CARE-017: Reset trust context token
+                if trust_token is not None:
+                    from kailash.runtime.trust.context import _runtime_trust_context
+
+                    _runtime_trust_context.reset(trust_token)
+
+                # BYOK hardening: clear credential store after execution completes
+                from kailash.workflow.credentials import get_credential_store
+
+                get_credential_store().clear()
+
+                # P0 Component 1: Cleanup guarantees
+                # Always cleanup connections and resources
+                try:
+                    await context.cleanup()
+                except Exception as cleanup_error:
+                    logger.warning(f"Error during context cleanup: {cleanup_error}")
+        finally:
+            if cancellable is not None:
+                await cancellable.disarm_async()
 
     async def _execute_workflow_internal(
         self, workflow, inputs: Dict[str, Any], context: ExecutionContext, run_id: str

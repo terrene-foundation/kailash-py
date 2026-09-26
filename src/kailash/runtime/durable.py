@@ -1048,6 +1048,12 @@ def decode_checkpoint_payload(blob: bytes) -> Dict[str, Any]:
     return payload
 
 
+def _validate_force_resume_with_drift(value: bool) -> None:
+    """A drift bypass requires an explicit boolean, never truthy coercion."""
+    if value is not True and value is not False:
+        raise TypeError("force_resume_with_drift must be a bool (False or True)")
+
+
 def check_shape_drift_or_raise(
     *,
     idempotency_key: str,
@@ -1059,6 +1065,7 @@ def check_shape_drift_or_raise(
 
     See :class:`WorkflowShapeDriftError` for semantics.
     """
+    _validate_force_resume_with_drift(force_resume_with_drift)
     stored_fp = stored_payload.get("workflow_fingerprint", "")
     if stored_fp == current_fingerprint:
         return
@@ -1451,6 +1458,7 @@ class DurableExecutionEngine:
           eliminate the race entirely.
         """
         # #912 Shard 1: validate typed time-limit kwargs at the entry point.
+        _validate_force_resume_with_drift(force_resume_with_drift)
         _validate_limits(soft_time_limit, time_limit)
 
         effective_inputs: Dict[str, Any] = (
