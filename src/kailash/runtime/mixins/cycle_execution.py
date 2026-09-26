@@ -243,11 +243,30 @@ class CycleExecutionMixin:
         active_lock = threading.Lock()
         node_tasks = set()
 
+        def iteration_state(cycle_id, iteration):
+            tracker = execution_state.execution_tracker
+            if tracker is not None and cycle_id is not None:
+                tracker = tracker.for_cycle_iteration(cycle_id, iteration)
+            return replace(execution_state, execution_tracker=tracker)
+
+        async def replay_node(node_id, cycle_id, iteration):
+            state = iteration_state(cycle_id, iteration)
+            self._check_execution_cancelled(node_id, state)
+            if stopped.is_set():
+                raise asyncio.CancelledError()
+            tracker = state.execution_tracker
+            if tracker is not None and tracker.is_completed(node_id):
+                result = tracker.get_output(node_id)
+                self._check_node_result(node_id, result)
+                return True, result
+            return False, None
+
         async def execute_node(node, node_id, inputs, cycle_id, iteration):
             task = asyncio.current_task()
             node_tasks.add(task)
             try:
-                self._check_execution_cancelled(node_id, execution_state)
+                state = iteration_state(cycle_id, iteration)
+                self._check_execution_cancelled(node_id, state)
                 if stopped.is_set():
                     raise asyncio.CancelledError()
                 started_at = datetime.now(UTC)
@@ -257,7 +276,6 @@ class CycleExecutionMixin:
                     node, node_id, inputs
                 )
                 self._check_node_result(node_id, result)
-                # Iteration-aware durable storage is supplied by the cycle tracker.
                 await self._publish_node_completion(
                     workflow=workflow,
                     node_id=node_id,
@@ -265,16 +283,16 @@ class CycleExecutionMixin:
                     outputs=result,
                     run_id=run_id,
                     started_at=started_at,
-                    execution_state=replace(execution_state, execution_tracker=None),
+                    execution_state=state,
                 )
                 return result
             finally:
                 node_tasks.remove(task)
 
-        def dispatch(*args):
+        def on_owner(function, *args):
             if stopped.is_set():
                 raise asyncio.CancelledError()
-            coroutine = execute_node(*args)
+            coroutine = function(*args)
             try:
                 future = asyncio.run_coroutine_threadsafe(coroutine, loop)
             except BaseException:
@@ -295,6 +313,12 @@ class CycleExecutionMixin:
                 with active_lock:
                     active.remove(future)
 
+        def dispatch(*args):
+            return on_owner(execute_node, *args)
+
+        def replay(*args):
+            return on_owner(replay_node, *args)
+
         executor = cyclic_executor._fork_for_execution()
         worker = asyncio.create_task(
             asyncio.to_thread(
@@ -305,6 +329,7 @@ class CycleExecutionMixin:
                 run_id,
                 self,
                 node_executor=dispatch,
+                node_replayer=replay,
             )
         )
         try:

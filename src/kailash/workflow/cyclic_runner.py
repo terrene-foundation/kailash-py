@@ -134,6 +134,7 @@ class WorkflowState:
         self.initial_parameters: dict[str, Any] = {}
         self.runtime: Any = None  # Will be set by executor for enterprise features
         self.node_executor = None
+        self.node_replayer = None
 
 
 class CyclicWorkflowExecutor:
@@ -165,6 +166,7 @@ class CyclicWorkflowExecutor:
         runtime=None,
         *,
         node_executor=None,
+        node_replayer=None,
     ) -> tuple[dict[str, Any], str]:
         """Execute workflow with cycle support.
 
@@ -198,9 +200,11 @@ class CyclicWorkflowExecutor:
         # The plan handles DAG stages even when there are no cycle groups.
         # WorkflowRunner instead accepts registered workflow IDs and state models.
         try:
-            execution_options = (
-                {"node_executor": node_executor} if node_executor is not None else {}
-            )
+            execution_options = {}
+            if node_executor is not None:
+                execution_options["node_executor"] = node_executor
+            if node_replayer is not None:
+                execution_options["node_replayer"] = node_replayer
             results = self._execute_with_cycles(
                 workflow, parameters, run_id, task_manager, runtime, **execution_options
             )
@@ -306,6 +310,7 @@ class CyclicWorkflowExecutor:
         runtime=None,
         *,
         node_executor=None,
+        node_replayer=None,
     ) -> dict[str, Any]:
         """Execute workflow with cycle handling.
 
@@ -335,6 +340,7 @@ class CyclicWorkflowExecutor:
         # Store runtime for enterprise features
         state.runtime = runtime
         state.node_executor = node_executor
+        state.node_replayer = node_replayer
 
         # Execute the plan
         results = self._execute_plan(workflow, execution_plan, state, task_manager)
@@ -1120,6 +1126,19 @@ class CyclicWorkflowExecutor:
         node = workflow.get_node(node_id)
         if not node:
             raise WorkflowExecutionError(f"Node not found: {node_id}")
+
+        if state.node_replayer is not None:
+            restored, result = state.node_replayer(
+                node_id, cycle_state.cycle_id if cycle_state else None, iteration
+            )
+            if restored:
+                if (
+                    cycle_state
+                    and isinstance(result, dict)
+                    and "_cycle_state" in result
+                ):
+                    cycle_state.set_node_state(node_id, result["_cycle_state"])
+                return result
 
         # Gather inputs from connections
         inputs = {}

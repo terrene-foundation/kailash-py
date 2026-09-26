@@ -5508,7 +5508,7 @@ class LocalRuntime(
         if token is not None and token.is_cancelled:
             raise WorkflowCancelledError(
                 cancelled_at_node=node_id,
-                completed_nodes=tracker.completed_node_ids if tracker else [],
+                completed_nodes=tracker.all_completed_node_ids if tracker else [],
             )
 
     def _check_node_result(self, node_id: str, result: Any) -> None:

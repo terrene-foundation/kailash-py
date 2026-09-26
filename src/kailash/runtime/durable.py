@@ -676,9 +676,25 @@ def redacted_tracker_state_for_checkpoint(
     # tracker dict is never mutated even on the no-op path.
     new_state: Dict[str, Any] = {}
     for key, value in tracker_state.items():
-        if key == "node_outputs":
+        if key in ("node_outputs", "cycle_iterations"):
             continue  # populated below
         new_state[key] = value
+
+    if "cycle_iterations" in tracker_state:
+        new_state["cycle_iterations"] = {
+            cycle_id: {
+                iteration: redacted_tracker_state_for_checkpoint(
+                    state,
+                    classification_policy=classification_policy,
+                    workflow_id=workflow_id,
+                    workflow_fingerprint=workflow_fingerprint,
+                    tenant_id=tenant_id,
+                    idempotency_key=idempotency_key,
+                )
+                for iteration, state in iterations.items()
+            }
+            for cycle_id, iterations in tracker_state["cycle_iterations"].items()
+        }
 
     raw_outputs_map = tracker_state.get("node_outputs", {})
     if not isinstance(raw_outputs_map, Mapping):

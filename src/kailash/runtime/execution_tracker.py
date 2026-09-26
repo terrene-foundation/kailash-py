@@ -35,10 +35,33 @@ class ExecutionTracker:
     def __init__(self) -> None:
         self._completed: Dict[str, Dict[str, Any]] = {}  # node_id -> output
         self._execution_order: List[str] = []
+        self._cycle_iterations: Dict[str, Dict[int, "ExecutionTracker"]] = {}
+        self._checkpoint_parent: Optional["ExecutionTracker"] = None
 
     # ------------------------------------------------------------------
     # Recording API
     # ------------------------------------------------------------------
+
+    def for_cycle_iteration(self, cycle_id: str, iteration: int) -> "ExecutionTracker":
+        """Use real node IDs within one iteration, persisting the whole attempt.
+
+        Iteration views isolate completion queries without encoding a scope into
+        node IDs, so classification policies keep their original node lookup.
+        """
+        if (
+            not isinstance(cycle_id, str)
+            or not isinstance(iteration, int)
+            or iteration < 1
+        ):
+            raise ValueError(
+                "Cycle completion scope requires a cycle ID and positive iteration"
+            )
+        iterations = self._cycle_iterations.setdefault(cycle_id, {})
+        if iteration not in iterations:
+            tracker = ExecutionTracker()
+            tracker._checkpoint_parent = self
+            iterations[iteration] = tracker
+        return iterations[iteration]
 
     def record_completion(self, node_id: str, output: Any) -> None:
         """Record that *node_id* completed with *output*."""
@@ -64,6 +87,21 @@ class ExecutionTracker:
         return list(self._execution_order)
 
     @property
+    def all_completed_node_ids(self) -> List[str]:
+        """Unique original node IDs across the whole attempt, including cycles."""
+        root = self
+        while root._checkpoint_parent is not None:
+            root = root._checkpoint_parent
+
+        def completed(tracker):
+            yield from tracker._execution_order
+            for iterations in tracker._cycle_iterations.values():
+                for child in iterations.values():
+                    yield from completed(child)
+
+        return list(dict.fromkeys(completed(root)))
+
+    @property
     def serialized_outputs(self) -> Dict[str, Any]:
         """All cached outputs keyed by node ID."""
         return dict(self._completed)
@@ -74,10 +112,24 @@ class ExecutionTracker:
 
     def to_dict(self) -> Dict[str, Any]:
         """Return a JSON-friendly dict suitable for checkpoint storage."""
-        return {
+        if self._checkpoint_parent is not None:
+            return self._checkpoint_parent.to_dict()
+        return self._local_state()
+
+    def _local_state(self) -> Dict[str, Any]:
+        state: Dict[str, Any] = {
             "completed_nodes": list(self._execution_order),
             "node_outputs": dict(self._completed),
         }
+        if self._cycle_iterations:
+            state["cycle_iterations"] = {
+                cycle_id: {
+                    str(iteration): tracker._local_state()
+                    for iteration, tracker in iterations.items()
+                }
+                for cycle_id, iterations in self._cycle_iterations.items()
+            }
+        return state
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ExecutionTracker":
@@ -89,6 +141,14 @@ class ExecutionTracker:
             # was first recorded, so no need to re-serialise.
             tracker._completed[node_id] = output
             tracker._execution_order.append(node_id)
+        for cycle_id, iterations in data.get("cycle_iterations", {}).items():
+            for iteration, state in iterations.items():
+                index = int(iteration)
+                if str(index) != str(iteration) or index < 1:
+                    raise ValueError("Invalid cycle checkpoint iteration")
+                child = cls.from_dict(state)
+                child._checkpoint_parent = tracker
+                tracker._cycle_iterations.setdefault(cycle_id, {})[index] = child
         return tracker
 
     # ------------------------------------------------------------------
