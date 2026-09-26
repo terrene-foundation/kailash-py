@@ -9,11 +9,35 @@ from __future__ import annotations
 
 import os
 import random
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
 import kailash_ml
 from kailash_ml._seed import SeedReport, seed
+
+
+@pytest.fixture
+def optional_seed_modules(monkeypatch):
+    """Keep dispatch tests independent of optional ML import costs."""
+    modules = {
+        "numpy.random": SimpleNamespace(seed=Mock()),
+        "torch": SimpleNamespace(
+            manual_seed=Mock(),
+            cuda=SimpleNamespace(is_available=lambda: False),
+            use_deterministic_algorithms=Mock(),
+        ),
+        "pytorch_lightning": SimpleNamespace(seed_everything=Mock()),
+        "sklearn": SimpleNamespace(),
+        "numpy": SimpleNamespace(
+            show_config=lambda **kwargs: {
+                "Build Dependencies": {"blas": {"name": "openblas"}}
+            }
+        ),
+    }
+    monkeypatch.setattr(kailash_ml._seed, "_try_import", modules.__getitem__)
+    return modules
 
 
 def test_seed_report_is_exported_at_package_root():
@@ -103,10 +127,26 @@ def test_seed_report_contains_subsystem_via_in():
     assert "torch" not in r
 
 
-def test_torch_deterministic_false_when_torch_opted_out():
+def test_torch_deterministic_false_when_torch_opted_out(optional_seed_modules):
     # torch_deterministic only fires when torch was actually seeded.
     r = seed(42, torch=False)
-    assert r.torch_deterministic is False
+    assert r.torch_deterministic is False, "torch opt-out reported determinism"
+    assert dict(r.skipped)["torch"] == "opt_out"
+    optional_seed_modules["torch"].manual_seed.assert_not_called()
+    optional_seed_modules["torch"].use_deterministic_algorithms.assert_not_called()
+    # Lightning's flag is independent of torch's flag.
+    optional_seed_modules["pytorch_lightning"].seed_everything.assert_called_once_with(
+        42, workers=True
+    )
+
+
+def test_torch_deterministic_true_when_torch_seeded(optional_seed_modules):
+    r = seed(42)
+    assert r.torch_deterministic is True, "seeded torch did not report determinism"
+    optional_seed_modules["torch"].manual_seed.assert_called_once_with(42)
+    optional_seed_modules["torch"].use_deterministic_algorithms.assert_called_once_with(
+        True
+    )
 
 
 def test_seed_report_is_hashable():
@@ -115,15 +155,18 @@ def test_seed_report_is_hashable():
     {r: "ok"}  # does not raise
 
 
-def test_applied_list_order_deterministic():
+def test_applied_list_order_deterministic(optional_seed_modules):
     """Applied list order is a public contract — reproducibility audits
     grep for specific strings in specific positions."""
     r = seed(42, python=True, numpy=True, torch=True, lightning=True, sklearn=True)
-    # pythonhashseed is always first
-    assert r.applied[0] == "pythonhashseed"
-    # python always second (when applied)
-    if "python" in r.applied:
-        assert r.applied[1] == "python"
+    assert r.applied == (
+        "pythonhashseed",
+        "python",
+        "numpy",
+        "torch",
+        "lightning",
+        "sklearn",
+    ), "unexpected seed application order"
 
 
 # --- blas_backend (ml-engines-v2.md §11.2 MUST 5) ---------------------------
