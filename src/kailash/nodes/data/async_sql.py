@@ -684,7 +684,7 @@ def _terminate_driver_handle_sync(handle: Any, *, label: str) -> bool:
                 "is possible; the connection will be reclaimed by the server's "
                 "own timeout.",
                 label,
-                type(exc).__name__,
+                safe_type_name(exc),
             )
             return False
 
@@ -699,13 +699,13 @@ def _terminate_driver_handle_sync(handle: Any, *, label: str) -> bool:
             logger.warning(
                 "async_sql.sqlite_sync_close_failed: could not close %s (%s).",
                 label,
-                type(exc).__name__,
+                safe_type_name(exc),
             )
             return False
 
     logger.debug(
         "async_sql.pool_sync_dispose_unsupported",
-        extra={"pool": label, "handle_type": type(handle).__name__},
+        extra={"pool": label, "handle_type": safe_type_name(handle)},
     )
     return False
 
@@ -4028,7 +4028,7 @@ def _stamp_pool_loop(adapter: Any) -> None:
         # latent path for a future third-party one. Logged, not silent.
         logger.debug(
             "async_sql.pool_loop_stamp_failed",
-            extra={"adapter_type": type(adapter).__name__},
+            extra={"adapter_type": safe_type_name(adapter)},
         )
 
 
@@ -4067,7 +4067,7 @@ def _unregister_pool(owner: Any) -> int:
         # on EVERY sweep would otherwise be invisible.
         logger.debug(
             "async_sql.pool_unregister_sweep_skipped",
-            extra={"error_type": type(exc).__name__},
+            extra={"error_type": safe_type_name(exc)},
         )
         return 0
     for key, entry in items:
@@ -4599,7 +4599,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
         except Exception as e:
             # Stack inspection failed, assume production
             logger.debug(
-                f"Stack inspection failed (error={type(e).__name__}), assuming production"
+                f"Stack inspection failed (error={safe_type_name(e)}), assuming production"
             )
             pass
 
@@ -5090,7 +5090,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 frame_locals = frame.f_locals
                 if "self" in frame_locals:
                     obj = frame_locals["self"]
-                    logger.debug(f"Checking call stack object: {type(obj).__name__}")
+                    logger.debug(f"Checking call stack object: {safe_type_name(obj)}")
 
                     # Check if this is a LocalRuntime with connection pool manager
                     if hasattr(obj, "_pool_coordinator") and hasattr(
@@ -5938,7 +5938,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
                             "fallback_pool_key": redact_pool_key(fallback_pool_key),
                             "registry_size": current,
                             "cap": cap,
-                            "trigger": type(e).__name__,
+                            "trigger": safe_type_name(e),
                         },
                     )
                     # Clear pool sharing for this instance and create dedicated pool

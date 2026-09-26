@@ -230,51 +230,60 @@ class TestSiblingSitesInTheSameFile:
         from kailash.middleware.core.agent_ui import AgentUIMiddleware
 
         agent_ui = AgentUIMiddleware(max_sessions=5)
-        realtime = RealtimeMiddleware(agent_ui)
+        try:
+            realtime = RealtimeMiddleware(agent_ui)
 
-        # `url` is a caller-supplied field on WebhookRegisterRequest.
-        with _StreamProbe(
-            "kailash.middleware.communication.realtime", logging.INFO
-        ) as probe:
-            realtime.register_webhook(webhook_id="w1", url=INJECTION)
-        _assert_single_clean_line(probe, "kid-a")
+            # `url` is a caller-supplied field on WebhookRegisterRequest.
+            with _StreamProbe(
+                "kailash.middleware.communication.realtime", logging.INFO
+            ) as probe:
+                realtime.register_webhook(webhook_id="w1", url=INJECTION)
+            _assert_single_clean_line(probe, "kid-a")
 
-        # `name` is a caller-supplied field on WorkflowCreateRequest.
-        with _StreamProbe("kailash.middleware.core.agent_ui", logging.INFO) as probe:
-            asyncio.run(
-                agent_ui._build_workflow_from_config(
-                    {
-                        "name": INJECTION,
-                        "nodes": [
-                            {
-                                "id": "n",
-                                "type": "PythonCodeNode",
-                                "config": {"name": "n", "code": "result = {}"},
-                            }
-                        ],
-                        "connections": [],
-                    }
-                )
-            )
-        _assert_single_clean_line(probe, "kid-a")
-
-        # The build-FAILURE sink: the exception text is derived from the
-        # caller's own node graph, on the path a prober drives repeatedly.
-        with _StreamProbe("kailash.middleware.core.agent_ui", logging.ERROR) as probe:
-            with pytest.raises(ValueError):
+            # `name` is a caller-supplied field on WorkflowCreateRequest.
+            with _StreamProbe(
+                "kailash.middleware.core.agent_ui", logging.INFO
+            ) as probe:
                 asyncio.run(
                     agent_ui._build_workflow_from_config(
                         {
-                            "name": "x",
-                            "nodes": [{"id": INJECTION, "type": INJECTION}],
+                            "name": INJECTION,
+                            "nodes": [
+                                {
+                                    "id": "n",
+                                    "type": "PythonCodeNode",
+                                    "config": {"name": "n", "code": "result = {}"},
+                                }
+                            ],
                             "connections": [],
                         }
                     )
                 )
-        assert probe.lines, "the build failure must still be logged"
-        assert len(probe.lines) == 1, f"expected one line, got {probe.lines!r}"
-        for byte in CONTROL_BYTES:
-            assert byte not in probe.lines[0], f"{byte!r} survived: {probe.lines[0]!r}"
+            _assert_single_clean_line(probe, "kid-a")
+
+            # The build-FAILURE sink: the exception text is derived from the
+            # caller's own node graph, on the path a prober drives repeatedly.
+            with _StreamProbe(
+                "kailash.middleware.core.agent_ui", logging.ERROR
+            ) as probe:
+                with pytest.raises(ValueError):
+                    asyncio.run(
+                        agent_ui._build_workflow_from_config(
+                            {
+                                "name": "x",
+                                "nodes": [{"id": INJECTION, "type": INJECTION}],
+                                "connections": [],
+                            }
+                        )
+                    )
+            assert probe.lines, "the build failure must still be logged"
+            assert len(probe.lines) == 1, f"expected one line, got {probe.lines!r}"
+            for byte in CONTROL_BYTES:
+                assert (
+                    byte not in probe.lines[0]
+                ), f"{byte!r} survived: {probe.lines[0]!r}"
+        finally:
+            agent_ui.close()
 
     def test_verification_error_text_cannot_forge_records(self):
         """The ``except Exception`` sink at ``verify_token`` renders foreign text.
