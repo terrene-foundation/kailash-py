@@ -1050,7 +1050,7 @@ def decode_checkpoint_payload(blob: bytes) -> Dict[str, Any]:
 
 def _validate_force_resume_with_drift(value: bool) -> None:
     """A drift bypass requires an explicit boolean, never truthy coercion."""
-    if not isinstance(value, bool):
+    if value is not True and value is not False:
         raise TypeError("force_resume_with_drift must be a bool (False or True)")
 
 

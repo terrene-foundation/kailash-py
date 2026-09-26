@@ -35,6 +35,15 @@ class ControlNode(Node):
         return {"value": 42}
 
 
+class SpoofedBoolean:
+    @property
+    def __class__(self):
+        return bool
+
+    def __bool__(self):
+        raise AssertionError("Drift validation must not coerce caller objects")
+
+
 def make_workflow():
     node = ControlNode()
     node.calls = 0
@@ -166,7 +175,9 @@ async def test_deadline_covers_checkpoint_preparation(checkpoint_store, monkeypa
         "durable",
     ],
 )
-@pytest.mark.parametrize("value", ["false", "true", "", 0, 1, None, [], {}])
+@pytest.mark.parametrize(
+    "value", ["false", "true", "", 0, 1, None, [], {}, SpoofedBoolean()]
+)
 async def test_drift_override_rejects_non_boolean_before_execution(entry, value):
     workflow, node = make_workflow()
     runtime = LocalRuntime() if entry.startswith("local") else AsyncLocalRuntime()
@@ -202,7 +213,9 @@ async def test_drift_override_rejects_non_boolean_before_execution(entry, value)
         runtime.close()
 
 
-@pytest.mark.parametrize("value", ["false", "true", "", 0, 1, None, [], {}])
+@pytest.mark.parametrize(
+    "value", ["false", "true", "", 0, 1, None, [], {}, SpoofedBoolean()]
+)
 @pytest.mark.parametrize("stored", ["same", "different"])
 def test_shared_drift_evaluator_rejects_non_boolean_even_without_drift(value, stored):
     with pytest.raises(TypeError, match="force_resume_with_drift must be a bool"):
