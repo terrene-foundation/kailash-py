@@ -1,0 +1,24 @@
+CANDIDATE_SHA256 23406d699cd29b3933a3305e9faaeb902827c38ece81b1348e7024933b5d6cfe
+ORIGINAL_SELECTION_MATCHED ["packages/kailash-ml/tests/unit/test_seed.py","packages/kailash-ml/tests/unit/test_register_estimator.py","packages/kailash-ml/tests/unit/test_experiment_tracker.py","packages/kailash-ml/tests/unit/test_rag_diagnostics_unit.py","packages/kailash-ml/tests/unit/test_rl_diagnostics_unit.py","packages/kailash-ml/tests/unit/test_ml_from_brief_realizer.py"]
+SELECTION_NEGATIVE_CONTROL missing-first-file rejected
+COMMAND /tmp/kailash-csq14-ml-gate-command.sh
+CONTROLS /tmp/kailash-csq14-ml-controls-command.sh
+FULL_LOG /tmp/kailash-csq14-ml-final-strict.log
+CSQ14_ML_ORIGIN kailash /mnt/esperie-stage/trestle-remote-run/csq14-ml-seed-22e156323df6/src/kailash/__init__.py
+CSQ14_ML_ORIGIN kailash_ml /mnt/esperie-stage/trestle-remote-run/csq14-ml-seed-22e156323df6/packages/kailash-ml/src/kailash_ml/__init__.py
+CSQ14_ML_ORIGIN kailash_ml._seed /mnt/esperie-stage/trestle-remote-run/csq14-ml-seed-22e156323df6/packages/kailash-ml/src/kailash_ml/_seed.py
+CSQ14_ML_ORIGIN dataflow /mnt/esperie-stage/trestle-remote-run/csq14-ml-seed-22e156323df6/packages/kailash-dataflow/src/dataflow/__init__.py
+CSQ14_ML_ORIGIN nexus /mnt/esperie-stage/trestle-remote-run/csq14-ml-seed-22e156323df6/packages/kailash-nexus/src/nexus/__init__.py
+CSQ14_ML_PYTHON /mnt/esperie-stage/trestle-remote-run/csq14-ml-seed-22e156323df6/.venv/bin/python 3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]
+237 passed in 3.68s
+E       AssertionError: torch opt-out reported determinism
+MUTATION_REACHED:torch-opt-out
+CSQ14_SOURCE_CONTROL_PASS torch-opt-out torch opt-out reported determinism
+E       AssertionError: seeded torch did not report determinism
+MUTATION_REACHED:torch-opt-in
+CSQ14_SOURCE_CONTROL_PASS torch-opt-in seeded torch did not report determinism
+E       AssertionError: unexpected seed application order
+MUTATION_REACHED:applied-order
+CSQ14_SOURCE_CONTROL_PASS applied-order unexpected seed application order
+CSQ14_SOURCE_UNCHANGED /mnt/esperie-stage/trestle-remote-run/csq14-ml-seed-22e156323df6/packages/kailash-ml/src/kailash_ml/_seed.py
+[trestle-remote-run] exit=0 command wall=30.4s host=esperie-ai
