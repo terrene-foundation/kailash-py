@@ -2,6 +2,47 @@
 
 ## Current checkpoint — supersedes historical statuses
 
+Source HEAD `ea4f09514` on dev. Approved CodeQL9 executed; pools design exception
+recorded. No push/merge/publish this continuation. Historical `0a01bfe29` full
+checks are NOT final approval; its DataFlow type gate and independent reviews
+found the now-committed repairs.
+
+Twenty bounded repairs are recorded in the final-gate-repairs receipt. Cycle A
+`1ea7f5dd7`, B `ef2f89cce`, C `ea4f09514` exactly match FINAL6's11-file manifest.
+Independent correctness and adversarial each delivered two scoped clean rounds;
+author475strict/Python0; parent194strict/Python0 on identical production. Final
+fixture permits an actual deadline before first dispatch while exactly correlating
+node calls, closure and completion events; reached disabled-timer controls fail.
+Native trust precedes checkpoint reads, preparation errors keep identity, and
+wrapper policy is captured before verifier callbacks. All other interim hooks pass;
+SKIP=pytest-check remains documented and must be unset for final all-files gates.
+
+Whole-promotion review found a separate confirmed outbound DNS binding gap in
+Nexus HttpClient and Kaizen LlmHttpClient: guards see public DNS answers, then the
+socket independently resolves to the owned loopback endpoint and receives200.
+Author ml_correctness_review is implementing the shared Core pinned transport in
+`csq14-nexus-dns-binding` (base4d2a1dbbc), with Nexus/Kaizen specialist guidance.
+Archive and cycle_final_review are independently checking actual sockets/TLS,
+Host/SNI/origin pools, redirects, timeout/cancel/close and minimum dependency APIs.
+No whole-union convergence or promotion readiness is claimed.
+
+Kaizen inherited base provider execution is unchanged. Separate proposal
+`04-validate/csq14-kaizen-base-execution-design-task.md` awaits USER disposition:
+record separately and finish promotion, or replace inherited canned implementation.
+No response yet; pools exception does not cover this distinct proposal.
+
+Cycle/convergence completed source worktrees were backed up after committed-byte
+parity and drained. Review trees were cleaned/re-pinned toea4f. All52 historical
+refs (51archive +1original) and5ordered stashes remain exact after the source
+commits. Preserve them. No publishing. After DNS repair/reviews, regenerate final
+assertion/caller inventory, run exact-candidate Linux/Mac gates and three delivered
+whole-promotion reviews, consolidated push, exact-head required checks and separate
+D1-authorized mergePR2229. Post-main holistic review/owned-tree drain and bounded
+vault-pair update follow; pending Kaizen user disposition must resolve before merge.
+
+## Historical checkpoints (superseded)
+
+
 All source and fixture repairs are committed through `1dcc5f486`: retry ownership
 `467bda018`, SQLite schema classification `9140d081d`, cycle execution and diagnostic
 privacy `b134a9518`, and cycle fixtures `1dcc5f486`. The nine bounded repair receipts

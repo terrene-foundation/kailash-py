@@ -117,9 +117,9 @@ Execute a workflow synchronously.
 
 1. Emits `DeprecationWarning` if not using context manager or explicit `close()`
 2. Gets effective trust context (if configured)
-3. If an event loop is already running: falls back to synchronous execution (`_execute_sync`)
-4. If no event loop: creates/reuses a persistent event loop and runs async execution (`_execute_async`) via `loop.run_until_complete()`
-5. After execution: clears credential store for BYOK hardening
+3. If no event loop is running and the persistent loop is available, acquires exclusive admission and runs async execution on that loop. Otherwise, uses `_execute_sync` with an independently owned loop, preserving the caller's context; overlapping callers do not wait for the persistent loop. Source: `src/kailash/runtime/local.py:1302-1371`, `src/kailash/runtime/local.py:2391-2514`.
+4. Every route enters `_execute_async`, which verifies configured workflow trust once before checkpoint loading or node execution. A denied workflow raises `WorkflowExecutionError`; disabled verification retains its explicit opt-out behavior. Source: `src/kailash/runtime/local.py:2557-2569`.
+5. After execution: releases persistent-loop admission and clears credential store for BYOK hardening. Source: `src/kailash/runtime/local.py:1404-1434`.
 
 **Resource management patterns**:
 
@@ -136,7 +136,7 @@ finally:
     runtime.close()
 ```
 
-**Persistent event loop**: The runtime maintains a persistent event loop across multiple `execute()` calls. This is critical for `AsyncSQLDatabaseNode` and other async components -- connection pools remain valid across executions.
+**Persistent event loop**: Uncontended synchronous calls outside an already-running event loop reuse the runtime's persistent loop. The bridge disposes `AsyncSQLDatabaseNode` pools for its own loop; explicitly retained AsyncSQL pools on the persistent loop remain usable. An ordinary SQL node may release its own pool during node cleanup, so loop reuse does not imply that every node-owned pool survives a call. Sources: `src/kailash/runtime/local.py:1302-1371`, `src/kailash/runtime/local.py:2391-2449`, `src/kailash/runtime/local.py:3002-3029`.
 
 #### 4.1.3 execute_async
 
@@ -215,7 +215,7 @@ Primary async execution method with production safeguards.
 - Connection lifecycle management
 - Task cancellation on timeout
 - Cleanup guarantees via `ExecutionContext`
-- Trust verification before execution (if configured)
+- Trust verification before checkpoint loading and node execution (if configured); the effective trust context is propagated through both preparation and execution. Source: `src/kailash/runtime/async_local.py:1030-1089`.
 
 **Raises**:
 
@@ -526,6 +526,14 @@ Saves are upserts (atomic). Reads update `accessed_at`.
 fields (`workflow_fingerprint`, `tracker`) or on a non-UTF-8 / non-JSON
 blob. The runtime-layer typed-error gate per
 `rules/zero-tolerance.md` Rule 3a.
+
+For cyclic execution, `tracker` additionally contains
+`cycle_iterations[cycle_id][iteration]`, where each positive iteration number is
+a JSON string key and its value contains that iteration's `completed_nodes` and
+`node_outputs`. Node IDs retain their original values for replay and classification
+lookup. Acyclic trackers retain the shape above. Source:
+`src/kailash/runtime/execution_tracker.py:111-152` and
+`src/kailash/runtime/durable.py:679-697`.
 
 #### 4.6.8 Atomicity, tenant isolation, observability
 
