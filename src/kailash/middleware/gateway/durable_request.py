@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from .checkpoint_manager import CheckpointManager
 
 from kailash.sdk_exceptions import NodeExecutionError, WorkflowCancelledError
+from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
 from kailash.workflow import Workflow, WorkflowBuilder
 
 logger = logging.getLogger(__name__)
@@ -705,7 +706,13 @@ class DurableRequest:
             },
         )
 
-        logger.error(f"Request {self.id} failed: {error}")
+        logger.error(
+            "Durable request failed",
+            extra={
+                "error_type": safe_type_name(error),
+                "error_frames": safe_exception_frames(error),
+            },
+        )
 
     def get_status(self) -> Dict[str, Any]:
         """Get current request status."""
