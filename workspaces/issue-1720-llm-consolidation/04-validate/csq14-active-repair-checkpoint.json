@@ -431,7 +431,6 @@
   "pools_decision_resolved": "User explicitly chose Record separately; finish promotion (Recommended). See csq14-dataflow-pools-design-task.md.",
   "current_pending_work": [
     "Complete confirmed Nexus/Kaizen DNS binding repair and independent two-round reviews",
-    "Obtain pending Kaizen inherited base execution user disposition; pools decision already resolved",
     "Regenerate final assertion/caller inventory, run exact-candidate Linux/Mac full gates and three whole-promotion review deliveries",
     "Consolidated push, exact-head required checks, separate merge under existing D1 approval",
     "Post-main holistic review, clean owned worktree drain and authorized vault-pair continuity updates"
@@ -534,9 +533,11 @@
     }
   },
   "pending_kaizen_base_decision": {
-    "status": "awaiting user; no deferral authorized",
-    "record": "04-validate/csq14-kaizen-base-execution-design-task.md",
-    "question": "Record separately and finish promotion, or replace inherited canned base execution now?"
+    "resolved": true,
+    "user_decision": "Record separately; finish promotion (Recommended)",
+    "date": "2026-09-26",
+    "task": "csq14-kaizen-base-execution-design-task.md",
+    "scope": "Inherited KaizenNode._execute_ai_model canned-response behavior only; no other gate waived"
   },
   "newly_committed_repairs": {
     "request_diagnostic": "5ec8e125c",

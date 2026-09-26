@@ -2158,7 +2158,6 @@
     },
     "committed_final11_hashes_match": true
   },
-  "pending_kaizen_base_execution": "User disposition pending; proposal is not an approved deferral. Existing pools exception applies only to pools.",
   "confirmed_dns_connection_finding": {
     "baseline": "4d2a1dbbc9d5871646fa6cb6370f25daf704b699",
     "nexus_probe": {
@@ -2170,5 +2169,12 @@
       "sha256": "faeedae0fa9306f1cf2bc08faf2a425acf785cce7d0cb8571121727e6aa2d974"
     },
     "disposition": "Shared Core pinned transport repair in isolated csq14-nexus-dns-binding; independent correctness/security reviews active. No waiver."
+  },
+  "kaizen_base_execution_decision": {
+    "approved": true,
+    "user_decision": "Record separately; finish promotion (Recommended)",
+    "date": "2026-09-26",
+    "task": "csq14-kaizen-base-execution-design-task.md",
+    "scope": "Bounded Rule2 exception for documented inherited canned execution only"
   }
 }

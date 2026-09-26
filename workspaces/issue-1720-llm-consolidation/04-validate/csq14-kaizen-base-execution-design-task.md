@@ -1,6 +1,11 @@
 # Separate Kaizen base execution design task
 
-Status: proposal awaiting the user's disposition; not an approved deferral.
+Status: separate design task approved by the user on 2026-09-26.
+
+The user explicitly chose: “Record separately; finish promotion (Recommended)”.
+This is a bounded exception to AGENTS.md Zero-Tolerance Rule 2 for the inherited
+`KaizenNode._execute_ai_model` canned-response behavior documented below. It does
+not waive required promotion checks or authorize additional deferrals.
 
 During the bounded diagnostic review, the inherited implementation of
 `KaizenNode._execute_ai_model` was found to construct a canned response instead of
@@ -18,10 +23,10 @@ from automatic logs while preserving public results. Replacing the inherited
 execution method changes a separate public API contract, including provider
 selection, authentication, synchronous invocation, result shape and compatibility
 with subclasses. AGENTS.md Zero-Tolerance Rule 2 forbids production placeholders;
-leaving this separate behavior for a design task therefore needs an explicit user
-exception, just as the earlier pools decision did.
+the user has explicitly authorized leaving this separate behavior for this design
+task while finishing promotion, just as for the earlier pools decision.
 
-Proposed separate task acceptance criteria:
+Separate task acceptance criteria:
 
 - Determine supported direct `KaizenNode` usage and subclass compatibility from
   actual callers and the authoritative Kaizen specs.
@@ -34,5 +39,5 @@ Proposed separate task acceptance criteria:
 - Preserve automatic diagnostic privacy and document migration behavior.
 
 No change to provider execution, public outputs or model configuration is included
-in the current diagnostic patch. The authorized pools design exception does not
-itself authorize this separate exception.
+in the current diagnostic patch. This separate exception is authorized by the user’s
+2026-09-26 decision above; the pools exception remains independently scoped.

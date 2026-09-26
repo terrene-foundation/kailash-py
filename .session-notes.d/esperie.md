@@ -26,10 +26,11 @@ Archive and cycle_final_review are independently checking actual sockets/TLS,
 Host/SNI/origin pools, redirects, timeout/cancel/close and minimum dependency APIs.
 No whole-union convergence or promotion readiness is claimed.
 
-Kaizen inherited base provider execution is unchanged. Separate proposal
-`04-validate/csq14-kaizen-base-execution-design-task.md` awaits USER disposition:
-record separately and finish promotion, or replace inherited canned implementation.
-No response yet; pools exception does not cover this distinct proposal.
+The user explicitly approved recording the inherited Kaizen base provider execution
+gap separately and finishing promotion on2026-09-26. The bounded Rule2 exception is
+in `04-validate/csq14-kaizen-base-execution-design-task.md`. Together with the earlier
+pools decision, both API design dispositions are resolved; no approval remains
+pending. Required checks and D1 promotion scope remain in force.
 
 Cycle/convergence completed source worktrees were backed up after committed-byte
 parity and drained. Review trees were cleaned/re-pinned toea4f. All52 historical
@@ -38,7 +39,7 @@ commits. Preserve them. No publishing. After DNS repair/reviews, regenerate fina
 assertion/caller inventory, run exact-candidate Linux/Mac gates and three delivered
 whole-promotion reviews, consolidated push, exact-head required checks and separate
 D1-authorized mergePR2229. Post-main holistic review/owned-tree drain and bounded
-vault-pair update follow; pending Kaizen user disposition must resolve before merge.
+vault-pair update follow; both separate API design tasks are authorized.
 
 ## Historical checkpoints (superseded)
 
