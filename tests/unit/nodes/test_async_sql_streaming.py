@@ -221,59 +221,17 @@ async def test_stream_pulls_in_batch_size_chunks(seeded_adapter, monkeypatch):
     rather than a memory heuristic.
     """
     recorded_sizes = []
-    real_get_conn = seeded_adapter._get_connection
-
-    async def instrumented_get_conn():
-        db = await real_get_conn()
-        real_execute = db.execute
-
-        async def execute_wrapping_cursor(sql, params=None):
-            cursor = await real_execute(sql, params)
-            real_fetchmany = cursor.fetchmany
-
-            async def recording_fetchmany(size):
-                recorded_sizes.append(size)
-                return await real_fetchmany(size)
-
-            cursor.fetchmany = recording_fetchmany
-            return cursor
-
-        db.execute = execute_wrapping_cursor
-        return db
-
-    # File-DB stream path uses aiosqlite.connect inline, so patch that to
-    # wrap the cursor's fetchmany. We monkeypatch the adapter's aiosqlite
-    # connect to return a connection whose execute wraps fetchmany.
+    # Observe the real cursor without replacing execute's awaitable/context-
+    # manager protocol, which connection setup also uses for PRAGMA cursors.
     import aiosqlite
 
-    real_connect = aiosqlite.connect
+    real_fetchmany = aiosqlite.Cursor.fetchmany
 
-    class _ConnectWrapper:
-        def __init__(self, *args, **kwargs):
-            self._cm = real_connect(*args, **kwargs)
+    async def recording_fetchmany(cursor, size=None):
+        recorded_sizes.append(size)
+        return await real_fetchmany(cursor, size)
 
-        async def __aenter__(self):
-            db = await self._cm.__aenter__()
-            real_execute = db.execute
-
-            async def execute_wrapping_cursor(sql, params=None):
-                cursor = await real_execute(sql, params)
-                real_fetchmany = cursor.fetchmany
-
-                async def recording_fetchmany(size):
-                    recorded_sizes.append(size)
-                    return await real_fetchmany(size)
-
-                cursor.fetchmany = recording_fetchmany
-                return cursor
-
-            db.execute = execute_wrapping_cursor
-            return db
-
-        async def __aexit__(self, *exc):
-            return await self._cm.__aexit__(*exc)
-
-    monkeypatch.setattr(seeded_adapter._aiosqlite, "connect", _ConnectWrapper)
+    monkeypatch.setattr(aiosqlite.Cursor, "fetchmany", recording_fetchmany)
 
     streamed = []
     async with seeded_adapter.stream(
@@ -312,36 +270,15 @@ async def test_stream_does_not_pull_remaining_rows_before_consumed(
 
     import aiosqlite
 
-    real_connect = aiosqlite.connect
+    real_fetchmany = aiosqlite.Cursor.fetchmany
 
-    class _ConnectWrapper:
-        def __init__(self, *args, **kwargs):
-            self._cm = real_connect(*args, **kwargs)
+    async def counting_fetchmany(cursor, size=None):
+        nonlocal fetched_total
+        batch = await real_fetchmany(cursor, size)
+        fetched_total += len(batch)
+        return batch
 
-        async def __aenter__(self):
-            db = await self._cm.__aenter__()
-            real_execute = db.execute
-
-            async def execute_wrapping(sql, params=None):
-                cursor = await real_execute(sql, params)
-                real_fetchmany = cursor.fetchmany
-
-                async def counting_fetchmany(size):
-                    nonlocal fetched_total
-                    batch = await real_fetchmany(size)
-                    fetched_total += len(batch)
-                    return batch
-
-                cursor.fetchmany = counting_fetchmany
-                return cursor
-
-            db.execute = execute_wrapping
-            return db
-
-        async def __aexit__(self, *exc):
-            return await self._cm.__aexit__(*exc)
-
-    seeded_adapter._aiosqlite.connect = _ConnectWrapper
+    aiosqlite.Cursor.fetchmany = counting_fetchmany
     try:
         async with seeded_adapter.stream(
             "SELECT id FROM items ORDER BY id", batch_size=2
@@ -358,7 +295,7 @@ async def test_stream_does_not_pull_remaining_rows_before_consumed(
             async for _ in agen:
                 pass
     finally:
-        seeded_adapter._aiosqlite.connect = real_connect
+        aiosqlite.Cursor.fetchmany = real_fetchmany
 
     assert fetched_total == 5
 
