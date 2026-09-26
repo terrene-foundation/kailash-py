@@ -11,7 +11,11 @@ import uuid
 from typing import Any, Dict, Optional
 
 from kailash.nodes.base import NodeParameter, register_node
-from kailash.utils.secure_logging import sanitize_log_value
+from kailash.utils.secure_logging import (
+    safe_exception_frames,
+    safe_type_name,
+    sanitize_log_value,
+)
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
 from ..signatures import Signature
@@ -181,17 +185,7 @@ class KaizenNode(AINodeBase):
         self.logger.info(
             f"Executing KaizenNode with model: {sanitize_log_value(model)}"
         )
-        # This site already had a 100-char BOUND and no newline flatten --
-        # precisely the wrong half of the barrier. The bound limits how much
-        # log VOLUME a caller can drive; only the flatten stops a prompt
-        # carrying "\n" from forging a SECOND record that a downstream reader
-        # cannot distinguish from one this process emitted.
-        # `sanitize_log_value` supplies both, and truncates before it
-        # flattens, so the bound is not a per-character cost on a huge prompt.
-        prompt_text = sanitize_log_value(prompt, 100)
-        if len(prompt_text) == 100:
-            prompt_text += "..."
-        self.logger.debug("Prompt: %s", prompt_text)
+        self.logger.debug("Prompt received")
 
         try:
             # Simulate AI model execution
@@ -221,8 +215,11 @@ class KaizenNode(AINodeBase):
             # #1970: ``_execute_ai_model`` is the provider seam — an auth /
             # rate-limit exception from it can embed the caller's API key.
             self.logger.error(
-                "KaizenNode execution failed: %s",
-                sanitize_provider_error(e, "KaizenNode"),
+                "KaizenNode execution failed",
+                extra={
+                    "error_type": safe_type_name(e),
+                    "error_frames": safe_exception_frames(e),
+                },
             )
             raise
 
@@ -250,9 +247,9 @@ class KaizenNode(AINodeBase):
 
         response = f"AI Response to: '{prompt[:50]}...' using {model}"
 
-        # `response` is built from the caller-supplied prompt above, so the
-        # caller's newlines reach this record unless they are flattened here.
-        self.logger.debug("Generated response: %s", sanitize_log_value(response))
+        self.logger.debug(
+            "Generated response", extra={"response_length": len(response)}
+        )
         return response
 
     def execute(self, **kwargs) -> Dict[str, Any]:
@@ -274,7 +271,13 @@ class KaizenNode(AINodeBase):
             # subclass — any node whose ``run`` re-raises a provider exception
             # lands here, and this dict is returned straight to the caller.
             sanitized = sanitize_provider_error(e, type(self).__name__)
-            self.logger.error("Node execution failed: %s", sanitized)
+            self.logger.error(
+                "Node execution failed",
+                extra={
+                    "error_type": safe_type_name(e),
+                    "error_frames": safe_exception_frames(e),
+                },
+            )
             return {"error": sanitized, "status": "failed"}
 
     def pre_execution_hook(self, inputs: Dict[str, Any]) -> Dict[str, Any]:

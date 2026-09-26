@@ -11,10 +11,10 @@ downstream reader cannot distinguish from one this process emitted:
 * ``kaizen/nodes/auth/directory_integration.py`` -- the directory search term
 * ``kaizen/nodes/base.py``                -- the prompt
 
-The prompt site is the instructive one: it ALREADY had a 100-character bound
-and no flatten -- precisely the wrong half of the barrier. A bound limits how
-much log VOLUME a caller can drive; only the flatten stops the forging. The
-two are independent properties and a site needs both.
+Prompt and response diagnostics now retain fixed events and counts, without
+payload text. Directory search diagnostics retain intent booleans and an
+attribute count. Model identifiers and assigned roles retain their existing
+bounded display-hygiene contract.
 
 WHY THE INSTRUMENT READS THE HANDLER, not just ``caplog.records``
 ----------------------------------------------------------------
@@ -36,7 +36,7 @@ BOTH POLARITIES ARE PINNED
 * POSITIVE -- no forged second record; no raw ``\\n`` in the message; for the
   auth sites, no raw email address anywhere on the record.
 * NEGATIVE -- the diagnostic content that makes each record worth emitting is
-  still there (the benign head of the query/prompt and the assigned roles). A "fix" that simply deleted the log statements would pass
+  still there (fixed events, counts, intent booleans, and assigned roles). A fix that simply deleted the log statements would pass
   the positive half alone; these controls are what forbid it.
 
 PII disposition (distinct from injection, and NOT satisfied by sanitizing)
@@ -56,6 +56,8 @@ import io
 import json
 import logging
 import pathlib
+
+import pytest
 
 import kaizen.nodes.base
 from kailash.utils import secure_logging
@@ -109,8 +111,10 @@ class _StubLLM:
 
     def __init__(self, payload: object) -> None:
         self._payload = payload
+        self.calls = []
 
     async def async_run(self, **_kwargs) -> dict:
+        self.calls.append(_kwargs)
         return {"response": {"content": json.dumps(self._payload)}}
 
 
@@ -231,7 +235,7 @@ def test_sso_role_assignment_email_cannot_forge_a_record(caplog):
 def _assert_email_independent_role_event(caplog, logger_name, assign, expected_roles):
     """Reach both logging layers; an old digest or a hidden extra field fails."""
     standard_fields = set(logging.makeLogRecord({}).__dict__) | {"message", "asctime"}
-    expected_message = f"AI role assignment: {expected_roles}"
+    expected_message = "AI role assignment completed"
     messages = []
     for email in (EMAIL, "another-person@example.test", EMAIL + FORGED, "", None):
         caplog.clear()
@@ -244,9 +248,10 @@ def _assert_email_independent_role_event(caplog, logger_name, assign, expected_r
         assert message == expected_message
         assert wire.lines() == [f"INFO:{logger_name}:{expected_message}"]
         record = records[0]
-        assert record.msg == "AI role assignment: %s"
-        assert record.args == (str(expected_roles),)
-        assert set(record.__dict__) <= standard_fields
+        assert record.msg == expected_message
+        assert record.args == ()
+        assert record.role_count == len(expected_roles)
+        assert set(record.__dict__) <= standard_fields | {"role_count"}
         raw_record = repr(record.__dict__)
         if email:
             assert email not in raw_record
@@ -322,14 +327,24 @@ def test_directory_search_query_cannot_forge_a_record(caplog):
 
     with emitting(DIR_LOGGER, logging.INFO) as wire:
         with caplog.at_level(logging.INFO, logger=DIR_LOGGER):
-            asyncio.run(node._ai_search_analysis("find developers" + FORGED))
+            intent = asyncio.run(node._ai_search_analysis("find developers" + FORGED))
 
     assert len(wire.lines()) == 1, f"forged extra line(s): {wire.lines()}"
     _assert_no_forged_line(wire)
     message = _assert_single_unforged_record(_records(caplog, DIR_LOGGER))
-    # NEGATIVE: the benign head of the query and the parsed intent survive.
-    assert "find developers" in message
-    assert "users=True" in message
+    assert message == "AI search analysis completed"
+    assert intent == {
+        "search_users": True,
+        "search_groups": False,
+        "search_attributes": ["cn"],
+    }
+    record = _records(caplog, DIR_LOGGER)[0]
+    assert record.search_users is True and record.search_groups is False
+    assert record.attribute_count == 1
+    assert (
+        "find developers" + FORGED in node.llm_agent.calls[0]["messages"][0]["content"]
+    )
+    assert "find developers" not in repr(vars(record))
 
 
 def test_directory_search_query_cannot_forge_on_the_failure_path(caplog):
@@ -347,7 +362,15 @@ def test_directory_search_query_cannot_forge_on_the_failure_path(caplog):
 
     assert isinstance(intent, dict)  # fell back, as documented
     message = _assert_single_unforged_record(_records(caplog, DIR_LOGGER))
-    assert "find developers" in message
+    assert message == "AI search analysis failed, falling back to default"
+    assert intent == {
+        "search_users": True,
+        "search_groups": False,
+        "search_attributes": ["cn", "mail", "uid"],
+        "filters": {},
+        "reasoning": "Using default search configuration due to AI failure",
+    }
+    assert "find developers" not in repr(vars(_records(caplog, DIR_LOGGER)[0]))
 
 
 def test_directory_role_assignment_does_not_log_the_email_address(caplog):
@@ -390,10 +413,11 @@ def test_prompt_cannot_forge_a_record(caplog):
     assert len(wire.lines()) == 3, f"forged extra line(s): {wire.lines()}"
     _assert_no_forged_line(wire)
     prompt_records = [
-        r for r in _records(caplog, BASE_LOGGER) if r.getMessage().startswith("Prompt:")
+        r for r in _records(caplog, BASE_LOGGER) if r.getMessage() == "Prompt received"
     ]
     message = _assert_single_unforged_record(prompt_records)
-    assert "summarize this" in message  # NEGATIVE: the benign head survives
+    assert message == "Prompt received"
+    assert "summarize this" not in repr(vars(prompt_records[0]))
 
 
 def test_prompt_carriage_return_cannot_rewrite_the_line(caplog):
@@ -403,24 +427,25 @@ def test_prompt_carriage_return_cannot_rewrite_the_line(caplog):
         node.run(prompt="summarize this" + FORGED_CR)
 
     prompt_records = [
-        r for r in _records(caplog, BASE_LOGGER) if r.getMessage().startswith("Prompt:")
+        r for r in _records(caplog, BASE_LOGGER) if r.getMessage() == "Prompt received"
     ]
     _assert_single_unforged_record(prompt_records)
 
 
 def test_prompt_bound_is_retained_alongside_the_flatten(caplog):
-    """The bound was the half this site already had; it must not be lost."""
+    """Long prompts cannot inflate the fixed diagnostic event."""
     node = _kaizen_node()
 
     with caplog.at_level(logging.DEBUG, logger=BASE_LOGGER):
         node.run(prompt="A" * 5000)
 
     prompt_records = [
-        r for r in _records(caplog, BASE_LOGGER) if r.getMessage().startswith("Prompt:")
+        r for r in _records(caplog, BASE_LOGGER) if r.getMessage() == "Prompt received"
     ]
     message = _assert_single_unforged_record(prompt_records)
     assert len(message) < 200, f"bound lost, record is {len(message)} chars"
-    assert message.endswith("...")
+    assert message == "Prompt received"
+    assert "A" * 100 not in repr(vars(prompt_records[0]))
 
 
 def test_model_name_cannot_forge_a_record(caplog):
@@ -449,6 +474,238 @@ def test_generated_response_cannot_forge_a_record(caplog):
     response_records = [
         r
         for r in _records(caplog, BASE_LOGGER)
-        if r.getMessage().startswith("Generated response:")
+        if r.getMessage() == "Generated response"
     ]
     _assert_single_unforged_record(response_records)
+
+
+PRIVATE_PAYLOAD = "diagnostic-person@example.invalid"
+
+
+@pytest.mark.parametrize("surface", ["directory", "sso"])
+@pytest.mark.parametrize("role_shape", ["list", "string"])
+def test_private_provider_roles_remain_results_not_diagnostics(
+    caplog, surface, role_shape
+):
+    roles = (
+        ["user", PRIVATE_PAYLOAD] if role_shape == "list" else "user " + PRIVATE_PAYLOAD
+    )
+    directory = surface == "directory"
+    node = _dir_node(roles) if directory else _sso_node({"roles": roles})
+    logger_name = DIR_LOGGER if directory else SSO_LOGGER
+    with (
+        emitting(logger_name) as wire,
+        caplog.at_level(logging.DEBUG, logger=logger_name),
+    ):
+        result = asyncio.run(
+            node._ai_role_assignment({"email": EMAIL})
+            if directory
+            else node._ai_role_assignment({"email": EMAIL}, "okta")
+        )
+    assert result == roles
+    assert len(node.llm_agent.calls) == 1
+    records = _assert_private_records(caplog, logger_name, wire)
+    assert len(records) == 1
+    assert records[0].getMessage() == "AI role assignment completed"
+    assert records[0].role_count == (2 if role_shape == "list" else None)
+
+
+def _assert_private_records(caplog, logger_name, wire):
+    records = _records(caplog, logger_name)
+    assert records
+    assert PRIVATE_PAYLOAD not in repr([vars(record) for record in records])
+    assert PRIVATE_PAYLOAD not in "\n".join(wire.lines())
+    assert all(record.exc_info is None for record in records)
+    assert all(
+        "\n" not in record.getMessage() and "\r" not in record.getMessage()
+        for record in records
+    )
+    _assert_no_forged_line(wire)
+    return records
+
+
+@pytest.mark.parametrize("method", ["_ai_field_mapping", "_ai_role_assignment"])
+def test_sso_provider_error_preserves_fallback_without_private_diagnostics(
+    caplog, method
+):
+    error = ValueError(PRIVATE_PAYLOAD + FORGED)
+    error.__cause__ = RuntimeError(PRIVATE_PAYLOAD)
+    calls = []
+
+    class FailedProvider:
+        async def async_run(self, **kwargs):
+            calls.append(kwargs)
+            raise error
+
+    node = _sso_node({})
+    node.attribute_mapping = {"email": "email"}
+    node.llm_agent = FailedProvider()
+    with (
+        emitting(SSO_LOGGER) as wire,
+        caplog.at_level(logging.DEBUG, logger=SSO_LOGGER),
+    ):
+        result = asyncio.run(getattr(node, method)({"email": PRIVATE_PAYLOAD}, "okta"))
+    assert result == (
+        {"email": PRIVATE_PAYLOAD} if method == "_ai_field_mapping" else ["user"]
+    )
+    assert len(calls) == 1
+    assert PRIVATE_PAYLOAD in calls[0]["messages"][0]["content"]
+    assert calls[0]["provider"] == "mock" and calls[0]["model"] == "mock-model"
+    records = _assert_private_records(caplog, SSO_LOGGER, wire)
+    assert len(records) == 1
+    assert records[0].getMessage() == (
+        "AI field mapping failed for okta, falling back to rule-based"
+        if method == "_ai_field_mapping"
+        else "AI role assignment failed, falling back to default"
+    )
+    assert records[0].error_type == "ValueError" and records[0].error_frames
+
+
+@pytest.mark.parametrize("users", [True, False, PRIVATE_PAYLOAD + FORGED])
+def test_directory_search_preserves_private_provider_input_and_result(caplog, users):
+    payload = {
+        "search_users": users,
+        "search_groups": False,
+        "search_attributes": [PRIVATE_PAYLOAD],
+        "reasoning": PRIVATE_PAYLOAD,
+    }
+    node = _dir_node(payload)
+    with (
+        emitting(DIR_LOGGER) as wire,
+        caplog.at_level(logging.DEBUG, logger=DIR_LOGGER),
+    ):
+        result = asyncio.run(
+            node._ai_search_analysis(
+                PRIVATE_PAYLOAD + FORGED, {"mail": PRIVATE_PAYLOAD}
+            )
+        )
+    assert result == payload
+    call = node.llm_agent.calls[0]
+    assert call["provider"] == "mock" and call["model"] == "mock-model"
+    assert call["max_completion_tokens"] == 2000
+    assert PRIVATE_PAYLOAD + FORGED in call["messages"][0]["content"]
+    records = _assert_private_records(caplog, DIR_LOGGER, wire)
+    assert len(records) == 1
+    assert records[0].getMessage() == "AI search analysis completed"
+    assert records[0].search_users is (users is True)
+    assert records[0].search_groups is False
+    assert records[0].attribute_count == 1
+
+
+@pytest.mark.parametrize("entry", ["run", "execute"])
+def test_base_prompt_and_generated_response_are_not_diagnostics(caplog, entry):
+    node = _kaizen_node()
+    with (
+        emitting(BASE_LOGGER) as wire,
+        caplog.at_level(logging.DEBUG, logger=BASE_LOGGER),
+    ):
+        result = getattr(node, entry)(prompt=PRIVATE_PAYLOAD)
+    assert result == {
+        "response": f"AI Response to: '{PRIVATE_PAYLOAD[:50]}...' using mock-model",
+        "model_used": "mock-model",
+        "prompt_length": len(PRIVATE_PAYLOAD),
+        "response_length": len(
+            f"AI Response to: '{PRIVATE_PAYLOAD[:50]}...' using mock-model"
+        ),
+    }
+    records = _assert_private_records(caplog, BASE_LOGGER, wire)
+    assert [r.getMessage() for r in records] == [
+        "Executing KaizenNode with model: mock-model",
+        "Prompt received",
+        "Generated response",
+    ]
+    assert records[-1].response_length == result["response_length"]
+
+
+@pytest.mark.parametrize("hostile_type", [False, True])
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "run",
+        "execute",
+        "_ai_search_analysis",
+        "_ai_role_assignment",
+        "_ai_permission_mapping",
+        "_ai_security_settings",
+    ],
+)
+def test_automatic_errors_preserve_results_without_private_diagnostics(
+    caplog, monkeypatch, entry, hostile_type
+):
+    error_type = type(
+        "Provider\nFailure" if hostile_type else "ProviderFailure", (ValueError,), {}
+    )
+    error = error_type(PRIVATE_PAYLOAD + FORGED)
+    error.__cause__ = ValueError(PRIVATE_PAYLOAD)
+    calls = []
+
+    def fail(**kwargs):
+        calls.append(kwargs)
+        raise error
+
+    class FailedProvider:
+        async def async_run(self, **kwargs):
+            return fail(**kwargs)
+
+    base = entry in {"run", "execute"}
+    node = _kaizen_node() if base else _dir_node({})
+    logger = BASE_LOGGER if base else DIR_LOGGER
+    if base:
+        monkeypatch.setattr(node, "_execute_ai_model", fail)
+    else:
+        node.llm_agent = FailedProvider()
+    with emitting(logger) as wire, caplog.at_level(logging.DEBUG, logger=logger):
+        if entry == "run":
+            with pytest.raises(ValueError) as caught:
+                node.run(prompt=PRIVATE_PAYLOAD)
+            assert caught.value is error
+        elif entry == "execute":
+            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+            result = node.execute(prompt=PRIVATE_PAYLOAD)
+            assert result == {
+                "error": sanitize_provider_error(error, "KaizenNode"),
+                "status": "failed",
+            }
+            assert PRIVATE_PAYLOAD in result["error"]
+        else:
+            argument = (
+                PRIVATE_PAYLOAD
+                if entry == "_ai_search_analysis"
+                else {"email": PRIVATE_PAYLOAD}
+            )
+            result = asyncio.run(getattr(node, entry)(argument))
+            expected = {
+                "_ai_search_analysis": {
+                    "search_users": True,
+                    "search_groups": False,
+                    "search_attributes": ["cn", "mail", "uid"],
+                    "filters": {},
+                    "reasoning": "Using default search configuration due to AI failure",
+                },
+                "_ai_role_assignment": ["user"],
+                "_ai_permission_mapping": ["read"],
+                "_ai_security_settings": {
+                    "mfa_required": False,
+                    "password_expiry_days": 90,
+                    "session_timeout_minutes": 480,
+                },
+            }
+            assert result == expected[entry]
+    assert len(calls) == 1
+    if base:
+        assert calls[0] == {
+            "prompt": PRIVATE_PAYLOAD,
+            "model": "mock-model",
+            "temperature": 0.0,
+            "max_tokens": 16,
+            "timeout": 1,
+        }
+    records = _assert_private_records(caplog, logger, wire)
+    failures = [record for record in records if record.levelno >= logging.WARNING]
+    assert len(failures) == (2 if entry == "execute" else 1)
+    assert all(
+        record.error_type == ("Provider?Failure" if hostile_type else "ProviderFailure")
+        for record in failures
+    )
+    assert all(record.error_frames for record in failures)

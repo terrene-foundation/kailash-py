@@ -17,10 +17,12 @@ from typing import Any, Dict, List, Optional
 from kailash.nodes.auth.directory_integration import (
     DirectoryIntegrationNode as CoreDirectoryIntegrationNode,
 )
-from kailash.utils.secure_logging import sanitize_log_value
+from kailash.utils.secure_logging import (
+    safe_exception_frames,
+    safe_type_name,
+)
 from kaizen.nodes._env_model import detect_provider, resolve_default_model
 from kaizen.nodes.ai import LLMAgentNode
-from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
 logger = logging.getLogger(__name__)
 
@@ -275,23 +277,24 @@ Example output:
                 raise ValueError("LLM result missing nested response.content")
             search_intent = json.loads(response_content)
 
-            # `query` is the caller-supplied directory search term; the three
-            # `search_intent` values are parsed from the LLM response. Both
-            # are untrusted for log-forging purposes.
             logger.info(
-                f"AI search analysis for '{sanitize_log_value(query)}': "
-                f"users={sanitize_log_value(search_intent.get('search_users'))}, "
-                f"groups={sanitize_log_value(search_intent.get('search_groups'))}, "
-                f"attributes={len(search_intent.get('search_attributes', []))}"
+                "AI search analysis completed",
+                extra={
+                    "search_users": search_intent.get("search_users") is True,
+                    "search_groups": search_intent.get("search_groups") is True,
+                    "attribute_count": len(search_intent.get("search_attributes", [])),
+                },
             )
 
             return search_intent
 
         except Exception as e:
             logger.warning(
-                "AI search analysis failed for '%s', falling back to default: %s",
-                sanitize_log_value(query),
-                sanitize_provider_error(e, "LLM"),
+                "AI search analysis failed, falling back to default",
+                extra={
+                    "error_type": safe_type_name(e),
+                    "error_frames": safe_exception_frames(e),
+                },
             )
             # Fallback to safe default - search for users with basic attributes
             return {
@@ -468,16 +471,20 @@ Example output:
             if "user" not in roles:
                 roles.insert(0, "user")
 
-            # Email-derived tags remain enumerable from candidate addresses.
-            # Keep the role-assignment event and roles without an email field.
-            logger.info("AI role assignment: %s", sanitize_log_value(roles))
+            logger.info(
+                "AI role assignment completed",
+                extra={"role_count": len(roles) if isinstance(roles, list) else None},
+            )
 
             return roles
 
         except Exception as e:
             logger.warning(
-                "AI role assignment failed, falling back to default: %s",
-                sanitize_provider_error(e, "LLM"),
+                "AI role assignment failed, falling back to default",
+                extra={
+                    "error_type": safe_type_name(e),
+                    "error_frames": safe_exception_frames(e),
+                },
             )
             # Fallback to safe default - always include "user" role
             return ["user"]
@@ -549,8 +556,11 @@ Example output:
 
         except Exception as e:
             logger.warning(
-                "AI permission mapping failed, using defaults: %s",
-                sanitize_provider_error(e, "LLM"),
+                "AI permission mapping failed, using defaults",
+                extra={
+                    "error_type": safe_type_name(e),
+                    "error_frames": safe_exception_frames(e),
+                },
             )
             # Fallback to safe default - read-only permission
             return ["read"]
@@ -619,8 +629,11 @@ Example output:
 
         except Exception as e:
             logger.warning(
-                "AI security settings failed, using defaults: %s",
-                sanitize_provider_error(e, "LLM"),
+                "AI security settings failed, using defaults",
+                extra={
+                    "error_type": safe_type_name(e),
+                    "error_frames": safe_exception_frames(e),
+                },
             )
             # Fallback to safe defaults
             return {

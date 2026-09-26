@@ -15,11 +15,14 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from kailash.nodes.auth.sso import SSOAuthenticationNode as CoreSSONode
-from kailash.utils.secure_logging import sanitize_log_value
+from kailash.utils.secure_logging import (
+    safe_exception_frames,
+    safe_type_name,
+    sanitize_log_value,
+)
 from kaizen.core.structured_output import create_structured_output_config
 from kaizen.nodes._env_model import detect_provider, resolve_default_model
 from kaizen.nodes.ai import LLMAgentNode
-from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 from kaizen.nodes.auth.signatures import (
     SSOFieldMappingSignature,
     SSORoleAssignmentSignature,
@@ -241,9 +244,12 @@ Use empty strings "" for missing text fields. Return ONLY the JSON object, no ex
 
         except Exception as e:
             logger.warning(
-                "AI field mapping failed for %s, falling back to rule-based: %s",
+                "AI field mapping failed for %s, falling back to rule-based",
                 sanitize_log_value(provider),
-                sanitize_provider_error(e, "LLM"),
+                extra={
+                    "error_type": safe_type_name(e),
+                    "error_frames": safe_exception_frames(e),
+                },
             )
             # Fallback to Core SDK rule-based mapping
             return self._map_attributes(attributes, provider)
@@ -319,16 +325,20 @@ Return ONLY the JSON object, no explanation."""
             if "user" not in roles:
                 roles.insert(0, "user")
 
-            # Email-derived tags remain enumerable from candidate addresses.
-            # Keep the role-assignment event and roles without an email field.
-            logger.info("AI role assignment: %s", sanitize_log_value(roles))
+            logger.info(
+                "AI role assignment completed",
+                extra={"role_count": len(roles) if isinstance(roles, list) else None},
+            )
 
             return roles
 
         except Exception as e:
             logger.warning(
-                "AI role assignment failed, falling back to default: %s",
-                sanitize_provider_error(e, "LLM"),
+                "AI role assignment failed, falling back to default",
+                extra={
+                    "error_type": safe_type_name(e),
+                    "error_frames": safe_exception_frames(e),
+                },
             )
             # Fallback to safe default - always include "user" role
             return ["user"]
