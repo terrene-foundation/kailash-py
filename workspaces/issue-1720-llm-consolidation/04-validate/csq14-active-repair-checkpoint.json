@@ -1,0 +1,133 @@
+{
+  "source_head": "51fcd96c003587ce6ca16ba56cde799e135850b4",
+  "promotion": {
+    "pr": 2229,
+    "remote_head": "ce4c9de676f1ab1e0a159cb8c273dcf2e47a2cb4",
+    "D1_approved": true,
+    "publishing_authorized": false
+  },
+  "pending_dismissal_approval": [
+    11595,
+    11596,
+    11466,
+    11467,
+    10866,
+    5153,
+    131,
+    133,
+    6082
+  ],
+  "landed": {
+    "sso_privacy": {
+      "source": "9d9b00450",
+      "merge": "eae68c672",
+      "tests": "/tmp/csq14-auth-role-parent-tests.log",
+      "independent_controls": "/tmp/csq14-auth-role-parent-review.log"
+    },
+    "gateway_initial": {
+      "commit": "58c745790",
+      "strict_tests": 19,
+      "review": "two clean independent rounds"
+    },
+    "transaction_cache": {
+      "source": "f856002c2",
+      "merge": "7615b14eb",
+      "review": "two clean independent rounds"
+    },
+    "socket_ws": {
+      "source": "428304edc",
+      "merge": "21c2fc68e",
+      "strict_tests": 107,
+      "original_named_test_denominator": 68,
+      "review": "two clean independent rounds"
+    },
+    "async_owner": {
+      "source": "9e82f072f",
+      "merge": "e7c1085b0",
+      "strict_tests": 86,
+      "review": "two clean independent rounds",
+      "worktree_held_for_integration_loader": false
+    },
+    "async_content": {
+      "patch": "/tmp/csq14-async-content-final.patch",
+      "sha256": "ad304339234648ff3e5e33b33184cdf463db27f7da019e1cd7bd73edd04b9442",
+      "parent_strict_tests": 52,
+      "parent_reached_control_failures": 8,
+      "review": "two clean independent rounds; scoped evidence retained",
+      "source": "ebab03c87",
+      "merge": "a32a24d0a"
+    },
+    "dataflow_utility": {
+      "patch": "/tmp/csq14-dataflow-utils-options-final.patch",
+      "sha256": "590e7a67bdbc8c7256fbbb448018a0945f43d5b9d4c108783914a352357c739b",
+      "combined_tests": 83,
+      "review": "two clean independent rounds; scoped evidence retained",
+      "source": "1a0b5d38e",
+      "merge": "51fcd96c0"
+    },
+    "logging": {
+      "source": "f87b8ba2a",
+      "patch": "/tmp/csq14-log-sinks-final.patch",
+      "sha256": "865d4f4fe5c539a5f48a794997b6a58bfe2f5c068ebf48e5ab8c073d9f25f5df",
+      "review": "two clean independent rounds; scoped evidence retained",
+      "merge": "fcee1a249"
+    },
+    "gateway_sibling": {
+      "patch": "/tmp/csq14-gateway-sibling-final.patch",
+      "sha256": "779bc1a13b885a30f42cf783d8a3b5c5d6ba9ba43c49908de9319387aa6b67cf",
+      "strict_tests": 28,
+      "review": "two clean independent rounds; scoped evidence retained",
+      "source": "ec9e5adea",
+      "merge": "ec9e5adea",
+      "merged_logging_tests": 38
+    }
+  },
+  "frozen": {
+    "runtime_forwarding": {
+      "patch": "/tmp/csq14-runtime-forwarding-final.patch",
+      "sha256": "569e68f18a0008835e6ef21bb4d6a0756d31470aac03236787a1cc09e35a05e9",
+      "strict_tests": 83,
+      "warning_inventory": "two expected forced-drift records; no unexpected WARN+",
+      "controls": [
+        "sync_forward",
+        "async_forward",
+        "unsupported_guard",
+        "idempotency",
+        "forced_drift"
+      ],
+      "review": "two independent reviewers active; third whole-union coverage review active"
+    }
+  },
+  "active": [
+    "runtime compatibility option forwarding: bounded separate sibling at e7c1085; canonical options previously dropped",
+    "final whole-union review and integrated gates",
+    "pending nine CodeQL dismissal approvals"
+  ],
+  "final_obligations": [
+    "full integrated root regression",
+    "DataFlow unit/regression after utility/cache fixes",
+    "all configured all-files hooks including pytest-check",
+    "whole merged-union holistic correctness/security reviews",
+    "consolidated push",
+    "exact final head all required and test checks success",
+    "separate approved promotion merge",
+    "drain landed clean siblings and update authorized vault"
+  ],
+  "limits": [
+    "five inherited stashes held",
+    "uncertain historical refs retained",
+    "no whole-forest completion or owner-acceptance claim",
+    "CodeQL 265 exact membership not reconstructed"
+  ],
+  "worktrees_drained": [
+    "csq14-async-content",
+    "csq14-async-node-owner",
+    "csq14-holistic-coverage",
+    "csq14-holistic-security"
+  ],
+  "review_worktrees": [
+    "csq14-final-correctness",
+    "csq14-final-security",
+    "csq14-final-coverage"
+  ]
+}

@@ -2,6 +2,24 @@
 
 ## Next actions (standing authorization preserved)
 
+Current continuation checkpoint supersedes the historical gate statuses below:
+primary dev is 51fcd96c0. Initial gateway cleanup, transaction cache isolation,
+socket/WebSocket repair, AsyncNode loop/cancellation ownership, content failure,
+DataFlow utility/options, gateway per-app ownership and safe logging are landed.
+Four clean reachable implementation siblings were drained. Only the bounded
+runtime compatibility-option forwarding shard remains: freeze 569e68f1, 83
+strict tests, five reached mutation controls, two expected drift diagnostics
+and no unexpected WARN+. Its two independent reviews and three parallel
+whole-union reviews are running in root-created final review siblings.
+See the active JSON checkpoint for exact paths, hashes and evidence scope.
+Nine proposed CodeQL dispositions await explicit user approval: 11595, 11596,
+11466, 11467, 10866, 5153, 131, 133, 6082. None has been dismissed. D1 promotion
+approval persists, publishing is unauthorized, five stashes remain held.
+Final combined gates, all configured hooks including pytest-check, whole-union
+reviews and exact-head remote success remain required before merge. Do not bank
+historical green gates for this revised source. The authorized external vault
+pair was restamped at 51fcd96c0, preserving the acceptance register verbatim.
+
 1. PR #2229 remains open at ce4c9de67. The CI repairs and three final review fixes are landed through 8f77625056e37ffd993d803a3cddd473408e0a08. Root regression is rerunning at that source. DataFlow full unit and regression gates passed at 13687209e. A fresh live read also found the required CodeQL check failed, reporting "265 new alerts"; its scan contains 2,253 results versus three in the prior analysis. Three reviewers are investigating scan provenance, exact alert membership, and actual security behavior. Do not mistake Analyze Python success for CodeQL success. Finish repairs and all configured hooks before a consolidated push. Merge only after all required checks and every previously failing test job pass on the exact final head. D1 approval persists; advisory type backlog #73 is excluded.
    Revalidate: `gh pr view 2229 --json state,headRefOid,mergeStateStatus`.
 2. Every completed implementation branch has landed in dev and its clean sibling has been removed. Three detached holistic review siblings remain for the CodeQL investigation. Preserve them until the corresponding review is delivered.
@@ -175,3 +193,18 @@ is authorized. The prior scoped approvals cover 11587, 11588, and 11594 only.
 All-files hooks, including pytest-check, remain required before the next push. The attempted
 `mac-mini` runner was rejected before execution; the corrected declared host is
 `esperie-mac-mini`. Never count the rejected launch as a gate run.
+
+## Expanded scan continuation checkpoint
+
+Privacy repair b64c55e63 (merge134fe5e8c) and one-character regex cleanup
+fbdb9f790 are landed. The actual scan-mode change and scope limits are recorded
+in `04-validate/csq14-expanded-codeql-receipt.json`; no new dismissals occurred.
+Root rerun at8f7762505: 3,043 passed, one real-socket startup failure, three skips,
+24 deselections. The failure says "server never came up on port46061"; startup
+logging appeared during teardown. This timing alone does not prove the cause.
+
+Active bounded implementation: owned real-socket fixture in sibling
+csq14-holistic-security (branchtest/csq14-owned-socket-fixture); DataFlowTestUtils
+and shared VisualMigrationBuilder finalization in csq14-holistic-coverage
+(branchfix/csq14-dataflow-test-utils). Remaining detached holistic-correctness
+sibling supports read-only security disposition research. Final hooks stay open.

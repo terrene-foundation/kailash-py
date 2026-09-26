@@ -1,5 +1,30 @@
 # CSQ 14 continuation — final gates
 
+## Active checkpoint (supersedes historical rows below)
+
+Primary dev: 51fcd96c0; remote promotion still ce4c9de67. D1 approved.
+No publishing. Nine CodeQL dismissal approvals pending; five stashes held.
+
+| Repair | State |
+| --- | --- |
+| SSO privacy | Landed eae68c672, clean sibling drained |
+| Initial gateway validation/lifetime | Landed 58c745790, 19 strict passes |
+| DataFlow transaction cache | Landed 7615b14eb, clean sibling drained |
+| Socket/WebSocket | Landed 21c2fc68e, 107 strict passes, original named tests 68 |
+| AsyncNode loop/cancellation ownership | Landed e7c1085b0, 86 strict passes, clean sibling drained |
+| Sibling gateway lifetime/auth binding | Landed ec9e5adea, two independent correctness/security rounds |
+| Async content failure | Landed a32a24d0a, 52 parent passes; clean sibling drained |
+| DataFlow utility/options | Landed 51fcd96c0, combined 83-pass SQLite integration; clean sibling drained |
+| Five logging sinks | Landed fcee1a249; merged gateway/logging 38 strict passes; clean sibling drained |
+| Runtime compatibility option forwarding | Freeze 569e68f1; 83 strict passes, five reached controls; review active |
+
+Three holistic reviews use final-correctness/security/coverage siblings at
+51fcd96c0 plus the exact forwarding overlay; compare their source to the final
+merge before banking union evidence. Final root/DataFlow suites, all configured
+hooks including pytest-check and exact-head remote checks remain OPEN.
+
+## Historical checkpoints
+
 Current source: 8f77625056e37ffd993d803a3cddd473408e0a08. All implementation siblings are landed and drained.
 PR #2229 remains at ce4c9de67 until the next validated consolidated push.
 

@@ -1,0 +1,118 @@
+{
+  "prior": {
+    "log": "/tmp/csq14-codeql-prior-workflow.log",
+    "evidence": [
+      {
+        "line": 32,
+        "text": "Analyze Python\tUNKNOWN STEP\t2026-09-25T10:55:54.7658950Z Download action repository 'github/codeql-action@v4' (SHA:2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2)"
+      },
+      {
+        "line": 590,
+        "text": "Analyze Python\tUNKNOWN STEP\t2026-09-25T10:56:15.3803565Z Computing PR diff ranges..."
+      },
+      {
+        "line": 591,
+        "text": "Analyze Python\tUNKNOWN STEP\t2026-09-25T10:56:16.5388726Z Persisted 593 diff range(s) across 147 file(s)."
+      },
+      {
+        "line": 1081,
+        "text": "Analyze Python\tUNKNOWN STEP\t2026-09-25T10:56:24.1018244Z Successfully created diff range extension pack at /home/runner/work/_temp/pr-diff-range."
+      },
+      {
+        "line": 3710,
+        "text": "Analyze Python\tUNKNOWN STEP\t2026-09-25T10:58:07.8698402Z [command]/opt/hostedtoolcache/CodeQL/2.27.1/x64/codeql/codeql database run-queries --ram=14575 --threads=4 --expect-discarded-cache --additional-packs=/home/runner/work/_temp/pr-diff-range --extension-packs=codeql-action/pr-diff-range /home/runner/work/_temp/codeql_databases/python --min-disk-free=1024 -v"
+      },
+      {
+        "line": 4780,
+        "text": "Analyze Python\tUNKNOWN STEP\t2026-09-25T11:00:59.3148720Z Successfully uploaded results"
+      },
+      {
+        "line": 4783,
+        "text": "Analyze Python\tUNKNOWN STEP\t2026-09-25T11:01:04.4912957Z Analysis upload status is complete."
+      }
+    ],
+    "artifact_count": 0
+  },
+  "current": {
+    "log": "/tmp/csq14-codeql-current-workflow.log",
+    "evidence": [
+      {
+        "line": 32,
+        "text": "Analyze Python\tSet up job\t2026-09-26T00:50:45.2444156Z Download action repository 'github/codeql-action@v4' (SHA:2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2)"
+      },
+      {
+        "line": 601,
+        "text": "Analyze Python\tInitialize CodeQL\t2026-09-26T00:51:04.5692353Z Computing PR diff ranges..."
+      },
+      {
+        "line": 602,
+        "text": "Analyze Python\tInitialize CodeQL\t2026-09-26T00:51:05.8997290Z ##[warning]Cannot retrieve the full diff because there are too many (300) changed files in the pull request."
+      },
+      {
+        "line": 1089,
+        "text": "Analyze Python\tPerform CodeQL Analysis\t2026-09-26T00:51:16.2448332Z No precomputed diff ranges found; skipping diff-informed analysis stage."
+      },
+      {
+        "line": 3719,
+        "text": "Analyze Python\tPerform CodeQL Analysis\t2026-09-26T00:53:38.8260540Z [command]/opt/hostedtoolcache/CodeQL/2.27.1/x64/codeql/codeql database run-queries --ram=14575 --threads=4 --expect-discarded-cache /home/runner/work/_temp/codeql_databases/python --min-disk-free=1024 -v"
+      },
+      {
+        "line": 4789,
+        "text": "Analyze Python\tPerform CodeQL Analysis\t2026-09-26T00:58:11.4660930Z Successfully uploaded results"
+      },
+      {
+        "line": 4793,
+        "text": "Analyze Python\tPerform CodeQL Analysis\t2026-09-26T00:58:27.0879735Z Analysis upload status is complete."
+      }
+    ],
+    "artifact_count": 0
+  },
+  "required_check": {
+    "title": "265 new alerts including 10 high severity security vulnerabilities",
+    "summary": "### New alerts in code changed by this pull request\n\nSecurity Alerts:\n * 10 high\n * 5 medium\n\nOther Alerts:\n * 2 errors\n * 12 warnings\n * 236 notes\n\n_Alerts not introduced by this pull request might have been detected because the code changes were too large._\n\nSee annotations below for details.\n\n[View all branch alerts](/terrene-foundation/kailash-py/security/code-scanning?query=pr%3A2229+tool%3ACodeQL+is%3Aopen).",
+    "text": null,
+    "annotations_count": 100,
+    "annotations_url": "https://api.github.com/repos/terrene-foundation/kailash-py/check-runs/108304848821/annotations"
+  },
+  "scope_note": "Execution/provenance only; alert membership and validity owned by other lanes. Prior result count was diff-informed, not a complete repository inventory. Severity configuration override not exposed in inspected APIs; documented default only.",
+  "scope_limits": [
+    "The required findings check reports 265 alerts; its annotation API exposes 100. The other inventories do not prove exact membership.",
+    "An analysis job succeeding is not a findings check passing.",
+    "Neither the expanded result count nor membership in a static scan proves a runtime vulnerability.",
+    "No new alert dismissals are authorized or performed. Prior approvals cover 11587,11588,11594 only."
+  ],
+  "bounded_repairs": {
+    "11597": {
+      "finding": "Synthetic beneficiary identifier reached the actual DEBUG stream",
+      "source": "b64c55e63",
+      "merge": "134fe5e8c",
+      "reviews": "Two independent correctness and security rounds",
+      "tests": "19 strict; actual stream, raw-record and decision controls"
+    },
+    "11624": {
+      "finding": "Duplicate slash in one negated regex character class",
+      "source": "fbdb9f790",
+      "tests": "354 strict; parsed-regex equality and all 1114112 codepoint probes, with reached opposite patterns"
+    },
+    "dataflow_test_utils": {
+      "state": "Active root-cause repair",
+      "confirmed": "Unsupported migration kwargs and incomplete workflow connections; shared migration finalization is a pass body",
+      "membership": "Not established as part of hidden 265"
+    },
+    "11595_11596": {
+      "state": "Proposed false positives, no dismissal",
+      "evidence": "JSON token scanner only reached after full json.loads; scheme negative lookbehind prevents retry at each inner character. Actual reached unguarded controls slow down; guarded inputs do not."
+    }
+  },
+  "latest_root_gate": {
+    "source": "8f77625056e37ffd993d803a3cddd473408e0a08",
+    "passed": 3043,
+    "failed": 1,
+    "skipped": 3,
+    "deselected": 24,
+    "failure": "test_real_uvicorn_socket_rejects_anonymous_execution: server never came up on port 46061",
+    "observation": "Server startup logging appeared during teardown; cause not established from timing alone",
+    "repair": "Active bounded owned-server/socket fixture repair",
+    "log": "/tmp/csq14-final-root-gate.log"
+  }
+}

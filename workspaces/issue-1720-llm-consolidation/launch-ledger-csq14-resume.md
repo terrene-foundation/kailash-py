@@ -1,5 +1,26 @@
 # CSQ 14 continuation — 2026-09-26
 
+## Current continuation checkpoint — supersedes historical gate states
+
+Primary dev: `51fcd96c003587ce6ca16ba56cde799e135850b4`. Content failure, DataFlow utility/options,
+gateway sibling ownership and safe logging are now landed. Individual review
+receipts, frozen hashes and validation scope are retained in
+`04-validate/csq14-active-repair-checkpoint.json`.
+
+A bounded follow-on shard repairs the actual compatibility-wrapper option drop:
+`fix/csq14-runtime-option-forwarding`, sibling `csq14-runtime-forwarding`, owner
+`archive_checkpoint`. The orchestrator created it at e7c1085 before dispatch;
+the prompt mandates resolved-root/branch assertions and concrete report-back.
+Supported canonical options must be forwarded; non-None unsupported controls
+must fail before execution. No new runtime engine is authorized by this shard.
+
+The nine CodeQL dispositions remain proposals pending explicit approval. D1
+promotion approval persists; package publishing remains unauthorized. The final
+all-files hook obligation is OPEN, including pytest-check; individual commit
+skips do not discharge it. Final whole-union reviews and exact-head successful
+remote checks are also OPEN. Five stashes and uncertain historical refs remain
+held. No forest-completion or owner-acceptance claim is made.
+
 Recovered parent thread: `01a0d8a0-e67b-7dc2-8628-1e1bfbbd3eca`.
 Source checkpoint: `709759a385ae5950fdeab2eda739718dddfb75e3`.
 Prior user approval for D1 and the advisory-type exception was read from
