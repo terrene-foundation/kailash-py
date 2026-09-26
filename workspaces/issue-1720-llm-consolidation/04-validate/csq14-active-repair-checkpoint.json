@@ -221,9 +221,11 @@
     }
   },
   "active": [
-    "final full root/DataFlow suites, all-files hooks and three whole-union reviews on the committed candidate",
-    "pending user decision on undefined documented pools kwarg; do not invent contract or infer Rule3c exception",
-    "exact-head remote checks, separate approved merge, three post-main reviews and clean sibling drain"
+    "root: streaming fixture02288 independently clean; migration dependency7b50 under independentsecurity review; parentreviewof33a486gatefixtures and6f347diagnosticpatch",
+    "archive_checkpoint: separate graph state/export fixture in final-gate-fixtures sibling;33a486originalartifact frozen",
+    "ml_correctness_review: retry-policy ownership repair in csq14-retry-policy-ownership sibling",
+    "ml_gate_recovery: independent review rootmigration7b50 in final3-security;6f347diagnostic author snapshot frozen",
+    "pending pools user decision; then finalfullgates/holisticreviews/consolidatedpush/exactheadchecks/separatemerge/postmainreviews/drain"
   ],
   "final_obligations": [
     "full integrated root regression",
@@ -271,7 +273,11 @@
     "csq14-final3-coverage"
   ],
   "open_findings": [
-    "User decision on unused undefined documented DataFlow pools kwarg remains pending",
+    "Migration dependent/prerequisite degree and nonadjacent declared edge defect: rootpatch7b50 underreview;24actualSQLite permutationsnowpass",
+    "Retry engine exhaustion adds unconfigured directattempt before existing ownerfallback: specialistrepairactive",
+    "Fullgate testfixtures old relativeURL/proxyprotocol/loglevel and securityrawtypename sinks: patchesprepared/applied, independentreviewsactive",
+    "Graph positivefixture state/export warnings: separatetestonlyrepairactive",
+    "User decision on unused undefined documented pools kwarg remains pending",
     "Final full gates and whole-union reviews remain open"
   ],
   "holistic_attempt": {
@@ -293,20 +299,29 @@
   },
   "review_overlay_backups": "/tmp/csq14-drained-review-overlays",
   "last_full_gates": {
-    "source": "a6ff5afe38d490b142c8275f07c542ea158c3f02",
+    "source": "1f3ce4b44da8114a541161141a681e41b708f266",
     "root": {
-      "failed": 8,
-      "passed": 3398
+      "failed": 2,
+      "passed": 3554,
+      "skipped": 3,
+      "deselected": 24
     },
     "dataflow_unit": {
       "failed": 3,
-      "passed": 3481
+      "passed": 3501,
+      "skipped": 31
     },
     "all_files_hooks": {
       "pytest_failed": 1,
-      "pytest_passed": 4897
+      "pytest_passed": 2620,
+      "pytest_skipped": 2,
+      "pytest_deselected": 3
     },
-    "status": "not clean; findings repaired, rerun required after all current source changes"
+    "status": "NOT CLEAN; failures routed to bounded repairs; DataFlow regression did not run after failed unit gate",
+    "logs": [
+      "/tmp/csq14-final-union-ci-gates.log",
+      "/tmp/csq14-final-union-hooks.log"
+    ]
   },
   "codeql_dismissals": {
     "approved_ids": [
@@ -371,8 +386,9 @@
   "pending_user_decision": {
     "question": "Record unused/undefined DataFlow pools kwarg for separate design and finish promotion, or implement primary/read overrides now?",
     "reason": "AGENTS.md zero-tolerance Rule3c requires documented kwargs consumed or forwarded; no key-shape/precedence contract exists",
-    "state": "async question submitted; no answer received; elapsed time is not approval",
-    "evidence": "ml_correctness_review found zero AST loads with positive-control; specs/dataflow-core.md constructor declares pools, engine signature says Per-database pool overrides; no canonical dictionary forwarding API"
+    "state": "RESOLVED: user explicitly chose Record separately; finish promotion (Recommended)",
+    "evidence": "ml_correctness_review found zero AST loads with positive-control; specs/dataflow-core.md constructor declares pools, engine signature says Per-database pool overrides; no canonical dictionary forwarding API",
+    "decision_record": "04-validate/csq14-dataflow-pools-design-task.md"
   },
   "lifecycle_fixture_correction": {
     "patch": "/tmp/csq14-lifecycle-fixture.patch",
@@ -389,5 +405,30 @@
     "patch_sha256": "da3f4da4217ab70282fbf68158971daf4dd01e0882d954a90b3fd85edf3b6293",
     "review": "two scoped independent rounds CLEAN;12 strict,0warnings; all27 original assertions retained; omitted-close opposing control retained12runtimeowners and rejected all12",
     "evidence": "/tmp/csq14-param-fixture-correctness-good.log; /tmp/csq14-param-fixture-correctness-omit.log"
-  }
+  },
+  "whole_union_attempt_1f3": {
+    "root_coverage": {
+      "passed": 1255,
+      "failed": 2,
+      "deselected": 2
+    },
+    "dataflow_coverage": {
+      "passed": 453,
+      "failed": 1,
+      "deselected": 7
+    },
+    "kaizen_coverage": {
+      "passed": 13
+    },
+    "status": "NOT CLEAN; absolute review also reproduced migration dependency misordering and unconfigured retry attempt; final holistic rerun required"
+  },
+  "implementation_worktrees": [
+    "csq14-final-gate-fixtures",
+    "csq14-final-diagnostic-sinks",
+    "csq14-retry-policy-ownership"
+  ],
+  "current_repair_receipt": "04-validate/csq14-final-gate-repairs-receipt.json",
+  "latest_committed_head": "dfd71cb7f68602bd621cc1e2268b5d2ac8a8afc4",
+  "current_retry_status": "d1e846 not clean: permissive classifier retries terminal controls, raw retry diagnostics, observer fault replays success, enterprise circuit wrapper passes coroutine; revised repair in progress",
+  "pools_decision_resolved": "User explicitly chose Record separately; finish promotion (Recommended). See csq14-dataflow-pools-design-task.md."
 }

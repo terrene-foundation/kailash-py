@@ -1,77 +1,48 @@
-# CSQ 14 continuation — final promotion gate, 2026-09-26
+# CSQ14 continuation — promotion remains authorized
 
-## Live checkpoint — supersedes historical statuses below
+## Current checkpoint — supersedes historical statuses
 
-Resume the approved promotion PR #2229. Latest production repair is
-`c7078698fcfc02ac4316014a96762388efd97f16`: SQLite consumers now share canonical database targets and cache
-identity, readonly setup and encoded memory lifetime work, failed initialization
-reclaims its connections, and concurrent cold memory use/disconnect preserves
-ownership. Two independent correctness rounds and two adversarial security rounds
-are clean for that bounded shard. Source hashes, tests, reached opposing controls
-and limits are recorded in `04-validate/csq14-sqlite-address-repair-receipt.json`.
-Backend/finalizer test fixtures landed at ab6fd9f3a; parameter adapter runtime
-fixtures landed at4e479097e, retaining their original assertions and with two
-independent scoped reviews. No unresolved SQLite finding is being deferred.
+Latest committed repair: `dfd71cb7f68602bd621cc1e2268b5d2ac8a8afc4`. Five bounded repairs are committed: streaming
+cursor observations, migration dependency ordering, safe type diagnostics/resource
+fixtures, pinned database/log-capture fixtures, and real graph state/export fixtures.
+Exact hashes, parsed tests and scoped reviews:
+`04-validate/csq14-final-gate-repairs-receipt.json`.
 
-Next: commit this checkpoint, repin clean final3 review siblings to that exact
-candidate, run full Linux root/DataFlow suites and Mac all-files hooks (including
-pytest-check) in parallel with three whole-union reviewers. The prior a6ff5afe
-full gates FAILED and do not certify the current source. Interim pytest-check
-skips are explicitly tracked until the full hook gate passes. No consolidated
-push has occurred; PR #2229 remains remotece4c9de67, OPEN/BLOCKED on the live read.
-D1 approval persists. Read all required checks and previously failing jobs on the
-exact final head, then merge in a separate command. Three post-main union/tree
-parity reviews remain required, followed by clean completed sibling drain.
+The retry ownership patch is still UNCOMMITTED and NOT CLEAN. Independent actual
+execution found permissive classification retries terminal controls, retry diagnostics
+expose exception values, successful operations replay after observer faults, and the
+enterprise circuit wrapper supplies a coroutine instead of a callable. Correctness
+is fixing the root causes in the isolated retry-policy-ownership tree; security and
+archive reviewers require revised source and two clean scoped rounds. Preserve
+uncommitted Local/test changes; do not bank the historical337-test green for these gaps.
 
-One separate user decision is still pending via the async question: record the
-unused, undefined documented `DataFlow(pools=...)` argument for a separate design
-task and finish promotion, or implement a primary/read override contract now.
-No answer or Rule3c exception has been inferred. Continue independent final gates
-while waiting; do not silently invent the contract or claim complete closure.
+User explicitly resolved the separate pools question: “Record separately; finish
+promotion (Recommended)”. The open task is
+`04-validate/csq14-dataflow-pools-design-task.md`. This is a bounded exception to
+fixing the unused documented argument now; no override contract is invented and no
+pools decision remains pending.
 
-All nine CodeQL dismissals (11595,11596,11466,11467,10866,5153,131,133,6082)
-were explicitly approved, executed and independently re-read as dismissed.
-The durable receipt is `04-validate/csq14-codeql-disposition-receipt.json`.
-No further approval is needed for those IDs; no other dismissal is authorized.
-CodeQL and promotion checks remain required.
+All nine approved CodeQL dismissals were executed and re-read as dismissed:
+11595,11596,11466,11467,10866,5153,131,133,6082. Receipt:
+`04-validate/csq14-codeql-disposition-receipt.json`. No other dismissal is authorized.
+Required CodeQL checks stay required.
 
-Preserve all five inherited stashes and 52 uncertain historical refs. Memory
-source and all three final2 review siblings were backed up and drained after
-content parity. The SQLite author tree and three final3 review trees remain.
-Only the authorized dated sweep/wrapup vault pair may be updated externally;
-its frozen acceptance register remains byte-preserved. No publishing, owner
-acceptance, whole-forest completion, Windows runtime or filesystem race guarantee.
+Next: finish/review/commit retry repair, repin clean isolated final review trees,
+regenerate assertion/caller inventories, and rerun Linux root/DataFlow suites plus
+Mac all-files hooks including pytest-check. The complete1f3 gate FAILED and does not
+certify these fixes. Then require three whole-union review deliveries, consolidate
+push to dev and existing promotion branch, read every required/previously failing
+check on the exact PR head, and merge #2229 in a SEPARATE command. D1 authorization
+persists; no publishing. Three post-main union/tree parity reviews and completed
+worktree drain follow. Interim SKIP=pytest-check is documented in repair commits and
+remains open until the full hook run passes.
 
-## Next actions (standing authorization preserved)
-
-Current continuation checkpoint supersedes the historical gate statuses below:
-primary dev is 51fcd96c0. Initial gateway cleanup, transaction cache isolation,
-socket/WebSocket repair, AsyncNode loop/cancellation ownership, content failure,
-DataFlow utility/options, gateway per-app ownership and safe logging are landed.
-Four clean reachable implementation siblings were drained. Only the bounded
-runtime compatibility-option forwarding shard remains: freeze 569e68f1, 83
-strict tests, five reached mutation controls, two expected drift diagnostics
-and no unexpected WARN+. Its two independent reviews and three parallel
-whole-union reviews are running in root-created final review siblings.
-See the active JSON checkpoint for exact paths, hashes and evidence scope.
-Nine proposed CodeQL dispositions await explicit user approval: 11595, 11596,
-11466, 11467, 10866, 5153, 131, 133, 6082. None has been dismissed. D1 promotion
-approval persists, publishing is unauthorized, five stashes remain held.
-Final combined gates, all configured hooks including pytest-check, whole-union
-reviews and exact-head remote success remain required before merge. Do not bank
-historical green gates for this revised source. The authorized external vault
-pair was restamped at 51fcd96c0, preserving the acceptance register verbatim.
-
-1. PR #2229 remains open at ce4c9de67. The CI repairs and three final review fixes are landed through 8f77625056e37ffd993d803a3cddd473408e0a08. Root regression is rerunning at that source. DataFlow full unit and regression gates passed at 13687209e. A fresh live read also found the required CodeQL check failed, reporting "265 new alerts"; its scan contains 2,253 results versus three in the prior analysis. Three reviewers are investigating scan provenance, exact alert membership, and actual security behavior. Do not mistake Analyze Python success for CodeQL success. Finish repairs and all configured hooks before a consolidated push. Merge only after all required checks and every previously failing test job pass on the exact final head. D1 approval persists; advisory type backlog #73 is excluded.
-   Revalidate: `gh pr view 2229 --json state,headRefOid,mergeStateStatus`.
-2. Every completed implementation branch has landed in dev and its clean sibling has been removed. Three detached holistic review siblings remain for the CodeQL investigation. Preserve them until the corresponding review is delivered.
-   Revalidate: `git worktree list --porcelain` and `git for-each-ref refs/heads refs/remotes`.
-3. Preserve the five inherited stashes. Never restore/drop them without the user's decision. Rejected recovery was deleted and NEVER merged; the approved stale draft was deleted with its landing receipt.
-   Revalidate: `git stash list` (five held entries), and archived disposition below.
-4. Continue bounded archive-content adjudication; retain uncertain historical refs and never merge a stale prototype wholesale. Five archive clusters still have partial/unresolved content; no whole-forest completion claim.
-   Revalidate: `workspaces/issue-1720-llm-consolidation/04-validate/csq13-ref-adjudication.json` (52 refs, explicit dispositions).
-5. Keep the unresolved #2225 design question and paused Express routing/cache findings distinct from completed repairs. Package publishing is a separate release gate, not implied by promotion approval.
-   Revalidate: `gh issue view 2225 --comments`; inspect Express callers before resuming that shard.
+The completed diagnostic and SQLite author trees were backed up, verified against
+committed blobs and drained. Current worktrees are gate-fixtures (archive), retry
+ownership (author), and three final3 review trees. Preserve all five inherited stashes
+and52 uncertain historical refs. Only the authorized dated sweep/wrapup vault pair
+may be updated externally; preserve the frozen acceptance register byte-for-byte.
+No owner acceptance, whole-forest completion, Windows or filesystem race guarantee.
 
 ## Recovered authorization
 

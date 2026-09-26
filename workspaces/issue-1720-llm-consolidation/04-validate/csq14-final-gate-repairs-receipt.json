@@ -1,0 +1,692 @@
+{
+  "status": "five bounded repairs committed; final union pending retry repairs and complete gates",
+  "repairs": [
+    {
+      "repair": "streaming",
+      "commit": "fc826f4842577cd86d8c63225424549ed66840bb",
+      "patch_sha256": "02288a0e00dc15167b46c8c31dcf3f4e4639c6cb980fd58eece9189aff037f42",
+      "files": {
+        "tests/unit/nodes/test_async_sql_streaming.py": "854f8ea20285f45ab793ecf5ff15769b7073997e8f637f53be0a63f06bc0e0a7"
+      },
+      "tests": [
+        {
+          "log": "/tmp/csq14-stream-fixture-tests2.log",
+          "sha256": "93ba62f786fa91b485ed297bf22f4b16b49e0c82cb4c68f22dcc81fb8e3a1b63",
+          "summary": "16 passed in 0.78s"
+        },
+        {
+          "log": "/tmp/csq14-stream-fixture-correctness-good.log",
+          "sha256": "74bc7d16569859baa30f88584b4a41bcacc6ca42df69833c9cbbc84851ac0318",
+          "summary": "16 passed in 0.96s"
+        }
+      ],
+      "review": "two scoped rounds clean; does not certify final promotion union"
+    },
+    {
+      "repair": "migration",
+      "commit": "5261bff068ef9575c03843c14ff8deaeb732bf9b",
+      "patch_sha256": "7b50bfdf53c1d7b4f715b781604c9ba36a6c96233b65b6f0641b70ad58c34079",
+      "files": {
+        "packages/kailash-dataflow/src/dataflow/migrations/batched_migration_executor.py": "90a5c7c126d546e836312f7b34d42b5143fba35348c0e52c2b9c34705e922947",
+        "packages/kailash-dataflow/tests/regression/test_batched_migration_dependency_order.py": "8c06b71cd2312a56d2331c28ad02988d922ee1b37dcfc979f44ec750639ea09c"
+      },
+      "tests": [
+        {
+          "log": "/tmp/csq14-migration-order-after.log",
+          "sha256": "50e844625ba2b75aa038152e3804054912d3c051221aabecb83cd7a2666cc43c",
+          "summary": "============================== 45 passed in 0.51s =============================="
+        },
+        {
+          "log": "/tmp/csq14-migration-security-positive.log",
+          "sha256": "87fa45658a685c71edbe81816e4cacc848380725c6f4bdbc831a389232fbd238",
+          "summary": "============================== 45 passed in 0.79s =============================="
+        }
+      ],
+      "review": "two scoped rounds clean; does not certify final promotion union",
+      "manifest": {
+        "patch_sha256": "7b50bfdf53c1d7b4f715b781604c9ba36a6c96233b65b6f0641b70ad58c34079",
+        "files": {
+          "packages/kailash-dataflow/src/dataflow/migrations/batched_migration_executor.py": "90a5c7c126d546e836312f7b34d42b5143fba35348c0e52c2b9c34705e922947",
+          "packages/kailash-dataflow/tests/regression/test_batched_migration_dependency_order.py": "8c06b71cd2312a56d2331c28ad02988d922ee1b37dcfc979f44ec750639ea09c"
+        },
+        "tests": "45 strict (24 actual SQLite permutations + explicit truecycle +20existingunit), no Pythonwarnings",
+        "red_before": "24fail1pass onoriginalsource; failures includeactualno-table/missingcolumn and falsecycle notices",
+        "specialist_consult": "archive_checkpoint confirmsdependent\u2192prerequisitegraph, indegreedirection and nonadjacent declaredprerequisitegap; fixretainsstablequeue and explicitcyclewarning/fallback"
+      }
+    },
+    {
+      "repair": "diagnostics",
+      "commit": "171079f030fbfde0166685b2deac74bebc943bc5",
+      "patch_sha256": "6f347001a1af18ba050c101eb3aa0981f9b3f337893171c015271d16b575ce29",
+      "files": {
+        "src/kailash/nodes/data/async_sql.py": "101b968fee6a61f902c61b115b45b9aff46ea45b4b420538349422328293ea53",
+        "tests/regression/test_async_sql_type_diagnostic_privacy.py": "d9d79e9b0f23ecf775c57619b7eeca938775a7864dc7a73476fc8a4c0c32ab93",
+        "tests/regression/test_issue_2104_jwt_log_injection.py": "aab8f9f08150f924a5969c7ffd10be450310168a1c984a1b6a1ddd464951c064",
+        "tests/regression/test_trust_signing_preimage_rejects_nan_inf.py": "0d8ae39b61b57a8d57ff503a8bd100e1f2a0300aecb94f4efc84a9bebdbbd3e9"
+      },
+      "tests": [
+        {
+          "log": "/tmp/csq14-parent-diagnostic-and-fixtures.log",
+          "sha256": "39369c622ce53af42d30124bd0abc31b8a946905296991de537310403e627277",
+          "summary": "171 passed in 2.42s"
+        },
+        {
+          "log": "/tmp/csq14-final-supplement-root.log",
+          "sha256": "b3dadb095bf472572a6b8ad41aec566563e6aba457d5177ae401f97bb8eb8bb9",
+          "summary": "53 passed in 1.64s"
+        }
+      ],
+      "review": "two scoped rounds clean; does not certify final promotion union",
+      "manifest": {
+        "patch_sha256": "6f347001a1af18ba050c101eb3aa0981f9b3f337893171c015271d16b575ce29",
+        "files": {
+          "src/kailash/nodes/data/async_sql.py": "101b968fee6a61f902c61b115b45b9aff46ea45b4b420538349422328293ea53",
+          "tests/regression/test_issue_2104_jwt_log_injection.py": "aab8f9f08150f924a5969c7ffd10be450310168a1c984a1b6a1ddd464951c064",
+          "tests/regression/test_trust_signing_preimage_rejects_nan_inf.py": "0d8ae39b61b57a8d57ff503a8bd100e1f2a0300aecb94f4efc84a9bebdbbd3e9",
+          "tests/regression/test_async_sql_type_diagnostic_privacy.py": "d9d79e9b0f23ecf775c57619b7eeca938775a7864dc7a73476fc8a4c0c32ab93"
+        },
+        "nonlogging_ast_identical": true,
+        "nonlogging_opposite_detected": true,
+        "raw_type_direct_logger_sites": [],
+        "fixture_original_checks_unchanged": [
+          [
+            "tests/regression/test_issue_2104_jwt_log_injection.py",
+            11
+          ],
+          [
+            "tests/regression/test_trust_signing_preimage_rejects_nan_inf.py",
+            26
+          ]
+        ]
+      }
+    },
+    {
+      "repair": "database_and_signal_fixtures",
+      "commit": "eec1fa2d307cb1fca4c9cde72d83c9e364465d2f",
+      "patch_sha256": "33a4860934808adc42bc9ac5f87d98abf52654514f22ef68578eacb4ba51dcc8",
+      "files": {
+        "packages/kailash-dataflow/tests/unit/core/test_pool_stats_provider.py": "d226e9d52a383a287919a7ce00fc73394679ef8a4357903de1edcea9023a8e40",
+        "packages/kailash-dataflow/tests/unit/features/test_read_replica.py": "d782f072880f480adddb9663d47357ce37ca88c2d36a39934b73b2ca3265f9c8",
+        "tests/regression/test_signal_wait_input_boundary.py": "51abf6c10c8a1a5329fe96c1afad4168ead8ffb08b38e29c680566885cbaa884"
+      },
+      "tests": [
+        {
+          "log": "/tmp/csq14-parent-fixtures-and-migration.log",
+          "sha256": "011180913143d998e541af979ab06c460ba0b48df918fd27ac130c06e9e07a5f",
+          "summary": "============================== 77 passed in 0.63s =============================="
+        },
+        {
+          "log": "/tmp/csq14-final-supplement-dataflow.log",
+          "sha256": "b423b4479a2ba153a74260cfc3ee9bb359d951c8836aed72291a70a80bb43e56",
+          "summary": "============================== 32 passed in 0.73s =============================="
+        }
+      ],
+      "review": "two scoped rounds clean; does not certify final promotion union",
+      "manifest": {
+        "root": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-final-gate-fixtures",
+        "head": "1f3ce4b44da8114a541161141a681e41b708f266",
+        "patch_sha256": "33a4860934808adc42bc9ac5f87d98abf52654514f22ef68578eacb4ba51dcc8",
+        "files": [
+          {
+            "path": "packages/kailash-dataflow/tests/unit/core/test_pool_stats_provider.py",
+            "sha256": "d226e9d52a383a287919a7ce00fc73394679ef8a4357903de1edcea9023a8e40",
+            "named_tests": 13,
+            "comparison": [
+              {
+                "test": "test_provider_returns_zeros_when_no_pool",
+                "original_assertions": 5,
+                "preserved_assertions": 5,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_provider_reads_asyncpg_pool",
+                "original_assertions": 4,
+                "preserved_assertions": 4,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_provider_reads_sqlalchemy_queuepool",
+                "original_assertions": 7,
+                "preserved_assertions": 7,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_provider_reads_sqlite_pool_stats",
+                "original_assertions": 4,
+                "preserved_assertions": 4,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_provider_scoped_to_database_url",
+                "original_assertions": 3,
+                "preserved_assertions": 3,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_provider_handles_exception_gracefully",
+                "original_assertions": 4,
+                "preserved_assertions": 4,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_provider_snapshots_shared_pools",
+                "original_assertions": 3,
+                "preserved_assertions": 3,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_health_check_includes_pool_stats",
+                "original_assertions": 3,
+                "preserved_assertions": 3,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_health_check_degraded_at_95_percent",
+                "original_assertions": 2,
+                "preserved_assertions": 2,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_health_check_ok_without_monitor",
+                "original_assertions": 2,
+                "preserved_assertions": 2,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_pool_stats_with_monitor",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_pool_stats_without_monitor",
+                "original_assertions": 5,
+                "preserved_assertions": 5,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_execute_raw_lightweight_not_configured",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              }
+            ]
+          },
+          {
+            "path": "packages/kailash-dataflow/tests/unit/features/test_read_replica.py",
+            "sha256": "d782f072880f480adddb9663d47357ce37ca88c2d36a39934b73b2ca3265f9c8",
+            "named_tests": 19,
+            "comparison": [
+              {
+                "test": "test_single_adapter_default",
+                "original_assertions": 3,
+                "preserved_assertions": 3,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_dual_adapter_creation",
+                "original_assertions": 4,
+                "preserved_assertions": 3,
+                "changed_assertions": [
+                  "Assert(test=Compare(left=Attribute(value=Name(id='db', ctx=Load()), attr='_read_url', ctx=Load()), ops=[Eq()], comparators=[Constant(value='sqlite:///read_replica.db')]))"
+                ]
+              },
+              {
+                "test": "test_read_routes_to_replica",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_write_routes_to_primary",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_get_connection_manager_for_primary",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_single_adapter_routing",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_connection_manager_url_override",
+                "original_assertions": 1,
+                "preserved_assertions": 0,
+                "changed_assertions": [
+                  "Assert(test=Compare(left=Attribute(value=Name(id='cm', ctx=Load()), attr='_url_override', ctx=Load()), ops=[Eq()], comparators=[Constant(value='sqlite:///override.db')]))"
+                ]
+              },
+              {
+                "test": "test_connection_manager_pool_size_override",
+                "original_assertions": 2,
+                "preserved_assertions": 2,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_read_pool_size_passed_to_read_connection_manager",
+                "original_assertions": 3,
+                "preserved_assertions": 3,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_health_check_single_adapter",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_health_check_dual_adapter",
+                "original_assertions": 2,
+                "preserved_assertions": 2,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_express_read_accepts_use_primary",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_express_list_accepts_use_primary",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_express_count_accepts_use_primary",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_express_find_one_accepts_use_primary",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_sync_express_read_accepts_use_primary",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_sync_express_list_accepts_use_primary",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_sync_express_count_accepts_use_primary",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_sync_express_find_one_accepts_use_primary",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              }
+            ]
+          },
+          {
+            "path": "tests/regression/test_signal_wait_input_boundary.py",
+            "sha256": "51abf6c10c8a1a5329fe96c1afad4168ead8ffb08b38e29c680566885cbaa884",
+            "named_tests": 9,
+            "comparison": [
+              {
+                "test": "test_source_is_pinned",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_invalid_inputs_leave_queued_signal_available",
+                "original_assertions": 4,
+                "preserved_assertions": 4,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_schema_coercion_selects_the_string_named_queue",
+                "original_assertions": 4,
+                "preserved_assertions": 4,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_missing_required_name_does_not_consume_a_signal",
+                "original_assertions": 2,
+                "preserved_assertions": 2,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_falsey_name_rejection_precedes_string_coercion",
+                "original_assertions": 3,
+                "preserved_assertions": 3,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_constructor_defaults_and_runtime_override_preserve_output",
+                "original_assertions": 4,
+                "preserved_assertions": 4,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_default_unknown_parameter_warning_is_retained",
+                "original_assertions": 3,
+                "preserved_assertions": 3,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_timeout_preserves_typed_result_and_warning",
+                "original_assertions": 4,
+                "preserved_assertions": 4,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_cancellation_propagates_and_later_signal_remains_deliverable",
+                "original_assertions": 3,
+                "preserved_assertions": 3,
+                "changed_assertions": []
+              }
+            ]
+          }
+        ],
+        "semantic_changes": "Two former relative URL string assertions now require literal absolute tmp_path URL plus actual marker row and PRAGMA physical-file identity after CWD changes; all other assertions retained."
+      }
+    },
+    {
+      "repair": "workflow_fixtures",
+      "commit": "dfd71cb7f68602bd621cc1e2268b5d2ac8a8afc4",
+      "patch_sha256": "25e9d08069130870e3e9de11d8a5baeca19792b5c1da8e114bbe056efeb27bf0",
+      "files": {
+        "tests/unit/workflow/test_graph_comprehensive.py": "a7ae9652a167562c3e1d272c5158e19fed1afd359f363eb0c3fdd95ab71033f1"
+      },
+      "tests": [
+        {
+          "log": "/tmp/csq14-parent-graph-tests.log",
+          "sha256": "67b804c3b21ca0b049319e6b6b134529c78308dc4c79f6cf8da06acc3b533fb2",
+          "summary": "39 passed in 1.94s"
+        }
+      ],
+      "review": "two scoped rounds clean; does not certify final promotion union",
+      "manifest": {
+        "head": "1f3ce4b44da8114a541161141a681e41b708f266",
+        "path": "tests/unit/workflow/test_graph_comprehensive.py",
+        "source_sha256": "a7ae9652a167562c3e1d272c5158e19fed1afd359f363eb0c3fdd95ab71033f1",
+        "patch_sha256": "25e9d08069130870e3e9de11d8a5baeca19792b5c1da8e114bbe056efeb27bf0",
+        "rows": [
+          {
+            "test": "TestWorkflowNodeInstanceCreation.test_create_node_instance_with_name_parameter",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowNodeInstanceCreation.test_create_node_instance_with_id_parameter",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowNodeInstanceCreation.test_create_node_instance_fallback_pattern",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowNodeInstanceCreation.test_create_node_instance_missing_name_error",
+            "original_assertions": 0,
+            "preserved_assertions": 0,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowNodeInstanceCreation.test_create_node_instance_unexpected_parameter_error",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowNodeInstanceCreation.test_create_node_instance_generic_error",
+            "original_assertions": 0,
+            "preserved_assertions": 0,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowConnections.test_connect_basic",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowConnections.test_connect_nonexistent_source_node",
+            "original_assertions": 0,
+            "preserved_assertions": 0,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowConnections.test_connect_nonexistent_target_node",
+            "original_assertions": 0,
+            "preserved_assertions": 0,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowConnections.test_connect_with_mapping",
+            "original_assertions": 1,
+            "preserved_assertions": 1,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowConnections.test_connect_multiple_connections",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowCycles.test_create_cycle_basic",
+            "original_assertions": 1,
+            "preserved_assertions": 1,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowCycles.test_create_cycle_with_metadata",
+            "original_assertions": 1,
+            "preserved_assertions": 1,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowCycles.test_separate_dag_and_cycle_edges",
+            "original_assertions": 1,
+            "preserved_assertions": 1,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowCycles.test_get_cycle_groups",
+            "original_assertions": 1,
+            "preserved_assertions": 1,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowCycles.test_has_cycles_detection",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowValidation.test_validate_cycles",
+            "original_assertions": 0,
+            "preserved_assertions": 0,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowValidation.test_validate_with_missing_required_parameters",
+            "original_assertions": 0,
+            "preserved_assertions": 0,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowValidation.test_validate_with_runtime_parameters",
+            "original_assertions": 0,
+            "preserved_assertions": 0,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowExecution.test_run_method",
+            "original_assertions": 5,
+            "preserved_assertions": 5,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowExecution.test_execute_method",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowExecution.test_execute_with_parameters",
+            "original_assertions": 1,
+            "preserved_assertions": 1,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowStateWrapper.test_create_state_wrapper",
+            "original_assertions": 4,
+            "preserved_assertions": 4,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowStateWrapper.test_execute_with_state",
+            "original_assertions": 2,
+            "preserved_assertions": 1,
+            "missing_assertions": [
+              "Assert(test=Compare(left=Name(id='results', ctx=Load()), ops=[Eq()], comparators=[Dict(keys=[Constant(value='node1')], values=[Dict(keys=[Constant(value='result')], values=[Constant(value='success')])])]))"
+            ]
+          },
+          {
+            "test": "TestWorkflowExportImport.test_to_dict",
+            "original_assertions": 8,
+            "preserved_assertions": 8,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowExportImport.test_to_json",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowExportImport.test_to_yaml",
+            "original_assertions": 3,
+            "preserved_assertions": 3,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowExportImport.test_save_json",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowExportImport.test_save_yaml",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowExportImport.test_save_invalid_format",
+            "original_assertions": 0,
+            "preserved_assertions": 0,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowExportImport.test_from_dict",
+            "original_assertions": 6,
+            "preserved_assertions": 6,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowExportImport.test_export_to_kailash",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowErrorHandling.test_workflow_creation_with_invalid_metadata",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowErrorHandling.test_get_nonexistent_node",
+            "original_assertions": 1,
+            "preserved_assertions": 1,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowErrorHandling.test_repr_and_str_methods",
+            "original_assertions": 4,
+            "preserved_assertions": 4,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowErrorHandling.test_workflow_with_complex_metadata",
+            "original_assertions": 3,
+            "preserved_assertions": 3,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowCyclicConnections.test_cyclic_connection_creation",
+            "original_assertions": 8,
+            "preserved_assertions": 8,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowCyclicConnections.test_node_instance_creation",
+            "original_assertions": 4,
+            "preserved_assertions": 4,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowCyclicConnections.test_connection_creation",
+            "original_assertions": 4,
+            "preserved_assertions": 4,
+            "missing_assertions": []
+          }
+        ],
+        "semantic_reconciliation": "One exact success-only result shape now requires success plus real state_wrapper output; counter/data changed, original immutable, StateModel and no-LocalRuntime assertions retained. Export prior file assertions retained and exact supported native CSV node/container/config/edge assertions added.",
+        "controls": {
+          "state": 1,
+          "mapping": 1,
+          "edge": 1,
+          "params": 1
+        },
+        "python_warnings": 0,
+        "warn_plus": 0,
+        "tests_passed": 39
+      }
+    }
+  ],
+  "retry_status": "d1e846 not clean: permissive classifier retries terminal controls, raw retry diagnostics, observer fault replays success, enterprise circuit wrapper passes coroutine; revised repair in progress",
+  "pools_decision": "User explicitly chose Record separately; finish promotion (Recommended). See csq14-dataflow-pools-design-task.md.",
+  "controls": "Reached opposite results recorded in /tmp/csq14-parent-graph-control-*.log, parent-diagnostic-control-*.log, parent-fixtures-control-*.log, migration-security-{indegree,adjacent,round2}.log and stream-fixture-control.log. No failed control run is counted as positive suite pass.",
+  "final_hook_obligation": "Interim SKIP=pytest-check documented in each commit. Run all configured all-files hooks including pytest-check on final clean candidate before push.",
+  "drained_completed_sources": [
+    {
+      "worktree": "csq14-final-diagnostic-sinks",
+      "backup": "/tmp/csq14-drained-csq14-final-diagnostic-sinks",
+      "parity_commit": "171079f03"
+    },
+    {
+      "worktree": "csq14-sqlite-address-parity",
+      "backup": "/tmp/csq14-drained-csq14-sqlite-address-parity",
+      "parity_commit": "c7078698f"
+    }
+  ]
+}
