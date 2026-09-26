@@ -34,8 +34,14 @@ import logging
 import warnings
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
-from aiohttp import web
-from aiohttp.web_exceptions import NotAppKeyWarning
+try:
+    from aiohttp import web
+    from aiohttp.web_exceptions import NotAppKeyWarning
+except ImportError as exc:
+    raise ImportError(
+        "aiohttp authentication requires the server extra: "
+        "pip install 'kailash[server]'"
+    ) from exc
 
 from kailash.trust.auth.models import AuthenticatedUser
 

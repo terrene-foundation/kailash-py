@@ -7,7 +7,10 @@ both key APIs referencing the same values. Negative pole: rejected credentials
 never reach that handler. Warning controls reject any expanded filter scope.
 """
 
+import subprocess
+import sys
 import warnings
+from pathlib import Path
 
 import pytest
 from aiohttp import web
@@ -25,6 +28,48 @@ _RECOMMENDATION = (
     "It is recommended to use web.RequestKey instances for keys.\n"
     "https://docs.aiohttp.org/en/stable/web_advanced.html#request-s-storage"
 )
+
+
+def test_missing_aiohttp_names_the_required_extra():
+    source_root = Path(__file__).resolve().parents[2] / "src"
+    assert Path(auth.__file__).resolve() == (
+        source_root / "kailash/trust/auth/aiohttp.py"
+    )
+    probe = """
+import importlib.abc
+import pathlib
+import sys
+
+sys.path.insert(0, sys.argv[1])
+import kailash
+assert pathlib.Path(kailash.__file__).resolve().parent.parent == pathlib.Path(sys.argv[1])
+
+class MissingAiohttp(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == 'aiohttp' or fullname.startswith('aiohttp.'):
+            raise ModuleNotFoundError('aiohttp deliberately unavailable', name=fullname)
+
+assert 'aiohttp' not in sys.modules
+sys.meta_path.insert(0, MissingAiohttp())
+try:
+    import kailash.trust.auth.aiohttp
+except ImportError as exc:
+    assert "pip install 'kailash[server]'" in str(exc), str(exc)
+    assert isinstance(exc.__cause__, ModuleNotFoundError), repr(exc.__cause__)
+    assert exc.__cause__.name == 'aiohttp'
+    print('MISSING_AIOHTTP_ACTIONABLE')
+else:
+    raise AssertionError('missing optional dependency was accepted')
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", probe, str(source_root)],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip() == "MISSING_AIOHTTP_ACTIONABLE"
 
 
 @pytest.mark.asyncio
