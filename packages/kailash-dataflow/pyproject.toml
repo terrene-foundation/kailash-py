@@ -131,6 +131,8 @@ all = [
 ]
 dev = [
     "pytest>=7.0.0",
+    # Starlette 1.7+ TestClient prefers httpx2; its httpx fallback is deprecated.
+    "httpx2>=2.13.1",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.0.0",
     # pytest-timeout: per-test timeout enforcement (issue #979 / PR #976

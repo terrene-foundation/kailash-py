@@ -86,7 +86,8 @@ class TestDelegateCanonicalFixtureParity:
     consumes the same file per ``cross-sdk-inspection.md`` Rule 4a."""
 
     @pytest.fixture(scope="class")
-    def fixture(self) -> dict:
+    @classmethod
+    def fixture(cls) -> dict:
         assert _DELEGATE_FIXTURE_PATH.exists(), (
             f"cross-SDK delegate fixture missing at {_DELEGATE_FIXTURE_PATH}; "
             "this fixture is the cross-SDK byte contract per issue #1258"

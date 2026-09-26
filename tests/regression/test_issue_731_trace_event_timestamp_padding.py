@@ -142,7 +142,8 @@ class TestCrossSDKFixtureParity:
     """
 
     @pytest.fixture(scope="class")
-    def fixture(self) -> dict:
+    @classmethod
+    def fixture(cls) -> dict:
         assert _FIXTURE_PATH.exists(), (
             f"cross-SDK fixture missing at {_FIXTURE_PATH}; "
             f"regenerate via the snippet in tests/regression/"
