@@ -50,13 +50,32 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 import time
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
 
 pytestmark = pytest.mark.regression
+
+
+@contextmanager
+def _legacy_mfa_warning():
+    message = (
+        "MultiFactorAuthNode: admin_override is deprecated (issue #2047) -- "
+        "it is a caller-supplied boolean, so it authorised administrative actions "
+        "on data the caller controlled. This node is in require_actor=False mode, "
+        "so it still gates the destructive actions and is still not an "
+        "authentication control. Wire actor_resolver= and require_actor=True "
+        "to replace it."
+    )
+    with pytest.warns(DeprecationWarning, match=re.escape(message)) as caught:
+        yield
+    assert [(warning.category, str(warning.message)) for warning in caught] == [
+        (DeprecationWarning, message)
+    ]
 
 
 def _digest(raw: bytes) -> str:
@@ -933,9 +952,10 @@ def test_revoke_all_does_not_deadlock_and_reports_revoked_methods():
     done = {}
 
     def _revoke():
-        done["result"] = node.execute(
-            action="revoke", user_id="user-1", method="all", admin_override=True
-        )
+        with _legacy_mfa_warning():
+            done["result"] = node.execute(
+                action="revoke", user_id="user-1", method="all", admin_override=True
+            )
 
     t = threading.Thread(target=_revoke, daemon=True)
     t.start()
@@ -1075,9 +1095,10 @@ def test_disable_with_admin_override_still_works():
     """Positive control: the administrative path is intact."""
     node = _enrolled_totp_node()
 
-    result = node.execute(
-        action="disable", user_id="victim", method="totp", admin_override=True
-    )
+    with _legacy_mfa_warning():
+        result = node.execute(
+            action="disable", user_id="victim", method="totp", admin_override=True
+        )
 
     assert result["success"] is True
     assert "totp" not in node.user_mfa_data["victim"]["methods"]
@@ -1328,7 +1349,10 @@ def test_jwt_rejects_a_forged_unsigned_token():
     from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
 
     node = EnterpriseAuthProviderNode(
-        name="eap_test", jwt_config={"secret": "the-real-signing-secret"}
+        name="eap_test",
+        jwt_config={
+            "secret": "the-real-signing-secret-test-key-material-at-least-32-bytes"
+        },
     )
     forged = _forged_jwt({"sub": "admin", "exp": int(time.time()) + 3600})
 
@@ -1349,11 +1373,14 @@ def test_jwt_rejects_a_token_signed_with_the_wrong_key():
     from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
 
     node = EnterpriseAuthProviderNode(
-        name="eap_test", jwt_config={"secret": "the-real-signing-secret"}
+        name="eap_test",
+        jwt_config={
+            "secret": "the-real-signing-secret-test-key-material-at-least-32-bytes"
+        },
     )
     attacker_token = pyjwt.encode(
         {"sub": "admin", "exp": int(time.time()) + 3600},
-        "attacker-chosen-key",
+        "attacker-chosen-key-test-key-material-at-least-32-bytes",
         algorithm="HS256",
     )
 
@@ -1373,7 +1400,7 @@ def test_jwt_accepts_a_properly_signed_token():
     pyjwt = pytest.importorskip("jwt")
     from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
 
-    secret = "the-real-signing-secret"
+    secret = "the-real-signing-secret-test-key-material-at-least-32-bytes"
     node = EnterpriseAuthProviderNode(name="eap_test", jwt_config={"secret": secret})
     good = pyjwt.encode(
         {"sub": "alice", "exp": int(time.time()) + 3600}, secret, algorithm="HS256"
@@ -1410,14 +1437,16 @@ def test_jwt_error_does_not_leak_which_check_failed():
     pyjwt = pytest.importorskip("jwt")
     from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
 
-    secret = "the-real-signing-secret"
+    secret = "the-real-signing-secret-test-key-material-at-least-32-bytes"
     node = EnterpriseAuthProviderNode(name="eap_test", jwt_config={"secret": secret})
 
     expired = pyjwt.encode(
         {"sub": "alice", "exp": int(time.time()) - 10}, secret, algorithm="HS256"
     )
     bad_sig = pyjwt.encode(
-        {"sub": "alice", "exp": int(time.time()) + 3600}, "wrong", algorithm="HS256"
+        {"sub": "alice", "exp": int(time.time()) + 3600},
+        "wrong-test-signing-key-material-32-bytes",
+        algorithm="HS256",
     )
 
     errors = {
@@ -1559,7 +1588,7 @@ def test_jwt_without_a_sub_claim_does_not_authenticate_as_the_caller():
     pyjwt = pytest.importorskip("jwt")
     from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
 
-    secret = "shared-signing-secret"
+    secret = "shared-signing-secret-test-key-material-at-least-32-bytes"
     node = EnterpriseAuthProviderNode(name="eap_test", jwt_config={"secret": secret})
     subjectless = pyjwt.encode(
         {"exp": int(time.time()) + 3600, "purpose": "password-reset"},
@@ -1762,7 +1791,7 @@ def test_authenticate_does_not_mint_a_session_for_a_caller_chosen_user_id():
     pyjwt = pytest.importorskip("jwt")
     from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
 
-    secret = "signing-secret"
+    secret = "signing-secret-test-key-material-at-least-32-bytes"
     node = EnterpriseAuthProviderNode(
         name="eap_test",
         enabled_methods=["jwt"],

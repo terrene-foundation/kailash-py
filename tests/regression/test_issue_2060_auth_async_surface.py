@@ -25,7 +25,9 @@ import asyncio
 import inspect
 import json
 import pathlib
+import re
 import time
+from contextlib import contextmanager, nullcontext
 
 import pytest
 
@@ -35,8 +37,25 @@ from kailash.nodes.auth.mfa import MultiFactorAuthNode
 from kailash.nodes.auth.session_management import SessionManagementNode
 from kailash.nodes.auth.sso import SSOAuthenticationNode
 
-SECRET = "signing-secret-for-tests"
+SECRET = "signing-secret-for-tests-at-least-32-bytes"
 ISSUER = "https://idp.test.invalid"
+
+
+@contextmanager
+def _legacy_mfa_warning():
+    message = (
+        "MultiFactorAuthNode: admin_override is deprecated (issue #2047) -- "
+        "it is a caller-supplied boolean, so it authorised administrative actions "
+        "on data the caller controlled. This node is in require_actor=False mode, "
+        "so it still gates the destructive actions and is still not an "
+        "authentication control. Wire actor_resolver= and require_actor=True "
+        "to replace it."
+    )
+    with pytest.warns(DeprecationWarning, match=re.escape(message)) as caught:
+        yield
+    assert [(warning.category, str(warning.message)) for warning in caught] == [
+        (DeprecationWarning, message)
+    ]
 
 
 def _provider(**overrides):
@@ -303,7 +322,8 @@ def test_admin_gated_destructive_mfa_actions_write_an_audit_record(action):
     written = []
     node.audit_log_node.execute = lambda **kw: written.append(kw) or {"logged": True}
 
-    node.run(action=action, user_id="alice", admin_override=True)
+    with _legacy_mfa_warning():
+        node.run(action=action, user_id="alice", admin_override=True)
 
     assert written, f"{action} completed with no audit record"
     # `reset` re-enrols before resetting, so it legitimately writes an
@@ -336,7 +356,8 @@ def test_mfa_audit_records_declare_the_missing_actor():
     written = []
     node.audit_log_node.execute = lambda **kw: written.append(kw) or {"logged": True}
 
-    node.run(action="revoke", user_id="alice", admin_override=True)
+    with _legacy_mfa_warning():
+        node.run(action="revoke", user_id="alice", admin_override=True)
 
     assert written, "revoke wrote no audit record"
     assert "actor" in written[0]["event_data"], written[0]
@@ -515,7 +536,10 @@ def test_audit_records_never_carry_credential_material(action, kwargs, caplog):
     node.run(action="setup", user_id="alice", method="totp", user_email="a@t.invalid")
     caplog.clear()
 
-    with caplog.at_level("INFO", logger=logger_name):
+    warning_context = (
+        _legacy_mfa_warning() if kwargs.get("admin_override") else nullcontext()
+    )
+    with caplog.at_level("INFO", logger=logger_name), warning_context:
         result = node.run(action=action, user_id="alice", **kwargs)
 
     assert result.get("success") is True, (
@@ -822,7 +846,8 @@ def test_mfa_revocation_emits_the_high_severity_security_event():
 
     node.run(action="setup", user_id="alice", method="totp", user_email="a@t.invalid")
     seen.clear()
-    node.run(action="revoke", user_id="alice", admin_override=True)
+    with _legacy_mfa_warning():
+        node.run(action="revoke", user_id="alice", admin_override=True)
 
     revoked = [e for e in seen if e["event_type"] == "mfa_revoked"]
     assert (
