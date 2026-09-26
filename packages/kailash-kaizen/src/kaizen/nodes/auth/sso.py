@@ -16,7 +16,6 @@ from typing import Any, Dict, List, Optional
 
 from kailash.nodes.auth.sso import SSOAuthenticationNode as CoreSSONode
 from kailash.utils.secure_logging import sanitize_log_value
-from kailash.utils.url_credentials import fingerprint_value
 from kaizen.core.structured_output import create_structured_output_config
 from kaizen.nodes._env_model import detect_provider, resolve_default_model
 from kaizen.nodes.ai import LLMAgentNode
@@ -320,30 +319,9 @@ Return ONLY the JSON object, no explanation."""
             if "user" not in roles:
                 roles.insert(0, "user")
 
-            # The subject's email is PII on the AUTHENTICATION path
-            # (`rules/security.md`: MUST NOT log PII) AND it is IdP-supplied,
-            # so it is two defects at once -- a disclosure and a log-forging
-            # vector. Flattening alone would close only the second.
-            #
-            # It is therefore replaced by a stable, non-reversible correlation
-            # tag rather than merely sanitized. That is what keeps this record
-            # USEFUL: the reason it exists is to answer "which principal
-            # received which roles", and a fingerprint answers that across
-            # every record for the same subject while putting no identifier on
-            # the line. Dropping to DEBUG would not do -- DEBUG still writes
-            # the address, behind a flag production can and does turn on --
-            # and deleting the record would erase an auth-path audit trail.
-            # `fingerprint_value` (not `fingerprint_secret`) is the correct
-            # name here: the tag is destined for a log sink.
-            #
-            # `roles` is parsed from the LLM response, so it is untrusted for
-            # forging purposes and is flattened.
-            email = attributes.get("email")
-            logger.info(
-                "AI role assignment for %s: %s",
-                f"email:{fingerprint_value(str(email))}" if email else "unknown",
-                sanitize_log_value(roles),
-            )
+            # Email-derived tags remain enumerable from candidate addresses.
+            # Keep the role-assignment event and roles without an email field.
+            logger.info("AI role assignment: %s", sanitize_log_value(roles))
 
             return roles
 

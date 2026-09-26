@@ -36,24 +36,22 @@ BOTH POLARITIES ARE PINNED
 * POSITIVE -- no forged second record; no raw ``\\n`` in the message; for the
   auth sites, no raw email address anywhere on the record.
 * NEGATIVE -- the diagnostic content that makes each record worth emitting is
-  still there (the benign head of the query/prompt, the assigned roles, the
-  correlation tag). A "fix" that simply deleted the log statements would pass
+  still there (the benign head of the query/prompt and the assigned roles). A "fix" that simply deleted the log statements would pass
   the positive half alone; these controls are what forbid it.
 
 PII disposition (distinct from injection, and NOT satisfied by sanitizing)
 --------------------------------------------------------------------------
-``rules/security.md`` says MUST NOT log PII, and #2030 already ruled agent I/O
-values off INFO in this package. An email address on the authentication path
-is PII, so the two auth role-assignment records carry a stable non-reversible
-``fingerprint_value`` correlation tag INSTEAD of the address: that still
-answers the question the record exists for ("which principal received which
-roles") and joins across records for the same subject, without putting an
-identifier on the line.
+Role-assignment events retain the assigned roles without an email-derived
+field. The former unkeyed fingerprint was recoverable from candidate addresses;
+it did not provide the claimed non-reversibility. The implementing log calls are
+``packages/kailash-kaizen/src/kaizen/nodes/auth/sso.py:324-326`` and
+``packages/kailash-kaizen/src/kaizen/nodes/auth/directory_integration.py:471-473``.
 """
 
 from __future__ import annotations
 
 import asyncio
+import inspect
 import io
 import json
 import logging
@@ -91,6 +89,13 @@ def test_modules_under_test_are_the_ones_in_this_checkout():
     here = pathlib.Path(__file__).resolve()
     # .../<root>/packages/kailash-kaizen/tests/regression/<this file>
     root = here.parents[4]
+    auth_root = root / "packages/kailash-kaizen/src/kaizen/nodes/auth"
+    assert pathlib.Path(inspect.getfile(SSOAuthenticationNode)).resolve() == (
+        auth_root / "sso.py"
+    )
+    assert pathlib.Path(inspect.getfile(DirectoryIntegrationNode)).resolve() == (
+        auth_root / "directory_integration.py"
+    )
     assert (
         pathlib.Path(kaizen.nodes.base.__file__).resolve().is_relative_to(root)
     ), f"kaizen imported from {kaizen.nodes.base.__file__}, not from {root}"
@@ -223,23 +228,42 @@ def test_sso_role_assignment_email_cannot_forge_a_record(caplog):
     assert "privilege escalation approved" not in message
 
 
+def _assert_email_independent_role_event(caplog, logger_name, assign, expected_roles):
+    """Reach both logging layers; an old digest or a hidden extra field fails."""
+    standard_fields = set(logging.makeLogRecord({}).__dict__) | {"message", "asctime"}
+    expected_message = f"AI role assignment: {expected_roles}"
+    messages = []
+    for email in (EMAIL, "another-person@example.test", EMAIL + FORGED, "", None):
+        caplog.clear()
+        with emitting(logger_name, logging.INFO) as wire:
+            with caplog.at_level(logging.INFO, logger=logger_name):
+                roles = asyncio.run(assign(email))
+        assert roles == expected_roles
+        records = _records(caplog, logger_name)
+        message = _assert_single_unforged_record(records)
+        assert message == expected_message
+        assert wire.lines() == [f"INFO:{logger_name}:{expected_message}"]
+        record = records[0]
+        assert record.msg == "AI role assignment: %s"
+        assert record.args == (str(expected_roles),)
+        assert set(record.__dict__) <= standard_fields
+        raw_record = repr(record.__dict__)
+        if email:
+            assert email not in raw_record
+            assert fingerprint_value(email) not in raw_record
+        messages.append(message)
+    assert len(set(messages)) == 1
+
+
 def test_sso_role_assignment_does_not_log_the_email_address(caplog):
-    """PII disposition: a correlation TAG, never the address itself."""
-    node = _sso_node({"roles": ["user", "admin"]})
-
-    with caplog.at_level(logging.INFO, logger=SSO_LOGGER):
-        asyncio.run(node._ai_role_assignment({"email": EMAIL}, "okta"))
-
-    record = _records(caplog, SSO_LOGGER)[0]
-    rendered = record.getMessage() + repr(record.__dict__)
-
-    # POSITIVE: the address is absent in every form a handler could emit.
-    assert EMAIL not in rendered
-    assert "victim" not in rendered
-    # NEGATIVE: the record is still useful -- it carries a tag that joins
-    # across records for this subject, and the roles that were assigned.
-    assert f"email:{fingerprint_value(EMAIL)}" in record.getMessage()
-    assert "admin" in record.getMessage()
+    """Different principals produce the same event when roles are equal."""
+    node = _sso_node({"roles": ["admin"]})
+    _assert_email_independent_role_event(
+        caplog,
+        SSO_LOGGER,
+        lambda email: node._ai_role_assignment({"email": email}, "okta"),
+        ["user", "admin"],
+    )
 
 
 def test_sso_role_assignment_llm_supplied_roles_cannot_forge_a_record(caplog):
@@ -327,17 +351,14 @@ def test_directory_search_query_cannot_forge_on_the_failure_path(caplog):
 
 
 def test_directory_role_assignment_does_not_log_the_email_address(caplog):
-    """Same-file sibling of site 1, same PII disposition."""
-    node = _dir_node(["user", "auditor"])
-
-    with caplog.at_level(logging.INFO, logger=DIR_LOGGER):
-        asyncio.run(node._ai_role_assignment({"email": EMAIL + FORGED}))
-
-    records = _records(caplog, DIR_LOGGER)
-    message = _assert_single_unforged_record(records)
-    assert EMAIL not in message
-    assert f"email:{fingerprint_value(EMAIL + FORGED)}" in message
-    assert "auditor" in message
+    """Directory provisioning has the same email-independent event contract."""
+    node = _dir_node(["auditor"])
+    _assert_email_independent_role_event(
+        caplog,
+        DIR_LOGGER,
+        lambda email: node._ai_role_assignment({"email": email}),
+        ["user", "auditor"],
+    )
 
 
 # --------------------------------------------------------------------------
