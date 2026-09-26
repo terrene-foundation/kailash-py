@@ -4,6 +4,7 @@ Tests JWT middleware with real HTTP requests via TestClient.
 Tier 2 tests - NO MOCKING. Real tokens, real middleware, real HTTP.
 """
 
+import secrets
 from datetime import datetime, timedelta, timezone
 
 import jwt as pyjwt
@@ -23,18 +24,28 @@ SECRET = "integration-test-secret-key-at-least-32-chars"
 # =============================================================================
 
 
+@pytest.fixture(autouse=True)
+def configured_encryption(monkeypatch):
+    """Provision the gateway secret manager even when a test only calls auth."""
+    monkeypatch.setenv("KAILASH_ENCRYPTION_KEY", secrets.token_urlsafe(48))
+
+
 @pytest.fixture
 def jwt_app():
     """Create a Nexus app with JWT middleware."""
     app = Nexus(enable_durability=False)
     app.add_middleware(JWTMiddleware, config=JWTConfig(secret=SECRET))
-    return app
+    try:
+        yield app
+    finally:
+        app.close()
 
 
 @pytest.fixture
 def jwt_client(jwt_app):
     """Create a TestClient from a JWT-protected Nexus app."""
-    return TestClient(jwt_app.fastapi_app)
+    with TestClient(jwt_app.fastapi_app) as client:
+        yield client
 
 
 def _make_token(
@@ -299,19 +310,22 @@ class TestCookieAuthentication:
     def test_cookie_token_authentication(self):
         """Token from cookie authenticates request."""
         app = Nexus(enable_durability=False)
-        app.add_middleware(
-            JWTMiddleware,
-            config=JWTConfig(secret=SECRET, token_cookie="access_token"),
-        )
-        client = TestClient(app.fastapi_app)
+        try:
+            app.add_middleware(
+                JWTMiddleware,
+                config=JWTConfig(secret=SECRET, token_cookie="access_token"),
+            )
+            with TestClient(app.fastapi_app) as client:
 
-        token = _make_token()
-        # Set cookie on the client
-        client.cookies.set("access_token", token)
+                token = _make_token()
+                # Set cookie on the client
+                client.cookies.set("access_token", token)
 
-        response = client.get("/workflows/test/execute")
-        # Not 401 - authenticated via cookie
-        assert response.status_code != 401
+                response = client.get("/workflows/test/execute")
+                # Not 401 - authenticated via cookie
+                assert response.status_code != 401
+        finally:
+            app.close()
 
 
 # =============================================================================
@@ -329,26 +343,29 @@ class TestFastAPIDependencies:
         from nexus.auth.dependencies import get_current_user
 
         app = Nexus(enable_durability=False)
-        app.add_middleware(JWTMiddleware, config=JWTConfig(secret=SECRET))
+        try:
+            app.add_middleware(JWTMiddleware, config=JWTConfig(secret=SECRET))
 
-        router = APIRouter()
+            router = APIRouter()
 
-        @router.get("/profile")
-        def get_profile(user=Depends(get_current_user)):
-            return {"user_id": user.user_id, "email": user.email}
+            @router.get("/profile")
+            def get_profile(user=Depends(get_current_user)):
+                return {"user_id": user.user_id, "email": user.email}
 
-        app.include_router(router, prefix="/api")
-        client = TestClient(app.fastapi_app)
+            app.include_router(router, prefix="/api")
+            with TestClient(app.fastapi_app) as client:
 
-        token = _make_token(sub="user-456", email="test@example.com")
-        response = client.get(
-            "/api/profile",
-            headers={"Authorization": f"Bearer {token}"},
-        )
+                token = _make_token(sub="user-456", email="test@example.com")
+                response = client.get(
+                    "/api/profile",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
 
-        assert response.status_code == 200
-        assert response.json()["user_id"] == "user-456"
-        assert response.json()["email"] == "test@example.com"
+                assert response.status_code == 200
+                assert response.json()["user_id"] == "user-456"
+                assert response.json()["email"] == "test@example.com"
+        finally:
+            app.close()
 
     def test_get_current_user_without_token(self):
         """get_current_user raises 401 without authentication."""
@@ -357,18 +374,21 @@ class TestFastAPIDependencies:
         from nexus.auth.dependencies import get_current_user
 
         app = Nexus(enable_durability=False)
-        # No JWT middleware - test dependency standalone
-        router = APIRouter()
+        try:
+            # No JWT middleware - test dependency standalone
+            router = APIRouter()
 
-        @router.get("/profile")
-        def get_profile(user=Depends(get_current_user)):
-            return {"user_id": user.user_id}
+            @router.get("/profile")
+            def get_profile(user=Depends(get_current_user)):
+                return {"user_id": user.user_id}
 
-        app.include_router(router, prefix="/api")
-        client = TestClient(app.fastapi_app)
+            app.include_router(router, prefix="/api")
+            with TestClient(app.fastapi_app) as client:
 
-        response = client.get("/api/profile")
-        assert response.status_code == 401
+                response = client.get("/api/profile")
+                assert response.status_code == 401
+        finally:
+            app.close()
 
     def test_require_role_dependency(self):
         """RequireRole dependency checks roles."""
@@ -377,33 +397,36 @@ class TestFastAPIDependencies:
         from nexus.auth.dependencies import RequireRole
 
         app = Nexus(enable_durability=False)
-        app.add_middleware(JWTMiddleware, config=JWTConfig(secret=SECRET))
+        try:
+            app.add_middleware(JWTMiddleware, config=JWTConfig(secret=SECRET))
 
-        router = APIRouter()
+            router = APIRouter()
 
-        @router.get("/admin")
-        def admin_endpoint(user=Depends(RequireRole("admin"))):
-            return {"admin": True}
+            @router.get("/admin")
+            def admin_endpoint(user=Depends(RequireRole("admin"))):
+                return {"admin": True}
 
-        app.include_router(router, prefix="/api")
-        client = TestClient(app.fastapi_app)
+            app.include_router(router, prefix="/api")
+            with TestClient(app.fastapi_app) as client:
 
-        # Admin user - should succeed
-        admin_token = _make_token(roles=["admin"])
-        response = client.get(
-            "/api/admin",
-            headers={"Authorization": f"Bearer {admin_token}"},
-        )
-        assert response.status_code == 200
-        assert response.json()["admin"] is True
+                # Admin user - should succeed
+                admin_token = _make_token(roles=["admin"])
+                response = client.get(
+                    "/api/admin",
+                    headers={"Authorization": f"Bearer {admin_token}"},
+                )
+                assert response.status_code == 200
+                assert response.json()["admin"] is True
 
-        # Viewer user - should get 403
-        viewer_token = _make_token(roles=["viewer"])
-        response = client.get(
-            "/api/admin",
-            headers={"Authorization": f"Bearer {viewer_token}"},
-        )
-        assert response.status_code == 403
+                # Viewer user - should get 403
+                viewer_token = _make_token(roles=["viewer"])
+                response = client.get(
+                    "/api/admin",
+                    headers={"Authorization": f"Bearer {viewer_token}"},
+                )
+                assert response.status_code == 403
+        finally:
+            app.close()
 
     def test_require_permission_dependency(self):
         """RequirePermission dependency checks permissions."""
@@ -412,29 +435,32 @@ class TestFastAPIDependencies:
         from nexus.auth.dependencies import RequirePermission
 
         app = Nexus(enable_durability=False)
-        app.add_middleware(JWTMiddleware, config=JWTConfig(secret=SECRET))
+        try:
+            app.add_middleware(JWTMiddleware, config=JWTConfig(secret=SECRET))
 
-        router = APIRouter()
+            router = APIRouter()
 
-        @router.post("/articles")
-        def create_article(user=Depends(RequirePermission("write:articles"))):
-            return {"created": True}
+            @router.post("/articles")
+            def create_article(user=Depends(RequirePermission("write:articles"))):
+                return {"created": True}
 
-        app.include_router(router, prefix="/api")
-        client = TestClient(app.fastapi_app)
+            app.include_router(router, prefix="/api")
+            with TestClient(app.fastapi_app) as client:
 
-        # User with correct permission
-        writer_token = _make_token(permissions=["write:articles"])
-        response = client.post(
-            "/api/articles",
-            headers={"Authorization": f"Bearer {writer_token}"},
-        )
-        assert response.status_code == 200
+                # User with correct permission
+                writer_token = _make_token(permissions=["write:articles"])
+                response = client.post(
+                    "/api/articles",
+                    headers={"Authorization": f"Bearer {writer_token}"},
+                )
+                assert response.status_code == 200
 
-        # User without permission
-        reader_token = _make_token(permissions=["read:articles"])
-        response = client.post(
-            "/api/articles",
-            headers={"Authorization": f"Bearer {reader_token}"},
-        )
-        assert response.status_code == 403
+                # User without permission
+                reader_token = _make_token(permissions=["read:articles"])
+                response = client.post(
+                    "/api/articles",
+                    headers={"Authorization": f"Bearer {reader_token}"},
+                )
+                assert response.status_code == 403
+        finally:
+            app.close()

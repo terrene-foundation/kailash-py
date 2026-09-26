@@ -22,6 +22,7 @@ from starlette.responses import JSONResponse, Response
 from kailash.trust.auth.exceptions import ExpiredTokenError, InvalidTokenError
 from kailash.trust.auth.jwt import JWTConfig, JWTValidator
 from kailash.trust.auth.models import AuthenticatedUser
+from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
 
 # Cross-engine propagation surface per specs/nexus-ml-integration.md §§2–3.
 # JWT middleware sets these on every validated request so kailash-ml,
@@ -183,7 +184,13 @@ class JWTMiddleware(BaseHTTPMiddleware):
                         _current_actor_id.reset(actor_token)
                         _current_tenant_id.reset(tenant_token)
                 except Exception as e:
-                    logger.warning("API key validation failed: %s", e)
+                    logger.warning(
+                        "API key validation failed",
+                        extra={
+                            "error_type": safe_type_name(e),
+                            "error_frames": safe_exception_frames(e),
+                        },
+                    )
                     return JSONResponse(
                         status_code=401,
                         content={
@@ -224,8 +231,14 @@ class JWTMiddleware(BaseHTTPMiddleware):
                     result = self.config.on_token_validated(payload)
                     if inspect.isawaitable(result):
                         await result
-                except Exception:
-                    logger.exception("on_token_validated hook failed")
+                except Exception as e:
+                    logger.error(
+                        "on_token_validated hook failed",
+                        extra={
+                            "error_type": safe_type_name(e),
+                            "error_frames": safe_exception_frames(e),
+                        },
+                    )
 
             # Cross-engine tenant/actor propagation per specs/nexus-ml-integration.md §2.2.
             # Reset in `finally:` — a raise inside call_next must NOT leak into the next
@@ -247,7 +260,13 @@ class JWTMiddleware(BaseHTTPMiddleware):
                 },
             )
         except InvalidTokenError as e:
-            logger.warning("Invalid token: %s", e)
+            logger.warning(
+                "Invalid token",
+                extra={
+                    "error_type": safe_type_name(e),
+                    "error_frames": safe_exception_frames(e),
+                },
+            )
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Invalid token", "error": "invalid_token"},
@@ -256,7 +275,13 @@ class JWTMiddleware(BaseHTTPMiddleware):
                 },
             )
         except Exception as e:
-            logger.error("JWT verification failed: %s", e)
+            logger.error(
+                "JWT verification failed",
+                extra={
+                    "error_type": safe_type_name(e),
+                    "error_frames": safe_exception_frames(e),
+                },
+            )
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Authentication failed", "error": "auth_error"},
