@@ -17,6 +17,7 @@ the target dialect automatically.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -178,6 +179,14 @@ class SQLTaskMessage:
         return cls(**filtered)
 
 
+def _bounded_queue_index_name(name: str, max_length: int) -> str:
+    """Preserve short names; fit derived names with a 128-bit digest suffix."""
+    if len(name) <= max_length:
+        return name
+    digest = hashlib.sha256(name.encode("utf-8")).hexdigest()[:32]
+    return f"{name[: max_length - len(digest) - 1]}_{digest}"
+
+
 class SQLTaskQueue:
     """SQL-backed task queue using ConnectionManager.
 
@@ -201,16 +210,17 @@ class SQLTaskQueue:
         table_name: str = "kailash_task_queue",
         default_visibility_timeout: int = 300,
     ) -> None:
-        from kailash.db.dialect import (
-            DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
-            _validate_identifier,
-        )
+        from kailash.db.dialect import _validate_identifier
 
-        _validate_identifier(
-            table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-        )
+        _validate_identifier(table_name, max_length=conn.dialect.max_identifier_length)
         self._conn = conn
         self._table = table_name
+        self._dequeue_index = _bounded_queue_index_name(
+            f"idx_{table_name}_dequeue", conn.dialect.max_identifier_length
+        )
+        self._stale_index = _bounded_queue_index_name(
+            f"idx_{table_name}_stale", conn.dialect.max_identifier_length
+        )
         self._default_visibility_timeout = default_visibility_timeout
         self._initialized = False
 
@@ -242,6 +252,10 @@ class SQLTaskQueue:
         # dialect helper, not hardcoded column declaration").
         _ts = self._conn.dialect.double_precision_type()
         quoted_table = self._conn.dialect.quote_identifier(self._table)
+        # Validate every derived name before the first DDL statement, so a
+        # configuration error cannot leave a partially created queue schema.
+        self._conn.dialect.quote_identifier(self._dequeue_index)
+        self._conn.dialect.quote_identifier(self._stale_index)
         await self._conn.execute(
             f"CREATE TABLE IF NOT EXISTS {quoted_table} ("
             f"task_id {_tc} PRIMARY KEY, "
@@ -260,14 +274,14 @@ class SQLTaskQueue:
 
         # Index for efficient dequeue: pending tasks ordered by creation time
         await self._conn.create_index(
-            f"idx_{self._table}_dequeue",
+            self._dequeue_index,
             self._table,
             "status, created_at",
         )
 
         # Index for stale processing detection
         await self._conn.create_index(
-            f"idx_{self._table}_stale",
+            self._stale_index,
             self._table,
             "status, updated_at",
         )

@@ -234,7 +234,7 @@ class ParallelRuntime:
         finally:
             # Always release timer tasks even on the no-limit path.
             if cancellable is not None:
-                cancellable.disarm()
+                await cancellable.disarm_async()
 
     async def _execute_workflow_parallel(
         self,

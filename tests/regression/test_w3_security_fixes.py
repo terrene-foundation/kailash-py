@@ -502,12 +502,11 @@ def test_soft_row_cap_default_is_none() -> None:
     SQLTaskQueueDispatcher(conn) pre-cap MUST continue to work
     unchanged.
     """
+    from kailash.db.connection import ConnectionManager
     from kailash.infrastructure.task_queue import SQLTaskQueueDispatcher
 
-    class _DummyConn:
-        pass
-
-    dispatcher = SQLTaskQueueDispatcher(_DummyConn())
+    # Construction resolves the actual dialect without opening a connection.
+    dispatcher = SQLTaskQueueDispatcher(ConnectionManager("sqlite:///:memory:"))
     assert dispatcher._soft_row_cap is None
 
 
