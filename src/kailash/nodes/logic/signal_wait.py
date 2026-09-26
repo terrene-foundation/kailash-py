@@ -44,6 +44,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter, register_node
+from kailash.sdk_exceptions import NodeValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -174,11 +175,21 @@ class SignalWaitNode(Node):
         start_time = datetime.now(UTC)
         self.logger.info(f"Executing node {self.id} (async signal wait)")
 
-        # Merge config with runtime inputs (runtime takes precedence)
-        merged = {**self.config, **runtime_inputs}
-        signal_name = merged.get("signal_name")
-        timeout = merged.get("timeout")
-        input_data = merged.get("input_data")
+        # Apply the same input boundary as Node.execute before touching a queue.
+        merged = {**self._get_execution_config(), **runtime_inputs}
+        nested_config = merged.get("config")
+        if isinstance(nested_config, dict):
+            for key, value in nested_config.items():
+                if key not in runtime_inputs:
+                    merged[key] = value
+        # Preserve the signal API's required-name guard before str coercion can
+        # turn None or another falsey value into a different queue name.
+        if not merged.get("signal_name"):
+            raise NodeValidationError("signal_name is required for SignalWaitNode")
+        validated = self.validate_inputs(**merged)
+        signal_name = validated.get("signal_name")
+        timeout = validated.get("timeout")
+        input_data = validated.get("input_data")
 
         if not signal_name:
             raise ValueError("signal_name is required for SignalWaitNode")
