@@ -189,7 +189,7 @@ class BatchedMigrationExecutor:
             operations: List of operations to analyze
 
         Returns:
-            Dictionary mapping operation index to set of dependent operation indices
+            Dictionary mapping operation index to its prerequisite operation indices
         """
         dependencies = defaultdict(set)
         table_operations = defaultdict(list)
@@ -203,14 +203,12 @@ class BatchedMigrationExecutor:
             # Sort by logical dependency order
             table_ops.sort(key=lambda x: self._get_operation_priority(x[1]))
 
-            # Create dependencies between operations on same table
-            for i in range(len(table_ops) - 1):
-                current_idx, current_op = table_ops[i]
-                next_idx, next_op = table_ops[i + 1]
-
-                # Check if operations have dependencies
-                if self._operations_have_dependency(current_op, next_op):
-                    dependencies[next_idx].add(current_idx)
+            # A prerequisite can apply beyond its immediate sorted neighbor
+            # (for example CREATE TABLE precedes every operation on that table).
+            for i, (current_idx, current_op) in enumerate(table_ops):
+                for next_idx, next_op in table_ops[i + 1 :]:
+                    if self._operations_have_dependency(current_op, next_op):
+                        dependencies[next_idx].add(current_idx)
 
         return dependencies
 
@@ -271,10 +269,10 @@ class BatchedMigrationExecutor:
         # Kahn's algorithm for topological sorting
         in_degree = [0] * len(operations)
 
-        # Calculate in-degrees
-        for deps in dependencies.values():
-            for dep in deps:
-                in_degree[dep] += 1
+        # The graph maps each dependent to its prerequisites, so its degree
+        # counts the prerequisites that must complete before it becomes ready.
+        for dependent, prerequisites in dependencies.items():
+            in_degree[dependent] = len(prerequisites)
 
         # Start with operations that have no dependencies
         queue = [i for i, degree in enumerate(in_degree) if degree == 0]
