@@ -270,7 +270,7 @@ def _resolve_exception_class(exc_name: str) -> type:
     return _EXCEPTION_ALLOWLIST[exc_name]
 
 
-class ContentAwareExecutionError(Exception):
+class ContentAwareExecutionError(WorkflowExecutionError, RuntimeExecutionError):
     """Exception raised when content-aware success detection identifies a failure."""
 
     node_id: str
@@ -2810,6 +2810,8 @@ class LocalRuntime(
                                     workflow_context=workflow_context,
                                 )
                             except Exception as e:
+                                if isinstance(e, ContentAwareExecutionError):
+                                    raise
                                 self.logger.warning(
                                     f"Conditional execution failed, falling back to standard execution: {e}"
                                 )
@@ -2838,6 +2840,8 @@ class LocalRuntime(
                                 workflow_context=workflow_context,
                             )
                         except Exception as e:
+                            if isinstance(e, ContentAwareExecutionError):
+                                raise
                             self.logger.warning(
                                 f"Conditional execution failed, falling back to standard execution: {e}"
                             )
@@ -2866,6 +2870,8 @@ class LocalRuntime(
                             workflow_context=workflow_context,
                         )
                     except Exception as e:
+                        if isinstance(e, ContentAwareExecutionError):
+                            raise
                         self.logger.warning(
                             f"Conditional execution failed, falling back to standard execution: {e}"
                         )
@@ -3054,6 +3060,8 @@ class LocalRuntime(
             if _signal_key:
                 self._workflow_signals.pop(_signal_key, None)
 
+            if isinstance(e, ContentAwareExecutionError):
+                raise
             # Wrap other errors in RuntimeExecutionError
             raise RuntimeExecutionError(
                 f"Unified enterprise workflow execution failed: {type(e).__name__}: {e}"
@@ -3194,6 +3202,7 @@ class LocalRuntime(
                 node_id
             ):
                 cached_output = execution_tracker.get_output(node_id)
+                self._check_node_result(node_id, cached_output)
                 results[node_id] = cached_output
                 node_outputs[node_id] = cached_output
                 completed_nodes.append(node_id)
@@ -3356,6 +3365,43 @@ class LocalRuntime(
                 # Get performance metrics
                 performance_metrics = metrics_context.result()
 
+                # Content-aware success detection (CRITICAL FIX)
+                if self.content_aware_success_detection:
+                    should_stop, error_message = should_stop_on_content_failure(
+                        result=outputs,
+                        content_aware_mode=True,
+                        stop_on_error=True,  # Always stop on content failures when content-aware mode is enabled
+                    )
+
+                    if should_stop:
+                        # Create detailed error for content-aware failure
+                        error = create_content_aware_error(
+                            node_id=node_id,
+                            result=(
+                                outputs
+                                if isinstance(outputs, dict)
+                                else {"error": error_message}
+                            ),
+                            error_message=error_message,
+                        )
+
+                        # Log the content-aware failure
+                        self.logger.error(
+                            f"Content-aware failure detected in node {node_id}: {error_message}"
+                        )
+
+                        # Update task status to failed if task manager exists
+                        if task and task_manager:
+                            task_manager.update_task_status(
+                                task.task_id,
+                                TaskStatus.FAILED,
+                                error=str(error),
+                                ended_at=datetime.now(UTC),
+                            )
+
+                        # Raise the content-aware execution error
+                        raise error
+
                 # Store outputs
                 node_outputs[node_id] = outputs
                 results[node_id] = outputs
@@ -3471,43 +3517,6 @@ class LocalRuntime(
                 if self.debug:
                     self.logger.debug(f"Node {node_id} outputs: {outputs}")
 
-                # Content-aware success detection (CRITICAL FIX)
-                if self.content_aware_success_detection:
-                    should_stop, error_message = should_stop_on_content_failure(
-                        result=outputs,
-                        content_aware_mode=True,
-                        stop_on_error=True,  # Always stop on content failures when content-aware mode is enabled
-                    )
-
-                    if should_stop:
-                        # Create detailed error for content-aware failure
-                        error = create_content_aware_error(
-                            node_id=node_id,
-                            result=(
-                                outputs
-                                if isinstance(outputs, dict)
-                                else {"error": error_message}
-                            ),
-                            error_message=error_message,
-                        )
-
-                        # Log the content-aware failure
-                        self.logger.error(
-                            f"Content-aware failure detected in node {node_id}: {error_message}"
-                        )
-
-                        # Update task status to failed if task manager exists
-                        if task and task_manager:
-                            task_manager.update_task_status(
-                                task.task_id,
-                                TaskStatus.FAILED,
-                                error=str(error),
-                                ended_at=datetime.now(UTC),
-                            )
-
-                        # Raise the content-aware execution error
-                        raise error
-
                 # Update task status with enhanced metrics
                 if task and task_manager:
                     # Convert performance metrics to TaskMetrics format
@@ -3618,8 +3627,7 @@ class LocalRuntime(
 
                 # Content-aware execution errors should always stop execution
                 if isinstance(e, ContentAwareExecutionError):
-                    error_msg = f"Content-aware failure in node '{node_id}': {e}"
-                    raise WorkflowExecutionError(error_msg) from e
+                    raise
 
                 # CARE-039: Trust verification denials must always stop execution
                 if "Trust verification denied" in str(e):
@@ -4909,6 +4917,8 @@ class LocalRuntime(
             return results
 
         except Exception as e:
+            if isinstance(e, ContentAwareExecutionError):
+                raise
             # Enhanced error logging with fallback reasoning
             self.logger.error(f"Error in conditional execution approach: {e}")
             if fallback_reason:
@@ -5134,6 +5144,8 @@ class LocalRuntime(
                     )
 
                 except Exception as e:
+                    if isinstance(e, ContentAwareExecutionError):
+                        raise
                     self.logger.error(f"Error executing node {node_id}: {e}")
                     # Continue with other nodes
                     all_phase1_results[node_id] = {
@@ -5155,6 +5167,8 @@ class LocalRuntime(
             return all_phase1_results  # Return ALL results, not just switches
 
         except Exception as e:
+            if isinstance(e, ContentAwareExecutionError):
+                raise
             self.logger.error(f"Error in switch execution phase: {e}")
             return all_phase1_results
 
@@ -5296,6 +5310,8 @@ class LocalRuntime(
                     self.logger.debug(f"Node {node_id} completed")
 
                 except Exception as e:
+                    if isinstance(e, ContentAwareExecutionError):
+                        raise
                     self.logger.error(f"Error executing remaining node {node_id}: {e}")
                     # Continue with other nodes or stop based on error handling
                     if self._should_stop_on_error(workflow, node_id):
@@ -5313,8 +5329,18 @@ class LocalRuntime(
             return remaining_results
 
         except Exception as e:
+            if isinstance(e, ContentAwareExecutionError):
+                raise
             self.logger.error(f"Error in pruned plan execution: {e}")
             return remaining_results
+
+    def _check_node_result(self, node_id: str, result: Any) -> None:
+        """Reject failed output before publishing results or successful checkpoints."""
+        should_stop, error_info = should_stop_on_content_failure(
+            result, content_aware_mode=self.content_aware_success_detection
+        )
+        if should_stop:
+            raise create_content_aware_error(node_id, result, error_info)
 
     async def _execute_single_node(
         self,
@@ -5444,6 +5470,7 @@ class LocalRuntime(
             else:
                 outputs = node_instance.execute(**node_inputs)
 
+        self._check_node_result(node_id, outputs)
         return outputs
 
     # Retry Policy Management Methods
