@@ -38,5 +38,5 @@
     "Intermediate venv re-creation refused before tests; rerun reused private environment.",
     "Bare pyenv launcher exited139 during parent check; final GitHub verifier reran using /usr/bin/python3."
   ],
-  "pending": "Final complete all-files hooks including pytest-check before promotion push."
+  "pending": "None for local gate: complete configured all-files hooks, including pytest-check, passed at fe791935c; see csq14-final-hooks-receipt.json. Exact promotion-head GitHub checks remain a separate gate."
 }

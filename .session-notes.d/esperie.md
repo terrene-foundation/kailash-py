@@ -2,7 +2,7 @@
 
 ## Next actions (standing authorization preserved)
 
-1. Finish the final all-files hook gate, publish dev, push PR #2229 once, and merge after exact-head required checks AND every previously failing test job pass. D1 is already approved; advisory type backlog #73 is excluded.
+1. Local gates are complete. Update PR #2229 to the consolidated dev checkpoint once, then merge after exact-head required checks AND every previously failing test job pass. If live state is MERGED, this D1 directive is discharged. D1 is already approved; advisory type backlog #73 is excluded.
    Revalidate: `gh pr view 2229 --json state,headRefOid,mergeStateStatus`.
 2. Land every completed branch in dev and remove its clean worktree immediately. Only the primary checkout remains; there are no completed implementation siblings to retain. No PR or CI trigger for dev.
    Revalidate: `git worktree list --porcelain` and `git for-each-ref refs/heads refs/remotes`.
@@ -50,9 +50,9 @@ Integrated census at `b796ffe08`: Core units 5368 passed / one watchdog fixture 
 Core integration 2607 passed; DataFlow infrastructure 27 passed; root infrastructure22 passed.
 Kaizen LLM/parity/security1822 passed, expanded units8387 passed, regressions1965 passed,
 authorization parity43 passed without skips, agents818 passed. Skips/deselections are excluded.
-These are completed runs, superseding older interrupted Kaizen runs. Recovered final Core rerun at709759a38 passed5371 with5skips,3deselections,6xfails,5xpasses; those exclusions are not coverage.
+These are completed runs, superseding older interrupted Kaizen runs. Recovered final Core rerun at 709759a38 passed 5371 with 5 skips, 3 deselections, 6 xfails, 5 xpasses; those exclusions are not coverage.
 Full configured hooks completed: pytest-check, doc8 and structural hooks passed; formatter/lint
-failures are being repaired. The final full hook run, including pytest-check, remains mandatory after the new seed-test commit.
+failures are being repaired. The final full all-files hook run, including pytest-check, passed at fe791935c after the seed-test repair.
 
 Watchdog repair has13 strict tests, actual delayed/disabled monitor controls, reached threshold
 mutations, callback-survival checks, and two independent clean rounds. Warning tests now reject
@@ -115,19 +115,20 @@ runtime-confirmed security verdicts, and were not closed by TTL-forwarding revie
 
 Exact recovered slot14 thread: `01a0d8a0-e67b-7dc2-8628-1e1bfbbd3eca`.
 Final old gate actually finished: Core and all configured hooks passed; ML alone failed
-on a30-second PyTorch Lightning cold import. `seed(torch=False)` intentionally leaves
+on a 30-second PyTorch Lightning cold import. `seed(torch=False)` intentionally leaves
 its independent Lightning flag enabled. Unit fixtures now isolate optional libraries
 and assert actual calls/reports, preserving production behavior. Strict original six-file
-selection:237passed with warnings as errors and unchanged30-second timeout; reached
+selection: 237 passed with warnings as errors and unchanged 30-second timeout; reached
 source mutations rejected. Correctness and adversarial reviewers each delivered two
-clean rounds. Implementation34eca2992, merge6fa357a1b; sibling and branch removed.
+clean rounds. Implementation 34eca2992, merge 6fa357a1b; sibling and branch removed.
 
-Archive evidence landed asf065c42bd, merge6d5e34e35; sibling and branch removed.
-All52archive/original ref names checked,30previously recorded tips checked, all52current
+Archive evidence landed as f065c42bd, merge 6d5e34e35; sibling and branch removed.
+All 52 archive/original ref names checked, 30 previously recorded tips checked, all 52 current
 tips captured. Five recovered reports distinguish fresh structural evidence from prior
-runtime results; no original unresolved disposition was upgraded. See04-validate/csq14-*
+runtime results; no original unresolved disposition was upgraded. See 04-validate/csq14-*
 and launch-ledger-csq14-resume.md. Only primary checkout remains; five stashes held.
 
-Final all-files hook run is owed once, including pytest-check skipped/documented on the
-seed-test checkpoint. PR still has old28602f1a0 pending the consolidated push.
-Vault sweep/wrapup pair remains owed before ending this recovery run (CLAUDE.md Directive1).
+Final all-files hooks, including the checkpoint-skipped pytest-check, passed at fe791935c.
+See csq14-final-hooks-receipt.json. Only evidence/continuity documents changed afterward.
+PR still had old 28602f1a0 at this receipt; query its current head/state before acting.
+The required vault sweep/wrapup pair was written and will be restamped after promotion.

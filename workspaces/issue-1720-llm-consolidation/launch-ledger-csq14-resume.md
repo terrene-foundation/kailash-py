@@ -9,7 +9,7 @@ thread `01a0d7ea-e2a1-74b3-8af2-2a47dc410525`; it remains in force.
 | --- | --- | --- | --- | --- |
 | ML gate | `fix/csq14-ml-seed` | Diagnose failed seed unit test; preserve independent opt-outs; bounded ML gate and controls | `/root/ml_gate_recovery`: committing; `/root/ml_correctness_review`: two clean rounds; `/root/archive_checkpoint`: two clean adversarial rounds | Landed `6fa357a1b`; branch and sibling removed |
 | Archive evidence | `docs/csq14-archive-recovery` | Recover five temporary reports; verify historical receipts and 52-ref inventory; retain unresolved scope | `/root/archive_checkpoint`: delivered; `/root/ml_correctness_review`: independent verification | Landed `6d5e34e35`; branch and sibling removed |
-| Integration | `dev` | Recover completed gate result; exact-head promotion checks; land and drain completed lanes | `/root`: coordinating | All implementation lanes drained; final configured hooks next |
+| Integration | `dev` | Recover completed gate result; exact-head promotion checks; land and drain completed lanes | `/root`: coordinating | All implementation lanes drained; full configured hooks passed; promotion checks next |
 
 Sibling root: `/Users/esperie/repos/kailash/build/.kailash-py-wt/`.
 Both dispatched lanes received a mandatory resolved-root/branch assertion.
@@ -53,3 +53,7 @@ complete configured all-files hooks, including `pytest-check`, before the
 consolidated promotion push. This preserves the existing final-gate obligation
 without repeating the Core suite at every lane checkpoint. No skipped hook is
 represented as having passed.
+
+Obligation discharged: full configured all-files hooks including `pytest-check` passed
+at `fe791935c`; `git diff --exit-code` passed. See `04-validate/csq14-final-hooks-receipt.json`.
+Only evidence/continuity documents changed after that gate.
