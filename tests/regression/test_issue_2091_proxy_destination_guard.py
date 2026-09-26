@@ -71,7 +71,10 @@ BLOCKED_DESTINATIONS = [
     ("http://[64:ff9b::a9fe:a9fe]/", "metadata_service"),
     ("http://[::ffff:0:a9fe:a9fe]/", "metadata_service"),
     ("http://[::ffff:0:169.254.169.254]/", "metadata_service"),
-    ("http://[::ffff:169.254.169.254]/", "link_local"),
+    # The embedded address determines the reason, regardless of Python's
+    # classification of the IPv6 wrapper itself.
+    ("http://[::ffff:169.254.169.254]/", "metadata_service"),
+    ("http://[::ffff:169.254.1.5]/", "link_local"),
 ]
 
 #: Public addresses wrapped in the SAME IPv6 translation prefixes. The

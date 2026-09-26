@@ -13,6 +13,22 @@ such as `>=2.0`.
 
 ## [Unreleased]
 
+### Fixed — aiohttp authenticated request storage
+
+JWT and API-key authentication now publish identity through public
+`AUTH_USER_KEY` and `AUTH_TOKEN_PAYLOAD_KEY` constants from
+`kailash.trust.auth.aiohttp`. They are typed `web.RequestKey` instances when
+supported, and the original string keys on older supported aiohttp versions.
+Existing `request["user"]` and `request["token_payload"]` access remains supported.
+The compatibility shim quiets only aiohttp's exact `NotAppKeyWarning` request-key
+recommendation during those two legacy alias assignments; typed writes and
+handler execution retain the application's warning policy.
+Source: `src/kailash/trust/auth/aiohttp.py:55-87` (`_publish_auth_state`).
+
+**Migration:** import the two constants and read `request[AUTH_USER_KEY]` and
+`request[AUTH_TOKEN_PAYLOAD_KEY]`. Authentication decisions and the stored identity
+objects are unchanged; no immediate migration is required for existing handlers.
+
 ### Changed (BREAKING) — audit-store `verify_chain()` fails closed on an empty chain (#2221)
 
 `AuditStoreProtocol.verify_chain()` (both `InMemoryAuditStore` and `SqliteAuditStore`) previously

@@ -348,7 +348,7 @@ _EXPECTED_CONSTRUCT = {
     ("commands", "establish_cmd"),
     ("commands", "delegate_cmd"),
     # UNSIGNED emissions (signature="UNSIGNED"; never reach the verify path).
-    ("engine", "GovernanceEngine.grant_clearance"),
+    ("engine", "GovernanceEngine._emit_clearance_granted"),
     ("engine", "GovernanceEngine.transition_clearance"),
 }
 
