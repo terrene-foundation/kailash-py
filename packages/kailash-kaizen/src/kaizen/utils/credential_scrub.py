@@ -1092,7 +1092,7 @@ _URL_WITH_AUTH_OVERFLOW = re.compile(
 # `https://tok"en...@host`; the plain exclusion fences the crossings but drops
 # that token entirely.
 _URL_WITH_USERINFO_ONLY = re.compile(
-    r'([A-Za-z][A-Za-z0-9+.-]{0,31}://)(?:(?!"[,}\]:])[^/?#\f\v @:/])+@', re.ASCII
+    r'([A-Za-z][A-Za-z0-9+.-]{0,31}://)(?:(?!"[,}\]:])[^/?#\f\v @:])+@', re.ASCII
 )
 
 # ---------------------------------------------------------------------------
