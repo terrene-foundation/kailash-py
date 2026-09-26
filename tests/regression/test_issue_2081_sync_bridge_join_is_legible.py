@@ -37,9 +37,11 @@ from decimal import Decimal
 
 import pytest
 
+from kailash.nodes.base import Node, NodeParameter
 from kailash.runtime import local as local_runtime
 from kailash.runtime.local import LocalRuntime
 from kailash.sdk_exceptions import RuntimeExecutionError
+from kailash.workflow.graph import Workflow
 
 # ``_join_sync_bridge`` is imported INSIDE the tests that need it. It is a
 # symbol this fix introduces, so a module-level import would turn a pre-fix run
@@ -55,6 +57,23 @@ class _NamedWorkflow:
 
     def __init__(self, name: str) -> None:
         self.name = name
+
+
+class _SleepingNode(Node):
+    """Block the actual workflow worker without process-wide sandbox limits."""
+
+    def get_parameters(self):
+        return {"delay": NodeParameter(name="delay", type=float, required=True)}
+
+    def run(self, **kwargs):
+        time.sleep(kwargs["delay"])
+        return {"done": True}
+
+
+def _sleeping_workflow(name: str, node_id: str, delay: float) -> Workflow:
+    workflow = Workflow(name, name=name)
+    workflow.add_node(node_id, _SleepingNode(delay=delay))
+    return workflow
 
 
 def _blocked_thread(release: threading.Event) -> threading.Thread:
@@ -172,20 +191,11 @@ async def test_a_slow_bridge_is_not_silent_at_the_real_call_site(caplog, monkeyp
     monkeypatch is what keeps this test runnable against unfixed code, where
     the module constant does not exist yet.
     """
-    from kailash.workflow.builder import WorkflowBuilder
-
     monkeypatch.setattr(
         local_runtime, "SYNC_BRIDGE_WATCHDOG_INTERVAL", 1.0, raising=False
     )
 
-    builder = WorkflowBuilder()
-    builder.add_node(
-        "PythonCodeNode",
-        "slowpoke",
-        {"code": "import time\ntime.sleep(3)\nresult = {'done': True}"},
-    )
-    workflow = builder.build()
-    workflow.name = "issue_2081_slow_workflow"
+    workflow = _sleeping_workflow("issue_2081_slow_workflow", "slowpoke", delay=3.0)
 
     with (
         LocalRuntime() as runtime,
@@ -215,30 +225,14 @@ async def test_execute_from_inside_a_running_loop_does_not_hang_forever():
     NEVER RETURNS — the test hangs and is killed by the timeout marker above.
     POST-FIX the configured bound converts it into a typed error.
 
-    The blocking node genuinely blocks: ``execution_timeout`` in
-    ``kailash.security`` measures elapsed time AFTER the guarded block returns
-    and does not interrupt, so ``time.sleep`` inside a PythonCodeNode holds the
-    bridge thread exactly as a wedged pool teardown would.
+    The node's real ``time.sleep`` holds the workflow's bridge thread until
+    the configured delay expires, independently of the caller's join timeout.
     """
-    from kailash.workflow.builder import WorkflowBuilder
-
     assert asyncio.get_running_loop() is not None  # precondition for the bridge
 
-    # The sleep is kept SHORT on purpose. PythonCodeNode executes inside
-    # ``kailash.security.memory_limit_guard``, which applies a PROCESS-WIDE
-    # RLIMIT_AS ceiling for the duration of the guarded block. An abandoned
-    # bridge thread therefore holds that ceiling over every test that runs
-    # while it is still sleeping — which is #2078's failure mode, re-created
-    # by this test's own fixture. A 5s sleep against a 1s bound proves the
-    # abandonment with a window this test can then drain.
-    builder = WorkflowBuilder()
-    builder.add_node(
-        "PythonCodeNode",
-        "blocker",
-        {"code": "import time\ntime.sleep(5)\nresult = {'done': True}"},
-    )
-    workflow = builder.build()
-    workflow.name = "issue_2081_blocking_workflow"
+    # A finite sleep outlasts the one-second join bound and lets this test
+    # drain its real worker before returning.
+    workflow = _sleeping_workflow("issue_2081_blocking_workflow", "blocker", delay=5.0)
 
     with LocalRuntime(sync_bridge_timeout=1) as runtime:
 
@@ -266,8 +260,7 @@ async def test_execute_from_inside_a_running_loop_does_not_hang_forever():
             "the unbounded wait at process teardown"
         )
         # Drain before returning. The daemon assertion above is what pins the
-        # product behaviour; leaving the thread running would additionally leak
-        # this test's process-wide memory ceiling into whatever runs next.
+        # product behaviour; drain the test's worker before the next test starts.
         for bridge in bridges:
             bridge.join(timeout=30)
             assert not bridge.is_alive(), "abandoned bridge thread failed to drain"
