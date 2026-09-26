@@ -21,11 +21,35 @@ import pytest
 
 pytestmark = [pytest.mark.unit]
 
-# Set TDD mode for this test
-os.environ["DATAFLOW_TDD_MODE"] = "true"
-
 from dataflow import DataFlow
 from dataflow.testing.tdd_support import TDDTestContext
+
+
+@pytest.fixture(autouse=True)
+def owned_tdd_instances(monkeypatch):
+    """Keep TDD configuration and successful engine ownership within each test."""
+    from functools import wraps
+
+    from dataflow.testing import tdd_support
+
+    monkeypatch.setenv("DATAFLOW_TDD_MODE", "true")
+    monkeypatch.setattr(
+        tdd_support, "_current_test_context", tdd_support.get_test_context()
+    )
+    instances = []
+    original = DataFlow.__init__
+
+    @wraps(original)
+    def initialize(instance, *args, **kwargs):
+        original(instance, *args, **kwargs)
+        instances.append(instance)
+
+    monkeypatch.setattr(DataFlow, "__init__", initialize)
+    try:
+        yield
+    finally:
+        for instance in reversed(instances):
+            instance.close()
 
 
 class TestTDDModePropagatesToNodeGenerator:
