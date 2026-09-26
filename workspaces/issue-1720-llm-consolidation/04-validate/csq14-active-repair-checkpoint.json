@@ -1,5 +1,5 @@
 {
-  "source_head": "a2298eb7f9f3db63392e1d7e7fe6d940bc2c6eff",
+  "source_head": "07ee23ffee758a74ec42abd2bdc90c3aba57e062",
   "promotion": {
     "pr": 2229,
     "remote_head": "ce4c9de676f1ab1e0a159cb8c273dcf2e47a2cb4",
@@ -177,6 +177,30 @@
     "tdd_fixture": {
       "commit": "a2298eb7f",
       "status": "landed; final union gates remain open"
+    },
+    "conditional_fallback": {
+      "commit": "74c330005",
+      "status": "landed with scoped review; final union gates open"
+    },
+    "native_planner_fixture": {
+      "commit": "cb92f3261",
+      "status": "landed with scoped review; final union gates open"
+    },
+    "memory_database_identity": {
+      "commit": "48a36aef8",
+      "status": "landed with scoped review; final union gates open"
+    },
+    "conditional_durable_state": {
+      "commit": "ec01c3b87",
+      "status": "landed with scoped review; final union gates open"
+    },
+    "conformance_log_fixture": {
+      "commit": "07ee23ffe",
+      "status": "landed with scoped review; final union gates open"
+    },
+    "diagnostic_sink_scanner": {
+      "commit": "d26e4f40a",
+      "status": "landed with scoped review; final union gates open"
     }
   },
   "frozen": {
@@ -197,13 +221,10 @@
     }
   },
   "active": [
-    "single-owner conditional fallback 3dba43e4 applied uncommitted; independent review active",
-    "optimized conditional checkpoint replay and completion publisher follow-on",
-    "memory database cache identity and SQLite alias canonicalization",
-    "direct diagnostic scanner a1ccc979 applied uncommitted",
-    "planner positive-fixture warning review",
-    "final full suites/hooks and three union reviews after source freezes",
-    "separate shared SQLite file-address parsing parity shard in csq14-sqlite-address-parity; memory39ce baseline remains separate"
+    "shared SQLite address parsing and caller cache identity parity; author archive_checkpoint in csq14-sqlite-address-parity; memory39ce borrowed base",
+    "independent Core correctness/security consultation and two scoped review rounds on forthcoming frozen SQLite patch",
+    "final full root/DataFlow suites, all-files hooks and three union reviews after final source",
+    "exact-head remote checks, separate approved merge, three post-main reviews and clean sibling drain"
   ],
   "final_obligations": [
     "full integrated root regression",
@@ -244,12 +265,12 @@
     "csq14-final2-correctness",
     "csq14-final2-security",
     "csq14-final2-coverage",
-    "csq14-memory-cache-identity"
+    "csq14-memory-cache-identity",
+    "csq14-sqlite-address-parity"
   ],
   "open_findings": [
-    "optimized checkpoint replay executes completed nodes again",
-    "distinct memory database owners currently share query-cache key",
-    "positive nested-conditional fixture replaces WorkflowDAG with DiGraph"
+    "inconsistent relative/native SQLite file addresses across producers",
+    "draft normalized cache identity conflates real disk and memdb VFS databases; correction in progress"
   ],
   "holistic_attempt": {
     "source": "51fcd96c0 plus forwarding569e68 overlay",
@@ -300,5 +321,17 @@
     "state": "all dismissed as false positive; independent API reads confirmed",
     "receipt": "workspaces/issue-1720-llm-consolidation/04-validate/csq14-codeql-disposition-receipt.json",
     "required_checks_waived": false
+  },
+  "current_frozen_repairs": {
+    "memory": {
+      "patch": "/tmp/csq14-memory-cache-identity-final.patch",
+      "sha256": "39ce246143512b484364ba813b041d5b379f10ec9dad6bb69b9d1fedac3f2562",
+      "status": "landed48a36aef8"
+    },
+    "conditional_state": {
+      "patch": "/tmp/csq14-conditional-state-complete.patch",
+      "sha256": "31f904ee8f7156012dd03c118abbdb72623b50f204c373020b6f96a3bd03b15c",
+      "status": "landedec01c3b87"
+    }
   }
 }

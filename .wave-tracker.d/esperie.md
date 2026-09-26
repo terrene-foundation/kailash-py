@@ -2,45 +2,52 @@
 
 ## Live repair checkpoint — supersedes earlier statuses
 
-Committed source is `a2298eb7f9f3db63392e1d7e7fe6d940bc2c6eff`; this is NOT the final promotion candidate.
-New landed repairs include PACT API CI provisioning (33caf1bfe), graph fixture
-ownership (8be44bcf5), SignalWait validation (14e916aaf), real DataFlow privacy
-assertions (927e8fca1), gateway fixture cleanup (b11496ad4), route/scanner
-instrumentation (d1e22be9d), cold namespace configuration (af4b4e506), automatic
-runtime diagnostics (9279d92c3), temporary DataFlow connection ownership
-(fb7187f36), and isolated TDD fixtures (a2298eb7f).
-Runtime diagnostics: 229 strict cases, two scoped independent rounds, unchanged
-nonlogging ASTs in five production modules, actual missing-key record/stream
-probe, and reached old-frame control (12 hits, 10 failures). Ownership: 25 local
-strict cases, original real SQLite cancellation reproduction now propagates
-cancellation after disposal, six reached prior-scope failures, independent
-PostgreSQL run and two scoped review rounds. Debug timing notices were inventoried;
-these receipts do not claim whole-suite warning absence or MySQL coverage.
+Committed source is `07ee23ffee758a74ec42abd2bdc90c3aba57e062`; final promotion gates remain OPEN.
+Runtime automatic diagnostics (9279d92c3), temporary connection ownership
+(fb7187f36), memory cache/connection identities (48a36aef8), single-owner
+conditional fallback (74c330005), and durable conditional state (ec01c3b87)
+are landed with two scoped independent rounds and reached negative controls.
+Fixtures now preserve actual gateway lifetimes, native graph ordering, import
+security, and real SQLite rollback while asserting safe automatic diagnostics.
+The final conformance fixture commit is 07ee23ffe. Runtime state receipts include
+349 author, 166 independent, 229 parent integration and 21 final focused passes;
+DataFlow memory/address receipts include 134 author, 114 independent and 39
+revised parent passes. These overlapping totals are not unique coverage counts.
+Real Redis cache isolation and real SQLite tenant-separated replay were exercised.
 
-OPEN source work: single-owner conditional fallback (frozen 3dba43e4, applied
-uncommitted), optimized checkpoint replay/completion plumbing (separate follow-on),
-and canonical memory database cache identity/SQLite alias handling. A scanner
-follow-on (a1ccc979) restricts direct-expression findings to actual logger arguments;
-public result dictionaries are not log sinks. Planner fixture warnings are under
-review. Active siblings are final2-correctness, final2-security, final2-coverage,
-and memory-cache-identity. Preserve their owned overlays.
+ONE source shard remains: shared SQLite address parsing and cache identity
+across sync/async adapters, registry, migrations, DDL and connection producers.
+Author archive_checkpoint works in root-created sibling csq14-sqlite-address-parity,
+branch fix/csq14-sqlite-address-parity at cb92f3261 with memory39ce as borrowed base.
+Core correctness and security specialists consult/review independently. Public
+spec defines standard three-slash relative and four-slash absolute URLs; retain
+legacy two-slash relative compatibility and native URI options. A shared helper
+must preserve driver options and distinguish disk versus memdb VFS databases in
+cache identity. Actual disk/memdb rows differed while a draft key collided; this
+finding is OPEN until the frozen correction and reached controls pass. Generic
+Rust-pinned key encoders stay byte-identical. Caller cache namespaces may change
+to close this isolation defect; no persistent data migration is intended.
 
-The a6ff5afe full gates did run and were NOT clean: Linux root 8 failed/3398
-passed after API provisioning, DataFlow unit 3 failed/3481 passed, Mac hooks
-pytest-check 1 failed/4897 passed. Their identified fixtures/expectations are now
-repaired, but those historical runs do not cover the new source. Final full root
-and DataFlow suites, every all-files hook including pytest-check, and three
-whole-union reviews remain OPEN. Authorized per-commit pytest-check skips remain
-tracked here until that complete all-files gate passes. No push has occurred.
+The a6ff5afe full gates ran and were NOT clean: Linux root 8 failed/3398 passed,
+DataFlow unit 3 failed/3481 passed, Mac hook pytest-check 1 failed/4897 passed.
+Those identified defects/fixtures are repaired, but those runs do not cover the
+current source. Final full root/DataFlow suites, all configured all-files hooks
+including pytest-check, and three whole-union reviews must run after the final
+shard converges. Authorized interim pytest-check skips remain tracked here until
+that full hook gate passes. No push has occurred; PR #2229 remains ce4c9de67.
+D1 promotion approval persists. Exact-head required checks and all previously
+failing test jobs must pass before a separate merge command. Three post-main
+union/tree-parity reviews remain due, then drain only clean landed siblings.
 
-D1 promotion approval persists. PR #2229 remote head remains ce4c9de67. All nine
-CodeQL false-positive dismissals were explicitly approved and executed on
-2026-09-26, with independent GitHub readback; exact receipts are in
-`04-validate/csq14-codeql-disposition-receipt.json`. Required
-exact-head checks and every previously failing test job must pass before the
-separate merge command. Three post-main union/tree-parity reviews remain due.
-Preserve five stashes and 52 uncertain refs. No publishing, owner acceptance,
-whole-forest completion, Windows runtime or filesystem race-prevention claim.
+All nine CodeQL false-positive dismissals (11595,11596,11466,11467,10866,5153,
+131,133,6082) were explicitly approved, executed and independently re-read as
+dismissed on 2026-09-26. The receipt is
+`04-validate/csq14-codeql-disposition-receipt.json`; no approval remains pending
+for these IDs. CodeQL and other promotion checks were not waived.
+Preserve five stashes and 52 uncertain historical refs. No package publishing,
+owner acceptance, whole-forest completion, Windows runtime or filesystem race
+prevention claim. Existing final2/memory review overlays remain held until
+source parity is proven and their owned contents are safely drained.
 
 
 ## Active checkpoint (supersedes historical rows below)
