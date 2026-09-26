@@ -55,6 +55,10 @@ from kailash.runtime.local import (
     _ConditionalExecutionState,
 )
 from kailash.runtime.metrics import get_metrics_bridge
+from kailash.runtime.resource_manager import (
+    _is_retry_observer_failure,
+    _retry_execution_scope,
+)
 from kailash.sdk_exceptions import (
     HardTimeLimitExceeded,
     RuntimeExecutionError,
@@ -907,6 +911,7 @@ class AsyncLocalRuntime(LocalRuntime):
 
         return (results, run_id)
 
+    @_retry_execution_scope
     async def execute_workflow_async(
         self,
         workflow,
@@ -1193,6 +1198,8 @@ class AsyncLocalRuntime(LocalRuntime):
             except Exception as e:
                 logger.error(f"Workflow execution failed: {safe_exception_frames(e)}")
                 context.metrics.error_count += 1
+                if _is_retry_observer_failure(e):
+                    raise
                 raise WorkflowExecutionError(f"Async execution failed: {e}") from e
 
             finally:
@@ -1276,6 +1283,8 @@ class AsyncLocalRuntime(LocalRuntime):
             ):
                 raise
             except Exception as error:
+                if _is_retry_observer_failure(error):
+                    raise
                 logger.warning(
                     "Conditional optimization failed; using standard execution: %s",
                     safe_exception_frames(error),
@@ -1571,7 +1580,9 @@ class AsyncLocalRuntime(LocalRuntime):
                 results[node_id] = result
                 node_outputs[node_id] = result
             except Exception as e:
-                if isinstance(e, ContentAwareExecutionError):
+                if isinstance(
+                    e, ContentAwareExecutionError
+                ) or _is_retry_observer_failure(e):
                     raise
                 raise WorkflowExecutionError(
                     f"Node '{node_id}' execution failed: {e}"
@@ -1816,7 +1827,9 @@ class AsyncLocalRuntime(LocalRuntime):
                 logger.error(
                     f"Node '{node_id}' failed after {execution_time:.2f}s: {safe_exception_frames(e)}"
                 )
-                if isinstance(e, ContentAwareExecutionError):
+                if isinstance(
+                    e, ContentAwareExecutionError
+                ) or _is_retry_observer_failure(e):
                     raise
                 raise WorkflowExecutionError(
                     f"Node '{node_id}' execution failed: {e}"
@@ -1915,7 +1928,9 @@ class AsyncLocalRuntime(LocalRuntime):
                 logger.error(
                     f"Sync node '{node_id}' failed after {execution_time:.2f}s: {safe_exception_frames(e)}"
                 )
-                if isinstance(e, ContentAwareExecutionError):
+                if isinstance(
+                    e, ContentAwareExecutionError
+                ) or _is_retry_observer_failure(e):
                     raise
                 raise WorkflowExecutionError(
                     f"Sync node '{node_id}' execution failed: {e}"

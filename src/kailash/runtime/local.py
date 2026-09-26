@@ -49,6 +49,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Tuple
 
+from kailash.runtime.resource_manager import (
+    _is_retry_observer_failure,
+    _retry_execution_scope,
+)
 from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
 
 if TYPE_CHECKING:
@@ -1296,8 +1300,10 @@ class LocalRuntime(
         try:
             try:
                 try:
-                    # Check if we're already in an event loop
                     loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    loop = None
+                if loop is not None:
                     # If we're in an event loop, run synchronously instead
                     if effective_trust_ctx is not None:
                         from kailash.runtime.trust.context import runtime_trust_context
@@ -1320,7 +1326,7 @@ class LocalRuntime(
                             search_attributes=search_attributes,
                             **durable_kwargs,
                         )
-                except RuntimeError:
+                else:
                     # No event loop running, use persistent loop
                     loop = self._ensure_event_loop()
 
@@ -2416,7 +2422,7 @@ class LocalRuntime(
                     )
                 )
                 result_container.append(result)
-            except Exception as e:
+            except BaseException as e:
                 exception_container.append(e)
             finally:
                 if loop and not loop.is_closed():
@@ -2521,6 +2527,7 @@ class LocalRuntime(
 
         return result_container[0]
 
+    @_retry_execution_scope
     async def _execute_async(
         self,
         workflow: Workflow,
@@ -2841,7 +2848,7 @@ class LocalRuntime(
                                         SoftTimeLimitExceeded,
                                         HardTimeLimitExceeded,
                                     ),
-                                ):
+                                ) or _is_retry_observer_failure(e):
                                     raise
                                 self.logger.warning(
                                     f"Conditional execution failed, falling back to standard execution: {safe_exception_frames(e)}"
@@ -2880,7 +2887,7 @@ class LocalRuntime(
                                     SoftTimeLimitExceeded,
                                     HardTimeLimitExceeded,
                                 ),
-                            ):
+                            ) or _is_retry_observer_failure(e):
                                 raise
                             self.logger.warning(
                                 f"Conditional execution failed, falling back to standard execution: {safe_exception_frames(e)}"
@@ -2919,7 +2926,7 @@ class LocalRuntime(
                                 SoftTimeLimitExceeded,
                                 HardTimeLimitExceeded,
                             ),
-                        ):
+                        ) or _is_retry_observer_failure(e):
                             raise
                         self.logger.warning(
                             f"Conditional execution failed, falling back to standard execution: {safe_exception_frames(e)}"
@@ -3118,7 +3125,7 @@ class LocalRuntime(
                     SoftTimeLimitExceeded,
                     HardTimeLimitExceeded,
                 ),
-            ):
+            ) or _is_retry_observer_failure(e):
                 raise
             # Wrap other errors in RuntimeExecutionError
             raise RuntimeExecutionError(
@@ -3595,7 +3602,9 @@ class LocalRuntime(
                         )
 
                 # Content-aware execution errors should always stop execution
-                if isinstance(e, ContentAwareExecutionError):
+                if isinstance(
+                    e, ContentAwareExecutionError
+                ) or _is_retry_observer_failure(e):
                     raise
 
                 # CARE-039: Trust verification denials must always stop execution
@@ -4392,37 +4401,24 @@ class LocalRuntime(
 
         # Execute node with retry policy and circuit breaker if available
         node_result = None
-        if self._retry_policy_engine and self._circuit_breaker:
-            # Enterprise retry with circuit breaker integration
+        if self._retry_policy_engine:
+            # The engine already owns the configured circuit breaker. Pass a
+            # callable once and adapt its policy envelope to the node API.
             try:
-                _cb_call = getattr(
-                    self._circuit_breaker, "call_async", None
-                ) or getattr(self._circuit_breaker, "call", None)
                 _node_fn = getattr(node, "async_run", None) or node.execute
-                if _cb_call is not None:
-                    node_result = await self._retry_policy_engine.execute_with_retry(
-                        _cb_call(_node_fn), **inputs
+                retry_result = await self._retry_policy_engine.execute_with_retry(
+                    _node_fn, **inputs
+                )
+                if not retry_result.success:
+                    if retry_result.final_exception is not None:
+                        raise retry_result.final_exception
+                    raise RuntimeExecutionError(
+                        "Enterprise retry policy exhausted without a result"
                     )
-                else:
-                    node_result = await self._retry_policy_engine.execute_with_retry(
-                        _node_fn, **inputs
-                    )
+                node_result = retry_result.value
             except Exception as e:
                 logger.error(
                     f"Enterprise node execution failed for {node_id}: {safe_exception_frames(e)}"
-                )
-                raise
-
-        elif self._retry_policy_engine:
-            # Retry policy without circuit breaker
-            try:
-                _node_fn = getattr(node, "async_run", None) or node.execute
-                node_result = await self._retry_policy_engine.execute_with_retry(
-                    _node_fn, **inputs
-                )
-            except Exception as e:
-                logger.error(
-                    f"Retry policy node execution failed for {node_id}: {safe_exception_frames(e)}"
                 )
                 raise
 
@@ -4475,57 +4471,61 @@ class LocalRuntime(
         import asyncio
 
         try:
-            # Check if we're in an event loop
-            loop = asyncio.get_running_loop()
-            # We're in an async context, but need to run sync
-            # Use thread pool to avoid blocking
+            asyncio.get_running_loop()
+        except RuntimeError:
+            running = False
+        else:
+            running = True
+
+        entered = False
+
+        async def run_async():
+            nonlocal entered
+            entered = True
+            return await self.execute_node_with_enterprise_features(
+                node, node_id, inputs, **execution_kwargs
+            )
+
+        def run_owned_coroutine(runner):
+            coroutine = run_async()
+            try:
+                return runner(coroutine)
+            finally:
+                # A runner can reject before taking ownership (including a
+                # loop-start failure). Close our coroutine on every exit.
+                coroutine.close()
+
+        if running:
             import concurrent.futures
 
-            async def run_async():
-                return await self.execute_node_with_enterprise_features(
-                    node, node_id, inputs, **execution_kwargs
-                )
-
             try:
-                # Propagate the caller's contextvars across the thread-pool
-                # boundary so a ContextVar set before execution is visible
-                # inside the node's run() on this sync-in-async path (#1200).
                 _caller_ctx = contextvars.copy_context()
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(_caller_ctx.run, asyncio.run, run_async())
+                    future = executor.submit(
+                        _caller_ctx.run, run_owned_coroutine, asyncio.run
+                    )
                     return future.result()
-            except RuntimeError as thread_err:
-                # Python 3.13: asyncio.run() may fail in worker threads, or
-                # thread pool exhausted — fall back to direct node execution
-                if "cannot be called from a running event loop" in str(
-                    thread_err
-                ) or "can't start new thread" in str(thread_err):
+            except RuntimeError as error:
+                if not entered and (
+                    "cannot be called from a running event loop" in str(error)
+                    or "can't start new thread" in str(error)
+                ):
                     context = inputs.pop("context", None)
                     if context is not None:
                         return node.execute(context=context, **inputs)
                     return node.execute(**inputs)
                 raise
-
-        except RuntimeError:
-            # No event loop, can run directly
+        else:
             try:
-                return asyncio.run(
-                    self.execute_node_with_enterprise_features(
-                        node, node_id, inputs, **execution_kwargs
-                    )
-                )
-            except RuntimeError as e:
-                if "cannot be called from a running event loop" in str(e):
-                    # Python 3.13: asyncio.run() may raise even when
-                    # get_running_loop() raised RuntimeError — use new_event_loop
+                return run_owned_coroutine(asyncio.run)
+            except RuntimeError as error:
+                if not entered and "cannot be called from a running event loop" in str(
+                    error
+                ):
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
                     try:
-                        return loop.run_until_complete(
-                            self.execute_node_with_enterprise_features(
-                                node, node_id, inputs, **execution_kwargs
-                            )
-                        )
+                        return run_owned_coroutine(loop.run_until_complete)
                     finally:
                         loop.close()
                 raise
@@ -4917,7 +4917,7 @@ class LocalRuntime(
                     SoftTimeLimitExceeded,
                     HardTimeLimitExceeded,
                 ),
-            ):
+            ) or _is_retry_observer_failure(e):
                 raise
             # Enhanced error logging with fallback reasoning
             self.logger.error(
@@ -5145,7 +5145,7 @@ class LocalRuntime(
                             SoftTimeLimitExceeded,
                             HardTimeLimitExceeded,
                         ),
-                    ):
+                    ) or _is_retry_observer_failure(e):
                         raise
                     self.logger.error(
                         f"Error executing node {node_id}: {safe_exception_frames(e)}"
@@ -5178,7 +5178,7 @@ class LocalRuntime(
                     SoftTimeLimitExceeded,
                     HardTimeLimitExceeded,
                 ),
-            ):
+            ) or _is_retry_observer_failure(e):
                 raise
             self.logger.error(
                 f"Error in switch execution phase: {safe_exception_frames(e)}"
@@ -5333,7 +5333,7 @@ class LocalRuntime(
                             SoftTimeLimitExceeded,
                             HardTimeLimitExceeded,
                         ),
-                    ):
+                    ) or _is_retry_observer_failure(e):
                         raise
                     self.logger.error(
                         f"Error executing remaining node {node_id}: {safe_exception_frames(e)}"
@@ -5362,7 +5362,7 @@ class LocalRuntime(
                     SoftTimeLimitExceeded,
                     HardTimeLimitExceeded,
                 ),
-            ):
+            ) or _is_retry_observer_failure(e):
                 raise
             self.logger.error(
                 f"Error in pruned plan execution: {safe_exception_frames(e)}"
@@ -5561,8 +5561,12 @@ class LocalRuntime(
 
         # Execute the node with retry policy if enabled
         if self._enable_retry_coordination and self._retry_policy_engine:
-            # Define node execution function for retry wrapper
+            # Only a pre-dispatch engine failure may use the direct fallback.
+            attempted = False
+
             async def node_execution_func():
+                nonlocal attempted
+                attempted = True
                 if self.enable_async and hasattr(node_instance, "execute_async"):
                     return await node_instance.execute_async(**node_inputs)
                 else:
@@ -5574,7 +5578,28 @@ class LocalRuntime(
                     node_execution_func,
                     timeout=node_inputs.get("timeout"),  # Use node timeout if specified
                 )
-
+            except (
+                ContentAwareExecutionError,
+                WorkflowCancelledError,
+                SoftTimeLimitExceeded,
+                HardTimeLimitExceeded,
+            ):
+                raise
+            except Exception as e:
+                # Handle retry policy engine errors (shouldn't happen in normal operation)
+                logger.error(
+                    f"Retry policy engine error for node {node_id}: {safe_exception_frames(e)}"
+                )
+                if attempted:
+                    raise
+                # The engine failed before any node invocation.
+                if self.enable_async and hasattr(node_instance, "execute_async"):
+                    outputs = await node_instance.execute_async(**node_inputs)
+                else:
+                    outputs = node_instance.execute(**node_inputs)
+            else:
+                # A failed policy result is an exhausted node attempt, not an
+                # engine malfunction. Let the workflow owner choose its fallback.
                 if retry_result.success:
                     outputs = retry_result.value
 
@@ -5590,6 +5615,17 @@ class LocalRuntime(
                         f"Node {node_id} failed after {retry_result.total_attempts} attempts "
                         f"in {retry_result.total_time:.2f}s"
                     )
+
+                    if isinstance(
+                        retry_result.final_exception,
+                        (
+                            ContentAwareExecutionError,
+                            WorkflowCancelledError,
+                            SoftTimeLimitExceeded,
+                            HardTimeLimitExceeded,
+                        ),
+                    ) or _is_retry_observer_failure(retry_result.final_exception):
+                        raise retry_result.final_exception
 
                     # Re-raise the final exception with enhanced context
                     if retry_result.final_exception:
@@ -5629,16 +5665,6 @@ class LocalRuntime(
                             f"Node '{node_id}' failed after {retry_result.total_attempts} retry attempts"
                         )
 
-            except Exception as e:
-                # Handle retry policy engine errors (shouldn't happen in normal operation)
-                logger.error(
-                    f"Retry policy engine error for node {node_id}: {safe_exception_frames(e)}"
-                )
-                # Fall back to direct execution
-                if self.enable_async and hasattr(node_instance, "execute_async"):
-                    outputs = await node_instance.execute_async(**node_inputs)
-                else:
-                    outputs = node_instance.execute(**node_inputs)
         else:
             # Execute directly without retry policy
             if self.enable_async and hasattr(node_instance, "execute_async"):

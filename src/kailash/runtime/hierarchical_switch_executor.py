@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from kailash.analysis import ConditionalBranchAnalyzer
 from kailash.runtime.local import ContentAwareExecutionError
+from kailash.runtime.resource_manager import _is_retry_observer_failure
 from kailash.sdk_exceptions import (
     HardTimeLimitExceeded,
     SoftTimeLimitExceeded,
@@ -188,7 +189,7 @@ class HierarchicalSwitchExecutor:
                                     HardTimeLimitExceeded,
                                     asyncio.CancelledError,
                                 ),
-                            ):
+                            ) or _is_retry_observer_failure(result):
                                 raise result
                             if isinstance(result, Exception):
                                 logger.error(
@@ -355,7 +356,7 @@ class HierarchicalSwitchExecutor:
                     SoftTimeLimitExceeded,
                     HardTimeLimitExceeded,
                 ),
-            ):
+            ) or _is_retry_observer_failure(e):
                 raise
             logger.error(f"Error executing node {node_id}: {e}")
             return {"error": str(e)}
