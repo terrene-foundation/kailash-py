@@ -11,12 +11,30 @@ Note: These tests validate that cyclic workflows can be created and executed,
 but the convergence expression evaluation has limitations in the current SDK.
 """
 
+from copy import copy
+
 import pytest
 
 from kailash import Workflow
 from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
+
+
+@pytest.fixture(autouse=True)
+def _convergence_code_security_config():
+    # Cycle safety limits are owned by the runtime monitor. These in-process
+    # PythonCode fixtures do not exercise the separate code memory guard.
+    from kailash.security import get_security_config, set_security_config
+
+    original = get_security_config()
+    configured = copy(original)
+    configured.memory_limit = None
+    set_security_config(configured)
+    try:
+        yield
+    finally:
+        set_security_config(original)
 
 
 class TestConvergence:
@@ -52,23 +70,23 @@ class TestConvergence:
         ).max_iterations(5).converge_when("value >= 0.95").build()
 
         # Execute
-        runtime = LocalRuntime(enable_cycles=True)
-        results, run_id = runtime.execute(
-            workflow,
-            parameters={
-                "incrementor": {
-                    "value": 0.1,
-                }
-            },
-        )
+        with LocalRuntime(enable_cycles=True) as runtime:
+            results, run_id = runtime.execute(
+                workflow,
+                parameters={
+                    "incrementor": {
+                        "value": 0.1,
+                    }
+                },
+            )
 
-        # Verify max iterations safety worked
-        assert "incrementor" in results
-        final_value = results["incrementor"]["result"].get("value", 0)
-        # Should NOT reach 0.95 due to max iterations limit (0.1 + 5*0.01 = 0.15)
-        assert final_value < 0.95
-        # But should have made some progress
-        assert final_value > 0.1
+            # Verify max iterations safety worked
+            assert "incrementor" in results
+            final_value = results["incrementor"]["result"].get("value", 0)
+            # Should NOT reach 0.95 due to max iterations limit (0.1 + 5*0.01 = 0.15)
+            assert final_value < 0.95
+            # But should have made some progress
+            assert final_value > 0.1
 
     def test_simple_cycle_execution(self):
         """Test that a simple cycle executes and produces results."""
@@ -98,15 +116,15 @@ class TestConvergence:
         ).max_iterations(3).build()
 
         # Execute
-        runtime = LocalRuntime(enable_cycles=True)
-        results, run_id = runtime.execute(workflow)
+        with LocalRuntime(enable_cycles=True) as runtime:
+            results, run_id = runtime.execute(workflow)
 
-        # Verify cycle executed
-        assert "counter" in results
-        # Should have counted up to max_iterations
-        count_value = results["counter"]["result"].get("count", 0)
-        assert count_value > 0
-        assert count_value <= 3
+            # Verify cycle executed
+            assert "counter" in results
+            # Should have counted up to max_iterations
+            count_value = results["counter"]["result"].get("count", 0)
+            assert count_value > 0
+            assert count_value <= 3
 
     def test_cycle_with_initial_parameters(self):
         """Test cycle with initial parameters."""
@@ -146,24 +164,24 @@ class TestConvergence:
         ).max_iterations(5).build()
 
         # Execute with initial parameters
-        runtime = LocalRuntime(enable_cycles=True)
-        results, run_id = runtime.execute(
-            workflow,
-            parameters={
-                "accumulator": {
-                    "total": 10.0,
-                    "step": 2.0,
-                }
-            },
-        )
+        with LocalRuntime(enable_cycles=True) as runtime:
+            results, run_id = runtime.execute(
+                workflow,
+                parameters={
+                    "accumulator": {
+                        "total": 10.0,
+                        "step": 2.0,
+                    }
+                },
+            )
 
-        # Verify accumulation worked
-        assert "accumulator" in results
-        final_total = results["accumulator"]["result"].get("total", 0)
-        # Started at 10, added 2.0 per iteration
-        assert final_total > 10.0
-        # Max 5 iterations: 10 + (5 * 2) = 20
-        assert final_total <= 20.0
+            # Verify accumulation worked
+            assert "accumulator" in results
+            final_total = results["accumulator"]["result"].get("total", 0)
+            # Started at 10, added 2.0 per iteration
+            assert final_total > 10.0
+            # Max 5 iterations: 10 + (5 * 2) = 20
+            assert final_total <= 20.0
 
     def test_none_handling_in_cycle(self):
         """Test that None values are properly handled in cycles."""
@@ -192,13 +210,13 @@ class TestConvergence:
         ).max_iterations(3).build()
 
         # Execute with no parameters (None initial value)
-        runtime = LocalRuntime(enable_cycles=True)
-        results, run_id = runtime.execute(workflow, parameters={})
+        with LocalRuntime(enable_cycles=True) as runtime:
+            results, run_id = runtime.execute(workflow, parameters={})
 
-        # Should handle None and produce values
-        assert "handler" in results
-        final_value = results["handler"]["result"]["value"]
-        assert final_value > 0  # Started from None (1), then incremented
+            # Should handle None and produce values
+            assert "handler" in results
+            final_value = results["handler"]["result"]["value"]
+            assert final_value > 0  # Started from None (1), then incremented
 
     def test_multi_node_cycle(self):
         """Test cycle with multiple nodes in the loop."""
@@ -263,13 +281,13 @@ class TestConvergence:
         ).max_iterations(3).build()
 
         # Execute
-        runtime = LocalRuntime(enable_cycles=True)
-        results, run_id = runtime.execute(workflow)
+        with LocalRuntime(enable_cycles=True) as runtime:
+            results, run_id = runtime.execute(workflow)
 
-        # Verify cycle executed properly
-        assert "processor" in results
-        processor_result = results["processor"]["result"]
-        # Should have incremented iteration
-        assert processor_result["iteration"] > 0
-        assert processor_result["iteration"] <= 3
-        assert "processed_" in processor_result["processed_data"]
+            # Verify cycle executed properly
+            assert "processor" in results
+            processor_result = results["processor"]["result"]
+            # Should have incremented iteration
+            assert processor_result["iteration"] > 0
+            assert processor_result["iteration"] <= 3
+            assert "processed_" in processor_result["processed_data"]
