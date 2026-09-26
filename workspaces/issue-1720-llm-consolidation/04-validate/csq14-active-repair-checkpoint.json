@@ -1,5 +1,5 @@
 {
-  "source_head": "c7078698fcfc02ac4316014a96762388efd97f16",
+  "source_head": "1dcc5f486002e113fb5f37b21f036b40b28f9105",
   "promotion": {
     "pr": 2229,
     "remote_head": "ce4c9de676f1ab1e0a159cb8c273dcf2e47a2cb4",
@@ -221,11 +221,9 @@
     }
   },
   "active": [
-    "root: streaming fixture02288 independently clean; migration dependency7b50 under independentsecurity review; parentreviewof33a486gatefixtures and6f347diagnosticpatch",
-    "archive_checkpoint: separate graph state/export fixture in final-gate-fixtures sibling;33a486originalartifact frozen",
-    "ml_correctness_review: retry-policy ownership repair in csq14-retry-policy-ownership sibling",
-    "ml_gate_recovery: independent review rootmigration7b50 in final3-security;6f347diagnostic author snapshot frozen",
-    "pending pools user decision; then finalfullgates/holisticreviews/consolidatedpush/exactheadchecks/separatemerge/postmainreviews/drain"
+    "root: prepare clean exact-candidate Linux/Mac full gates and three independent whole-union reviews",
+    "all source repairs and fixture reviews complete; pools decision resolved separately",
+    "push only after full gates, then exact-head required checks, separate approved merge and post-main verification"
   ],
   "final_obligations": [
     "full integrated root regression",
@@ -422,13 +420,13 @@
     },
     "status": "NOT CLEAN; absolute review also reproduced migration dependency misordering and unconfigured retry attempt; final holistic rerun required"
   },
-  "implementation_worktrees": [
-    "csq14-final-gate-fixtures",
-    "csq14-final-diagnostic-sinks",
-    "csq14-retry-policy-ownership"
-  ],
+  "implementation_worktrees": [],
   "current_repair_receipt": "04-validate/csq14-final-gate-repairs-receipt.json",
-  "latest_committed_head": "dfd71cb7f68602bd621cc1e2268b5d2ac8a8afc4",
-  "current_retry_status": "d1e846 not clean: permissive classifier retries terminal controls, raw retry diagnostics, observer fault replays success, enterprise circuit wrapper passes coroutine; revised repair in progress",
-  "pools_decision_resolved": "User explicitly chose Record separately; finish promotion (Recommended). See csq14-dataflow-pools-design-task.md."
+  "latest_committed_head": "1dcc5f486002e113fb5f37b21f036b40b28f9105",
+  "current_retry_status": "Committed467bda018; independent correctness and security each two clean scoped rounds. Full union remains open.",
+  "pools_decision_resolved": "User explicitly chose Record separately; finish promotion (Recommended). See csq14-dataflow-pools-design-task.md.",
+  "current_pending_work": "Final source/tree-pinned local gates, three whole-union reviews, push/exact-head remote checks/separate merge/three post-main reviews/drain.",
+  "cycle_candidate_manifest": "/tmp/csq14-cycle-dag-final3-manifest.json",
+  "cycle_status": "Committed b134a9518 and fixture1dcc5f486; scoped correctness/security complete; parent95strict passed; final whole-union gates remain open.",
+  "final_review_overlays": "All five owned overlays backed up; files match committed1dcc5f486; source siblings drained; three final3 trees clean pending repin"
 }

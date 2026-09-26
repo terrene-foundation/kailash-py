@@ -2,47 +2,42 @@
 
 ## Current checkpoint — supersedes historical statuses
 
-Latest committed repair: `dfd71cb7f68602bd621cc1e2268b5d2ac8a8afc4`. Five bounded repairs are committed: streaming
-cursor observations, migration dependency ordering, safe type diagnostics/resource
-fixtures, pinned database/log-capture fixtures, and real graph state/export fixtures.
-Exact hashes, parsed tests and scoped reviews:
-`04-validate/csq14-final-gate-repairs-receipt.json`.
+All source and fixture repairs are committed through `1dcc5f486`: retry ownership
+`467bda018`, SQLite schema classification `9140d081d`, cycle execution and diagnostic
+privacy `b134a9518`, and cycle fixtures `1dcc5f486`. The nine bounded repair receipts
+are in `04-validate/csq14-final-gate-repairs-receipt.json`.
 
-The retry ownership patch is still UNCOMMITTED and NOT CLEAN. Independent actual
-execution found permissive classification retries terminal controls, retry diagnostics
-expose exception values, successful operations replay after observer faults, and the
-enterprise circuit wrapper supplies a coroutine instead of a callable. Correctness
-is fixing the root causes in the isolated retry-policy-ownership tree; security and
-archive reviewers require revised source and two clean scoped rounds. Preserve
-uncommitted Local/test changes; do not bank the historical337-test green for these gaps.
+Cycle correctness and adversarial security each completed two scoped clean rounds.
+Fixture correctness completed two clean rounds with reached opposite controls;
+91/95 original checks remain exact and four replacements across two named tests
+are reconciled. Parent combined95 strict tests passed, Python warnings empty;
+23 deliberate negative-case diagnostics are inventoried. Retry has two independent
+correctness and security rounds; SQLite schema has two correctness rounds and real
+SQLite/Redis/PostgreSQL evidence. These scoped results do not certify promotion.
 
-User explicitly resolved the separate pools question: “Record separately; finish
-promotion (Recommended)”. The open task is
-`04-validate/csq14-dataflow-pools-design-task.md`. This is a bounded exception to
-fixing the unused documented argument now; no override contract is invented and no
-pools decision remains pending.
+User resolved the pools question: “Record separately; finish promotion (Recommended)”.
+The open design task is `04-validate/csq14-dataflow-pools-design-task.md`.
+All nine approved CodeQL false-positive dismissals were executed and re-read:
+11595,11596,11466,11467,10866,5153,131,133,6082. Receipt is
+`04-validate/csq14-codeql-disposition-receipt.json`. No further dismissal authorized;
+required CodeQL checks stay required.
 
-All nine approved CodeQL dismissals were executed and re-read as dismissed:
-11595,11596,11466,11467,10866,5153,131,133,6082. Receipt:
-`04-validate/csq14-codeql-disposition-receipt.json`. No other dismissal is authorized.
-Required CodeQL checks stay required.
+Next: back up and clean owned review overlays after committed-byte parity, repin
+three final review trees, regenerate assertion/caller inventories, and rerun Linux
+root/DataFlow suites plus Mac all-files hooks including pytest-check. Earlier1f3
+full gates FAILED and do not certify this candidate. Require three actual whole-union
+review deliveries, consolidated push to dev and existing promotion branch, every
+required/previously failing check on the exact PR head, then merge #2229 separately.
+D1 authorization persists; no publishing. Three post-main union/tree parity reviews
+and completed worktree drain follow. Interim SKIP=pytest-check is documented in
+repair commits; full final hook run must unset it.
 
-Next: finish/review/commit retry repair, repin clean isolated final review trees,
-regenerate assertion/caller inventories, and rerun Linux root/DataFlow suites plus
-Mac all-files hooks including pytest-check. The complete1f3 gate FAILED and does not
-certify these fixes. Then require three whole-union review deliveries, consolidate
-push to dev and existing promotion branch, read every required/previously failing
-check on the exact PR head, and merge #2229 in a SEPARATE command. D1 authorization
-persists; no publishing. Three post-main union/tree parity reviews and completed
-worktree drain follow. Interim SKIP=pytest-check is documented in repair commits and
-remains open until the full hook run passes.
-
-The completed diagnostic and SQLite author trees were backed up, verified against
-committed blobs and drained. Current worktrees are gate-fixtures (archive), retry
-ownership (author), and three final3 review trees. Preserve all five inherited stashes
-and52 uncertain historical refs. Only the authorized dated sweep/wrapup vault pair
-may be updated externally; preserve the frozen acceptance register byte-for-byte.
-No owner acceptance, whole-forest completion, Windows or filesystem race guarantee.
+Source siblings for diagnostics, SQLite address/schema and retry are backed up and
+drained. Cycle and final-fixture siblings are also backed up and drained; three isolated
+final3 review trees are clean pending repin. Preserve all five inherited stashes and52 uncertain historical
+refs. Only the authorized dated sweep/wrapup vault pair may be updated externally;
+preserve its frozen acceptance register byte-for-byte. No owner acceptance or
+whole-forest completion is claimed.
 
 ## Recovered authorization
 

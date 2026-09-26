@@ -1,5 +1,5 @@
 {
-  "status": "five bounded repairs committed; final union pending retry repairs and complete gates",
+  "status": "nine bounded repairs committed; complete exact-candidate promotion gates pending",
   "repairs": [
     {
       "repair": "streaming",
@@ -671,9 +671,258 @@
         "warn_plus": 0,
         "tests_passed": 39
       }
+    },
+    {
+      "repair": "sqlite_schema_classification",
+      "commit": "9140d081ddd94b6407fa98f13461c7ccbb9e4816",
+      "files": {
+        "packages/kailash-dataflow/src/dataflow/core/engine.py": "cc8e676c33898032ced77019350fd00f8e3582e8f26bcf38b0d6058ab1956384",
+        "packages/kailash-dataflow/tests/regression/test_sqlite_schema_url_classification.py": "807d5707d7fe0bc25f33b7188fe46e2672848e3cfd999250fe595bc048b64add"
+      },
+      "tests": [
+        {
+          "path": "/tmp/csq14-parent-schema-classification-tests.log",
+          "sha256": "558622e06df3dfffac25f6abcd39e42f6962ab88bb1fce65f963b33b65bfcf45",
+          "summary": "============================== 21 passed in 3.51s =============================="
+        },
+        {
+          "path": "/tmp/csq14-schema-correctness-focused.log",
+          "sha256": "33572a1627bcc0417f53914b853bef2e08a044adc7456933ea5261e68f7d49eb",
+          "summary": "============================== 15 passed in 2.30s =============================="
+        },
+        {
+          "path": "/tmp/csq14-schema-correctness-redis.log",
+          "sha256": "0377fdbeda647620487816b2166b2ef84574ad3a3bce50e358ae554f3dada040",
+          "summary": "============================== 6 passed in 2.71s ==============================="
+        },
+        {
+          "path": "/tmp/csq14-schema-correctness-postgres.log",
+          "sha256": "91a5425370edecc26a0856576aaffc4909b3b237c454453e22f42f2cf1c00a55",
+          "summary": "============================== 1 passed in 3.32s ==============================="
+        }
+      ],
+      "review": "two scoped independent correctness rounds clean; retry additionally two adversarial security rounds clean",
+      "manifest": {
+        "root": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-sqlite-schema-classification",
+        "base": "a10fb3f1bb5c0faddc14098051d6f9a884e100b9",
+        "patch": "/tmp/csq14-schema-classification-final.patch",
+        "patch_sha256": "17f888ffbd568c80bdc306dd078bd453e3471f2e3581f89857625f70729b6c02",
+        "files": {
+          "packages/kailash-dataflow/src/dataflow/core/engine.py": "cc8e676c33898032ced77019350fd00f8e3582e8f26bcf38b0d6058ab1956384",
+          "packages/kailash-dataflow/tests/regression/test_sqlite_schema_url_classification.py": "807d5707d7fe0bc25f33b7188fe46e2672848e3cfd999250fe595bc048b64add"
+        },
+        "changed_production_methods": [
+          "_validate_database_connection",
+          "_initialize_migration_system",
+          "_initialize_audit_backend",
+          "ensure_table_exists",
+          "_verify_table_physically_exists_detailed",
+          "_reconcile_columns_async",
+          "_inspect_database_schema_real",
+          "_get_database_connection",
+          "_execute_multi_statement_ddl",
+          "_trigger_universal_schema_management",
+          "_convert_fields_to_columns",
+          "_auto_detect_relationships",
+          "_auto_detect_relationships_async"
+        ],
+        "invariants": [
+          "SQLite URL classification precedes other-engine filename substrings",
+          "Native SQLite relationship detection keeps existing SQLite skip behavior",
+          "Real file discovery returns actual schema; explicit memory inspection remains unsupported",
+          "Connections/resources are unchanged and test-owned handles close; nonSQLite dispatch preserved"
+        ],
+        "budget": "44 added/51 removed production lines, one production file, 4 invariants, max3 caller hops",
+        "tests": {
+          "focused": 15,
+          "real_redis": 6,
+          "real_postgres": 1
+        },
+        "warnings": {
+          "focused": "2 ERROR events only from explicit unsupported-memory rejection tests;13positive cases assert zeroWARN+",
+          "real_redis": 0,
+          "real_postgres": "2 auto-detected test-mode notices",
+          "python": 0
+        },
+        "remaining_lexical_matches": {
+          "postgres_or_mysql_substring": "All URL dispatch predicates now reject canonical SQLite first; PostgreSQL prefix-only allocator does not confuse filenames",
+          "audit_startswith_sqlite": "Derives existing separate audit SQLite filename after backend selection; storage policy unchanged",
+          "sqlite_autoindex": "SQLite catalog index filtering, not database address detection",
+          "connection_type_contains_sqlite": "Classifies a live connection object in PG migration compatibility, not a URL",
+          "bare_path_suffixes": "Existing bare-file compatibility branches after canonical is_sqlite_url",
+          "_get_async_sql_connection": "Memory URI priority then canonical is_sqlite_url already correct",
+          "_acquire_async_database_connection": "Actual PostgreSQL prefix test then canonical SQLite, ownership unchanged"
+        }
+      }
+    },
+    {
+      "repair": "retry_attempt_and_observer_ownership",
+      "commit": "467bda0188c2bdb8d5c26cd990eec74a44adec1c",
+      "files": {
+        "src/kailash/runtime/local.py": "2825809c6f75cfe7e60880fc237793ca760fc2d393876ece9e89902c110aa174",
+        "src/kailash/runtime/async_local.py": "14f5e667324e0f7acf2a9e6f9730a8ab3b549bd854fe55de628fd70d5e86c44d",
+        "src/kailash/runtime/hierarchical_switch_executor.py": "8a6f01d6105c0c8691e81efd099d8376586bc47b2c6892bd03ba92ccfc150d3d",
+        "src/kailash/runtime/resource_manager.py": "442fe4d1fb29f2a763782ceeb7d8e8ef94584341b8c57c80165cddcdd8a236a2",
+        "tests/regression/test_retry_policy_attempt_ownership.py": "071a9ebf15544894447773071f533016ca309b08979b83b0a46747a12aa4fb7d"
+      },
+      "tests": [
+        {
+          "path": "/tmp/csq14-parent-retry-launch-tests.log",
+          "sha256": "3da7f8711e3dd96f58732bafb6f2456b0bf892277199c86a56303994bb7c62ea",
+          "summary": "404 passed in 5.41s"
+        },
+        {
+          "path": "/tmp/csq14-retry-correctness-launch-tests.log",
+          "sha256": "a9d5614ae4c177418f9e77de02daad1cb70d8313c95634d552fe671f6c33d42d",
+          "summary": "404 passed in 11.82s"
+        },
+        {
+          "path": "/tmp/csq14-retry-security-launch-final.log",
+          "sha256": "098a8c131c652897978c7767ba45f6daff1d6235e7a38ae128f2b0e4ac8f5670",
+          "summary": "404 passed in 21.01s"
+        }
+      ],
+      "review": "two scoped independent correctness rounds clean; retry additionally two adversarial security rounds clean",
+      "manifest": {
+        "src/kailash/runtime/local.py": "2825809c6f75cfe7e60880fc237793ca760fc2d393876ece9e89902c110aa174",
+        "src/kailash/runtime/async_local.py": "14f5e667324e0f7acf2a9e6f9730a8ab3b549bd854fe55de628fd70d5e86c44d",
+        "src/kailash/runtime/hierarchical_switch_executor.py": "8a6f01d6105c0c8691e81efd099d8376586bc47b2c6892bd03ba92ccfc150d3d",
+        "src/kailash/runtime/resource_manager.py": "442fe4d1fb29f2a763782ceeb7d8e8ef94584341b8c57c80165cddcdd8a236a2",
+        "tests/regression/test_retry_policy_attempt_ownership.py": "071a9ebf15544894447773071f533016ca309b08979b83b0a46747a12aa4fb7d"
+      }
+    },
+    {
+      "repair": "acyclic_execution_and_cycle_diagnostic_privacy",
+      "commit": "b134a95181a1e01f1af7fad432993d8d5ac283ea",
+      "files": {
+        "src/kailash/workflow/cyclic_runner.py": "e95c1efb95b9175a221dd5c6eb5d079d4d88b5b362c28ddb431dc20e6843457e",
+        "tests/regression/test_cyclic_executor_acyclic_dispatch.py": "16cc9534b2f6ff65178e9dd4d8ee576f03df698859e338ad7645b5d2786a2890"
+      },
+      "manifest": {
+        "root": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-cycle-dag-dispatch",
+        "head": "a10fb3f1bb5c0faddc14098051d6f9a884e100b9",
+        "patch_sha256": "ed475e3889c832ce9cfa449074736acf6f347766f1afa26d79011d8c6aaa8d5e",
+        "delta_sha256": "f636c51dad263ceaf6babf5e62c9237dc122c3f9941a3b7520986f2768c273f3",
+        "files": {
+          "src/kailash/workflow/cyclic_runner.py": "e95c1efb95b9175a221dd5c6eb5d079d4d88b5b362c28ddb431dc20e6843457e",
+          "tests/regression/test_cyclic_executor_acyclic_dispatch.py": "16cc9534b2f6ff65178e9dd4d8ee576f03df698859e338ad7645b5d2786a2890"
+        },
+        "evidence": [
+          {
+            "path": "/tmp/csq14-cycle-dag-final3-tests.log",
+            "sha256": "191d9ad4f6a471901dc8f6a8d415475a1b3356cfbc5b033973abdb18445bb1ee",
+            "results": [
+              "............................                                             [100%]PYTHON_WARNINGS [] WARN_PLUS 19 REACHED_OLD 0",
+              "28 passed in 3.01s"
+            ]
+          },
+          {
+            "path": "/tmp/csq14-cycle-final3-control-keys.log",
+            "sha256": "851abd817daa3b21600e6c094942a3529f1035ff6cb96441387b92c6a7a04711",
+            "results": [
+              "1 failed, 2 passed, 11 deselected in 8.08s",
+              "REACHED keys 5 EXIT 1"
+            ]
+          },
+          {
+            "path": "/tmp/csq14-cycle-final3-control-edges.log",
+            "sha256": "19db6eecda3c889b9731f00c7fa77887e22d844589f5377d2290ba6268dfb7ae",
+            "results": [
+              "1 failed, 2 passed, 11 deselected in 8.08s",
+              "REACHED edges 3 EXIT 1"
+            ]
+          }
+        ],
+        "scope": "DAG through existing plan; all observed result values/keys/convergence config/termination payload/error diagnostics become count/presence or safe exception frames. Declared graph identities remain metadata scope. Public results/error/task payload unchanged.",
+        "production_numstat": "46\t38\tsrc/kailash/workflow/cyclic_runner.py",
+        "pending_fixture": "archive repairs separate comprehensive unitfixture; not in this twofilepatch; broad93 must rerun after that"
+      },
+      "tests": [
+        {
+          "path": "/tmp/csq14-parent-cycle-broad-tests.log",
+          "sha256": "05dbf88bd8c2748b295e5668db39bd2dcf943566bf24d1cbf00f228e65575498",
+          "summary": "95 passed in 5.47s"
+        },
+        {
+          "path": "/tmp/csq14-cycle-correctness-final3-tests.log",
+          "sha256": "9042feda1eecae20afde14dad098a8a463a74e79a987de60f4a5fcf872cf9e72",
+          "summary": "28 passed in 2.33s"
+        }
+      ],
+      "review": "two independent correctness and two adversarial security scoped rounds clean; final union open"
+    },
+    {
+      "repair": "cyclic_execution_fixtures",
+      "commit": "1dcc5f486002e113fb5f37b21f036b40b28f9105",
+      "files": {
+        "tests/tier2_integration/workflows/test_unit_cyclic_runner_comprehensive.py": "11e5129e22087ef593762d756805a258f5d30f9d4d67ad011af319cfc4d2c0fb"
+      },
+      "manifest": {
+        "base": "1f3ce4b44da8114a541161141a681e41b708f266",
+        "owned_files": {
+          "tests/tier2_integration/workflows/test_unit_cyclic_runner_comprehensive.py": "11e5129e22087ef593762d756805a258f5d30f9d4d67ad011af319cfc4d2c0fb"
+        },
+        "borrowed_production": {
+          "src/kailash/workflow/cyclic_runner.py": "e95c1efb95b9175a221dd5c6eb5d079d4d88b5b362c28ddb431dc20e6843457e"
+        },
+        "patch_sha256": "5e7bb7f58b74a01ba762749d177fae5b83416104f0ee3329ae00fb6985e1adfd",
+        "original_named_tests": 43,
+        "original_checks": 95,
+        "retained_checks": 91,
+        "changed_checks_by_test": {
+          "TestCyclicWorkflowExecutorBasic.test_execute_no_cycles_delegates_to_dag_runner": 2,
+          "TestCyclicWorkflowExecutorInternalMethods.test_execute_with_cycles_with_summaries": 2
+        },
+        "semantic_rows": [
+          {
+            "test": "TestCyclicWorkflowExecutorBasic.test_execute_no_cycles_delegates_to_dag_runner",
+            "change": "Real public DAG delivery replaces invalid WorkflowRunner delegation expectation; preserves non-null run ID and checks UUID, both outputs, once-only execution and actual edge input."
+          },
+          {
+            "test": "TestCyclicWorkflowExecutorInternalMethods.test_execute_with_cycles_with_summaries",
+            "change": "Two raw dictionary logger checks replaced with exactly one iterations=5 event and one iterations=3 event, retained successful return, and absent private payload in both formatted and raw records."
+          }
+        ],
+        "unchanged_node_execution_assertions": 15,
+        "opposite_assertion_removal_rejected": true,
+        "tests": "81 strict passed; complete fixture43 + existing methods14 + cycle mixin24",
+        "warnings": "0 Python warnings; 4 declared failure diagnostics attributed in /tmp/csq14-cyclic-fixture-warnings.json",
+        "controls": {
+          "old_protocol": [
+            8,
+            8
+          ],
+          "old_delegate_test": [
+            1,
+            1
+          ],
+          "old_summary_test": [
+            1,
+            1
+          ],
+          "raw_summary_producer": [
+            1,
+            1
+          ],
+          "wrong_delivery_producer": [
+            2,
+            1
+          ]
+        },
+        "semantic_named_test_rows": 2,
+        "replaced_check_expressions": 4
+      },
+      "tests": [
+        {
+          "path": "/tmp/csq14-cyclic-fixture-correctness-tests.log",
+          "sha256": "38b55ac77485f6c874adad708f0d58e2d11b8362dbb8ff38b7508a947f27a61b",
+          "summary": "81 passed in 6.13s"
+        }
+      ],
+      "review": "two independent correctness scoped rounds clean; final union open"
     }
   ],
-  "retry_status": "d1e846 not clean: permissive classifier retries terminal controls, raw retry diagnostics, observer fault replays success, enterprise circuit wrapper passes coroutine; revised repair in progress",
+  "retry_status": "Committed467bda018; independent correctness and security each two clean scoped rounds. Full union remains open.",
   "pools_decision": "User explicitly chose Record separately; finish promotion (Recommended). See csq14-dataflow-pools-design-task.md.",
   "controls": "Reached opposite results recorded in /tmp/csq14-parent-graph-control-*.log, parent-diagnostic-control-*.log, parent-fixtures-control-*.log, migration-security-{indegree,adjacent,round2}.log and stream-fixture-control.log. No failed control run is counted as positive suite pass.",
   "final_hook_obligation": "Interim SKIP=pytest-check documented in each commit. Run all configured all-files hooks including pytest-check on final clean candidate before push.",
@@ -687,6 +936,88 @@
       "worktree": "csq14-sqlite-address-parity",
       "backup": "/tmp/csq14-drained-csq14-sqlite-address-parity",
       "parity_commit": "c7078698f"
+    },
+    {
+      "worktree": "csq14-sqlite-schema-classification",
+      "backup": "/tmp/csq14-drained-csq14-sqlite-schema-classification",
+      "parity_commit": "9140d081d"
+    },
+    {
+      "worktree": "csq14-retry-policy-ownership",
+      "backup": "/tmp/csq14-drained-csq14-retry-policy-ownership",
+      "parity_commit": "467bda018"
+    },
+    {
+      "worktree": "csq14-cycle-dag-dispatch",
+      "backup": "/tmp/csq14-final-overlay-backup-csq14-cycle-dag-dispatch",
+      "parity_commit": "1dcc5f486002e113fb5f37b21f036b40b28f9105"
+    },
+    {
+      "worktree": "csq14-final-gate-fixtures",
+      "backup": "/tmp/csq14-final-overlay-backup-csq14-final-gate-fixtures",
+      "parity_commit": "1dcc5f486002e113fb5f37b21f036b40b28f9105"
     }
-  ]
+  ],
+  "cycle_security_evidence": {
+    "tests": {
+      "path": "/tmp/csq14-cycle-security-final3-positive.log",
+      "sha256": "d2dbc403e19c5c2293a33f51a06c6dc9f5d05896bf8edcbf96582d325d1f7317",
+      "summary": "28 passed in 1.08s"
+    },
+    "rounds": 2,
+    "controls": "old dispatch14hits8fails; raw helper18hits4fails; old keys5hits1fail; old convergence3hits1fail",
+    "limits": "actual DAG/cycle execution and automatic diagnostics; declared graph IDs and public result/error/task payload retained"
+  },
+  "cycle_fixture_independent_receipt": {
+    "verdict": "two scoped correctness rounds CLEAN",
+    "root": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-final3-correctness",
+    "head": "1f3ce4b44da8114a541161141a681e41b708f266",
+    "fixture_patch_sha": "5e7bb7f58b74a01ba762749d177fae5b83416104f0ee3329ae00fb6985e1adfd",
+    "source_hashes": {
+      "tests/tier2_integration/workflows/test_unit_cyclic_runner_comprehensive.py": "11e5129e22087ef593762d756805a258f5d30f9d4d67ad011af319cfc4d2c0fb",
+      "src/kailash/workflow/cyclic_runner.py": "e95c1efb95b9175a221dd5c6eb5d079d4d88b5b362c28ddb431dc20e6843457e"
+    },
+    "round1": {
+      "strict_passed": 81,
+      "python_warnings": [],
+      "warn_plus": 4,
+      "warning_scope": "Four intentional negative workflow/node error test diagnostics; all records inspected",
+      "ast": "43 named original tests;95 old checks;91 identical;4 replacements across2 tests;15 node execution checks and full bodies preserved;only additional method change setup;dropped-assertion opposite rejected"
+    },
+    "round2": {
+      "controls": {
+        "missing_mock_protocol": {
+          "hits": 8,
+          "failures": 8,
+          "failure": "TypeError: 'Mock' object is not iterable"
+        },
+        "wrong_actual_connection_input": {
+          "hits": 1,
+          "failures": 1,
+          "failure": "wrong-bound-input != dag_success"
+        },
+        "private_raw_field_same_summary_counts": {
+          "hits": 1,
+          "failures": 1,
+          "failure": "raw-record private absence assertion; both summary count events unchanged"
+        }
+      },
+      "source_hashes_unchanged": true
+    },
+    "artifacts": [
+      "/tmp/csq14-cyclic-fixture-correctness-tests.log",
+      "/tmp/csq14-cyclic-fixture-correctness-warnings.json",
+      "/tmp/csq14-cyclic-fixture-correctness-ast.log",
+      "/tmp/csq14-cyclic-fixture-correctness-control-mapping.log",
+      "/tmp/csq14-cyclic-fixture-correctness-control-protocol.log",
+      "/tmp/csq14-cyclic-fixture-correctness-control-hidden_summary.log"
+    ],
+    "limitations": "Fixture correction only against exact frozen e95 cycle producer; not whole-union or independent security convergence."
+  },
+  "combined_cycle_warnings": {
+    "python": [],
+    "intentional_records": 23,
+    "inventory_sha256": "960ba9d3dd304ed4a7e36d07e95ef5f125439998e1c370f8e413a5574d22b927",
+    "scope": "19 deliberate failure/observer records in new tests and4 existing negative workflow records"
+  }
 }
