@@ -1,54 +1,46 @@
 # CSQ 14 continuation — final promotion gate, 2026-09-26
 
-## Live repair checkpoint — supersedes earlier statuses
+## Live checkpoint — supersedes historical statuses below
 
-Committed source is `07ee23ffee758a74ec42abd2bdc90c3aba57e062`; final promotion gates remain OPEN.
-Runtime automatic diagnostics (9279d92c3), temporary connection ownership
-(fb7187f36), memory cache/connection identities (48a36aef8), single-owner
-conditional fallback (74c330005), and durable conditional state (ec01c3b87)
-are landed with two scoped independent rounds and reached negative controls.
-Fixtures now preserve actual gateway lifetimes, native graph ordering, import
-security, and real SQLite rollback while asserting safe automatic diagnostics.
-The final conformance fixture commit is 07ee23ffe. Runtime state receipts include
-349 author, 166 independent, 229 parent integration and 21 final focused passes;
-DataFlow memory/address receipts include 134 author, 114 independent and 39
-revised parent passes. These overlapping totals are not unique coverage counts.
-Real Redis cache isolation and real SQLite tenant-separated replay were exercised.
+Resume the approved promotion PR #2229. Latest production repair is
+`c7078698fcfc02ac4316014a96762388efd97f16`: SQLite consumers now share canonical database targets and cache
+identity, readonly setup and encoded memory lifetime work, failed initialization
+reclaims its connections, and concurrent cold memory use/disconnect preserves
+ownership. Two independent correctness rounds and two adversarial security rounds
+are clean for that bounded shard. Source hashes, tests, reached opposing controls
+and limits are recorded in `04-validate/csq14-sqlite-address-repair-receipt.json`.
+Backend/finalizer test fixtures landed at ab6fd9f3a; parameter adapter runtime
+fixtures landed at4e479097e, retaining their original assertions and with two
+independent scoped reviews. No unresolved SQLite finding is being deferred.
 
-ONE source shard remains: shared SQLite address parsing and cache identity
-across sync/async adapters, registry, migrations, DDL and connection producers.
-Author archive_checkpoint works in root-created sibling csq14-sqlite-address-parity,
-branch fix/csq14-sqlite-address-parity at cb92f3261 with memory39ce as borrowed base.
-Core correctness and security specialists consult/review independently. Public
-spec defines standard three-slash relative and four-slash absolute URLs; retain
-legacy two-slash relative compatibility and native URI options. A shared helper
-must preserve driver options and distinguish disk versus memdb VFS databases in
-cache identity. Actual disk/memdb rows differed while a draft key collided; this
-finding is OPEN until the frozen correction and reached controls pass. Generic
-Rust-pinned key encoders stay byte-identical. Caller cache namespaces may change
-to close this isolation defect; no persistent data migration is intended.
+Next: commit this checkpoint, repin clean final3 review siblings to that exact
+candidate, run full Linux root/DataFlow suites and Mac all-files hooks (including
+pytest-check) in parallel with three whole-union reviewers. The prior a6ff5afe
+full gates FAILED and do not certify the current source. Interim pytest-check
+skips are explicitly tracked until the full hook gate passes. No consolidated
+push has occurred; PR #2229 remains remotece4c9de67, OPEN/BLOCKED on the live read.
+D1 approval persists. Read all required checks and previously failing jobs on the
+exact final head, then merge in a separate command. Three post-main union/tree
+parity reviews remain required, followed by clean completed sibling drain.
 
-The a6ff5afe full gates ran and were NOT clean: Linux root 8 failed/3398 passed,
-DataFlow unit 3 failed/3481 passed, Mac hook pytest-check 1 failed/4897 passed.
-Those identified defects/fixtures are repaired, but those runs do not cover the
-current source. Final full root/DataFlow suites, all configured all-files hooks
-including pytest-check, and three whole-union reviews must run after the final
-shard converges. Authorized interim pytest-check skips remain tracked here until
-that full hook gate passes. No push has occurred; PR #2229 remains ce4c9de67.
-D1 promotion approval persists. Exact-head required checks and all previously
-failing test jobs must pass before a separate merge command. Three post-main
-union/tree-parity reviews remain due, then drain only clean landed siblings.
+One separate user decision is still pending via the async question: record the
+unused, undefined documented `DataFlow(pools=...)` argument for a separate design
+task and finish promotion, or implement a primary/read override contract now.
+No answer or Rule3c exception has been inferred. Continue independent final gates
+while waiting; do not silently invent the contract or claim complete closure.
 
-All nine CodeQL false-positive dismissals (11595,11596,11466,11467,10866,5153,
-131,133,6082) were explicitly approved, executed and independently re-read as
-dismissed on 2026-09-26. The receipt is
-`04-validate/csq14-codeql-disposition-receipt.json`; no approval remains pending
-for these IDs. CodeQL and other promotion checks were not waived.
-Preserve five stashes and 52 uncertain historical refs. No package publishing,
-owner acceptance, whole-forest completion, Windows runtime or filesystem race
-prevention claim. Existing final2/memory review overlays remain held until
-source parity is proven and their owned contents are safely drained.
+All nine CodeQL dismissals (11595,11596,11466,11467,10866,5153,131,133,6082)
+were explicitly approved, executed and independently re-read as dismissed.
+The durable receipt is `04-validate/csq14-codeql-disposition-receipt.json`.
+No further approval is needed for those IDs; no other dismissal is authorized.
+CodeQL and promotion checks remain required.
 
+Preserve all five inherited stashes and 52 uncertain historical refs. Memory
+source and all three final2 review siblings were backed up and drained after
+content parity. The SQLite author tree and three final3 review trees remain.
+Only the authorized dated sweep/wrapup vault pair may be updated externally;
+its frozen acceptance register remains byte-preserved. No publishing, owner
+acceptance, whole-forest completion, Windows runtime or filesystem race guarantee.
 
 ## Next actions (standing authorization preserved)
 

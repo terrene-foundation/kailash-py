@@ -1,5 +1,5 @@
 {
-  "source_head": "07ee23ffee758a74ec42abd2bdc90c3aba57e062",
+  "source_head": "c7078698fcfc02ac4316014a96762388efd97f16",
   "promotion": {
     "pr": 2229,
     "remote_head": "ce4c9de676f1ab1e0a159cb8c273dcf2e47a2cb4",
@@ -221,9 +221,8 @@
     }
   },
   "active": [
-    "shared SQLite address parsing and caller cache identity parity; author archive_checkpoint in csq14-sqlite-address-parity; memory39ce borrowed base",
-    "independent Core correctness/security consultation and two scoped review rounds on forthcoming frozen SQLite patch",
-    "final full root/DataFlow suites, all-files hooks and three union reviews after final source",
+    "final full root/DataFlow suites, all-files hooks and three whole-union reviews on the committed candidate",
+    "pending user decision on undefined documented pools kwarg; do not invent contract or infer Rule3c exception",
     "exact-head remote checks, separate approved merge, three post-main reviews and clean sibling drain"
   ],
   "final_obligations": [
@@ -260,19 +259,20 @@
     "csq14-security-path",
     "csq14-python-exception-diagnostics",
     "csq14-security-path-review",
-    "csq14-memory-cache-identity"
-  ],
-  "review_worktrees": [
+    "csq14-memory-cache-identity",
     "csq14-final2-correctness",
     "csq14-final2-security",
-    "csq14-final2-coverage",
+    "csq14-final2-coverage"
+  ],
+  "review_worktrees": [
     "csq14-sqlite-address-parity",
-    "csq14-final3-correctness"
+    "csq14-final3-correctness",
+    "csq14-final3-security",
+    "csq14-final3-coverage"
   ],
   "open_findings": [
-    "inconsistent relative/native SQLite file addresses across producers",
-    "draft normalized cache identity conflates real disk and memdb VFS databases; correction in progress",
-    "Linux malformed UTF-8 native filenames produce distinct actual databases but a draft shared cache identity; admission repair in progress"
+    "User decision on unused undefined documented DataFlow pools kwarg remains pending",
+    "Final full gates and whole-union reviews remain open"
   ],
   "holistic_attempt": {
     "source": "51fcd96c0 plus forwarding569e68 overlay",
@@ -334,6 +334,60 @@
       "patch": "/tmp/csq14-conditional-state-complete.patch",
       "sha256": "31f904ee8f7156012dd03c118abbdb72623b50f204c373020b6f96a3bd03b15c",
       "status": "landedec01c3b87"
+    },
+    "sqlite_candidate": {
+      "patch": "/tmp/csq14-sqlite-address-parity-refined4.patch",
+      "sha256": "f54fc4314187f2addc741031f4455acce05c49f4b6c76070461bc575a87be1e3",
+      "status": "landed c7078698fcfc02ac4316014a96762388efd97f16; two independent scoped correctness rounds and two security rounds CLEAN; final full promotion gates open",
+      "parent_focused_tests": 209,
+      "parent_core_tests": 49,
+      "parent_native_linux_probe": "/tmp/csq14-sqlite-native-independent-refined.log",
+      "parent_negative_control": "/tmp/csq14-sqlite-native-old-control.log",
+      "parent_warning_inventory": "DataFlow81 intentional records (54declaredtestmode,14memoryadvisories,5rollback,1abandonedtransaction,1rawmemoryopposite,2createfailures,4contentfailures); Core7 injected type-only close-failure diagnostics; Pythonwarnings[]",
+      "commit": "c7078698fcfc02ac4316014a96762388efd97f16",
+      "receipt": "workspaces/issue-1720-llm-consolidation/04-validate/csq14-sqlite-address-repair-receipt.json"
     }
+  },
+  "final2_overlay_backup": "/tmp/csq14-drained-final2-overlays-33d",
+  "prepared_final3_inventory": {
+    "source": "4fe79789f5e051f313c78bbbce70602abb9bd7e1",
+    "repair_files": 127,
+    "promotion_files": 781,
+    "original_named_tests": 764,
+    "original_exact_check_retention": 745,
+    "semantic_rows": 19,
+    "runtime_verdict": "not run; pending final SQLite source",
+    "manifest": "/tmp/csq14-final3-union-test-manifest.json"
+  },
+  "ownership_fixture_correction": {
+    "patch": "/tmp/csq14-owner-fixture-backend.patch",
+    "sha256": "0b4c34f63b695104be046a66a6e776661fd15edb6bb197bfac021d8241196bb9",
+    "status": "two independent scoped rounds CLEAN;20strict and2reached ownedclose-control failures; all21asserts/32assertion-or-raises calls retained",
+    "scope": "construct requested backend before owner identity is pinned; preserve21 original assertion ASTs; bounded cancellation setup cleanup",
+    "independent_tests": "/tmp/csq14-owner-fixture-correctness-tests.log",
+    "independent_control": "/tmp/csq14-owner-fixture-correctness-control.log",
+    "commit": "ab6fd9f3a"
+  },
+  "pending_user_decision": {
+    "question": "Record unused/undefined DataFlow pools kwarg for separate design and finish promotion, or implement primary/read overrides now?",
+    "reason": "AGENTS.md zero-tolerance Rule3c requires documented kwargs consumed or forwarded; no key-shape/precedence contract exists",
+    "state": "async question submitted; no answer received; elapsed time is not approval",
+    "evidence": "ml_correctness_review found zero AST loads with positive-control; specs/dataflow-core.md constructor declares pools, engine signature says Per-database pool overrides; no canonical dictionary forwarding API"
+  },
+  "lifecycle_fixture_correction": {
+    "patch": "/tmp/csq14-lifecycle-fixture.patch",
+    "sha256": "5f15b29e1a45e48564395c4e5cc5cbf219d32644575592e757a28b383f44e480",
+    "status": "landed; two independent scoped rounds clean;20 strict with no warnings; warning suppression reached2 expected assertion failures; all38 original assertions retained",
+    "scope": "Three manual finalizer tests clear only fake connection ownership in finally; all original assertions retained; no production destructor edit",
+    "log": "/tmp/csq14-lifecycle-fixture-test.log",
+    "commit": "ab6fd9f3a",
+    "independent_tests": "/tmp/csq14-lifecycle-fixture-correctness-tests.log",
+    "independent_control": "/tmp/csq14-lifecycle-fixture-correctness-control.log"
+  },
+  "parameter_fixture_correction": {
+    "commit": "4e479097e",
+    "patch_sha256": "da3f4da4217ab70282fbf68158971daf4dd01e0882d954a90b3fd85edf3b6293",
+    "review": "two scoped independent rounds CLEAN;12 strict,0warnings; all27 original assertions retained; omitted-close opposing control retained12runtimeowners and rejected all12",
+    "evidence": "/tmp/csq14-param-fixture-correctness-good.log; /tmp/csq14-param-fixture-correctness-omit.log"
   }
 }
