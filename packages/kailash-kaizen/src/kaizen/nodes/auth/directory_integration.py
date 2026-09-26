@@ -18,7 +18,6 @@ from kailash.nodes.auth.directory_integration import (
     DirectoryIntegrationNode as CoreDirectoryIntegrationNode,
 )
 from kailash.utils.secure_logging import sanitize_log_value
-from kailash.utils.url_credentials import fingerprint_value
 from kaizen.nodes._env_model import detect_provider, resolve_default_model
 from kaizen.nodes.ai import LLMAgentNode
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
@@ -469,16 +468,9 @@ Example output:
             if "user" not in roles:
                 roles.insert(0, "user")
 
-            # Same disposition as the SSO role-assignment record: the email is
-            # directory-supplied PII on the provisioning path, so it is
-            # replaced by the stable non-reversible correlation tag rather
-            # than merely flattened. See `nodes/auth/sso.py` for the reasoning.
-            email = user_data.get("email")
-            logger.info(
-                "AI role assignment for %s: %s",
-                f"email:{fingerprint_value(str(email))}" if email else "unknown",
-                sanitize_log_value(roles),
-            )
+            # Email-derived tags remain enumerable from candidate addresses.
+            # Keep the role-assignment event and roles without an email field.
+            logger.info("AI role assignment: %s", sanitize_log_value(roles))
 
             return roles
 
