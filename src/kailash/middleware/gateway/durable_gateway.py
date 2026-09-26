@@ -538,6 +538,9 @@ class DurableAPIGateway(WorkflowAPIGateway):
                 "state": projection,
             }
 
+    async def _lifespan_shutdown(self) -> None:
+        await self.close()
+
     async def close(self, shutdown_timeout: float = 30.0):
         """Close the durable gateway and cleanup resources.
 
@@ -547,42 +550,56 @@ class DurableAPIGateway(WorkflowAPIGateway):
         """
         import time
 
-        # Wait for active requests to complete with timeout
-        if self.active_requests:
-            logger.info(
-                f"Graceful shutdown: waiting for {len(self.active_requests)} "
-                f"active requests (timeout={shutdown_timeout}s)"
-            )
-            start = time.monotonic()
-            while (
-                self.active_requests and (time.monotonic() - start) < shutdown_timeout
-            ):
-                await asyncio.sleep(0.5)
-
+        try:
+            # Wait for active requests to complete with timeout
             if self.active_requests:
-                remaining = list(self.active_requests.keys())
-                logger.warning(
-                    f"Shutdown timeout reached with {len(remaining)} requests "
-                    f"still active: {remaining[:5]}"
+                logger.info(
+                    f"Graceful shutdown: waiting for {len(self.active_requests)} "
+                    f"active requests (timeout={shutdown_timeout}s)"
                 )
-                # Cancel remaining requests
-                for req_id, durable_request in list(self.active_requests.items()):
-                    try:
-                        await durable_request.cancel()
-                    except Exception as e:
-                        logger.error(f"Failed to cancel request {req_id}: {e}")
+                start = time.monotonic()
+                while (
+                    self.active_requests
+                    and (time.monotonic() - start) < shutdown_timeout
+                ):
+                    await asyncio.sleep(0.5)
 
-        # Cancel background tasks
-        for task in self._background_tasks:
-            if not task.done():
-                task.cancel()
+                if self.active_requests:
+                    remaining = list(self.active_requests.keys())
+                    logger.warning(
+                        f"Shutdown timeout reached with {len(remaining)} requests "
+                        f"still active: {remaining[:5]}"
+                    )
+                    for req_id, durable_request in list(self.active_requests.items()):
+                        try:
+                            await durable_request.cancel()
+                        except Exception as e:
+                            logger.error(f"Failed to cancel request {req_id}: {e}")
+
+        finally:
+            try:
+                for task in self._background_tasks:
+                    if not task.done():
+                        task.cancel()
+                if self._background_tasks:
+                    outcomes = await asyncio.gather(
+                        *self._background_tasks, return_exceptions=True
+                    )
+                    for outcome in outcomes:
+                        if isinstance(outcome, BaseException) and not isinstance(
+                            outcome, asyncio.CancelledError
+                        ):
+                            raise outcome
+            finally:
+                self._background_tasks.clear()
                 try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
-
-        # Close components
-        await self.checkpoint_manager.close()
-        await self.deduplicator.close()
-        await self.event_store.close()
+                    await self.checkpoint_manager.close()
+                finally:
+                    try:
+                        await self.deduplicator.close()
+                    finally:
+                        try:
+                            await self.event_store.close()
+                        finally:
+                            await super()._close_resources()
         logger.info("Durable gateway closed")

@@ -249,15 +249,15 @@ class WorkflowAPIGateway:
             # @app.on_event("startup")). Custom lifespan replaces Starlette's
             # _DefaultLifespan; without this iteration consumer hooks
             # silently drop (the #500 bug class).
-            await drive_router_lifespan_startup(app)
-            yield
-            # Shutdown
-            logger.info("Shutting down gateway")
-            await drive_router_lifespan_shutdown(app)
-            if self._proxy_client:
-                await self._proxy_client.aclose()
-            self._close_workflow_apis()
-            self.executor.shutdown(wait=True)
+            try:
+                await drive_router_lifespan_startup(app)
+                try:
+                    yield
+                finally:
+                    logger.info("Shutting down gateway")
+                    await drive_router_lifespan_shutdown(app)
+            finally:
+                await self._lifespan_shutdown()
 
         self.app = FastAPI(
             title=title, description=description, version=version, lifespan=lifespan
@@ -370,12 +370,29 @@ class WorkflowAPIGateway:
         self._workflow_apis = {}
 
     def close(self) -> None:
-        """Synchronously release per-workflow API runtimes (issue #1285).
+        """Synchronously release per-workflow runtimes and the executor.
 
         The async lifespan shutdown also performs this release; ``close()`` is
         the teardown path for a gateway constructed but never served.
         """
-        self._close_workflow_apis()
+        try:
+            self._close_workflow_apis()
+        finally:
+            self.executor.shutdown(wait=True)
+
+    async def _close_resources(self) -> None:
+        """Release async and sync owners, even when one close fails."""
+        try:
+            if self._proxy_client:
+                await self._proxy_client.aclose()
+        finally:
+            # Subclasses may expose an async close(), so select this owner's
+            # synchronous implementation explicitly rather than dispatching.
+            WorkflowAPIGateway.close(self)
+
+    async def _lifespan_shutdown(self) -> None:
+        """Dispatch complete lifespan cleanup to the resource-owning subclass."""
+        await self._close_resources()
 
     def _register_root_endpoints(self):
         """Register gateway-level endpoints."""

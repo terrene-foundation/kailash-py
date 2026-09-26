@@ -327,6 +327,10 @@ class EnhancedDurableAPIGateway(DurableAPIGateway):
 
     async def shutdown(self):
         """Shutdown the gateway and cleanup resources."""
+        await self.close()
+
+    async def close(self, shutdown_timeout: float = 30.0):
+        """Release enhanced and inherited owners through the public close API."""
         try:
             # Cancellation while draining requests must still release owners.
             for task in self._cleanup_tasks:
@@ -345,7 +349,7 @@ class EnhancedDurableAPIGateway(DurableAPIGateway):
                     # runtime reference and parent loop/signal resources.
                     self._runtime.close()
                 finally:
-                    await super().close()
+                    await super().close(shutdown_timeout=shutdown_timeout)
 
     async def health_check(self) -> Dict[str, Any]:
         """Perform health check on gateway and resources."""
