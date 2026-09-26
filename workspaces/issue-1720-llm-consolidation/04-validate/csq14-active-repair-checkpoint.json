@@ -1,5 +1,5 @@
 {
-  "source_head": "15960d9478e327389413e3765e4284801b16fa8b",
+  "source_head": "a2298eb7f9f3db63392e1d7e7fe6d940bc2c6eff",
   "promotion": {
     "pr": 2229,
     "remote_head": "ce4c9de676f1ab1e0a159cb8c273dcf2e47a2cb4",
@@ -147,6 +147,46 @@
         "/tmp/csq14-python-diagnostics-parent-tests.log",
         "/tmp/csq14-python-diagnostics-parent-control.log"
       ]
+    },
+    "pact_api_ci": {
+      "commit": "33caf1bfe",
+      "status": "landed; final union gates remain open"
+    },
+    "graph_fixture": {
+      "commit": "8be44bcf5",
+      "status": "landed; final union gates remain open"
+    },
+    "signal_validation": {
+      "commit": "14e916aaf",
+      "status": "landed; final union gates remain open"
+    },
+    "dataflow_privacy_expectations": {
+      "commit": "927e8fca1",
+      "status": "landed; final union gates remain open"
+    },
+    "gateway_fixture": {
+      "commit": "b11496ad4",
+      "status": "landed; final union gates remain open"
+    },
+    "route_scanner": {
+      "commit": "d1e22be9d",
+      "status": "landed; final union gates remain open"
+    },
+    "namespace_fixture": {
+      "commit": "af4b4e506",
+      "status": "landed; final union gates remain open"
+    },
+    "runtime_diagnostics": {
+      "commit": "9279d92c3",
+      "status": "landed; final union gates remain open"
+    },
+    "validation_connection_ownership": {
+      "commit": "fb7187f36",
+      "status": "landed; final union gates remain open"
+    },
+    "tdd_fixture": {
+      "commit": "a2298eb7f",
+      "status": "landed; final union gates remain open"
     }
   },
   "frozen": {
@@ -167,8 +207,12 @@
     }
   },
   "active": [
-    "three final whole-union reviews",
-    "complete root/DataFlow suites and all configured all-files hooks",
+    "single-owner conditional fallback 3dba43e4 applied uncommitted; independent review active",
+    "optimized conditional checkpoint replay and completion publisher follow-on",
+    "memory database cache identity and SQLite alias canonicalization",
+    "direct diagnostic scanner a1ccc979 applied uncommitted",
+    "planner positive-fixture warning review",
+    "final full suites/hooks and three union reviews after source freezes",
     "nine proposed CodeQL dismissals await explicit approval; none executed"
   ],
   "final_obligations": [
@@ -203,15 +247,20 @@
     "csq14-privacy-review",
     "csq14-mfa-review",
     "csq14-security-path",
-    "csq14-python-exception-diagnostics"
+    "csq14-python-exception-diagnostics",
+    "csq14-security-path-review"
   ],
   "review_worktrees": [
-    "csq14-security-path-review",
     "csq14-final2-correctness",
     "csq14-final2-security",
-    "csq14-final2-coverage"
+    "csq14-final2-coverage",
+    "csq14-memory-cache-identity"
   ],
-  "open_findings": [],
+  "open_findings": [
+    "optimized checkpoint replay executes completed nodes again",
+    "distinct memory database owners currently share query-cache key",
+    "positive nested-conditional fixture replaces WorkflowDAG with DiGraph"
+  ],
   "holistic_attempt": {
     "source": "51fcd96c0 plus forwarding569e68 overlay",
     "root_passed": 696,
@@ -229,5 +278,21 @@
       "/tmp/csq14-merged-dataflow-privacy-tests.log"
     ]
   },
-  "review_overlay_backups": "/tmp/csq14-drained-review-overlays"
+  "review_overlay_backups": "/tmp/csq14-drained-review-overlays",
+  "last_full_gates": {
+    "source": "a6ff5afe38d490b142c8275f07c542ea158c3f02",
+    "root": {
+      "failed": 8,
+      "passed": 3398
+    },
+    "dataflow_unit": {
+      "failed": 3,
+      "passed": 3481
+    },
+    "all_files_hooks": {
+      "pytest_failed": 1,
+      "pytest_passed": 4897
+    },
+    "status": "not clean; findings repaired, rerun required after all current source changes"
+  }
 }

@@ -2,27 +2,43 @@
 
 ## Live repair checkpoint — supersedes earlier statuses
 
-Final source candidate is `15960d9478e327389413e3765e4284801b16fa8b`. Runtime controls/timer ownership,
-constructor/runtime-input separation, real DataFlow transactions/cache handling,
-gateway per-app authentication/resource ownership and canonical path checks are landed.
-Automatic Core/DataFlow, MFA and Python exception diagnostics omit payload values;
-public exception/result contracts and explicit caller-authored logging are preserved.
-All substantive repair shards have two delivered scoped review rounds, reached
-negative controls and retained test evidence. The latest selections include 281
-runtime, 381 configuration, 403 MFA, 110 security/path and 42 Python cases. These
-overlap and must not be added as a unique coverage total. Ten macOS resource-limit
-skips do not cover those Linux paths. No filesystem race prevention or Windows
-runtime claim is made. Completed implementation siblings are drained.
+Committed source is `a2298eb7f9f3db63392e1d7e7fe6d940bc2c6eff`; this is NOT the final promotion candidate.
+New landed repairs include PACT API CI provisioning (33caf1bfe), graph fixture
+ownership (8be44bcf5), SignalWait validation (14e916aaf), real DataFlow privacy
+assertions (927e8fca1), gateway fixture cleanup (b11496ad4), route/scanner
+instrumentation (d1e22be9d), cold namespace configuration (af4b4e506), automatic
+runtime diagnostics (9279d92c3), temporary DataFlow connection ownership
+(fb7187f36), and isolated TDD fixtures (a2298eb7f).
+Runtime diagnostics: 229 strict cases, two scoped independent rounds, unchanged
+nonlogging ASTs in five production modules, actual missing-key record/stream
+probe, and reached old-frame control (12 hits, 10 failures). Ownership: 25 local
+strict cases, original real SQLite cancellation reproduction now propagates
+cancellation after disposal, six reached prior-scope failures, independent
+PostgreSQL run and two scoped review rounds. Debug timing notices were inventoried;
+these receipts do not claim whole-suite warning absence or MySQL coverage.
 
-Three final reviewers will assess the full promotion union and repair interfaces
-at this source; final root/DataFlow suites and every configured all-files hook,
-including pytest-check, remain OPEN. Historical greens do not cover this candidate.
-D1 promotion approval persists. PR #2229 remains at `ce4c9de67` until those gates pass.
-Nine proposed CodeQL dismissals await explicit approval; none was executed.
-Exact-head required checks and previously failing jobs must succeed before a
-separate merge operation. Three post-main union/tree-parity reviews remain due.
-Five stashes and 52 uncertain historical refs remain held. Package publishing,
-owner acceptance and whole-forest completion are not authorized or claimed.
+OPEN source work: single-owner conditional fallback (frozen 3dba43e4, applied
+uncommitted), optimized checkpoint replay/completion plumbing (separate follow-on),
+and canonical memory database cache identity/SQLite alias handling. A scanner
+follow-on (a1ccc979) restricts direct-expression findings to actual logger arguments;
+public result dictionaries are not log sinks. Planner fixture warnings are under
+review. Active siblings are final2-correctness, final2-security, final2-coverage,
+and memory-cache-identity. Preserve their owned overlays.
+
+The a6ff5afe full gates did run and were NOT clean: Linux root 8 failed/3398
+passed after API provisioning, DataFlow unit 3 failed/3481 passed, Mac hooks
+pytest-check 1 failed/4897 passed. Their identified fixtures/expectations are now
+repaired, but those historical runs do not cover the new source. Final full root
+and DataFlow suites, every all-files hook including pytest-check, and three
+whole-union reviews remain OPEN. Authorized per-commit pytest-check skips remain
+tracked here until that complete all-files gate passes. No push has occurred.
+
+D1 promotion approval persists. PR #2229 remote head remains ce4c9de67. Nine
+proposed CodeQL dismissals await explicit approval; none was executed. Required
+exact-head checks and every previously failing test job must pass before the
+separate merge command. Three post-main union/tree-parity reviews remain due.
+Preserve five stashes and 52 uncertain refs. No publishing, owner acceptance,
+whole-forest completion, Windows runtime or filesystem race-prevention claim.
 
 
 ## Current continuation checkpoint — supersedes historical gate states
