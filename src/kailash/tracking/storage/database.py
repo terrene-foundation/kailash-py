@@ -38,17 +38,25 @@ class SQLiteStorage(StorageBackend):
         self._lock = threading.Lock()
         if db_path is None:
             db_path = os.path.expanduser("~/.kailash/tracking/tracking.db")
-        elif db_path.startswith("sqlite://"):
-            # Support sqlite:// URL format for backward compatibility
-            db_path = db_path.replace("sqlite://", "")
-            db_path = os.path.expanduser(db_path)
+        from urllib.parse import unquote, urlsplit
 
-        # Create parent directory if needed
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        from kailash.utils.sqlite_url import (
+            sqlite_connection_target,
+            sqlite_memory_uri_kind,
+        )
 
-        self.db_path = db_path
-        # check_same_thread=False for cross-thread access (with locking)
-        self.conn = sqlite3.connect(db_path, check_same_thread=False)
+        target, options = sqlite_connection_target(db_path)
+        disk_path = unquote(urlsplit(target).path) if options.get("uri") else target
+        if not options.get("uri"):
+            target = os.path.expanduser(target)
+            disk_path = target
+        if target != ":memory:" and sqlite_memory_uri_kind(db_path) is None:
+            directory = os.path.dirname(disk_path)
+            if directory:
+                os.makedirs(directory, exist_ok=True)
+        self.db_path = target
+        # Explicit URL options retain priority over the cross-thread default.
+        self.conn = sqlite3.connect(target, **{"check_same_thread": False, **options})
         self._closed = False
 
         # Enable optimizations

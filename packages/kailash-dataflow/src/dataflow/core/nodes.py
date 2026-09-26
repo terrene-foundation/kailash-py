@@ -1805,8 +1805,9 @@ class NodeGenerator:
                         connection_string = kwargs.get("database_url")
                         if not connection_string:
                             connection_string = (
-                                self.dataflow_instance.config.database.url or ":memory:"
-                            )
+                                vars(self.dataflow_instance).get("_sqlite_database_url")
+                                or self.dataflow_instance.config.database.url
+                            ) or ":memory:"
 
                         # Detect database type for SQL generation
                         if kwargs.get("database_url"):
@@ -2498,8 +2499,9 @@ class NodeGenerator:
                     connection_string = kwargs.get("database_url")
                     if not connection_string:
                         connection_string = (
-                            self.dataflow_instance.config.database.url or ":memory:"
-                        )
+                            vars(self.dataflow_instance).get("_sqlite_database_url")
+                            or self.dataflow_instance.config.database.url
+                        ) or ":memory:"
 
                     # Detect database type for SQL generation
                     if kwargs.get("database_url"):
@@ -2795,8 +2797,9 @@ class NodeGenerator:
                         connection_string = kwargs.get("database_url")
                         if not connection_string:
                             connection_string = (
-                                self.dataflow_instance.config.database.url or ":memory:"
-                            )
+                                vars(self.dataflow_instance).get("_sqlite_database_url")
+                                or self.dataflow_instance.config.database.url
+                            ) or ":memory:"
 
                         # Detect database type for SQL generation
                         if kwargs.get("database_url"):
@@ -3087,8 +3090,9 @@ class NodeGenerator:
                     connection_string = kwargs.get("database_url")
                     if not connection_string:
                         connection_string = (
-                            self.dataflow_instance.config.database.url or ":memory:"
-                        )
+                            vars(self.dataflow_instance).get("_sqlite_database_url")
+                            or self.dataflow_instance.config.database.url
+                        ) or ":memory:"
 
                     # Detect database type for SQL generation
                     if kwargs.get("database_url"):
@@ -3348,7 +3352,11 @@ class NodeGenerator:
 
                         # Create query builder
                         builder = create_query_builder(
-                            table_name, self.dataflow_instance.config.database.url
+                            table_name,
+                            (
+                                vars(self.dataflow_instance).get("_sqlite_database_url")
+                                or self.dataflow_instance.config.database.url
+                            ),
                         )
 
                         # Apply filters using MongoDB-style operators
@@ -3394,8 +3402,9 @@ class NodeGenerator:
                         list_connection_string = kwargs.get("database_url")
                         if not list_connection_string:
                             list_connection_string = (
-                                self.dataflow_instance.config.database.url or ":memory:"
-                            )
+                                vars(self.dataflow_instance).get("_sqlite_database_url")
+                                or self.dataflow_instance.config.database.url
+                            ) or ":memory:"
 
                         # Detect database type for SQL generation
                         if kwargs.get("database_url"):
@@ -3443,8 +3452,9 @@ class NodeGenerator:
                         connection_string = kwargs.get("database_url")
                         if not connection_string:
                             connection_string = (
-                                self.dataflow_instance.config.database.url or ":memory:"
-                            )
+                                vars(self.dataflow_instance).get("_sqlite_database_url")
+                                or self.dataflow_instance.config.database.url
+                            ) or ":memory:"
 
                         # Detect database type within the function scope
                         from ..adapters.connection_parser import ConnectionParser
@@ -3670,8 +3680,9 @@ class NodeGenerator:
                     connection_string = kwargs.get("database_url")
                     if not connection_string:
                         connection_string = (
-                            self.dataflow_instance.config.database.url or ":memory:"
-                        )
+                            vars(self.dataflow_instance).get("_sqlite_database_url")
+                            or self.dataflow_instance.config.database.url
+                        ) or ":memory:"
 
                     # Detect database type
                     if kwargs.get("database_url"):
@@ -4255,7 +4266,11 @@ class NodeGenerator:
 
                         # Create query builder
                         builder = create_query_builder(
-                            table_name, self.dataflow_instance.config.database.url
+                            table_name,
+                            (
+                                vars(self.dataflow_instance).get("_sqlite_database_url")
+                                or self.dataflow_instance.config.database.url
+                            ),
                         )
 
                         # Apply filters using MongoDB-style operators
@@ -4276,8 +4291,9 @@ class NodeGenerator:
                         count_connection_string = kwargs.get("database_url")
                         if not count_connection_string:
                             count_connection_string = (
-                                self.dataflow_instance.config.database.url or ":memory:"
-                            )
+                                vars(self.dataflow_instance).get("_sqlite_database_url")
+                                or self.dataflow_instance.config.database.url
+                            ) or ":memory:"
 
                         # Detect database type for SQL generation
                         if kwargs.get("database_url"):
@@ -4304,8 +4320,9 @@ class NodeGenerator:
                     connection_string = kwargs.get("database_url")
                     if not connection_string:
                         connection_string = (
-                            self.dataflow_instance.config.database.url or ":memory:"
-                        )
+                            vars(self.dataflow_instance).get("_sqlite_database_url")
+                            or self.dataflow_instance.config.database.url
+                        ) or ":memory:"
 
                     # Detect database type
                     from ..adapters.connection_parser import ConnectionParser

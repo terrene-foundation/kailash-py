@@ -525,6 +525,8 @@ def create_query_builder(
     Returns:
         QueryBuilder instance
     """
+    from kailash.utils.sqlite_url import is_sqlite_url
+
     if database_url:
         if database_url.startswith(("postgresql://", "postgres://")):
             db_type = DatabaseType.POSTGRESQL
@@ -532,7 +534,7 @@ def create_query_builder(
             ("mysql://", "mysql+pymysql://", "mysql+aiomysql://")
         ):
             db_type = DatabaseType.MYSQL
-        elif database_url.startswith("sqlite://"):
+        elif is_sqlite_url(database_url):
             db_type = DatabaseType.SQLITE
         else:
             # Default to PostgreSQL

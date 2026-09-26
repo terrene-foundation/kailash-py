@@ -745,8 +745,12 @@ class MigrationHistoryManager:
         the in-memory path.
         """
         return getattr(self.dataflow, "_memory_db_uri", None) or (
-            self.dataflow.config.database.get_connection_url(
-                self.dataflow.config.environment
+            (
+                vars(self.dataflow).get("_memory_db_uri")
+                or vars(self.dataflow).get("_sqlite_database_url")
+                or self.dataflow.config.database.get_connection_url(
+                    self.dataflow.config.environment
+                )
             )
         )
 
@@ -1268,6 +1272,13 @@ class MigrationHistoryManager:
         connection_url = self._state_connection_url()
         database_type = ConnectionParser.detect_database_type(connection_url)
 
+        from kailash.utils.sqlite_url import sqlite_is_readonly
+
+        if database_type.lower() == "sqlite" and sqlite_is_readonly(connection_url):
+            # Read-only owners may inspect existing data without creating SDK
+            # bookkeeping tables. Explicit migration writes still fail normally.
+            return
+
         # Create the migration history table with database-specific SQL
         if database_type.lower() == "sqlite":
             create_table_sql = """
@@ -1519,8 +1530,12 @@ class SchemaStateManager:
         the in-memory path.
         """
         return getattr(self.dataflow, "_memory_db_uri", None) or (
-            self.dataflow.config.database.get_connection_url(
-                self.dataflow.config.environment
+            (
+                vars(self.dataflow).get("_memory_db_uri")
+                or vars(self.dataflow).get("_sqlite_database_url")
+                or self.dataflow.config.database.get_connection_url(
+                    self.dataflow.config.environment
+                )
             )
         )
 

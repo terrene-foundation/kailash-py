@@ -469,8 +469,12 @@ class BulkOperations:
 
         # Perform actual database insertion
         try:
-            connection_string = self.dataflow.config.database.get_connection_url(
-                self.dataflow.config.environment
+            connection_string = (
+                vars(self.dataflow).get("_memory_db_uri")
+                or vars(self.dataflow).get("_sqlite_database_url")
+                or self.dataflow.config.database.get_connection_url(
+                    self.dataflow.config.environment
+                )
             )
             database_type = self.dataflow._detect_database_type()
             # Use stored table_name from _models (respects custom __tablename__)
@@ -742,8 +746,12 @@ class BulkOperations:
                     return {"success": False, "error": str(e), "records_processed": 0}
 
                 # Get database connection and execute UPDATE
-                connection_string = self.dataflow.config.database.get_connection_url(
-                    self.dataflow.config.environment
+                connection_string = (
+                    vars(self.dataflow).get("_memory_db_uri")
+                    or vars(self.dataflow).get("_sqlite_database_url")
+                    or self.dataflow.config.database.get_connection_url(
+                        self.dataflow.config.environment
+                    )
                 )
                 database_type = self.dataflow._detect_database_type()
                 # Use stored table_name from _models (respects custom __tablename__)
@@ -957,8 +965,12 @@ class BulkOperations:
                 return {"success": False, "error": str(e), "records_processed": 0}
 
             try:
-                connection_string = self.dataflow.config.database.get_connection_url(
-                    self.dataflow.config.environment
+                connection_string = (
+                    vars(self.dataflow).get("_memory_db_uri")
+                    or vars(self.dataflow).get("_sqlite_database_url")
+                    or self.dataflow.config.database.get_connection_url(
+                        self.dataflow.config.environment
+                    )
                 )
                 database_type = self.dataflow._detect_database_type()
                 # Use stored table_name from _models (respects custom __tablename__)
@@ -1203,8 +1215,12 @@ class BulkOperations:
 
             try:
                 # Get database connection and execute DELETE
-                connection_string = self.dataflow.config.database.get_connection_url(
-                    self.dataflow.config.environment
+                connection_string = (
+                    vars(self.dataflow).get("_memory_db_uri")
+                    or vars(self.dataflow).get("_sqlite_database_url")
+                    or self.dataflow.config.database.get_connection_url(
+                        self.dataflow.config.environment
+                    )
                 )
                 database_type = self.dataflow._detect_database_type()
                 # Use stored table_name from _models (respects custom __tablename__)
@@ -1560,8 +1576,12 @@ class BulkOperations:
         total_skipped = 0
         batches_processed = 0
         try:
-            connection_string = self.dataflow.config.database.get_connection_url(
-                self.dataflow.config.environment
+            connection_string = (
+                vars(self.dataflow).get("_memory_db_uri")
+                or vars(self.dataflow).get("_sqlite_database_url")
+                or self.dataflow.config.database.get_connection_url(
+                    self.dataflow.config.environment
+                )
             )
             database_type = self.dataflow._detect_database_type()
             # Use stored table_name from _models (respects custom __tablename__)

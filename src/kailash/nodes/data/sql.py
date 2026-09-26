@@ -59,35 +59,19 @@ def _configure_sqlite_memory_pool(connection_string: str, pool_config: dict) -> 
     ``file:`` URI.
 
     Returns the (possibly rewritten) connection string; mutates ``pool_config``
-    in place ONLY on the memory path. File-backed SQLite (``sqlite:///x.db``),
-    PostgreSQL and MySQL are returned BYTE-UNCHANGED with their pool config
-    untouched.
+    in place ONLY on the memory path. SQLite addresses are normalized through
+    ``sqlite_sqlalchemy_url``; PostgreSQL/MySQL URLs and non-memory pool
+    configuration remain unchanged.
     """
+    from kailash.utils.sqlite_url import sqlite_memory_uri_kind, sqlite_sqlalchemy_url
+
     cs = connection_string
-    is_file_memory = cs.startswith("file:") and "mode=memory" in cs
-    is_sqlite_memory = cs.startswith("sqlite") and (
-        ":memory:" in cs or "mode=memory" in cs
-    )
-    if not (is_file_memory or is_sqlite_memory):
-        # Non-memory path: file SQLite / PostgreSQL / MySQL untouched.
-        return cs
+    if sqlite_memory_uri_kind(cs) is None:
+        # File SQLite uses canonical address conversion; other engines pass through.
+        return sqlite_sqlalchemy_url(cs)
 
     connect_args = dict(pool_config.get("connect_args", {}))
-    if is_file_memory:
-        # SQLAlchemy needs a dialect scheme in front of the raw file: URI AND
-        # the ``uri=true`` flag MUST live in the URL QUERY STRING — not in
-        # connect_args. If ``uri`` is passed only via connect_args, SQLAlchemy's
-        # pysqlite dialect parses ``?mode=memory&cache=shared`` as its OWN URL
-        # query args and strips them, so sqlite3 opens a PRIVATE unnamed memory
-        # DB and cross-connection ``cache=shared`` is silently lost (issue #1502
-        # — the registry sync path then can't see the anchor/Express DB). With
-        # ``uri=true`` in the query string the dialect forwards the whole
-        # ``file:...`` URI verbatim to ``sqlite3.connect(uri=True)``, preserving
-        # the shared cache across every connection to this instance's DB.
-        cs = f"sqlite:///{connection_string}&uri=true"
-        connect_args["check_same_thread"] = False
-    else:
-        connect_args["check_same_thread"] = False
+    connect_args["check_same_thread"] = False
 
     # StaticPool: one shared connection, safe to reuse across threads. It does
     # NOT accept pool_size / max_overflow / pool_timeout (QueuePool-only) — pop
@@ -100,7 +84,7 @@ def _configure_sqlite_memory_pool(connection_string: str, pool_config: dict) -> 
         **pool_config.get("connect_args", {}),
         **connect_args,
     }
-    return cs
+    return sqlite_sqlalchemy_url(cs)
 
 
 # Import optimistic locking for enterprise concurrency control

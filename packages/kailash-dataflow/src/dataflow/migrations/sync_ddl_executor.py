@@ -177,36 +177,10 @@ class SyncDDLExecutor:
 
     def _get_sqlite_connection(self):
         """Get a synchronous SQLite connection."""
-        db_path = self.database_url
+        from kailash.utils.sqlite_url import sqlite_connection_target
 
-        # Issue #1502: a ``file:...?mode=memory&cache=shared`` URI reaches the
-        # per-DataFlow-instance shared in-memory DB. It MUST be opened with
-        # ``uri=True`` and MUST NOT be run through the ``sqlite://`` stripping
-        # below, or sqlite3 would treat the literal ``file:...`` text as a
-        # filesystem path and create a separate on-disk DB.
-        if db_path.startswith("file:"):
-            conn = sqlite3.connect(db_path, check_same_thread=False, uri=True)
-            logger.debug(
-                "sync_ddl_executor.created_sync_sqlite_uri_connection_for_ddl",
-                extra={"db_path": db_path},
-            )
-            return conn
-
-        if db_path.startswith("sqlite:///"):
-            db_path = db_path.replace("sqlite:///", "")
-        elif db_path.startswith("sqlite://"):
-            db_path = db_path.replace("sqlite://", "")
-
-        # For in-memory databases
-        if db_path == "" or db_path == ":memory:":
-            db_path = ":memory:"
-
-        conn = sqlite3.connect(db_path, check_same_thread=False)
-        logger.debug(
-            "sync_ddl_executor.created_sync_sqlite_connection_for_ddl",
-            extra={"db_path": db_path},
-        )
-        return conn
+        db_path, options = sqlite_connection_target(self.database_url)
+        return sqlite3.connect(db_path, **{"check_same_thread": False, **options})
 
     def _get_mysql_connection(self):
         """Get a synchronous MySQL connection using pymysql."""

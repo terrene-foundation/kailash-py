@@ -231,42 +231,32 @@ class SQLiteAdapter(DatabaseAdapter):
         self._connect_kwargs: Dict[str, Any] = {}
         memory_db_name = kwargs.get("memory_db_name")
 
-        if self.connection_string == ":memory:":
-            self.database_path = ":memory:"
-        elif self.connection_string.startswith("sqlite:///"):
-            path_part = self.connection_string.replace("sqlite:///", "")
-            if path_part == ":memory:":
-                self.database_path = ":memory:"
-            else:
-                self.database_path = "/" + path_part
-        elif self.connection_string.startswith("sqlite://"):
-            self.database_path = self.connection_string.replace("sqlite://", "")
-        elif self.connection_string.startswith("file:"):
-            if "?" in self.connection_string:
-                # URI with parameters — preserve full string
-                self.database_path = self.connection_string
-                self._connect_kwargs["uri"] = True
-            else:
-                self.database_path = self.connection_string[5:]
-        else:
-            # Assume it's a file path for SQLite
-            self.database_path = self.connection_string
+        from kailash.utils.sqlite_url import (
+            sqlite_connection_target,
+            sqlite_is_readonly,
+            sqlite_memory_uri_kind,
+        )
+
+        self.database_path, self._connect_kwargs = sqlite_connection_target(
+            self.connection_string
+        )
 
         # Detect memory databases and translate to URI shared-cache mode.
         # Each aiosqlite.connect(":memory:") creates a SEPARATE database.
         # URI shared-cache lets multiple connections see the SAME in-memory DB.
         self.is_memory_database = (
-            self.database_path == ":memory:" or "mode=memory" in self.database_path
+            sqlite_memory_uri_kind(self.connection_string) is not None
         )
+        self.is_read_only = sqlite_is_readonly(self.connection_string)
         if self.database_path == ":memory:":
             name = memory_db_name or f"dataflow_{id(self)}"
             self.database_path = f"file:{name}?mode=memory&cache=shared"
             self._connect_kwargs["uri"] = True
 
         # Enterprise SQLite configuration
-        self.enable_wal = kwargs.get(
-            "enable_wal", True
-        )  # Default to WAL for better concurrency
+        self.enable_wal = (
+            kwargs.get("enable_wal", True) and not self.is_read_only
+        )  # Read-only connections must not change journal mode.
         self.wal_mode = SQLiteWALMode(
             kwargs.get("wal_mode", "WAL" if self.enable_wal else "DELETE")
         )
@@ -352,6 +342,22 @@ class SQLiteAdapter(DatabaseAdapter):
         if "pragma_overrides" in kwargs:
             self.pragmas.update(kwargs["pragma_overrides"])
 
+        if self.is_read_only:
+            # Persistent setup pragmas cannot run on a read-only URI. Keep
+            # connection-local settings, and leave writes rejected by SQLite.
+            self.pragmas = {
+                key: value
+                for key, value in self.pragmas.items()
+                if key.lower()
+                not in {
+                    "journal_mode",
+                    "page_size",
+                    "auto_vacuum",
+                    "optimize",
+                    "wal_checkpoint",
+                }
+            }
+
     async def connect(self) -> None:
         """Establish SQLite connection with enterprise features."""
         _require_aiosqlite()
@@ -372,7 +378,7 @@ class SQLiteAdapter(DatabaseAdapter):
                 await self._initialize_performance_monitoring()
 
             # Create database directory if needed
-            if not self.is_memory_database:
+            if not self.is_memory_database and not self._connect_kwargs.get("uri"):
                 db_path = Path(self.database_path)
                 db_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -464,15 +470,22 @@ class SQLiteAdapter(DatabaseAdapter):
                     self._pool_stats.total_connections += 1
                     self._pool_stats.active_connections += 1
 
+            body_failed = False
             try:
                 yield conn
+            except BaseException:
+                body_failed = True
+                raise
             finally:
-                # Reset connection state before returning to pool
+                # Reset this borrowed pool connection before reuse. A failed
+                # statement may start an implicit transaction; that rollback is
+                # expected, unlike a successful caller abandoning a transaction.
                 try:
                     if conn.in_transaction:
-                        logger.warning(
-                            "Connection released with open transaction - rolling back"
-                        )
+                        if not body_failed:
+                            logger.warning(
+                                "Connection released with open transaction - rolling back"
+                            )
                         await conn.rollback()
                 except Exception as e:
                     logger.warning(
@@ -859,11 +872,15 @@ class SQLiteAdapter(DatabaseAdapter):
 
         try:
             if not self.is_memory_database:
-                db_size = os.path.getsize(self.database_path)
+                async with self._get_connection() as conn:
+                    async with conn.execute("PRAGMA database_list") as cursor:
+                        databases = await cursor.fetchall()
+                disk_path = next(row[2] for row in databases if row[1] == "main")
+                db_size = os.path.getsize(disk_path) if disk_path else 0
 
                 # Add WAL file size if it exists
-                wal_path = self.database_path + "-wal"
-                if os.path.exists(wal_path):
+                wal_path = disk_path + "-wal"
+                if disk_path and os.path.exists(wal_path):
                     db_size += os.path.getsize(wal_path)
 
                 return db_size
@@ -1086,12 +1103,18 @@ class SQLiteAdapter(DatabaseAdapter):
                 if not self.is_memory_database:
                     import os
 
-                    db_size_mb = os.path.getsize(self.database_path) / (1024 * 1024)
+                    cursor = await conn.execute("PRAGMA database_list")
+                    databases = await cursor.fetchall()
+                    await cursor.close()
+                    disk_path = next(row[2] for row in databases if row[1] == "main")
+                    db_size_mb = (
+                        os.path.getsize(disk_path) / (1024 * 1024) if disk_path else 0.0
+                    )
 
                     # Check for WAL file
-                    wal_path = self.database_path + "-wal"
+                    wal_path = disk_path + "-wal"
                     wal_size_mb = 0
-                    if os.path.exists(wal_path):
+                    if disk_path and os.path.exists(wal_path):
                         wal_size_mb = os.path.getsize(wal_path) / (1024 * 1024)
                 else:
                     db_size_mb = 0.0

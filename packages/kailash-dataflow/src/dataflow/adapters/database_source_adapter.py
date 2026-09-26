@@ -68,16 +68,16 @@ class DatabaseSourceAdapter(BaseSourceAdapter):
 
         url = self.config.url
 
-        if url.startswith("sqlite"):
+        from kailash.utils.sqlite_url import is_sqlite_url, sqlite_connection_target
+
+        if is_sqlite_url(url):
             if aiosqlite is None:
                 raise ImportError(
                     "aiosqlite is required for SQLite database sources. "
                     "Install with: pip install kailash"
                 )
-            db_path = url.replace("sqlite:///", "").replace("sqlite://", "")
-            if not db_path or db_path == ":memory:":
-                db_path = ":memory:"
-            self._conn = await aiosqlite.connect(db_path)
+            db_path, options = sqlite_connection_target(url)
+            self._conn = await aiosqlite.connect(db_path, **options)
             self._conn.row_factory = aiosqlite.Row
         else:
             # PostgreSQL or MySQL — use asyncpg/aiomysql

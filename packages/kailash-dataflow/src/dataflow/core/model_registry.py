@@ -254,9 +254,13 @@ class ModelRegistry:
         (file SQLite, PostgreSQL, MySQL), so the ``or`` fallback is a no-op off
         the in-memory path and those backends keep their normal connection URL.
         """
-        url = getattr(self.dataflow, "_memory_db_uri", None) or (
-            self.dataflow.config.database.get_connection_url(
-                self.dataflow.config.environment
+        url = (
+            getattr(self.dataflow, "_memory_db_uri", None)
+            or vars(self.dataflow).get("_sqlite_database_url")
+            or (
+                self.dataflow.config.database.get_connection_url(
+                    self.dataflow.config.environment
+                )
             )
         )
         # Issue #1547: the registry's SQLDatabaseNode is SQLAlchemy-sync; a bare

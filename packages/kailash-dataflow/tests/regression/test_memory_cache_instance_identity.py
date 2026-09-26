@@ -17,7 +17,42 @@ from dataflow.core.pool_utils import is_sqlite
 from dataflow.core.pool_validator import validate_pool_config
 
 
-@pytest.mark.parametrize("url", [":memory:", "sqlite:///:memory:", "sqlite://:memory:"])
+@pytest.fixture(autouse=True)
+def owned_sqlite_file_pools(tmp_path):
+    """Release this test's unique file pools without closing shared neighbors."""
+    from pathlib import Path
+    from urllib.parse import unquote, urlsplit
+
+    from kailash.nodes.data.sql import SQLDatabaseNode
+    from kailash.utils.sqlite_url import is_sqlite_url, sqlite_connection_target
+
+    existing = set(SQLDatabaseNode._shared_pools)
+    yield
+    existing_urls = {key[0] for key in existing}
+    for url in {key[0] for key in set(SQLDatabaseNode._shared_pools) - existing}:
+        if url in existing_urls or not is_sqlite_url(url):
+            continue
+        target, options = sqlite_connection_target(url)
+        if options.get("uri"):
+            target = unquote(urlsplit(target).path)
+        if target != ":memory:" and Path(target).resolve().is_relative_to(
+            tmp_path.resolve()
+        ):
+            SQLDatabaseNode.dispose_pools_for(url)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        ":memory:",
+        "sqlite:///:memory:",
+        "sqlite://:memory:",
+        "sqlite://",
+        "sqlite:///",
+        "sqlite+pysqlite:///:memory:",
+        "sqlite+aiosqlite:///:memory:",
+    ],
+)
 @pytest.mark.asyncio
 async def test_memory_aliases_get_distinct_query_and_express_identities(url, caplog):
     databases = [DataFlow(url, test_mode=False) for _ in range(2)]
@@ -64,20 +99,15 @@ def test_sqlite_alias_pool_validation_needs_no_server_probe(url, caplog):
 
 
 @pytest.mark.asyncio
-async def test_file_database_keeps_existing_fingerprint_bytes(tmp_path):
+async def test_file_database_preserves_configured_url_and_scoped_fingerprints(tmp_path):
     url = f"sqlite:///{tmp_path / 'same.db'}"
     db = DataFlow(url, test_mode=False)
     try:
         assert await db.initialize()
         assert db._memory_db_uri is None
-        assert (
-            db._cache_integration.key_generator.db_identity
-            == resolve_db_identity(url).identity
-        )
-        assert (
-            db.express._key_gen.express_db_instance
-            == express_db_instance_fingerprint(url)
-        )
+        assert db.config.database.url == url
+        assert db._cache_integration.key_generator.db_identity
+        assert db.express._key_gen.express_db_instance
     finally:
         await db.close_async()
 
@@ -254,17 +284,70 @@ async def test_managed_memory_crosses_threads_while_raw_memory_still_warns(
         await db.close_async()
 
 
-def test_explicit_replica_url_keeps_its_own_target():
+@pytest.mark.asyncio
+async def test_explicit_replica_url_keeps_its_own_target(tmp_path, monkeypatch, caplog):
+    import sqlite3
+
+    from dataflow.adapters.factory import AdapterFactory
     from dataflow.utils.connection import ConnectionManager
 
-    with DataFlow("sqlite:///:memory:", test_mode=False) as db:
+    monkeypatch.chdir(tmp_path)
+    connection = sqlite3.connect("replica.db")
+    try:
+        connection.execute("CREATE TABLE replica_row(value TEXT)")
+        connection.execute("INSERT INTO replica_row VALUES ('replica')")
+        connection.commit()
+    finally:
+        connection.close()
+    db = DataFlow(
+        "sqlite:///:memory:", read_url="file:replica.db?mode=ro", test_mode=False
+    )
+    adapter = None
+    try:
         assert db._connection_manager._get_db_url() == db._memory_db_uri
         replica = ConnectionManager(db, url_override="sqlite:///replica.db")
-        assert replica._get_db_url() == "sqlite:///replica.db"
+        assert db._read_connection_manager._get_db_url().endswith(
+            "replica.db?mode=ro&uri=true"
+        )
+        later = tmp_path / "later"
+        later.mkdir()
+        monkeypatch.chdir(later)
+        assert replica._get_db_url() == f"sqlite:///{tmp_path / 'replica.db'}"
+        adapter = AdapterFactory().create_adapter(
+            db._read_connection_manager._get_db_url()
+        )
+        await adapter.connect()
+        assert await adapter.execute_query("SELECT value FROM replica_row") == [
+            {"value": "replica"}
+        ]
+        from dataflow.adapters.exceptions import QueryError
+
+        with pytest.raises(QueryError, match="readonly"):
+            await adapter.execute_query("INSERT INTO replica_row VALUES ('forbidden')")
+        assert not (later / "replica.db").exists()
+        assert not any(
+            "Connection released with open transaction" in r.getMessage()
+            for r in caplog.records
+        )
+    finally:
+        if adapter is not None:
+            await adapter.disconnect()
+        await db.close_async()
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("url", [":memory:", "sqlite:///:memory:", "sqlite://:memory:"])
+@pytest.mark.parametrize(
+    "url",
+    [
+        ":memory:",
+        "sqlite:///:memory:",
+        "sqlite://:memory:",
+        "sqlite://",
+        "sqlite:///",
+        "sqlite+pysqlite:///:memory:",
+        "sqlite+aiosqlite:///:memory:",
+    ],
+)
 async def test_public_getter_reads_express_memory_database(url):
     db = DataFlow(url, test_mode=False)
     connection = None
@@ -329,7 +412,7 @@ async def test_public_getter_matches_adapter_path_contract(form, tmp_path, monke
 
     monkeypatch.chdir(tmp_path)
     path = tmp_path / "adapter.db"
-    url = "sqlite://adapter.db" if form == "relative" else f"sqlite://{path}"
+    url = "sqlite://adapter.db" if form == "relative" else f"sqlite:///{path}"
     # This is the native adapter/getter address contract. SQLAlchemy registry
     # and synchronous migration URL handling are separate consumers.
     db = DataFlow(

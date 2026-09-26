@@ -13,6 +13,26 @@ such as `>=2.0`.
 
 ## [Unreleased]
 
+### Fixed — SQLite address and cache identity parity
+
+SQLite producers now agree on three-slash relative URLs (`sqlite:///data.db`),
+four-slash absolute URLs (`sqlite:////var/data.db`), and native `file:` URI options;
+the legacy two-slash relative form remains accepted. Applications relying on the
+old async adapter's accidental absolute interpretation of a three-slash URL must
+use the equivalent four-slash URL. Source: `src/kailash/utils/sqlite_url.py:48-128`.
+
+DataFlow pins file targets when their owner is created, retaining the configured
+URL for display. Private native memory URIs, including empty `file:` targets, are
+rejected before resource allocation; use managed `:memory:` or a named shared
+memory URI instead. Core single-connection private URI behavior remains available.
+Source: `src/kailash/utils/sqlite_url.py:164-198` and
+`packages/kailash-dataflow/src/dataflow/core/engine.py:606-642`.
+
+File cache namespaces change once to distinguish physical targets, encoded
+filenames, and identity-bearing native URI options. Existing caches start cold;
+persistent database contents and the generic cross-language fingerprint encoder
+are unchanged. Source: `src/kailash/utils/sqlite_url.py:131-161`.
+
 ### Fixed — aiohttp authenticated request storage
 
 JWT and API-key authentication now publish identity through public

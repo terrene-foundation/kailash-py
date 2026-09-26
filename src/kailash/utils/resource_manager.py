@@ -14,6 +14,8 @@ from contextlib import asynccontextmanager, contextmanager
 from datetime import UTC, datetime
 from typing import Any, Callable, Dict, Generic, Optional, Set, TypeVar
 
+from kailash.utils.secure_logging import safe_type_name
+
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
@@ -43,7 +45,9 @@ async def _await_cleanup(awaitable):
         result = task.result()
     except Exception as exc:
         if cancelled:
-            logger.error("Error cleaning up cancelled resource: %s", exc)
+            logger.error(
+                "Error cleaning up cancelled resource: %s", safe_type_name(exc)
+            )
             raise asyncio.CancelledError from exc
         raise
     if cancelled:

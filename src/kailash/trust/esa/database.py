@@ -291,10 +291,10 @@ class DatabaseESA(EnterpriseSystemAgent):
         try:
             import aiosqlite
 
-            # Parse connection string
-            # Format: sqlite:///path/to/db.db or sqlite:///:memory:
-            db_path = self.connection_string.replace("sqlite:///", "")
-            self._connection = await aiosqlite.connect(db_path)
+            from kailash.utils.sqlite_url import sqlite_connection_target
+
+            db_path, options = sqlite_connection_target(self.connection_string)
+            self._connection = await aiosqlite.connect(db_path, **options)
             # Enable row factory for dict-like access
             self._connection.row_factory = aiosqlite.Row
         except ImportError:

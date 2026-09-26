@@ -163,11 +163,16 @@ class DataFlowExpress:
         # ``database_url`` attribute on the DataFlow instance.
         _db_cfg = getattr(self._db, "config", None)
         _db_url = getattr(getattr(_db_cfg, "database", None), "url", None)
+        _db_url = vars(self._db).get("_sqlite_database_url") or _db_url
         # The configured memory alias denotes a distinct database per owner.
         # Read only stored state: a duck-typed owner need not expose this field.
         memory_uri = vars(self._db).get("_memory_db_uri")
         if memory_uri is not None:
             _db_url = f"sqlite:///{memory_uri}"
+        from kailash.utils.sqlite_url import sqlite_cache_identity_url
+
+        if isinstance(_db_url, str):
+            _db_url = sqlite_cache_identity_url(_db_url)
         express_db_instance = express_db_instance_fingerprint(_db_url)
         if express_db_instance is None:
             logger.warning(

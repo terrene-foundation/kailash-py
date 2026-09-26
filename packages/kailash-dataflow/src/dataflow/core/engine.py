@@ -602,6 +602,36 @@ class DataFlow(DataFlowEventMixin):
             warnings.warn(warning_msg, UserWarning, stacklevel=2)
             logger.warning(warning_msg)
 
+        from kailash.utils.sqlite_url import (
+            is_sqlite_url,
+            sqlite_memory_uri_kind,
+            sqlite_owner_url,
+            sqlite_sqlalchemy_url,
+        )
+
+        self._sqlite_database_url = (
+            sqlite_owner_url(self.config.database.url)
+            if isinstance(self.config.database.url, str)
+            and is_sqlite_url(self.config.database.url)
+            else None
+        )
+        for is_replica, candidate_url in (
+            (False, self.config.database.url),
+            (True, read_url),
+        ):
+            candidate_kind = sqlite_memory_uri_kind(candidate_url or "")
+            if candidate_kind == "private" or (
+                is_replica and candidate_kind == "anonymous"
+            ):
+                from dataflow.exceptions import DataFlowConfigurationError
+
+                raise DataFlowConfigurationError(
+                    "DataFlow requires a memory database shared across its connections; "
+                    "use managed :memory: or a named file: URI with mode=memory&cache=shared "
+                    "(memdb VFS requires an absolute name)."
+                )
+        _memory_kind = sqlite_memory_uri_kind(self.config.database.url or "")
+
         self._models = {}
         self._registered_models = {}  # Track registered models for compatibility
         self._model_fields = {}  # Store model field information
@@ -774,7 +804,7 @@ class DataFlow(DataFlowEventMixin):
         self._connection_manager = ConnectionManager(self)
 
         # TSG-105: Dual-adapter read replica support
-        self._read_url = read_url
+        self._read_url = sqlite_owner_url(read_url) if read_url else read_url
         self._read_pool_size = read_pool_size
         self._read_connection_manager: Optional[ConnectionManager] = None
         if read_url:
@@ -788,12 +818,14 @@ class DataFlow(DataFlowEventMixin):
         # Establish the real memory-database identity before cache consumers.
         # A fresh nonce prevents stale shared-cache entries surviving id() reuse.
         self._memory_db_uri: Optional[str] = None
-        if self.config.database.url in (
-            ":memory:",
-            "sqlite:///:memory:",
-            "sqlite://:memory:",
-        ):
+        if _memory_kind == "anonymous":
             self._memory_db_uri = f"file:df_mem_{uuid4().hex}?mode=memory&cache=shared"
+        elif _memory_kind == "shared":
+            # Retain a native URI, including explicit driver options, for all
+            # producers. The anchor below owns its lifetime across DDL steps.
+            self._memory_db_uri = sqlite_sqlalchemy_url(self.config.database.url)[
+                len("sqlite:///") :
+            ]
 
         # TSG-104: Wire cache configuration into Express
         _express_cache_ttl = getattr(self.config, "cache_ttl", 300)
@@ -891,9 +923,7 @@ class DataFlow(DataFlowEventMixin):
         if self._memory_db_uri is not None:
             import sqlite3
 
-            self._memory_connection = sqlite3.connect(
-                self._memory_db_uri, uri=True, check_same_thread=False
-            )
+            self._memory_connection = self._open_sqlite_connection(self._memory_db_uri)
 
         # Multi-tenant manager (lightweight — no DB connection)
         if self.config.security.multi_tenant:
@@ -1057,6 +1087,10 @@ class DataFlow(DataFlowEventMixin):
     # ------------------------------------------------------------------
     # Issue #713: Lazy per-event-loop runtime resolution
     # ------------------------------------------------------------------
+
+    def _effective_database_url(self) -> Optional[str]:
+        """Return the pinned SQLite target; retain other engine URL behavior."""
+        return vars(self).get("_sqlite_database_url") or self.config.database.url
 
     @property
     def runtime(self) -> Any:
@@ -1409,7 +1443,7 @@ class DataFlow(DataFlowEventMixin):
                         from dataflow.core.pool_validator import validate_pool_config
 
                         result = validate_pool_config(
-                            database_url=self.config.database.url
+                            database_url=DataFlow._effective_database_url(self)
                             or self.config.database.database_url,
                             pool_size=resolved_pool_size,
                             max_overflow=resolved_max_overflow,
@@ -1488,7 +1522,10 @@ class DataFlow(DataFlowEventMixin):
                         )
 
                 # RS-6: Lightweight pool for health checks (separate from main pool)
-                db_url = self.config.database.url or self.config.database.database_url
+                db_url = (
+                    DataFlow._effective_database_url(self)
+                    or self.config.database.database_url
+                )
                 if db_url:
                     try:
                         from dataflow.core.pool_lightweight import LightweightPool
@@ -1633,7 +1670,7 @@ class DataFlow(DataFlowEventMixin):
         """
         try:
             # Check if this is PostgreSQL which requires async connections
-            database_url = self.config.database.url
+            database_url = DataFlow._effective_database_url(self)
             is_postgresql = database_url and (
                 "postgresql" in database_url.lower()
                 or "postgres" in database_url.lower()
@@ -1747,11 +1784,19 @@ class DataFlow(DataFlowEventMixin):
             # construction; a URL set on the config after construction does
             # not retroactively change it (DataFlow URLs are set at init).
             db_conf = getattr(self.config, "database", None)
+            from kailash.utils.sqlite_url import sqlite_cache_identity_url
+
             db_res = resolve_db_identity(
                 url=(
-                    f"sqlite:///{self._memory_db_uri}"
+                    sqlite_cache_identity_url(self._memory_db_uri)
                     if self._memory_db_uri is not None
-                    else getattr(db_conf, "url", None)
+                    else (
+                        sqlite_cache_identity_url(
+                            vars(self).get("_sqlite_database_url") or db_conf.url
+                        )
+                        if isinstance(getattr(db_conf, "url", None), str)
+                        else getattr(db_conf, "url", None)
+                    )
                 ),
                 host=getattr(db_conf, "host", None),
                 port=getattr(db_conf, "port", None),
@@ -1817,12 +1862,16 @@ class DataFlow(DataFlowEventMixin):
             connection = self._get_async_sql_connection()
 
             # Determine database dialect from connection URL
-            database_url = self.config.database.url or ":memory:"
+            database_url = DataFlow._effective_database_url(self) or ":memory:"
             if "postgresql" in database_url or "postgres" in database_url:
                 dialect = "postgresql"
             elif "mysql" in database_url:
                 dialect = "mysql"
-            elif "sqlite" in database_url or database_url == ":memory:":
+            elif (
+                "sqlite" in database_url
+                or database_url.startswith("file:")
+                or database_url == ":memory:"
+            ):
                 dialect = "sqlite"
                 # SQLite is fully supported for production with enterprise adapter
             else:
@@ -1858,7 +1907,10 @@ class DataFlow(DataFlowEventMixin):
                 # Issue #1502: bare ``:memory:`` uses the per-instance shared-cache
                 # URI so migrations land in the SAME DB as CRUD; None otherwise.
                 connection_string=self._memory_db_uri
-                or self.config.database.get_connection_url(self.config.environment),
+                or (
+                    DataFlow._effective_database_url(self)
+                    or self.config.database.get_connection_url(self.config.environment)
+                ),
                 dialect=dialect,
                 migrations_dir=migrations_dir,
                 dataflow_instance=self,
@@ -1969,7 +2021,7 @@ class DataFlow(DataFlowEventMixin):
         database URL, creates the table/indexes, and wires the backend
         into the existing AuditIntegration instance.
         """
-        database_url = self.config.database.url or ":memory:"
+        database_url = DataFlow._effective_database_url(self) or ":memory:"
 
         try:
             if (
@@ -2395,7 +2447,9 @@ class DataFlow(DataFlowEventMixin):
             # migration paths use — NOT the pluralized class-name default, which
             # points at a nonexistent table for a custom-``__tablename__`` model.
             table_name = self._get_table_name(cls.__name__)
-            return create_query_builder(table_name, self.config.database.url)
+            return create_query_builder(
+                table_name, DataFlow._effective_database_url(self)
+            )
 
         # Bind the method as a classmethod
         cls.query_builder = classmethod(query_builder)
@@ -2460,7 +2514,7 @@ class DataFlow(DataFlowEventMixin):
         self._check_failed_ddl(model_name)
 
         # ADR-001: Check schema cache first
-        database_url = self.config.database.url or ":memory:"
+        database_url = DataFlow._effective_database_url(self) or ":memory:"
 
         # Calculate schema checksum if validation enabled
         schema_checksum = None
@@ -2888,19 +2942,14 @@ class DataFlow(DataFlowEventMixin):
 
             elif (
                 "sqlite" in url_lower
+                or database_url.startswith("file:")
                 or database_url == ":memory:"
                 or database_url.endswith(".db")
             ):
                 import sqlite3
 
                 if self._memory_db_uri is not None:
-                    # Shared-cache in-memory DB: a fresh connection to the SAME
-                    # shared URI sees committed state. A bare ``:memory:``
-                    # connection would be a DIFFERENT empty DB and produce a
-                    # false "absent" — hence the shared URI is required here.
-                    conn = sqlite3.connect(
-                        self._memory_db_uri, uri=True, check_same_thread=False
-                    )
+                    conn = self._open_sqlite_connection(database_url)
                 elif database_url in (":memory:", "sqlite:///:memory:"):
                     # Bare in-memory with no shared URI — cannot verify against
                     # committed state without reopening a different empty DB.
@@ -2912,13 +2961,7 @@ class DataFlow(DataFlowEventMixin):
                     # different-empty-DB and returns the identical verdict.
                     return None, "unverifiable-backend"
                 else:
-                    # File-based SQLite: strip the scheme prefix if present.
-                    path = database_url
-                    for prefix in ("sqlite:///", "sqlite://"):
-                        if path.startswith(prefix):
-                            path = path[len(prefix) :]
-                            break
-                    conn = sqlite3.connect(path, check_same_thread=False)
+                    conn = self._open_sqlite_connection(database_url)
                 try:
                     cur = conn.execute(
                         "SELECT name FROM sqlite_master "
@@ -3001,6 +3044,7 @@ class DataFlow(DataFlowEventMixin):
         elif (
             "sqlite" in url_lower
             or database_url == ":memory:"
+            or database_url.startswith("file:")
             or database_url.endswith(".db")
         ):
             database_type = "sqlite"
@@ -3169,17 +3213,13 @@ class DataFlow(DataFlowEventMixin):
         import sqlite3
 
         if self._memory_db_uri is not None:
-            return sqlite3.connect(
-                self._memory_db_uri, uri=True, check_same_thread=False
-            )
-        if database_url in (":memory:", "sqlite:///:memory:"):
+            database_url = self._memory_db_uri
+        elif database_url in (":memory:", "sqlite:///:memory:", "sqlite://:memory:"):
             return None
-        path = database_url
-        for prefix in ("sqlite:///", "sqlite://"):
-            if path.startswith(prefix):
-                path = path[len(prefix) :]
-                break
-        return sqlite3.connect(path, check_same_thread=False)
+        from kailash.utils.sqlite_url import sqlite_connection_target
+
+        path, options = sqlite_connection_target(database_url)
+        return sqlite3.connect(path, **{"check_same_thread": False, **options})
 
     async def _get_live_table_columns(
         self,
@@ -3391,7 +3431,7 @@ class DataFlow(DataFlowEventMixin):
         Returns:
             str: 'exists', 'needs_creation', or 'unknown'
         """
-        database_url = self.config.database.url or ":memory:"
+        database_url = DataFlow._effective_database_url(self) or ":memory:"
 
         if self._schema_cache.is_table_ensured(model_name, database_url):
             return "exists"
@@ -4756,7 +4796,8 @@ class DataFlow(DataFlowEventMixin):
             Dictionary with connection details
         """
         return {
-            "database_url": self.config.database.url or "sqlite:///:memory:",
+            "database_url": DataFlow._effective_database_url(self)
+            or "sqlite:///:memory:",
             "pool_size": self.config.database.pool_size,
             "max_overflow": self.config.database.max_overflow,
             "pool_recycle": self.config.database.pool_recycle,
@@ -5278,7 +5319,7 @@ class DataFlow(DataFlowEventMixin):
             QueryError: If schema introspection queries fail
             NotImplementedError: For unsupported databases
         """
-        database_url = self.config.database.url or ":memory:"
+        database_url = DataFlow._effective_database_url(self) or ":memory:"
 
         # Check database type and route to appropriate inspector
         if "postgresql" in database_url or "postgres" in database_url:
@@ -5506,8 +5547,10 @@ class DataFlow(DataFlowEventMixin):
         Raises:
             NotImplementedError: For in-memory SQLite databases (schema discovery not supported)
         """
-        # Check if this is a memory database
-        if database_url == ":memory:" or "memory" in database_url.lower():
+        from kailash.utils.sqlite_url import sqlite_memory_uri_kind
+
+        # Classify the target, not incidental words in a physical filename.
+        if sqlite_memory_uri_kind(database_url) is not None:
             # Enhanced error with catalog-based solutions (DF-501)
             message = (
                 "Schema discovery is not supported for in-memory SQLite databases. "
@@ -7161,7 +7204,7 @@ class DataFlow(DataFlowEventMixin):
                     return connection
 
             # Fallback: Create direct PostgreSQL connection
-            database_url = self.config.database.url
+            database_url = DataFlow._effective_database_url(self)
             if not database_url or database_url == ":memory:":
                 # For testing, create a simple SQLite connection
                 # check_same_thread=False allows use with async_safe_run thread pool
@@ -7214,7 +7257,7 @@ class DataFlow(DataFlowEventMixin):
             from ..adapters.connection_parser import ConnectionParser
 
             # Early return if no database URL configured
-            database_url = self.config.database.url
+            database_url = DataFlow._effective_database_url(self)
             if database_url is None:
                 logger.debug(
                     "No database URL configured, using SQLite fallback for migration system"
@@ -7242,8 +7285,14 @@ class DataFlow(DataFlowEventMixin):
             # in-memory DB as the CRUD/registry paths (AsyncSQLDatabaseNode handles
             # the ``file:...`` URI + ``uri=True``). Bypass ConnectionParser here —
             # it is built for ``scheme://host/db`` and would mangle a ``file:`` URI.
+            from kailash.utils.sqlite_url import is_sqlite_url
+
             if self._memory_db_uri is not None:
                 safe_connection_string = self._memory_db_uri
+            elif is_sqlite_url(database_url):
+                # Network URL reconstruction loses SQLite's absolute-path slash
+                # and native URI options; the canonical adapter parses these.
+                safe_connection_string = database_url
             else:
                 # Create a safe connection string for SQL databases
                 components = ConnectionParser.parse_connection_string(database_url)
@@ -7414,7 +7463,7 @@ class DataFlow(DataFlowEventMixin):
         loop. On any failure, ROLLBACK runs on the same connection so
         the partial work is undone atomically.
         """
-        database_url = self.config.database.url
+        database_url = DataFlow._effective_database_url(self)
         if (
             database_url is None
             or database_url == ":memory:"
@@ -7487,7 +7536,7 @@ class DataFlow(DataFlowEventMixin):
         This method detects the database type and calls the appropriate
         schema management system (PostgreSQL or SQLite).
         """
-        database_url = self.config.database.url or ":memory:"
+        database_url = DataFlow._effective_database_url(self) or ":memory:"
 
         # Detect database type and route to appropriate schema management
         if "postgresql" in database_url or "postgres" in database_url:
@@ -8133,7 +8182,7 @@ class DataFlow(DataFlowEventMixin):
         else:
             # Integer ID models use auto-increment
             # Get database type to set appropriate defaults
-            database_url = self.config.database.url or ":memory:"
+            database_url = DataFlow._effective_database_url(self) or ":memory:"
             is_sqlite = "sqlite" in database_url.lower() or database_url == ":memory:"
 
             columns["id"] = {
@@ -8648,9 +8697,9 @@ class DataFlow(DataFlowEventMixin):
             logger.debug("_ensure_migration_tables: Using shared runtime")
 
             # Get connection info
-            connection_string = self.config.database.get_connection_url(
-                self.config.environment
-            )
+            connection_string = DataFlow._effective_database_url(
+                self
+            ) or self.config.database.get_connection_url(self.config.environment)
 
             # Auto-detect database type if not provided
             if database_type is None:
@@ -8773,9 +8822,9 @@ class DataFlow(DataFlowEventMixin):
             logger.debug("_ensure_migration_tables_async: Using shared runtime")
 
             # Get connection info
-            connection_string = self.config.database.get_connection_url(
-                self.config.environment
-            )
+            connection_string = DataFlow._effective_database_url(
+                self
+            ) or self.config.database.get_connection_url(self.config.environment)
 
             # Auto-detect database type if not provided
             if database_type is None:
@@ -9069,7 +9118,7 @@ class DataFlow(DataFlowEventMixin):
         # clear_table_cache's ``endswith(f":{table}")`` invalidation still matches.
         import hashlib as _hashlib
 
-        db_url = self.config.database.url or ":memory:"
+        db_url = DataFlow._effective_database_url(self) or ":memory:"
         db_url_hash = _hashlib.sha256(db_url.encode("utf-8")).hexdigest()[:16]
         cache_key = f"{db_url_hash}:{table_name}"
         cached = self._column_cache.get(cache_key)
@@ -9169,7 +9218,7 @@ class DataFlow(DataFlowEventMixin):
         Returns:
             Database type (sqlite, postgresql, mysql)
         """
-        url = self.config.database.url
+        url = DataFlow._effective_database_url(self)
 
         # Handle None/missing URL - default to SQLite :memory:
         if not url:
@@ -9341,7 +9390,7 @@ class DataFlow(DataFlowEventMixin):
         # per-instance shared-cache URI so this node reaches the SAME in-memory
         # DB as DDL/migration; ``_memory_db_uri`` is None for every other config.
         connection_string = (
-            self._memory_db_uri or self.config.database.url or ":memory:"
+            self._memory_db_uri or DataFlow._effective_database_url(self) or ":memory:"
         )
 
         # Create new node
@@ -9399,7 +9448,9 @@ class DataFlow(DataFlowEventMixin):
 
         from ..migrations.sync_ddl_executor import SyncDDLExecutor
 
-        database_url = self.config.database.get_connection_url(self.config.environment)
+        database_url = DataFlow._effective_database_url(
+            self
+        ) or self.config.database.get_connection_url(self.config.environment)
         # Issue #1502: for bare ``:memory:`` write DDL to the per-instance
         # shared-cache URI so tables land in the SAME DB CRUD reads from.
         executor = SyncDDLExecutor(self._memory_db_uri or database_url)
@@ -9509,7 +9560,9 @@ class DataFlow(DataFlowEventMixin):
 
         from ..migrations.sync_ddl_executor import SyncDDLExecutor
 
-        database_url = self.config.database.get_connection_url(self.config.environment)
+        database_url = DataFlow._effective_database_url(
+            self
+        ) or self.config.database.get_connection_url(self.config.environment)
         # Issue #1502: for bare ``:memory:`` write DDL to the per-instance
         # shared-cache URI so tables land in the SAME DB CRUD reads from.
         executor = SyncDDLExecutor(self._memory_db_uri or database_url)
@@ -9737,7 +9790,7 @@ class DataFlow(DataFlowEventMixin):
             from ..migrations.sync_ddl_executor import SyncDDLExecutor
 
             # Get database URL
-            database_url = self.config.database.url
+            database_url = DataFlow._effective_database_url(self)
             if not database_url:
                 logger.warning(
                     f"No database URL configured, skipping sync table creation for '{model_name}'"
@@ -9922,7 +9975,7 @@ class DataFlow(DataFlowEventMixin):
         if not model_names:
             return
 
-        database_url = self.config.database.url
+        database_url = DataFlow._effective_database_url(self)
         if not database_url:
             return
 
@@ -10094,7 +10147,7 @@ class DataFlow(DataFlowEventMixin):
             from ..migrations.sync_ddl_executor import SyncDDLExecutor
 
             # Get database URL
-            database_url = self.config.database.url
+            database_url = DataFlow._effective_database_url(self)
             if not database_url:
                 logger.warning(
                     "No database URL configured, skipping sync table creation"
@@ -10376,7 +10429,7 @@ class DataFlow(DataFlowEventMixin):
         relationship definitions based on foreign key constraints.
         """
         # Skip schema discovery for SQLite databases (not supported for in-memory)
-        database_url = self.config.database.url or ":memory:"
+        database_url = DataFlow._effective_database_url(self) or ":memory:"
         if database_url == ":memory:" or "sqlite" in database_url.lower():
             # For SQLite, skip relationship auto-detection
             logger.debug(
@@ -10441,7 +10494,7 @@ class DataFlow(DataFlowEventMixin):
             model_name: Name of the model to detect relationships for
             fields: Model field definitions
         """
-        database_url = self.config.database.url or ":memory:"
+        database_url = DataFlow._effective_database_url(self) or ":memory:"
 
         # Skip for SQLite (no foreign key introspection for in-memory)
         if database_url == ":memory:" or "sqlite" in database_url.lower():
@@ -10606,9 +10659,9 @@ class DataFlow(DataFlowEventMixin):
         from kailash.workflow.builder import WorkflowBuilder
 
         workflow = WorkflowBuilder()
-        connection_string = self.config.database.get_connection_url(
-            self.config.environment
-        )
+        connection_string = DataFlow._effective_database_url(
+            self
+        ) or self.config.database.get_connection_url(self.config.environment)
 
         # Auto-detect database type from connection string
         from ..adapters.connection_parser import ConnectionParser
@@ -10745,7 +10798,9 @@ class DataFlow(DataFlowEventMixin):
             import asyncpg
 
             # Get database URL
-            db_url = self.config.database.get_connection_url(self.config.environment)
+            db_url = DataFlow._effective_database_url(
+                self
+            ) or self.config.database.get_connection_url(self.config.environment)
 
             # Create connection
             connection = await open_credentialed_connection(
@@ -10827,9 +10882,11 @@ class DataFlow(DataFlowEventMixin):
                 return await db_manager.get_test_connection(test_context), True
 
         # Default production behavior - create new connection
-        db_url = self.config.database.url
+        db_url = DataFlow._effective_database_url(self)
         if db_url is None:
             raise ValueError("Database URL is not configured")
+
+        from kailash.utils.sqlite_url import is_sqlite_url, sqlite_memory_uri_kind
 
         # Database-aware connection handling
         if db_url.startswith("postgresql://"):
@@ -10844,12 +10901,12 @@ class DataFlow(DataFlowEventMixin):
                 context="PostgreSQL",
             )
             return connection, False
-        elif db_url.startswith(("sqlite://", "file:")) or db_url == ":memory:":
+        elif is_sqlite_url(db_url):
             import aiosqlite
 
             from dataflow.adapters.sqlite import SQLiteAdapter
 
-            if db_url in {":memory:", "sqlite:///:memory:", "sqlite://:memory:"}:
+            if sqlite_memory_uri_kind(db_url) == "anonymous":
                 # All anonymous aliases belong to this instance's shared database.
                 # Match the constructor's nonce policy on degraded init paths too.
                 if self._memory_db_uri is None:
@@ -11627,7 +11684,11 @@ class DataFlow(DataFlowEventMixin):
         from dataflow.core.pool_monitor import pool_stats_dict
 
         # Scope to this instance's database URL
-        db_url = self.config.database.url or self.config.database.database_url or ""
+        db_url = (
+            DataFlow._effective_database_url(self)
+            or self.config.database.database_url
+            or ""
+        )
 
         def _provider() -> Dict[str, Any]:
             try:
@@ -12317,8 +12378,12 @@ class DataFlow(DataFlowEventMixin):
         # while rejecting ``FILE:`` that the parser had just classified as
         # SQLite, which is the exact surface DIVERGENCE the parity note above
         # exists to prevent.
-        if url.lower().startswith("file:"):
-            warn_sqlite_async_limitation(url)
+        from kailash.utils.sqlite_url import is_sqlite_url
+
+        if is_sqlite_url(url):
+            # DataFlow gives anonymous memory a shared owner URI below; native
+            # private memory is rejected before allocation. Raw callers still
+            # receive warn_sqlite_async_limitation's advisory.
             return True
 
         # Supported database schemes. The SQLAlchemy `+asyncpg` / `+psycopg2`
@@ -12490,7 +12555,7 @@ class DataFlow(DataFlowEventMixin):
             >>> # Clear from specific database
         """
         if database_url is None:
-            database_url = self.config.database.url or ":memory:"
+            database_url = DataFlow._effective_database_url(self) or ":memory:"
         # Issue #1545: invalidate the model's cached unique-index column-sets so
         # the next MySQL upsert re-reads information_schema. The index cache is
         # keyed by DB table name (``f"{db_url}:{table}"``), so resolve the model's

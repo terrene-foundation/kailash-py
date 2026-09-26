@@ -54,6 +54,7 @@ from kailash.nodes.base_async import AsyncNode
 from kailash.nodes.data.exceptions import PoolExhaustedError
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 from kailash.utils.loop_pool_registry import register_pool_drain_on_current_loop
+from kailash.utils.secure_logging import safe_type_name
 from kailash.utils.url_credentials import redact_pool_key
 
 logger = logging.getLogger(__name__)
@@ -2543,11 +2544,13 @@ class SQLiteAdapter(DatabaseAdapter):
         super().__init__(config)
         # Initialize SQLite-specific attributes
         self._db_path = config.connection_string or config.database or ":memory:"
-        self._is_memory_db = (
-            self._db_path == ":memory:" or "mode=memory" in self._db_path
-        )
+        from kailash.utils.sqlite_url import sqlite_memory_uri_kind
+
+        self._is_memory_db = sqlite_memory_uri_kind(self._db_path) is not None
         self._connect_kwargs: dict[str, Any] = {}
+        self._is_readonly = False
         self._connection = None
+        self._connection_lock = asyncio.Lock()
         self._memory_db_name = memory_db_name
         # Connection pool (initialized in connect())
         self._pool: Any | None = None
@@ -2579,33 +2582,11 @@ class SQLiteAdapter(DatabaseAdapter):
         if self.config.database:
             self._db_path = self.config.database
         elif self.config.connection_string:
-            # Parse SQLite connection string formats:
-            # sqlite:///path/to/file.db (absolute path)
-            # sqlite://path/to/file.db (relative path - rare)
-            # file:path/to/file.db (file URI scheme)
-            conn_str = self.config.connection_string
-            if conn_str.startswith("sqlite:///"):
-                # Absolute path: sqlite:///path/to/file.db -> /path/to/file.db
-                # Special case: sqlite:///:memory: -> :memory:
-                path_part = conn_str[9:]  # Remove "sqlite://" to keep the leading slash
-                if path_part == "/:memory:":
-                    self._db_path = ":memory:"
-                else:
-                    self._db_path = path_part
-            elif conn_str.startswith("sqlite://"):
-                # Relative path: sqlite://path/to/file.db -> path/to/file.db
-                self._db_path = conn_str[9:]  # Remove "sqlite://"
-            elif conn_str.startswith("file:"):
-                if "?" in conn_str:
-                    # URI with parameters — preserve full string (e.g. file:db?mode=memory&cache=shared)
-                    self._db_path = conn_str
-                    self._connect_kwargs["uri"] = True
-                else:
-                    # Simple file: prefix — strip it
-                    self._db_path = conn_str[5:]
-            else:
-                # Assume the connection string IS the path
-                self._db_path = conn_str
+            from kailash.utils.sqlite_url import sqlite_connection_target
+
+            self._db_path, self._connect_kwargs = sqlite_connection_target(
+                self.config.connection_string
+            )
         else:
             raise NodeExecutionError(
                 "SQLite requires either 'database' path or 'connection_string'"
@@ -2614,9 +2595,12 @@ class SQLiteAdapter(DatabaseAdapter):
         # Detect memory databases and translate to URI shared-cache mode.
         # Each aiosqlite.connect(":memory:") creates a SEPARATE database.
         # URI shared-cache mode lets multiple connections see the SAME in-memory DB.
-        self._is_memory_db = (
-            self._db_path == ":memory:" or "mode=memory" in self._db_path
-        )
+        from kailash.utils.sqlite_url import sqlite_is_readonly, sqlite_memory_uri_kind
+
+        # Native URI options have already been decoded by the shared parser.
+        address = self.config.database or self.config.connection_string
+        self._is_memory_db = sqlite_memory_uri_kind(address) is not None
+        self._is_readonly = sqlite_is_readonly(address)
         if self._db_path == ":memory:":
             name = self._memory_db_name or f"kailash_{id(self)}"
             self._db_path = f"file:{name}?mode=memory&cache=shared"
@@ -2639,9 +2623,10 @@ class SQLiteAdapter(DatabaseAdapter):
         any user query runs.
         """
         for pragma, value in self._DEFAULT_PRAGMAS.items():
-            if self._is_memory_db and pragma == "journal_mode":
-                continue  # WAL not supported for shared-cache memory DBs
-            await conn.execute(f"PRAGMA {pragma} = {value}")
+            if (self._is_memory_db or self._is_readonly) and pragma == "journal_mode":
+                continue  # Preserve native memory and read-only journal semantics.
+            async with conn.execute(f"PRAGMA {pragma} = {value}"):
+                pass
 
     async def _get_connection(self):
         """Get a database connection.
@@ -2650,28 +2635,28 @@ class SQLiteAdapter(DatabaseAdapter):
         see the same in-memory database. For file databases, uses the pool
         for connection reuse and bounded thread count.
         """
-        assert self._aiosqlite is not None
         if self._is_memory_db:
-            # Issue #1051: one reused connection per adapter instance for
-            # :memory:. The non-pool memory path (execute/execute_many/
-            # begin_transaction) calls _get_connection() per query; creating
-            # a fresh aiosqlite.connect() each time leaked every one of them
-            # because disconnect() only closes self._pool, which is None for
-            # :memory: by design. The "shared connection for memory databases"
-            # comments and the "don't close shared memory connections"
-            # transaction paths already assume a single reused connection —
-            # self._connection (set None at __init__) is the tracking slot
-            # this completes. disconnect() now owns its lifecycle.
-            if self._connection is None:
-                self._connection = await self._aiosqlite.connect(
-                    self._db_path, **self._connect_kwargs
-                )
-                self._connection.row_factory = self._aiosqlite.Row
-                await self._configure_connection(self._connection)
-            return self._connection
+            async with self._connection_lock:
+                if self._connection is None:
+                    self._connection = await self._open_connection()
+                return self._connection
+        return await self._open_connection()
+
+    async def _open_connection(self):
+        """Open and configure one owned connection before publishing it."""
+        assert self._aiosqlite is not None
+        from kailash.utils.resource_manager import _await_cleanup
+
         conn = await self._aiosqlite.connect(self._db_path, **self._connect_kwargs)
-        conn.row_factory = self._aiosqlite.Row
-        await self._configure_connection(conn)
+        try:
+            conn.row_factory = self._aiosqlite.Row
+            await self._configure_connection(conn)
+        except BaseException as setup_error:
+            try:
+                await _await_cleanup(conn.close())
+            except Exception as close_error:
+                raise setup_error from close_error
+            raise
         return conn
 
     async def disconnect(self) -> None:
@@ -2708,17 +2693,25 @@ class SQLiteAdapter(DatabaseAdapter):
         # Issue #1051: close the reused :memory: connection (untracked by the
         # pool path, which is None for :memory:). Without this it survives to
         # GC and aiosqlite.Connection.__del__ emits a ResourceWarning.
-        connection = self._connection
-        if connection is not None:
-            # Claim before awaiting, for the same reason the pool is claimed:
-            # aiosqlite's Connection.close() joins its worker THREAD, and two
-            # concurrent joins on one connection is the same overlapping-close
-            # hazard one layer down (issue #2079).
-            self._connection = None
-            await _close_pool_bounded(
-                connection.close(),
-                label=f"sqlite connection {id(connection)}",
-            )
+        from kailash.utils.resource_manager import _await_cleanup
+
+        async def close_connection():
+            async with self._connection_lock:
+                connection = self._connection
+                if connection is not None:
+                    # Claim before awaiting, for the same reason the pool is claimed:
+                    # aiosqlite's Connection.close() joins its worker THREAD, and two
+                    # concurrent joins on one connection is the same overlapping-close
+                    # hazard one layer down (issue #2079).
+                    self._connection = None
+                    await _close_pool_bounded(
+                        connection.close(),
+                        label=f"sqlite connection {id(connection)}",
+                    )
+
+        # Waiting for a cold creator is part of disposal ownership. A cancelled
+        # caller must not abandon the connection that creator is publishing.
+        await _await_cleanup(close_connection())
 
     async def execute(
         self,
@@ -2974,14 +2967,7 @@ class SQLiteAdapter(DatabaseAdapter):
             tuple: (connection, savepoint_name or None, transaction_depth)
         """
         assert self._aiosqlite is not None
-        if self._is_memory_db:
-            # Use shared connection for memory databases
-            db = await self._get_connection()
-        else:
-            # Create new connection for file databases
-            db = await self._aiosqlite.connect(self._db_path, **self._connect_kwargs)
-            db.row_factory = self._aiosqlite.Row
-            await self._configure_connection(db)
+        db = await self._get_connection()
 
         # Issue #1070: capture pre-call state so the abort path can restore it
         # exactly. Without a try/except here, a caller cancelled/raising
@@ -3064,10 +3050,8 @@ class SQLiteAdapter(DatabaseAdapter):
         self._savepoint_counter = savepoint_counter_before
 
         # 2. Unwind the underlying connection so it is no longer mid-BEGIN /
-        #    mid-SAVEPOINT. Closing is deliberately NOT done here: for
-        #    :memory: it would destroy the shared in-memory DB; for file DBs
-        #    the per-call connection is discarded by the caller's failure path
-        #    and GC, and ROLLBACK leaves it in a consistent state regardless.
+        #    mid-SAVEPOINT. Retain the adapter-owned memory connection, but
+        #    release the unpublished per-call file connection after rollback.
         try:
             if savepoint_name is not None:
                 # Nested abort: undo just the savepoint we created, leaving
@@ -3088,9 +3072,14 @@ class SQLiteAdapter(DatabaseAdapter):
                 extra={
                     "savepoint_name": savepoint_name,
                     "depth_restored_to": depth_before,
-                    "unwind_error": str(unwind_error),
+                    "unwind_error": safe_type_name(unwind_error),
                 },
             )
+        finally:
+            if not self._is_memory_db:
+                from kailash.utils.resource_manager import _await_cleanup
+
+                await _await_cleanup(self._close_quietly(db))
 
     async def _close_quietly(self, db: Any) -> None:
         """Close ``db``, logging (not raising) a close error.
@@ -3103,8 +3092,10 @@ class SQLiteAdapter(DatabaseAdapter):
         """
         try:
             await db.close()
-        except Exception:
-            logger.error("async_sql.sqlite.close_failed", exc_info=True)
+        except Exception as close_error:
+            logger.error(
+                "async_sql.sqlite.close_failed: %s", safe_type_name(close_error)
+            )
 
     async def commit_transaction(self, transaction: Any) -> None:
         """
@@ -3545,9 +3536,9 @@ class ProductionSQLiteAdapter(SQLiteAdapter):
         super().__init__(config)
         # Initialize SQLite-specific attributes
         self._db_path = config.connection_string or config.database or ":memory:"
-        self._is_memory_db = (
-            self._db_path == ":memory:" or "mode=memory" in self._db_path
-        )
+        from kailash.utils.sqlite_url import sqlite_memory_uri_kind
+
+        self._is_memory_db = sqlite_memory_uri_kind(self._db_path) is not None
         self._connection = None
         self._aiosqlite = None
 
@@ -5632,9 +5623,11 @@ class AsyncSQLDatabaseNode(AsyncNode):
         ):
             try:
                 # Simple detection based on connection string patterns
+                from kailash.utils.sqlite_url import is_sqlite_url
+
                 conn_lower = connection_string.lower()
                 if (
-                    connection_string == ":memory:"
+                    is_sqlite_url(connection_string)
                     or conn_lower.endswith(".db")
                     or conn_lower.endswith(".sqlite")
                     or conn_lower.endswith(".sqlite3")

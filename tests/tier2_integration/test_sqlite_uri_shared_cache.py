@@ -116,24 +116,28 @@ class TestSQLiteAdapterFilePrefixParsing:
         # The full URI should be preserved, not stripped
         assert adapter._db_path == "file:mydb?mode=memory&cache=shared"
 
-    async def test_simple_file_prefix_stripped(self):
-        """Test that simple file: prefix without params is stripped."""
+    async def test_simple_file_uri_reaches_literal_filename(self):
+        """A native URI without options retains its physical filename."""
         import os
         import tempfile
+        from urllib.parse import quote
 
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        with tempfile.NamedTemporaryFile(
+            prefix="uri#", suffix=".db", delete=False
+        ) as tmp:
             db_path = tmp.name
 
         try:
             config = DatabaseConfig(
                 type=DatabaseType.SQLITE,
-                connection_string=f"file:{db_path}",
+                connection_string=f"file:{quote(db_path)}",
             )
             adapter = SQLiteAdapter(config)
             await adapter.connect()
 
-            # Simple file: prefix should be stripped
-            assert adapter._db_path == db_path
+            rows = await adapter.execute("PRAGMA database_list")
+            assert rows[0]["file"] == os.path.realpath(db_path)
+            await adapter.disconnect()
         finally:
             os.unlink(db_path)
 

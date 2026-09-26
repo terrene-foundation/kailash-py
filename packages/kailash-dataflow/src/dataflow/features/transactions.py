@@ -621,14 +621,15 @@ async def _open_connection_for_url(
             credential_provider=credential_provider,
             context="PostgreSQL sync transaction",
         )
-    if scheme == "sqlite":
+    from kailash.utils.sqlite_url import is_sqlite_url, sqlite_connection_target
+
+    if is_sqlite_url(url):
         import aiosqlite
 
-        # Strip the sqlite:// prefix; aiosqlite expects the path.
-        path = url.split("://", 1)[1] if "://" in url else url
+        path, options = sqlite_connection_target(url)
         # aiosqlite.connect returns a connection-context object; calling
         # ``__aenter__`` opens the connection and returns the conn.
-        conn = aiosqlite.connect(path)
+        conn = aiosqlite.connect(path, **options)
         return await conn.__aenter__()
     raise RuntimeError(
         f"SyncTransactionManager: unsupported database scheme '{scheme}' "
@@ -957,7 +958,12 @@ class SyncTransactionManager:
                 "SyncTransactionManager: TransactionManager has no "
                 "`dataflow` back-reference; cannot resolve database URL."
             )
-        # DataFlow's canonical URL accessor — falls back to config.database.url.
+        owner_url = vars(dataflow).get("_memory_db_uri") or vars(dataflow).get(
+            "_sqlite_database_url"
+        )
+        if owner_url:
+            return owner_url
+        # Compatibility fallback for DataFlow-like callers without owner state.
         url = None
         for attr_path in (
             ("config", "database", "url"),
