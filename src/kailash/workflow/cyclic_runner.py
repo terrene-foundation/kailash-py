@@ -106,6 +106,7 @@ from kailash.sdk_exceptions import WorkflowExecutionError, WorkflowValidationErr
 from kailash.tracking import TaskManager, TaskStatus
 from kailash.tracking.metrics_collector import MetricsCollector
 from kailash.tracking.models import TaskMetrics
+from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
 from kailash.workflow.convergence import create_convergence_condition
 from kailash.workflow.cycle_state import CycleState, CycleStateManager
 from kailash.workflow.dag import CycleDetectedError, WorkflowDAG
@@ -183,13 +184,8 @@ class CyclicWorkflowExecutor:
             f"Starting cyclic workflow execution: {workflow.name} (run_id: {run_id})"
         )
 
-        # Check if workflow has cycles
-        if not workflow.has_cycles():
-            # No cycles, use standard DAG execution
-            logger.info("No cycles detected, using standard DAG execution")
-            return self.dag_runner.execute(workflow, parameters), run_id
-
-        # Execute with cycle support
+        # The plan handles DAG stages even when there are no cycle groups.
+        # WorkflowRunner instead accepts registered workflow IDs and state models.
         try:
             results = self._execute_with_cycles(
                 workflow, parameters, run_id, task_manager, runtime
@@ -198,7 +194,9 @@ class CyclicWorkflowExecutor:
             return results, run_id
 
         except Exception as e:
-            logger.error(f"Cyclic workflow execution failed: {e}")
+            logger.error(
+                "Cyclic workflow execution failed: %s", safe_exception_frames(e)
+            )
             raise WorkflowExecutionError(f"Execution failed: {e}") from e
 
         finally:
@@ -319,7 +317,7 @@ class CyclicWorkflowExecutor:
         # Log cycle summaries
         summaries = self.cycle_state_manager.get_all_summaries()
         for cycle_id, summary in summaries.items():
-            logger.info(f"Cycle {cycle_id} summary: {summary}")
+            logger.info(f"Cycle {cycle_id} summary: iterations={summary['iterations']}")
 
         return results
 
@@ -602,7 +600,7 @@ class CyclicWorkflowExecutor:
         cycle_id = cycle_group.cycle_id
         logger.info(f"Executing cycle group: {cycle_id}")
         logger.debug(f"Cycle nodes: {cycle_group.nodes}")
-        logger.debug(f"Cycle edges: {cycle_group.edges}")
+        logger.debug(f"Cycle edge count: {len(cycle_group.edges)}")
 
         # Get cycle configuration from first edge
         cycle_config = {}
@@ -654,7 +652,9 @@ class CyclicWorkflowExecutor:
                             cycle_task_id, TaskStatus.RUNNING
                         )
                 except Exception as e:
-                    logger.warning(f"Failed to create cycle group task: {e}")
+                    logger.warning(
+                        f"Failed to create cycle group task: {safe_exception_frames(e)}"
+                    )
 
             loop_count = 0
             converged = False
@@ -686,7 +686,9 @@ class CyclicWorkflowExecutor:
                                 iteration_task_id, TaskStatus.RUNNING
                             )
                     except Exception as e:
-                        logger.warning(f"Failed to create iteration task: {e}")
+                        logger.warning(
+                            f"Failed to create iteration task: {safe_exception_frames(e)}"
+                        )
 
                 # Execute nodes in cycle
                 iteration_results = {}
@@ -739,7 +741,7 @@ class CyclicWorkflowExecutor:
 
                 # Log iteration info BEFORE state update
                 logger.info(
-                    f"Cycle {cycle_id} iteration {cycle_state.iteration} (before update) results: {iteration_results}"
+                    f"Cycle {cycle_id} iteration {cycle_state.iteration} (before update) result_count={len(iteration_results)}"
                 )
 
                 # Update cycle state
@@ -767,18 +769,16 @@ class CyclicWorkflowExecutor:
                         iteration_results, cycle_state
                     )
                     logger.info(
-                        f"Cycle {cycle_id} convergence check: {convergence_condition.describe()} = {converged}"
+                        f"Cycle {cycle_id} convergence check: converged={converged}"
                     )
                     if converged:
-                        logger.info(
-                            f"Cycle {cycle_id} converged: {convergence_condition.describe()}"
-                        )
+                        logger.info(f"Cycle {cycle_id} converged")
                         should_terminate = True
 
                 # Check safety violations
                 if monitor.check_violations():
                     logger.warning(
-                        f"Cycle {cycle_id} safety violation: {monitor.violations}"
+                        f"Cycle {cycle_id} safety violation count={len(monitor.violations)}"
                     )
                     should_terminate = True
 
@@ -796,7 +796,9 @@ class CyclicWorkflowExecutor:
                             },
                         )
                     except Exception as e:
-                        logger.warning(f"Failed to update iteration task: {e}")
+                        logger.warning(
+                            f"Failed to update iteration task: {safe_exception_frames(e)}"
+                        )
 
                 # CRITICAL FIX: Check for natural termination based on cycle connection pattern
                 # Different patterns:
@@ -924,7 +926,7 @@ class CyclicWorkflowExecutor:
                                             ):
                                                 last_cycle_data = pred_result["result"]
                                                 logger.debug(
-                                                    f"Using data from {pred} for false_output: {last_cycle_data}"
+                                                    f"Using data from {pred} for false_output"
                                                 )
                                                 break
 
@@ -934,7 +936,7 @@ class CyclicWorkflowExecutor:
                                     )
                                     state.node_outputs[exit_node_id] = exit_result
                                     logger.debug(
-                                        f"Synthesized false_output for {exit_node_id} on max iteration termination with data: {exit_result['false_output']}"
+                                        f"Synthesized false_output for {exit_node_id} on max iteration termination"
                                     )
 
                                 # For natural termination (condition=false), the SwitchNode should already
@@ -948,7 +950,7 @@ class CyclicWorkflowExecutor:
                                     # The SwitchNode should have correctly set false_output
                                     state.node_outputs[exit_node_id] = exit_result
                                     logger.debug(
-                                        f"Natural termination: {exit_node_id} condition_result={exit_result.get('condition_result')}, false_output present={exit_result.get('false_output') is not None}"
+                                        f"Natural termination: {exit_node_id} condition_result={bool(exit_result.get('condition_result'))}, false_output present={exit_result.get('false_output') is not None}"
                                     )
 
                                 # CRITICAL FIX: For exit nodes that have downstream connections via false_output
@@ -980,11 +982,11 @@ class CyclicWorkflowExecutor:
                                                 else:
                                                     # Old format where edge_data might be a string
                                                     logger.debug(
-                                                        f"    Legacy edge_data format: {edge_data} (type: {type(edge_data)})"
+                                                        f"    Legacy edge_data format type: {safe_type_name(edge_data)}"
                                                     )
                                                     mapping = {}
                                                 logger.debug(
-                                                    f"    Edge mapping: {mapping}"
+                                                    f"    Edge mapping count: {len(mapping)}"
                                                 )
                                                 if "false_output" in mapping:
                                                     has_false_output_connections = True
@@ -997,7 +999,7 @@ class CyclicWorkflowExecutor:
                                         f"  Exit node {exit_node_id} has_false_output_connections: {has_false_output_connections}"
                                     )
                                     logger.debug(
-                                        f"  Exit node {exit_node_id} current false_output: {exit_result.get('false_output')}"
+                                        f"  Exit node {exit_node_id} false_output present={exit_result.get('false_output') is not None}"
                                     )
 
                                     # If this exit node has false_output connections but the cycle terminated naturally
@@ -1018,7 +1020,7 @@ class CyclicWorkflowExecutor:
                                                 exit_result
                                             )
                                             logger.info(
-                                                f"Synthesized false_output for {exit_node_id} on natural termination: {termination_data}"
+                                                f"Synthesized false_output for {exit_node_id} on natural termination"
                                             )
 
                     break
@@ -1051,11 +1053,15 @@ class CyclicWorkflowExecutor:
                         },
                     )
                 except Exception as e:
-                    logger.warning(f"Failed to update cycle group task: {e}")
+                    logger.warning(
+                        f"Failed to update cycle group task: {safe_exception_frames(e)}"
+                    )
 
             # Log cycle completion
             summary = cycle_state.get_summary()
-            logger.info(f"Cycle {cycle_id} completed: {summary}")
+            logger.info(
+                f"Cycle {cycle_id} completed: iterations={cycle_state.iteration}"
+            )
 
             return results, downstream_nodes
 
@@ -1159,13 +1165,13 @@ class CyclicWorkflowExecutor:
                 "None"
                 if pred_output is None
                 else (
-                    list(pred_output.keys())
+                    len(pred_output)
                     if isinstance(pred_output, dict)
-                    else type(pred_output)
+                    else safe_type_name(pred_output)
                 )
             )
             logger.debug(
-                f"Edge {pred} -> {node_id}: mapping = {mapping}, pred_output keys = {pred_output_info}"
+                f"Edge {pred} -> {node_id}: mapping_count={len(mapping)}, pred_output_size_or_type={pred_output_info}"
             )
             for src_key, dst_key in mapping.items():
                 # Handle nested output access
@@ -1183,7 +1189,7 @@ class CyclicWorkflowExecutor:
                 elif isinstance(pred_output, dict) and src_key in pred_output:
                     inputs[dst_key] = pred_output[src_key]
                     logger.debug(
-                        f"Mapped {src_key} -> {dst_key}: {type(pred_output[src_key])}, length={len(pred_output[src_key]) if hasattr(pred_output[src_key], '__len__') else 'N/A'}"
+                        f"Mapped value type: {safe_type_name(pred_output[src_key])}, length={len(pred_output[src_key]) if hasattr(pred_output[src_key], '__len__') else 'N/A'}"
                     )
                 elif src_key == "output":
                     # Default output mapping
@@ -1227,9 +1233,7 @@ class CyclicWorkflowExecutor:
         # Filter out None values to avoid security validation errors
         merged_inputs = {k: v for k, v in merged_inputs.items() if v is not None}
 
-        logger.debug(
-            f"Final merged_inputs for {node_id}: keys={list(merged_inputs.keys())}"
-        )
+        logger.debug(f"Final merged_inputs for {node_id}: count={len(merged_inputs)}")
 
         # Create task for node execution if task manager available
         task = None
@@ -1265,7 +1269,9 @@ class CyclicWorkflowExecutor:
                 if task:
                     task_manager.update_task_status(task.task_id, TaskStatus.RUNNING)
             except Exception as e:
-                logger.warning(f"Failed to create task for node '{node_id}': {e}")
+                logger.warning(
+                    f"Failed to create task for node '{node_id}': {safe_exception_frames(e)}"
+                )
 
         # CONDITIONAL EXECUTION: Skip nodes that only receive None inputs from conditional routing
         if self._should_skip_conditional_node_cyclic(workflow, node_id, merged_inputs):
@@ -1322,7 +1328,9 @@ class CyclicWorkflowExecutor:
                     # Update task metrics
                     task_manager.update_task_metrics(task.task_id, task_metrics)
                 except Exception as e:
-                    logger.warning(f"Failed to update task for node '{node_id}': {e}")
+                    logger.warning(
+                        f"Failed to update task for node '{node_id}': {safe_exception_frames(e)}"
+                    )
 
         except Exception as e:
             # Update task status on failure
@@ -1336,7 +1344,7 @@ class CyclicWorkflowExecutor:
                     )
                 except Exception as update_error:
                     logger.warning(
-                        f"Failed to update task status on error: {update_error}"
+                        f"Failed to update task status on error: {safe_exception_frames(update_error)}"
                     )
             raise
 
