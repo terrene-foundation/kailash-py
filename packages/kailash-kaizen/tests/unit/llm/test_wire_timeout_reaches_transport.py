@@ -100,12 +100,12 @@ def _client(*, deployment_timeout: float | None = None) -> LlmClient:
 
 @pytest.mark.asyncio
 async def test_complete_forwards_per_request_timeout_to_transport():
-    http = _RecordingHttpClient()
-    await _client().complete(
-        _MESSAGES, model="test-model", timeout=300.0, http_client=http
-    )
-    assert len(http.post_kwargs) == 1
-    assert http.post_kwargs[0]["timeout"] == 300.0
+    async with _RecordingHttpClient() as http:
+        await _client().complete(
+            _MESSAGES, model="test-model", timeout=300.0, http_client=http
+        )
+        assert len(http.post_kwargs) == 1
+        assert http.post_kwargs[0]["timeout"] == 300.0
 
 
 @pytest.mark.asyncio
@@ -115,44 +115,46 @@ async def test_complete_omits_timeout_kwarg_when_unset():
     Asserting only that ``timeout`` is PRESENT could not distinguish the fix
     from one that always sends a constant.
     """
-    http = _RecordingHttpClient()
-    await _client().complete(_MESSAGES, model="test-model", http_client=http)
-    assert len(http.post_kwargs) == 1
-    assert "timeout" not in http.post_kwargs[0]
+    async with _RecordingHttpClient() as http:
+        await _client().complete(_MESSAGES, model="test-model", http_client=http)
+        assert len(http.post_kwargs) == 1
+        assert "timeout" not in http.post_kwargs[0]
 
 
 @pytest.mark.asyncio
 async def test_complete_timeout_value_is_the_configured_one_not_the_default():
     """A non-default value must be DISTINGUISHABLE from the 60 s default."""
-    http = _RecordingHttpClient()
-    await _client().complete(
-        _MESSAGES, model="test-model", timeout=17.5, http_client=http
-    )
-    sent = http.post_kwargs[0]["timeout"]
-    assert sent == 17.5
-    assert sent != LlmClient._DEFAULT_TRANSPORT_TIMEOUT_SECONDS
+    async with _RecordingHttpClient() as http:
+        await _client().complete(
+            _MESSAGES, model="test-model", timeout=17.5, http_client=http
+        )
+        sent = http.post_kwargs[0]["timeout"]
+        assert sent == 17.5
+        assert sent != LlmClient._DEFAULT_TRANSPORT_TIMEOUT_SECONDS
 
 
 @pytest.mark.asyncio
 async def test_stream_forwards_per_request_timeout_to_transport():
-    http = _RecordingHttpClient()
-    client = _client()
-    async for _chunk in client.stream(
-        _MESSAGES, model="test-model", timeout=300.0, http_client=http
-    ):
-        pass
-    assert len(http.stream_kwargs) == 1
-    assert http.stream_kwargs[0]["timeout"] == 300.0
+    async with _RecordingHttpClient() as http:
+        client = _client()
+        async for _chunk in client.stream(
+            _MESSAGES, model="test-model", timeout=300.0, http_client=http
+        ):
+            pass
+        assert len(http.stream_kwargs) == 1
+        assert http.stream_kwargs[0]["timeout"] == 300.0
 
 
 @pytest.mark.asyncio
 async def test_stream_omits_timeout_kwarg_when_unset():
-    http = _RecordingHttpClient()
-    client = _client()
-    async for _chunk in client.stream(_MESSAGES, model="test-model", http_client=http):
-        pass
-    assert len(http.stream_kwargs) == 1
-    assert "timeout" not in http.stream_kwargs[0]
+    async with _RecordingHttpClient() as http:
+        client = _client()
+        async for _chunk in client.stream(
+            _MESSAGES, model="test-model", http_client=http
+        ):
+            pass
+        assert len(http.stream_kwargs) == 1
+        assert "timeout" not in http.stream_kwargs[0]
 
 
 # ---------------------------------------------------------------------------

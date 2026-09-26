@@ -17,14 +17,12 @@ supported construction path for Nexus outbound HTTP traffic.
 Every outbound URL is validated at two points:
 
 1. ``HttpClient`` routes the URL through ``check_url`` at request-dispatch
-   time. That catches literal-IP SSRF, encoded-IP bypass forms, and DNS
-   rebinding attempts that resolve to a private / loopback / metadata IP at
-   parse time.
+   time. Offline checks catch literal-IP SSRF, encoded-IP bypass forms,
+   metadata hostnames and disallowed hosts without blocking the event loop.
 2. ``HttpClient`` installs ``SafeDnsTransport`` on the underlying
-   ``httpx.AsyncClient``. The transport re-resolves the peer host at connect
-   time and rejects the connection before the TCP SYN fires. That closes the
-   TOCTOU window where a public hostname resolves to 1.2.3.4 at parse time
-   and to 127.0.0.1 at connect time.
+   ``httpx.AsyncClient``. The shared Core backend resolves and validates all
+   candidates within the connect deadline, then connects to numeric addresses
+   from that exact answer. No second hostname lookup can change the peer.
 
 Both guards run. Removing either widens the surface.
 
@@ -61,6 +59,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from kailash.utils.http_transport import DnsPinnedAsyncTransport
 from kailash.utils.network_guard import (
     DEFAULT_BLOCKED_NETWORKS as _DEFAULT_BLOCKED_NETWORKS,
     METADATA_HOSTNAMES as _METADATA_HOSTNAMES,
@@ -71,6 +70,7 @@ from kailash.utils.network_guard import (
     is_private_ipv4 as _is_private_ipv4,
     is_private_ipv6 as _is_private_ipv6,
     iter_resolved_ips as _iter_resolved_ips,
+    resolve_url_ips,
     url_fingerprint as _url_fingerprint,
 )
 
@@ -185,14 +185,14 @@ def check_url(
 # ---------------------------------------------------------------------------
 
 
-class SafeDnsTransport(httpx.AsyncHTTPTransport):
+class SafeDnsTransport(DnsPinnedAsyncTransport):
     """httpx transport that re-resolves the peer host at connect time.
 
     ``check_url`` validates at URL-parse time. Between parse and connect
     there is a TOCTOU window where a public hostname could resolve to a
     public IP once and to 127.0.0.1 the next time (classic DNS rebinding).
-    This transport closes that window by re-checking every resolution
-    immediately before the TCP SYN.
+    This transport closes that window by connecting only to numeric addresses
+    from the validated answer, preserving the original HTTP/TLS origin.
 
     Per issue #473 non-negotiable 1: the private-IP check runs BEFORE the
     host allowlist, so an allowlisted private IP is still rejected at
@@ -213,25 +213,22 @@ class SafeDnsTransport(httpx.AsyncHTTPTransport):
         allow_loopback: bool = False,
         **kwargs: Any,
     ) -> None:
-        super().__init__(**kwargs)
         self._blocked_networks = blocked_networks
         self._host_allowlist = host_allowlist
         self._allow_loopback = allow_loopback
 
-    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
-        host = request.url.host
-        # Re-run the full guard with DNS resolution active so a rebinding
-        # attack is caught before the connect. The URL is reconstructed from
-        # the request to keep fingerprints consistent with the caller-facing
-        # log line.
-        check_url(
-            str(request.url),
+        policy = dict(
             blocked_networks=self._blocked_networks,
             host_allowlist=self._host_allowlist,
             allow_loopback=self._allow_loopback,
-            resolve_dns=True,
         )
-        return await super().handle_async_request(request)
+        super().__init__(
+            validate_url=lambda url: check_url(url, resolve_dns=False, **policy),
+            resolve_addresses=lambda url: resolve_url_ips(
+                url, error_factory=InvalidEndpointError, **policy
+            ),
+            **kwargs,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -399,7 +396,7 @@ class HttpClient:
             blocked_networks=self._config.blocked_networks,
             host_allowlist=self._config.host_allowlist,
             allow_loopback=self._config.allow_loopback,
-            resolve_dns=True,
+            resolve_dns=False,
         )
 
         if request_id is None:
@@ -529,7 +526,7 @@ class HttpClient:
             blocked_networks=self._config.blocked_networks,
             host_allowlist=self._config.host_allowlist,
             allow_loopback=self._config.allow_loopback,
-            resolve_dns=True,
+            resolve_dns=False,
         )
         if request_id is None:
             request_id = str(uuid.uuid4())

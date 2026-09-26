@@ -22,7 +22,8 @@ from kaizen.llm.http_client import LlmHttpClient, _SafeHttpTransport
 
 
 @pytest.mark.integration
-def test_llmhttpclient_installs_safe_dns_resolver_structurally() -> None:
+@pytest.mark.asyncio
+async def test_llmhttpclient_installs_safe_dns_resolver_structurally() -> None:
     """Constructing LlmHttpClient wires SafeDnsResolver into the httpx transport.
 
     This is the orphan-detection test: LlmHttpClient is a facade; the
@@ -46,9 +47,7 @@ def test_llmhttpclient_installs_safe_dns_resolver_structurally() -> None:
         assert transport._resolver.kind() == "safe_dns"  # type: ignore[attr-defined]
     finally:
         # Close client cleanly — required for test isolation.
-        import asyncio
-
-        asyncio.run(client.aclose())
+        await client.aclose()
 
 
 @pytest.mark.integration

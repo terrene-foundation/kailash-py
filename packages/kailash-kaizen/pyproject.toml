@@ -84,8 +84,9 @@ dependencies = [
     "kailash-mcp>=0.5.0",
     "pydantic>=2.0.0",          # llm/deployment.py + auth modules
     "typing-extensions>=4.5.0", # core/schema_factory.py
-    "anyio>=4.0.0",             # autonomy observability/hooks/interrupts
-    "httpx>=0.25.0",            # llm/http_client.py + llm/client.py module-scope
+    "anyio>=4.1",             # autonomy observability/hooks/interrupts
+    "httpx>=0.25.0",
+    "httpcore>=0.18.0",  # public async network backend for DNS pinning
     "aiohttp>=3.13.3",          # autonomy/control/transports/http + nodes/ai/semantic_memory
     "PyJWT>=2.8.0",             # security/authentication.py module-scope
     "cryptography>=41.0.0",     # security/encryption.py (AESGCM, PBKDF2HMAC, hashes)
@@ -313,3 +314,7 @@ extend-ignore = [
 [tool.ruff.lint.per-file-ignores]
 # Allow all patterns in test files
 "tests/**/*.py" = ["E", "F"]
+
+# Build checkout uses the paired Core source; published metadata is unchanged.
+[tool.uv.sources]
+kailash = { path = "../..", editable = true }

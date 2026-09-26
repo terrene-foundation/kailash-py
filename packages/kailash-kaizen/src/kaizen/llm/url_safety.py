@@ -210,7 +210,7 @@ def check_url(url: str, *, resolve_dns: bool = True) -> None:
     The DEFAULT stays `True`, and every caller that is not doing parse-time
     validation takes it. `Endpoint._validate_base_url` is the one deliberate
     exception: it passes `resolve_dns=False` because a parse-time DNS answer
-    is stale by send time, while `http_client.SafeDnsResolver.check_host`
+    is stale by send time, while `http_client.SafeDnsResolver.resolve_addresses`
     re-runs the same classification immediately before the connection opens
     and owns the address the socket actually uses. That was decided on
     measurement, not preference — see #2168 and

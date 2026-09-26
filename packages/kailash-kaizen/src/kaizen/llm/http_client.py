@@ -34,15 +34,9 @@ agreed on the verdict and disagreed on the bucket for six addresses --
 including four IMDS-wrapper forms that reported the generic `ipv4_mapped`
 instead of `metadata_service`.
 
-`SafeDnsResolver` NARROWS the DNS-rebinding window to the resolver-cache
-interval; it does not eliminate it. `check_host` resolves, classifies,
-and discards, and httpx then resolves independently, so a 0-TTL record
-can still answer differently to the two lookups. Pinning the validated
-address into the connection would close that; today it is not closed, and
-no docstring here should imply otherwise.
-
-Removing the resolver install widens the surface -- it is the only gate
-that re-checks an address at the moment of use.
+`SafeDnsResolver` returns the validated addresses to the shared Core network
+backend. Only those numeric addresses reach TCP; the original hostname remains
+in the request origin for TLS certificate validation, SNI and HTTP Host.
 
 # Observability
 
@@ -78,10 +72,13 @@ import logging
 import socket
 import time
 import uuid
+from types import MethodType
 from typing import Any, AsyncIterator, Mapping, Optional
 from urllib.parse import urlparse
 
 import httpx
+
+from kailash.utils.http_transport import DnsPinnedAsyncTransport
 
 # Address classification is the SHARED implementation (#2091 follow-up).
 # This module previously carried its own copy of `_is_private_ipv4` /
@@ -94,6 +91,7 @@ import httpx
 # consolidating (`zero-tolerance.md` Rule 4).
 from kailash.utils.network_guard import (
     METADATA_IPS as _METADATA_IPS,
+    check_url as _check_network_url,
     ip_reason as _ip_reason,
     is_private_ipv4 as _is_private_ipv4,
     is_private_ipv6 as _is_private_ipv6,
@@ -168,8 +166,8 @@ class SafeDnsResolver:
     """Re-validates every resolved IP against the private/metadata allowlist.
 
     Stateless: a single instance is reused across every `LlmHttpClient`.
-    The `resolve(host, port)` method returns a tuple of socket tuples
-    suitable for `httpx.HTTPTransport`'s custom-resolver hook, OR raises
+    The `resolve_addresses(host)` method returns validated numeric addresses
+    for the shared Core TCP backend, OR raises
     `InvalidEndpoint` if any of the resolved addresses fall into the
     rejected ranges.
 
@@ -182,6 +180,10 @@ class SafeDnsResolver:
     __slots__ = ()
 
     def check_host(self, host: str) -> None:
+        """Validate a hostname without changing the public None-return contract."""
+        self.resolve_addresses(host)
+
+    def resolve_addresses(self, host: str) -> tuple[str, ...]:
         """Resolve `host` and raise `InvalidEndpoint` if any IP is private.
 
         Raises `InvalidEndpoint(reason="metadata_service")` for the AWS
@@ -207,8 +209,8 @@ class SafeDnsResolver:
             parsed = None
         if parsed is not None:
             _classify_or_raise(parsed, host)
-            # Literal public IP -- accept.
-            return
+            # Literal public IP -- connect without another lookup.
+            return (str(parsed),)
 
         # DNS resolution. Every returned address MUST pass the
         # allowlist; the first private/metadata address raises.
@@ -219,6 +221,7 @@ class SafeDnsResolver:
         if not infos:
             raise InvalidEndpoint("resolution_failed", raw_url=host)
 
+        addresses = []
         for info in infos:
             sockaddr = info[4]
             if not sockaddr:
@@ -229,6 +232,10 @@ class SafeDnsResolver:
             except (ValueError, TypeError):
                 continue
             _classify_or_raise(ip, host)
+            addresses.append(str(ip))
+        if not addresses:
+            raise InvalidEndpoint("resolution_failed", raw_url=host)
+        return tuple(dict.fromkeys(addresses))
 
     def kind(self) -> str:
         """Stable label for observability -- cross-SDK parity."""
@@ -240,28 +247,36 @@ class SafeDnsResolver:
 # ---------------------------------------------------------------------------
 
 
-class _SafeHttpTransport(httpx.AsyncHTTPTransport):
-    """httpx transport that routes every connect through SafeDnsResolver.
-
-    Subclass rather than compose: httpx's transport hook runs at connect
-    time, which is precisely the surface SafeDnsResolver needs. The
-    subclass overrides `handle_async_request` to validate the peer host
-    BEFORE the underlying transport opens the TCP socket. Any rejection
-    surfaces as `InvalidEndpoint`, which callers should treat as an
-    EndpointError (not an `httpx.ConnectError`).
-    """
+class _SafeHttpTransport(DnsPinnedAsyncTransport):
+    """Bind the resolver's validated addresses to the actual TCP connection."""
 
     def __init__(self, resolver: SafeDnsResolver, **kwargs: Any) -> None:
-        super().__init__(**kwargs)
         self._resolver = resolver
 
-    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
-        host = request.url.host
-        # Structural gate: validate the host at connect time. The
-        # resolver raises InvalidEndpoint on any private / metadata IP
-        # -- the TCP SYN never fires for a rejected host.
-        self._resolver.check_host(host)
-        return await super().handle_async_request(request)
+        def resolve_for_connection(url):
+            host = urlparse(url).hostname
+            # Preserve a caller's narrowing check_host override. The base
+            # implementation itself resolves, so do not run it twice.
+            check_host = resolver.check_host
+            if not (
+                type(check_host) is MethodType
+                and check_host.__func__ is SafeDnsResolver.check_host
+                and check_host.__self__ is resolver
+            ):
+                check_host(host)
+            return resolver.resolve_addresses(host)
+
+        super().__init__(
+            validate_url=lambda url: _check_network_url(
+                url,
+                resolve_dns=False,
+                allow_loopback=True,
+                loopback_hosts=("localhost",),
+                error_factory=InvalidEndpoint,
+            ),
+            resolve_addresses=resolve_for_connection,
+            **kwargs,
+        )
 
 
 class LlmHttpClient:

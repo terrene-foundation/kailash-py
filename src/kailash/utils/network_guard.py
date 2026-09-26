@@ -541,6 +541,47 @@ def check_url(
         raise error_factory("resolution_failed", raw_url=url)
 
 
+def resolve_url_ips(
+    url: str,
+    *,
+    blocked_networks=None,
+    host_allowlist=None,
+    allow_loopback: bool = False,
+    error_factory=BlockedDestinationError,
+) -> tuple[str, ...]:
+    """Return the exact validated TCP candidates, preserving the hostname policy.
+
+    Unlike :func:`check_url`, an empty answer always fails: a transport must
+    never fall back to a second, unchecked hostname resolution.
+    """
+    check_url(
+        url,
+        blocked_networks=blocked_networks,
+        host_allowlist=host_allowlist,
+        allow_loopback=allow_loopback,
+        resolve_dns=False,
+        error_factory=error_factory,
+    )
+    host = urlparse(url).hostname.lower()
+    literal = _try_parse_ip(host)
+    addresses = [literal] if literal is not None else iter_resolved_ips(host)
+    if not addresses:
+        raise error_factory("resolution_failed", raw_url=url)
+    for ip in addresses:
+        _validate_ip(
+            ip,
+            url=url,
+            blocked_networks=blocked_networks,
+            allow_loopback=allow_loopback,
+            host_lc=host,
+            loopback_hosts=set(DEFAULT_LOOPBACK_HOSTS),
+            allow_private=False,
+            allow_metadata=False,
+            error_factory=error_factory,
+        )
+    return tuple(str(ip) for ip in addresses)
+
+
 def _validate_ip(
     ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
     url: str,
