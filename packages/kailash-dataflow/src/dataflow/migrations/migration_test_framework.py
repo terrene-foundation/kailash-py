@@ -151,6 +151,8 @@ class MigrationTestFramework:
             extra={"database_type": self.database_type},
         )
         start_time = time.perf_counter()
+        connection = None
+        setup_complete = False
 
         try:
             if self.database_type == "sqlite":
@@ -169,6 +171,7 @@ class MigrationTestFramework:
                 extra={"setup_time": setup_time},
             )
 
+            setup_complete = True
             return connection
 
         except Exception as e:
@@ -176,7 +179,11 @@ class MigrationTestFramework:
                 "migration_test_framework.failed_to_setup_test_database",
                 extra={"error": str(e)},
             )
-            raise MigrationTestError(f"Database setup failed: {e}")
+            raise MigrationTestError(f"Database setup failed: {e}") from e
+        finally:
+            if not setup_complete:
+                # The caller never received ownership if setup failed/cancelled.
+                await self.teardown_test_database(connection)
 
     async def _setup_sqlite_database(self) -> sqlite3.Connection:
         """Setup SQLite test database."""
@@ -193,7 +200,11 @@ class MigrationTestFramework:
             connection = sqlite3.connect(
                 self.connection_string, check_same_thread=False
             )
-        connection.execute("PRAGMA foreign_keys = ON")
+        try:
+            connection.execute("PRAGMA foreign_keys = ON")
+        except BaseException:
+            connection.close()
+            raise
 
         # Wrap in async-compatible interface if needed
         return connection
@@ -207,7 +218,11 @@ class MigrationTestFramework:
         connection = await asyncpg.connect(self.connection_string)
 
         # Clean existing test data
-        await self._clean_postgresql_database(connection)
+        try:
+            await self._clean_postgresql_database(connection)
+        except BaseException:
+            await connection.close()
+            raise
 
         return connection
 
@@ -767,17 +782,27 @@ class MigrationTestFramework:
         logger.info("Tearing down test database")
 
         try:
-            # Clean up migration system components
-            if self._connection_manager:
-                await self._connection_manager.close()
-
-            # Close database connection
-            if connection:
-                if hasattr(connection, "close"):
-                    if asyncio.iscoroutinefunction(connection.close):
-                        await connection.close()
-                    else:
-                        connection.close()
+            # Release both runtime-owning components created during setup.
+            # Each later owner must still close if an earlier close fails.
+            try:
+                if self._migration_system is not None:
+                    self._migration_system.close()
+                    self._migration_system = None
+            finally:
+                try:
+                    if self._schema_inspector is not None:
+                        self._schema_inspector.close()
+                        self._schema_inspector = None
+                finally:
+                    try:
+                        if self._connection_manager:
+                            await self._connection_manager.close()
+                    finally:
+                        if connection is not None and hasattr(connection, "close"):
+                            if asyncio.iscoroutinefunction(connection.close):
+                                await connection.close()
+                            else:
+                                connection.close()
 
             logger.info("Test database teardown completed")
 

@@ -72,9 +72,17 @@ class TestMigrationTestFramework:
             mock_connect.return_value = mock_conn
 
             connection = await framework.setup_test_database()
-
-            assert connection is not None
-            mock_connect.assert_called_once_with(":memory:", check_same_thread=False)
+            migration_system = framework._migration_system
+            try:
+                assert connection is not None
+                mock_connect.assert_called_once_with(
+                    ":memory:", check_same_thread=False
+                )
+            finally:
+                await framework.teardown_test_database(connection)
+            assert migration_system._explicit_runtime is None
+            assert framework._migration_system is None
+            mock_conn.close.assert_called_once_with()
 
     @pytest.mark.asyncio
     async def test_setup_test_database_postgresql_mock(self):
@@ -90,9 +98,105 @@ class TestMigrationTestFramework:
             mock_connect.return_value = mock_conn
 
             connection = await framework.setup_test_database()
+            migration_system = framework._migration_system
+            inspector = framework._schema_inspector
+            try:
+                assert connection is not None
+                mock_connect.assert_called_once()
+            finally:
+                await framework.teardown_test_database(connection)
+            assert migration_system._explicit_runtime is None
+            assert framework._migration_system is None
+            mock_conn.close.assert_awaited_once_with()
+            assert inspector._explicit_runtime is None
+            assert framework._schema_inspector is None
 
-            assert connection is not None
-            mock_connect.assert_called_once()
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("database_type", ["sqlite", "postgresql"])
+    @pytest.mark.parametrize("cancelled", [False, True])
+    async def test_failed_setup_releases_unreturned_resources(
+        self, database_type, cancelled
+    ):
+        """Partial initialization retains ownership until resources are closed."""
+        framework = MigrationTestFramework(
+            database_type=database_type,
+            connection_string=(
+                ":memory:"
+                if database_type == "sqlite"
+                else "postgresql://test:test@localhost:5434/test"
+            ),
+        )
+        failure = (
+            asyncio.CancelledError("setup cancelled")
+            if cancelled
+            else RuntimeError("setup failed")
+        )
+        initialized = framework._initialize_migration_components
+        captured = {}
+
+        async def fail_after_initialization(connection):
+            await initialized(connection)
+            captured.update(
+                connection=connection,
+                system=framework._migration_system,
+                inspector=framework._schema_inspector,
+            )
+            raise failure
+
+        with patch.object(
+            framework, "_initialize_migration_components", fail_after_initialization
+        ):
+            with patch("asyncpg.connect", new=AsyncMock(return_value=AsyncMock())):
+                try:
+                    expected = (
+                        asyncio.CancelledError if cancelled else MigrationTestError
+                    )
+                    with pytest.raises(expected) as raised:
+                        await framework.setup_test_database()
+                    if cancelled:
+                        assert raised.value is failure
+                    else:
+                        assert raised.value.__cause__ is failure
+                    assert captured["system"]._explicit_runtime is None
+                    assert framework._migration_system is None
+                    assert framework._schema_inspector is None
+                    if database_type == "sqlite":
+                        with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+                            captured["connection"].execute("SELECT 1")
+                    else:
+                        assert captured["inspector"]._explicit_runtime is None
+                        captured["connection"].close.assert_awaited_once_with()
+                finally:
+                    # Also release retained resources when a regression assertion fails.
+                    await framework.teardown_test_database(captured.get("connection"))
+
+    @pytest.mark.asyncio
+    async def test_sqlite_initialization_failure_closes_connection_before_return(self):
+        framework = MigrationTestFramework()
+        connection = Mock(spec=sqlite3.Connection)
+        failure = RuntimeError("PRAGMA failed")
+        connection.execute.side_effect = failure
+        with patch("sqlite3.connect", return_value=connection):
+            with pytest.raises(MigrationTestError) as raised:
+                await framework.setup_test_database()
+        assert raised.value.__cause__ is failure
+        connection.close.assert_called_once_with()
+
+    @pytest.mark.asyncio
+    async def test_postgresql_initialization_cancellation_closes_connection_before_return(
+        self,
+    ):
+        framework = MigrationTestFramework(database_type="postgresql")
+        connection = AsyncMock()
+        failure = asyncio.CancelledError("cleanup cancelled")
+        with patch("asyncpg.connect", new=AsyncMock(return_value=connection)):
+            with patch.object(
+                framework, "_clean_postgresql_database", side_effect=failure
+            ):
+                with pytest.raises(asyncio.CancelledError) as raised:
+                    await framework.setup_test_database()
+        assert raised.value is failure
+        connection.close.assert_awaited_once_with()
 
     def test_create_test_migration(self):
         """Test creation of test migration."""
@@ -226,13 +330,11 @@ class TestMigrationTestFramework:
             database_type="sqlite", connection_string=":memory:"
         )
 
-        # Mock schema inspector returning different schema
-        mock_inspector = AsyncMock()
-        mock_inspector.get_current_schema.return_value = {
-            "wrong_table": TableDefinition(name="wrong_table", columns=[])
-        }
-
-        framework._schema_inspector = mock_inspector
+        # The SQLite inspector consumes sqlite3's synchronous cursor protocol.
+        connection = Mock(spec=sqlite3.Connection)
+        cursor = Mock(spec=sqlite3.Cursor)
+        connection.cursor.return_value = cursor
+        cursor.fetchall.side_effect = [[("wrong_table",)], []]
 
         # Expected schema
         expected_schema = {
@@ -245,10 +347,15 @@ class TestMigrationTestFramework:
         }
 
         is_verified = await framework.verify_migration_result(
-            connection=AsyncMock(), expected_schema=expected_schema
+            connection=connection, expected_schema=expected_schema
         )
 
         assert is_verified is False
+        connection.cursor.assert_called_once_with()
+        assert cursor.fetchall.call_count == 2
+        assert cursor.execute.call_args_list[-1].args == (
+            "PRAGMA table_info(wrong_table)",
+        )
 
     @pytest.mark.asyncio
     async def test_rollback_verification(self):
@@ -286,6 +393,28 @@ class TestMigrationTestFramework:
         # For SQLite :memory:, connection should be closed
         if hasattr(mock_conn, "close"):
             mock_conn.close.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_teardown_closes_other_resources_when_component_close_fails(self):
+        framework = MigrationTestFramework()
+        migration_system = Mock()
+        migration_system.close.side_effect = RuntimeError("close failed")
+        inspector = Mock()
+        manager = AsyncMock()
+        connection = AsyncMock()
+        framework._migration_system = migration_system
+        framework._schema_inspector = inspector
+        framework._connection_manager = manager
+
+        await framework.teardown_test_database(connection)
+
+        migration_system.close.assert_called_once_with()
+        inspector.close.assert_called_once_with()
+        manager.close.assert_awaited_once_with()
+        connection.close.assert_awaited_once_with()
+        # Keep a failed owner reachable for explicit recovery; successful owners clear.
+        assert framework._migration_system is migration_system
+        assert framework._schema_inspector is None
 
     def test_performance_requirements(self):
         """Test that framework meets performance requirements."""

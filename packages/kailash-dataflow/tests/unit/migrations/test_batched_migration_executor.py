@@ -5,8 +5,9 @@ Tests DDL operation batching logic and parallel execution safety
 without external dependencies.
 """
 
+from types import SimpleNamespace
 from typing import List
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, call, patch
 
 import pytest
 
@@ -24,11 +25,15 @@ class TestBatchedMigrationExecutor:
 
     @pytest.fixture
     def mock_connection(self):
-        """Mock database connection."""
-        connection = Mock()
-        connection.cursor = AsyncMock()
-        connection.transaction = AsyncMock()
-        return connection
+        """Model asyncpg's synchronous transaction factory and async execute.
+
+        A plain namespace exercises the database path instead of the executor's
+        legacy mock-detection branch.
+        """
+        return SimpleNamespace(
+            transaction=Mock(return_value=AsyncMock()),
+            execute=AsyncMock(),
+        )
 
     @pytest.fixture
     def executor(self, mock_connection):
@@ -208,21 +213,22 @@ class TestBatchedMigrationExecutor:
         assert result
 
     @pytest.mark.asyncio
-    async def test_execute_batched_migrations_single_batch(self, executor):
-        """Test executing single batch of operations."""
-        # For unit tests, just test that the method doesn't crash and returns True/False appropriately
-        batches = [["CREATE TABLE test (id SERIAL PRIMARY KEY);"]]
-
-        # The method should return True (execution logic is tested in integration tests)
-        # For unit tests, we focus on the batching logic rather than actual execution
-        result = await executor.execute_batched_migrations(batches)
-
-        # Should return True (successful execution with mock)
-        assert result
+    async def test_execute_batched_migrations_single_batch(
+        self, executor, mock_connection
+    ):
+        """Execute SQL inside a transaction and exit that transaction."""
+        sql = "CREATE TABLE test (id SERIAL PRIMARY KEY);"
+        assert await executor.execute_batched_migrations([[sql]]) is True
+        mock_connection.execute.assert_awaited_once_with(sql)
+        transaction = mock_connection.transaction.return_value
+        transaction.__aenter__.assert_awaited_once()
+        transaction.__aexit__.assert_awaited_once_with(None, None, None)
 
     @pytest.mark.asyncio
-    async def test_execute_batched_migrations_multiple_batches(self, executor):
-        """Test executing multiple batches sequentially."""
+    async def test_execute_batched_migrations_multiple_batches(
+        self, executor, mock_connection
+    ):
+        """Every statement is awaited in order, in one transaction per batch."""
         batches = [
             [
                 "CREATE TABLE users (id SERIAL PRIMARY KEY);",
@@ -230,56 +236,49 @@ class TestBatchedMigrationExecutor:
             ],
             ["ALTER TABLE users ADD COLUMN email VARCHAR(255);"],
         ]
-
-        result = await executor.execute_batched_migrations(batches)
-
-        assert result
-
-    @pytest.mark.asyncio
-    async def test_execute_batched_migrations_parallel_execution(self, executor):
-        """Test parallel execution of safe operations."""
-        batches = [
-            [
-                "CREATE TABLE users (id SERIAL PRIMARY KEY);",
-                "CREATE TABLE posts (id SERIAL PRIMARY KEY);",
-            ]
+        assert await executor.execute_batched_migrations(batches) is True
+        assert mock_connection.execute.await_args_list == [
+            call(sql) for batch in batches for sql in batch
+        ]
+        transaction = mock_connection.transaction.return_value
+        assert transaction.__aenter__.await_count == len(batches)
+        assert transaction.__aexit__.await_args_list == [
+            call(None, None, None) for _ in batches
         ]
 
-        result = await executor.execute_batched_migrations(batches)
-
-        assert result
+    @pytest.mark.asyncio
+    async def test_execute_batch_parallel(self, executor, mock_connection):
+        """Exercise the parallel helper, including each statement's transaction."""
+        statements = [
+            "CREATE TABLE users (id SERIAL PRIMARY KEY);",
+            "CREATE TABLE posts (id SERIAL PRIMARY KEY);",
+        ]
+        assert await executor._execute_batch_parallel(statements) is True
+        mock_connection.execute.assert_has_awaits(
+            [call(sql) for sql in statements], any_order=True
+        )
+        assert mock_connection.execute.await_count == len(statements)
+        transaction = mock_connection.transaction.return_value
+        assert transaction.__aenter__.await_count == len(statements)
+        assert transaction.__aexit__.await_count == len(statements)
 
     @pytest.mark.asyncio
     async def test_execute_batched_migrations_error_handling(
         self, executor, mock_connection
     ):
-        """Test basic error handling interface during batch execution.
-
-        Note: Complex error scenarios are tested in integration tests
-        with real database connections where actual errors can occur.
-        This unit test validates the basic error handling interface.
-        """
-        # Create a batch with valid operations
-        batches = [
-            {
-                "id": 1,
-                "operations": [
-                    {"type": "CREATE TABLE", "table": "test"},
-                ],
-            }
-        ]
-
-        # Mock connection to raise an error
-        mock_connection.execute = AsyncMock(side_effect=Exception("Test error"))
-
-        # The executor should handle the error gracefully
-        # In unit tests, we just verify the method exists and accepts parameters
-        try:
-            result = await executor.execute_batched_migrations(batches)
-            # If it returns, that's acceptable - error handling may allow this
-        except Exception:
-            # If it raises, that's also acceptable for this unit test
-            pass
+        """A real execution failure exits the transaction and stops the batch."""
+        sql = "CREATE TABLE test (id SERIAL PRIMARY KEY);"
+        error = RuntimeError("Test error")
+        mock_connection.execute.side_effect = error
+        assert await executor.execute_batched_migrations([[sql, "SELECT 1;"]]) is False
+        mock_connection.execute.assert_awaited_once_with(sql)
+        transaction = mock_connection.transaction.return_value
+        transaction.__aenter__.assert_awaited_once()
+        transaction.__aexit__.assert_awaited_once()
+        exc_type, exc_value, traceback = transaction.__aexit__.await_args.args
+        assert exc_type is RuntimeError
+        assert exc_value is error
+        assert traceback is not None
 
     def test_get_batch_execution_strategy_sequential(self, executor, sample_operations):
         """Test strategy selection for sequential execution."""
