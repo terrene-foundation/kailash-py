@@ -52,6 +52,7 @@ _AUTO_MIGRATE_WARN = "warn"
 
 from kailash.db.dialect import _validate_identifier
 from kailash.runtime import AsyncLocalRuntime, LocalRuntime
+from kailash.utils.sqlite_url import is_sqlite_url
 
 # Conservative SQL type allowlist for dynamic ALTER TABLE ... TYPE statements
 # (rules/dataflow-identifier-safety.md). The MODIFY_COLUMN path takes a
@@ -1671,9 +1672,13 @@ class DataFlow(DataFlowEventMixin):
         try:
             # Check if this is PostgreSQL which requires async connections
             database_url = DataFlow._effective_database_url(self)
-            is_postgresql = database_url and (
-                "postgresql" in database_url.lower()
-                or "postgres" in database_url.lower()
+            is_postgresql = (
+                database_url
+                and not is_sqlite_url(database_url)
+                and (
+                    "postgresql" in database_url.lower()
+                    or "postgres" in database_url.lower()
+                )
             )
 
             if is_postgresql:
@@ -1863,15 +1868,13 @@ class DataFlow(DataFlowEventMixin):
 
             # Determine database dialect from connection URL
             database_url = DataFlow._effective_database_url(self) or ":memory:"
-            if "postgresql" in database_url or "postgres" in database_url:
-                dialect = "postgresql"
-            elif "mysql" in database_url:
-                dialect = "mysql"
-            elif (
-                "sqlite" in database_url
-                or database_url.startswith("file:")
-                or database_url == ":memory:"
+            if not is_sqlite_url(database_url) and (
+                "postgresql" in database_url or "postgres" in database_url
             ):
+                dialect = "postgresql"
+            elif not is_sqlite_url(database_url) and "mysql" in database_url:
+                dialect = "mysql"
+            elif is_sqlite_url(database_url):
                 dialect = "sqlite"
                 # SQLite is fully supported for production with enterprise adapter
             else:
@@ -2024,7 +2027,7 @@ class DataFlow(DataFlowEventMixin):
         database_url = DataFlow._effective_database_url(self) or ":memory:"
 
         try:
-            if (
+            if not is_sqlite_url(database_url) and (
                 "postgresql" in database_url.lower()
                 or "postgres" in database_url.lower()
             ):
@@ -2042,7 +2045,7 @@ class DataFlow(DataFlowEventMixin):
                 # Default to SQLite for sqlite URLs and :memory:
                 from dataflow.core.event_stores.sqlite import SQLiteEventStore
 
-                if database_url == ":memory:" or "sqlite" in database_url.lower():
+                if is_sqlite_url(database_url):
                     # For in-memory or SQLite URLs, derive a file path
                     if database_url == ":memory:":
                         db_path = ":memory:"
@@ -2572,7 +2575,9 @@ class DataFlow(DataFlowEventMixin):
             await self._reconcile_columns_async(model_name, fields, database_url)
 
             # Detect database type and route appropriately
-            if "postgresql" in database_url or "postgres" in database_url:
+            if not is_sqlite_url(database_url) and (
+                "postgresql" in database_url or "postgres" in database_url
+            ):
                 logger.debug(
                     "engine.ensuring_postgresql_table_for_model",
                     extra={"model_name": model_name},
@@ -2580,11 +2585,7 @@ class DataFlow(DataFlowEventMixin):
                 await self._execute_postgresql_schema_management_async(
                     model_name, fields
                 )
-            elif (
-                "sqlite" in database_url
-                or database_url == ":memory:"
-                or database_url.endswith(".db")
-            ):
+            elif is_sqlite_url(database_url) or database_url.endswith(".db"):
                 logger.debug(
                     "engine.ensuring_sqlite_table_for_model",
                     extra={"model_name": model_name},
@@ -2901,7 +2902,9 @@ class DataFlow(DataFlowEventMixin):
         url_lower = database_url.lower()
 
         try:
-            if "postgresql" in url_lower or "postgres" in url_lower:
+            if not is_sqlite_url(database_url) and (
+                "postgresql" in url_lower or "postgres" in url_lower
+            ):
                 import asyncpg
 
                 from ..adapters.connection_parser import ConnectionParser
@@ -2940,12 +2943,7 @@ class DataFlow(DataFlowEventMixin):
                 finally:
                     await conn.close()
 
-            elif (
-                "sqlite" in url_lower
-                or database_url.startswith("file:")
-                or database_url == ":memory:"
-                or database_url.endswith(".db")
-            ):
+            elif is_sqlite_url(database_url) or database_url.endswith(".db"):
                 import sqlite3
 
                 if self._memory_db_uri is not None:
@@ -3037,16 +3035,13 @@ class DataFlow(DataFlowEventMixin):
         from ..adapters.dialect import DialectManager
 
         url_lower = database_url.lower()
-        if "postgresql" in url_lower or "postgres" in url_lower:
-            database_type = "postgresql"
-        elif "mysql" in url_lower:
-            database_type = "mysql"
-        elif (
-            "sqlite" in url_lower
-            or database_url == ":memory:"
-            or database_url.startswith("file:")
-            or database_url.endswith(".db")
+        if not is_sqlite_url(database_url) and (
+            "postgresql" in url_lower or "postgres" in url_lower
         ):
+            database_type = "postgresql"
+        elif not is_sqlite_url(database_url) and "mysql" in url_lower:
+            database_type = "mysql"
+        elif is_sqlite_url(database_url) or database_url.endswith(".db"):
             database_type = "sqlite"
         else:
             # Unknown backend (e.g. MongoDB) — no SQL column concept.
@@ -5321,14 +5316,12 @@ class DataFlow(DataFlowEventMixin):
         """
         database_url = DataFlow._effective_database_url(self) or ":memory:"
 
-        # Check database type and route to appropriate inspector
-        if "postgresql" in database_url or "postgres" in database_url:
+        # A native SQLite filename can contain another database's name.
+        if is_sqlite_url(database_url):
+            return await self._inspect_sqlite_schema_real(database_url)
+        elif "postgresql" in database_url or "postgres" in database_url:
             return await self._inspect_postgresql_schema_real(database_url)
-        elif (
-            "sqlite" in database_url
-            or database_url == ":memory:"
-            or database_url.endswith(".db")
-        ):
+        elif database_url.endswith(".db"):
             return await self._inspect_sqlite_schema_real(database_url)
         else:
             # Extract scheme from URL for better error message
@@ -7214,7 +7207,9 @@ class DataFlow(DataFlowEventMixin):
                 return connection
 
             # PostgreSQL connection using asyncpg (for proper async support)
-            if "postgresql" in database_url or "postgres" in database_url:
+            if not is_sqlite_url(database_url) and (
+                "postgresql" in database_url or "postgres" in database_url
+            ):
                 logger.debug(
                     "_get_database_connection() is sync but PostgreSQL requires async. Use _get_async_database_connection() instead."
                 )
@@ -7466,7 +7461,7 @@ class DataFlow(DataFlowEventMixin):
         database_url = DataFlow._effective_database_url(self)
         if (
             database_url is None
-            or database_url == ":memory:"
+            or is_sqlite_url(database_url)
             or not (
                 "postgresql" in database_url.lower()
                 or "postgres" in database_url.lower()
@@ -7539,17 +7534,15 @@ class DataFlow(DataFlowEventMixin):
         database_url = DataFlow._effective_database_url(self) or ":memory:"
 
         # Detect database type and route to appropriate schema management
-        if "postgresql" in database_url or "postgres" in database_url:
+        if not is_sqlite_url(database_url) and (
+            "postgresql" in database_url or "postgres" in database_url
+        ):
             logger.debug(
                 "engine.using_postgresql_schema_management_for_model",
                 extra={"model_name": model_name},
             )
             self._trigger_postgresql_schema_management(model_name, fields)
-        elif (
-            "sqlite" in database_url
-            or database_url == ":memory:"
-            or database_url.endswith(".db")
-        ):
+        elif is_sqlite_url(database_url) or database_url.endswith(".db"):
             logger.debug(
                 "engine.using_sqlite_schema_management_for_model",
                 extra={"model_name": model_name},
@@ -8183,7 +8176,7 @@ class DataFlow(DataFlowEventMixin):
             # Integer ID models use auto-increment
             # Get database type to set appropriate defaults
             database_url = DataFlow._effective_database_url(self) or ":memory:"
-            is_sqlite = "sqlite" in database_url.lower() or database_url == ":memory:"
+            is_sqlite = is_sqlite_url(database_url)
 
             columns["id"] = {
                 "type": "INTEGER",  # Use INTEGER for comparison (SERIAL is CREATE TABLE syntax only)
@@ -10430,7 +10423,7 @@ class DataFlow(DataFlowEventMixin):
         """
         # Skip schema discovery for SQLite databases (not supported for in-memory)
         database_url = DataFlow._effective_database_url(self) or ":memory:"
-        if database_url == ":memory:" or "sqlite" in database_url.lower():
+        if is_sqlite_url(database_url):
             # For SQLite, skip relationship auto-detection
             logger.debug(
                 f"Skipping relationship auto-detection for SQLite database: {mask_url(database_url)}"
@@ -10497,7 +10490,7 @@ class DataFlow(DataFlowEventMixin):
         database_url = DataFlow._effective_database_url(self) or ":memory:"
 
         # Skip for SQLite (no foreign key introspection for in-memory)
-        if database_url == ":memory:" or "sqlite" in database_url.lower():
+        if is_sqlite_url(database_url):
             logger.debug(
                 f"Skipping async relationship auto-detection for SQLite database: {mask_url(database_url)}"
             )
