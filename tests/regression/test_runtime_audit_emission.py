@@ -283,3 +283,92 @@ def test_local_access_denial_audit_preserves_public_error_and_uses_frames(caplog
     error = entries[0]["data"]["error"]
     assert "PermissionError@" in error
     assert "Access denied to workflow" not in error
+
+
+@pytest.mark.parametrize("terminal", ["cancel", "timeout"])
+def test_local_async_task_cancellation_emits_terminal_audit(caplog, terminal):
+    from kailash.nodes.base_async import AsyncNode
+    from kailash.workflow.graph import Workflow
+
+    async def exercise():
+        entered = asyncio.Event()
+        stopped = asyncio.Event()
+
+        class WaitingNode(AsyncNode):
+            def get_parameters(self):
+                return {}
+
+            async def async_run(self, **kwargs):
+                entered.set()
+                try:
+                    await asyncio.Event().wait()
+                finally:
+                    stopped.set()
+
+        workflow = Workflow("local-audit-cancel", name="local-audit-cancel")
+        workflow.add_node("waiting", WaitingNode())
+        with LocalRuntime(enable_audit=True, enable_monitoring=False) as runtime:
+            task = asyncio.create_task(runtime.execute_async(workflow))
+            await asyncio.wait_for(entered.wait(), timeout=5)
+            if terminal == "cancel":
+                task.cancel("private-cancellation-canary-5732")
+                with pytest.raises(
+                    asyncio.CancelledError, match="private-cancellation-canary-5732"
+                ):
+                    await task
+            else:
+                with pytest.raises(TimeoutError):
+                    await asyncio.wait_for(task, timeout=0.01)
+        assert stopped.is_set()
+
+    with caplog.at_level(logging.INFO):
+        asyncio.run(exercise())
+    records = [
+        record for record in caplog.records if record.name == "audit.runtime_audit"
+    ]
+    entries = [json.loads(record.getMessage()) for record in records]
+    assert [entry["event_type"] for entry in entries] == [
+        "workflow_execution_start",
+        "workflow_execution_cancelled",
+    ]
+    assert "CancelledError@" in entries[-1]["data"]["error"]
+    assert all(
+        "private-cancellation-canary-5732" not in record.getMessage()
+        for record in records
+    )
+
+
+@pytest.mark.asyncio
+async def test_local_direct_cancellation_restores_progress_and_signal_owners(caplog):
+    from kailash.nodes.base_async import AsyncNode
+    from kailash.runtime.progress import ProgressRegistry, _current_progress_registry
+    from kailash.workflow.graph import Workflow
+
+    error = asyncio.CancelledError("private-direct-cancellation-831")
+
+    class CancelNode(AsyncNode):
+        def get_parameters(self):
+            return {}
+
+        async def async_run(self, **kwargs):
+            raise error
+
+    workflow = Workflow("direct-audit-cancel", name="direct-audit-cancel")
+    workflow.add_node("cancel", CancelNode())
+    previous = ProgressRegistry()
+    token = _current_progress_registry.set(previous)
+    try:
+        with LocalRuntime(enable_audit=True, enable_monitoring=False) as runtime:
+            with caplog.at_level(logging.INFO):
+                with pytest.raises(asyncio.CancelledError) as caught:
+                    await runtime.execute_async(workflow)
+            assert caught.value is error
+            assert _current_progress_registry.get() is previous
+            assert runtime._workflow_signals == {}
+    finally:
+        _current_progress_registry.reset(token)
+    records = [
+        record for record in caplog.records if record.name == "audit.runtime_audit"
+    ]
+    assert len(records) == 2
+    assert "private-direct-cancellation-831" not in records[-1].getMessage()

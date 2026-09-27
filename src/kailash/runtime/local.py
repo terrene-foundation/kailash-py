@@ -2645,6 +2645,7 @@ class LocalRuntime(
         run_id = None
         _deferred_storage = None  # P0D-007: Initialize before try block
         _signal_key = None  # Signal cleanup key
+        _progress_token = None
 
         try:
             # Resource Limit Enforcement: Check limits before execution (P0A-003: opt-in only)
@@ -3029,9 +3030,6 @@ class LocalRuntime(
             # === Signal/Query System Cleanup ===
             self._workflow_signals.pop(_signal_key, None)
 
-            # === Progress Reporting Cleanup ===
-            _current_progress_registry.reset(_progress_token)
-
             return results, run_id
 
         except WorkflowValidationError:
@@ -3085,15 +3083,21 @@ class LocalRuntime(
             if _signal_key:
                 self._workflow_signals.pop(_signal_key, None)
             raise
-        except WorkflowCancelledError as e:
+        except (WorkflowCancelledError, asyncio.CancelledError) as e:
             # Cancellation should propagate without wrapping
             if self.enable_audit:
                 await self._log_audit_event_async(
                     "workflow_execution_cancelled",
                     {
                         "workflow_id": workflow.workflow_id,
-                        "completed_nodes": e.completed_nodes,
-                        "cancelled_at_node": e.cancelled_at_node,
+                        **(
+                            {
+                                "completed_nodes": e.completed_nodes,
+                                "cancelled_at_node": e.cancelled_at_node,
+                            }
+                            if isinstance(e, WorkflowCancelledError)
+                            else {"error": safe_exception_frames(e)}
+                        ),
                     },
                 )
             if task_manager and run_id:
@@ -3145,6 +3149,9 @@ class LocalRuntime(
             raise RuntimeExecutionError(
                 f"Unified enterprise workflow execution failed: {type(e).__name__}: {e}"
             ) from e
+        finally:
+            if _progress_token is not None:
+                _current_progress_registry.reset(_progress_token)
 
     async def _execute_workflow_async(
         self,
