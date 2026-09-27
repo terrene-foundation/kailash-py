@@ -30,6 +30,7 @@ Downstream Consumers:
 
 import csv
 import json
+from html.parser import HTMLParser
 from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter, register_node
@@ -771,6 +772,81 @@ class TextReaderNode(Node):
         return {"text": text}
 
 
+class _HTMLTextExtractor(HTMLParser):
+    """Extract visible text and headings without treating HTML as a regex."""
+
+    def __init__(self, source: str):
+        super().__init__(convert_charrefs=True)
+        self.source = source
+        self.text = []
+        self.sections = []
+        self._hidden = None
+        self._section = None
+        self._section_text = []
+        self._line_offsets = [0]
+        for index, character in enumerate(source):
+            if character == "\n":
+                self._line_offsets.append(index + 1)
+
+    def _position(self):
+        line, column = self.getpos()
+        return self._line_offsets[line - 1] + column
+
+    def handle_starttag(self, tag, attrs):
+        if self._hidden is not None:
+            return
+        if tag in {"script", "style"}:
+            self._hidden = tag
+            return
+        if tag == "title" or tag in {"h1", "h2", "h3", "h4", "h5", "h6"}:
+            self._section = (tag, self._position())
+            self._section_text = []
+
+    def handle_startendtag(self, tag, attrs):
+        # HTML script/style are not void elements: a trailing slash must not
+        # expose their contents as document text.
+        if tag in {"script", "style"}:
+            self.handle_starttag(tag, attrs)
+
+    def handle_endtag(self, tag):
+        if self._hidden is not None:
+            if tag == self._hidden:
+                self._hidden = None
+            return
+        if self._section is None or self._section[0] != tag:
+            return
+        content = "".join(self._section_text).strip()
+        if content:
+            if tag == "title":
+                self.sections.append(
+                    {
+                        "type": "title",
+                        "content": content,
+                        "start_position": 0,
+                        "end_position": len(content),
+                    }
+                )
+            else:
+                self.sections.append(
+                    {
+                        "type": "heading",
+                        "level": int(tag[1]),
+                        "title": content,
+                        "content": content,
+                        "start_position": self._section[1],
+                        "end_position": self.source.find(">", self._position()) + 1,
+                    }
+                )
+        self._section = None
+        self._section_text = []
+
+    def handle_data(self, data):
+        if self._hidden is None:
+            self.text.append(data)
+            if self._section is not None:
+                self._section_text.append(data)
+
+
 @register_node()
 class DocumentProcessorNode(Node):
     """
@@ -1111,37 +1187,16 @@ class DocumentProcessorNode(Node):
             with safe_open(file_path, "r", encoding=encoding) as f:
                 html_content = f.read()
 
-            # Simple HTML text extraction (in reality would use BeautifulSoup)
-            import re
-
-            # Remove script and style elements
-            html_content = re.sub(
-                r"<script[^>]*>.*?</script>",
-                "",
-                html_content,
-                flags=re.DOTALL | re.IGNORECASE,
-            )
-            html_content = re.sub(
-                r"<style[^>]*>.*?</style>",
-                "",
-                html_content,
-                flags=re.DOTALL | re.IGNORECASE,
-            )
-            # Remove HTML tags
-            content = re.sub(r"<[^>]+>", "", html_content)
-            # Clean up whitespace
-            content = re.sub(r"\s+", " ", content).strip()
-
+            parser = _HTMLTextExtractor(html_content)
+            parser.feed(html_content)
+            parser.close()
+            content = " ".join("".join(parser.text).split())
             metadata = {
                 "character_count": len(content),
                 "word_count": len(content.split()),
                 "original_html_length": len(html_content),
             }
-
-            sections = []
-            if preserve_structure:
-                # Simple section detection based on common patterns
-                sections = self._parse_html_structure(html_content, content)
+            sections = parser.sections if preserve_structure else []
 
             return {
                 "content": content,
@@ -1295,44 +1350,11 @@ class DocumentProcessorNode(Node):
         return sections
 
     def _parse_html_structure(self, html_content: str, text_content: str) -> list:
-        """Parse HTML structure into sections (simplified)."""
-        import re
-
-        sections = []
-
-        # Find title
-        title_match = re.search(
-            r"<title[^>]*>([^<]+)</title>", html_content, re.IGNORECASE
-        )
-        if title_match:
-            sections.append(
-                {
-                    "type": "title",
-                    "content": title_match.group(1),
-                    "start_position": 0,
-                    "end_position": len(title_match.group(1)),
-                }
-            )
-
-        # Find headings
-        heading_pattern = r"<(h[1-6])[^>]*>([^<]+)</h[1-6]>"
-        for match in re.finditer(heading_pattern, html_content, re.IGNORECASE):
-            tag = match.group(1)
-            text = match.group(2)
-            level = int(tag[1])
-
-            sections.append(
-                {
-                    "type": "heading",
-                    "level": level,
-                    "title": text,
-                    "content": text,
-                    "start_position": match.start(),
-                    "end_position": match.end(),
-                }
-            )
-
-        return sections
+        """Parse headings using the same HTML rules as visible text extraction."""
+        parser = _HTMLTextExtractor(html_content)
+        parser.feed(html_content)
+        parser.close()
+        return parser.sections
 
     def _get_timestamp(self) -> str:
         """Get current timestamp for metadata."""

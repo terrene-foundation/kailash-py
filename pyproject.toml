@@ -35,9 +35,10 @@ dependencies = [
     # `filelock` inside `kailash.trust._locking.file_lock()`. The delegate
     # path now reaches `_locking` for `validate_id` only — no eager filelock.
     # `filelock` lives in the `[trust]` extra (pyproject.toml § trust below).
-    # Every dep below has at least one module-scope import in the slim-core
-    # closure.
+    # Trust metadata also requires a real HTML sanitizer; it is never an
+    # optional protection that silently disappears from an installation.
     # ─────────────────────────────────────────────────────────────
+    "nh3>=0.3.7",     # trust/security.py (metadata HTML sanitization)
     "jsonschema>=4.24.0",   # workflow/contracts.py:21 (Draft7Validator)
     "pydantic>=2.6",        # nodes/base.py:37, workflow/graph.py:12 (BaseModel)
     "pyyaml>=6.0",          # workflow/graph.py:11 (workflow serialization)

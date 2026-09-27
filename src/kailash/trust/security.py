@@ -28,6 +28,8 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
+import nh3
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -211,7 +213,7 @@ class TrustSecurityValidator:
 
     # Unsafe characters/patterns in metadata
     UNSAFE_PATTERNS = [
-        re.compile(r"<script[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL),
+        re.compile(r"<script[^>]*>.*?</script\s*>", re.IGNORECASE | re.DOTALL),
         re.compile(r"javascript:", re.IGNORECASE),
         re.compile(r"on\w+\s*=", re.IGNORECASE),  # Event handlers
         re.compile(r"data:text/html", re.IGNORECASE),
@@ -365,10 +367,26 @@ class TrustSecurityValidator:
             return value
 
     def _sanitize_string(self, text: str) -> str:
-        """Remove unsafe patterns from string."""
-        for pattern in self.UNSAFE_PATTERNS:
-            text = pattern.sub("", text)
-        return text
+        """Keep safe HTML after legacy token cleanup, never transform it afterward."""
+        if len(text) > 8192:
+            raise ValidationError("Metadata string exceeds 8192 characters")
+        # Retain the public pattern list and its legacy token-removal behavior.
+        # Its substitutions can join fragments; the final HTML sanitizer must
+        # therefore run AFTER them, including for dictionary keys.
+        for _ in range(16):
+            cleaned = text
+            for pattern in self.UNSAFE_PATTERNS:
+                cleaned = pattern.sub("", cleaned)
+            cleaned = nh3.clean(cleaned)
+            if cleaned == text:
+                return cleaned
+            # Entity normalization or deletion can expose another legacy token.
+            # Reach a stable sanitized representation within this call rather
+            # than changing metadata again on its next validation pass.
+            text = cleaned
+        raise ValidationError(
+            "Metadata sanitization did not stabilize within 16 passes"
+        )
 
 
 # ============================================================================

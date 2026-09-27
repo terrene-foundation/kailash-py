@@ -59,7 +59,7 @@ Authoritative catalog of every node class in the Kailash Python SDK. Generated f
 - **Purpose:** Processes documents across multiple formats (PDF, DOCX, HTML, etc.) with content extraction.
 - **Key Parameters:** `file_path` (str, required), `extract_metadata` (bool), `extract_images` (bool)
 - **Outputs:** `{"content": str, "metadata": dict, "pages": int}`
-- **Notes:** Handles various document formats with format-specific extraction.
+- **Notes:** Handles various document formats with format-specific extraction. HTML processing returns plain text, decodes character entities, excludes script/style contents (including closing-tag whitespace and unclosed elements), and extracts title/heading sections using the standard HTML parser. Heading offsets refer to the original HTML input; `original_html_length` measures that input before extraction (source: `src/kailash/nodes/data/readers.py:775-847`, `src/kailash/nodes/data/readers.py:1182-1217`).
 
 ### CSVWriterNode
 
