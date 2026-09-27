@@ -1,4 +1,4 @@
-"""Unit tests for database storage backend."""
+"""Real SQLite integration tests for the database storage backend."""
 
 import json
 import os
@@ -6,7 +6,6 @@ import sqlite3
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
@@ -17,33 +16,52 @@ from kailash.tracking.storage.database import DatabaseStorage
 class TestDatabaseStorageInitialization:
     """Test DatabaseStorage initialization."""
 
-    def test_init_with_sqlite_url(self):
-        """Test initialization with sqlite:// URL."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            db_path = f"{tmpdir}/test.db"
-            storage = DatabaseStorage(f"sqlite://{db_path}")
-
+    def test_init_with_sqlite_url(self, tmp_path):
+        """Four-slash URLs preserve the absolute database path."""
+        db_path = str(tmp_path / "absolute" / "test.db")
+        with DatabaseStorage(f"sqlite:///{db_path}") as storage:
             assert storage.db_path == db_path
             assert os.path.exists(db_path)
-
-            # Verify connection
             assert storage.conn is not None
-            storage.conn.close()
+            assert (
+                Path(
+                    storage.conn.execute("PRAGMA database_list").fetchone()[2]
+                ).resolve()
+                == Path(db_path).resolve()
+            )
 
-    def test_init_with_user_path_expansion(self):
-        """Test initialization with ~ path expansion."""
-        with patch("os.path.expanduser") as mock_expand:
-            mock_expand.return_value = "/home/user/.kailash/tracking.db"
-            with patch("os.makedirs") as mock_makedirs:
-                with patch("sqlite3.connect") as mock_connect:
-                    mock_connect.return_value = MagicMock()
+    @pytest.mark.parametrize("prefix", ["sqlite://", "sqlite:///"])
+    def test_init_with_relative_sqlite_url(self, tmp_path, monkeypatch, prefix):
+        """Both supported relative forms resolve below the working directory."""
+        monkeypatch.chdir(tmp_path)
+        db_path = "nested/test.db"
+        with DatabaseStorage(f"{prefix}{db_path}") as storage:
+            assert storage.db_path == db_path
+            assert (tmp_path / db_path).is_file()
+            assert (
+                Path(
+                    storage.conn.execute("PRAGMA database_list").fetchone()[2]
+                ).resolve()
+                == (tmp_path / db_path).resolve()
+            )
+            run = WorkflowRun(run_id="relative-proof", workflow_name="url-proof")
+            storage.save_run(run)
+        with DatabaseStorage(str(tmp_path / db_path)) as reopened:
+            assert reopened.load_run("relative-proof").workflow_name == "url-proof"
 
-                    storage = DatabaseStorage("sqlite://~/.kailash/tracking.db")
-
-                    mock_expand.assert_called_once_with("~/.kailash/tracking.db")
-                    mock_makedirs.assert_called_once_with(
-                        "/home/user/.kailash", exist_ok=True
-                    )
+    def test_init_with_user_path_expansion(self, tmp_path, monkeypatch):
+        """Expand a home-relative URL and create its parents using real SQLite."""
+        monkeypatch.setenv("HOME", str(tmp_path))
+        db_path = tmp_path / ".kailash" / "tracking.db"
+        with DatabaseStorage("sqlite://~/.kailash/tracking.db") as storage:
+            assert storage.db_path == str(db_path)
+            assert db_path.is_file()
+            assert (
+                Path(
+                    storage.conn.execute("PRAGMA database_list").fetchone()[2]
+                ).resolve()
+                == db_path.resolve()
+            )
 
     def test_init_with_direct_path(self):
         """Test initialization with direct path (no sqlite://)."""
@@ -53,7 +71,7 @@ class TestDatabaseStorageInitialization:
 
             assert storage.db_path == db_path
             assert os.path.exists(db_path)
-            storage.conn.close()
+            storage.close()
 
     def test_schema_initialization(self):
         """Test database schema is created correctly."""
@@ -89,7 +107,7 @@ class TestDatabaseStorageInitialization:
             }
             assert expected_indexes.issubset(indexes)
 
-            storage.conn.close()
+            storage.close()
 
 
 class TestWorkflowRunOperations:
@@ -102,7 +120,7 @@ class TestWorkflowRunOperations:
             db_path = f"{tmpdir}/test.db"
             storage = DatabaseStorage(db_path)
             yield storage
-            storage.conn.close()
+            storage.close()
 
     def test_save_and_load_run(self, storage):
         """Test saving and loading a workflow run."""
@@ -208,7 +226,7 @@ class TestTaskOperations:
                 )
                 storage.save_run(run)
             yield storage
-            storage.conn.close()
+            storage.close()
 
     def test_save_and_load_task(self, storage):
         """Test saving and loading a task."""
@@ -472,7 +490,7 @@ class TestImportExport:
             db_path = f"{tmpdir}/test.db"
             storage = DatabaseStorage(db_path)
             yield storage
-            storage.conn.close()
+            storage.close()
 
     def test_export_run(self, storage):
         """Test exporting a run with tasks."""
@@ -613,7 +631,7 @@ class TestDatabaseStorageEdgeCases:
             db_path = f"{tmpdir}/test.db"
             storage = DatabaseStorage(db_path)
             yield storage
-            storage.conn.close()
+            storage.close()
 
     def test_clear_all_data(self, storage):
         """Test clearing all stored data."""

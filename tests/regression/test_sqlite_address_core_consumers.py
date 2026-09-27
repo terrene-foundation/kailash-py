@@ -85,7 +85,7 @@ def test_sql_node_native_memory_works_across_distinct_live_threads(form, tmp_pat
             state["first_error"] = error
         finally:
             ready.set()
-        if not finished.wait(5):
+        if not finished.wait(30):
             state["timeout"] = True
         try:
             SQLDatabaseNode.dispose_pools_for(uri)
@@ -95,10 +95,9 @@ def test_sql_node_native_memory_works_across_distinct_live_threads(form, tmp_pat
             state["cleanup_error"] = error
 
     def second():
-        if not ready.wait(5):
-            state["timeout"] = True
-            finished.set()
-            return
+        assert (
+            ready.is_set()
+        ), "Start the borrower only after the owner publishes readiness"
         state["second_id"] = threading.get_ident()
         state["first_alive"] = first_thread.is_alive()
         try:
@@ -113,9 +112,13 @@ def test_sql_node_native_memory_works_across_distinct_live_threads(form, tmp_pat
     )
     try:
         first_thread.start()
+        # Connection setup/imports are not a five-second product deadline.
+        # Admit the borrower after setup, while the owner is still alive;
+        # retain finite watchdogs so a real deadlock still fails this test.
+        assert ready.wait(30), "Owner did not finish SQLite setup"
         second_thread.start()
-        first_thread.join(7)
-        second_thread.join(7)
+        first_thread.join(35)
+        second_thread.join(35)
         assert not first_thread.is_alive() and not second_thread.is_alive()
         assert not any(
             key.endswith("error") or key == "timeout" for key in state
@@ -127,8 +130,9 @@ def test_sql_node_native_memory_works_across_distinct_live_threads(form, tmp_pat
         assert state["first"]["row_count"] == state["second"]["row_count"] == 1
     finally:
         finished.set()
-        first_thread.join(7)
-        second_thread.join(7)
+        first_thread.join(35)
+        if second_thread.ident is not None:
+            second_thread.join(35)
         anchor.close()
 
 

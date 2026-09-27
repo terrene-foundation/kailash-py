@@ -507,7 +507,7 @@ class SQLiteStorage(StorageBackend):
 
 **Constructor parameters:**
 
-- `db_path: str | None = None` — file path or `sqlite://PATH` URL. Defaults to `~/.kailash/tracking/tracking.db` when None. The `sqlite://` prefix is stripped and `~` is expanded. Parent directories are created automatically.
+- `db_path: str | None = None` — file path or SQLite URL. Defaults to `~/.kailash/tracking/tracking.db` when None. Three-slash URLs (`sqlite:///relative.db`) name relative paths; four-slash URLs (`sqlite:////absolute/path.db`) name absolute paths. The two-slash relative form (`sqlite://relative.db`) remains accepted. Bare file paths stay literal; `~` is expanded for non-URI targets, and parent directories are created automatically. Tracking uses the shared SQLite address parser rather than stripping only `sqlite://` (source: `src/kailash/utils/sqlite_url.py:47-65`, `src/kailash/tracking/storage/database.py:28-60`).
 
 **Connection setup:**
 
