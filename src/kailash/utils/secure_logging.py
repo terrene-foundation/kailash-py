@@ -455,6 +455,38 @@ def sanitize_log_value(value: object, limit: int = _DEFAULT_LOG_VALUE_CHARS) -> 
     return flattened.replace("\r", " ").replace("\n", " ")
 
 
+def safe_log_field(value: object, limit: int = _DEFAULT_LOG_VALUE_CHARS) -> str:
+    """Mask recognized credentials in string metadata, then bound log structure.
+
+    URL userinfo/query credentials and JSON credential fields use the shared
+    masker before truncation or control-character replacement. This is not an
+    arbitrary-secret detector. Bytes are strictly decoded before masking;
+    exact builtin scalar values may be rendered. Other objects are opaque,
+    so arbitrary repr/str payloads cannot enter diagnostics. Callback exception
+    payloads should use safe_exception_frames.
+    """
+    try:
+        if isinstance(value, str):
+            raw = str.__str__(value)
+        elif isinstance(value, bytes):
+            raw = bytes.decode(value, "utf-8", errors="strict")
+        elif (
+            value is None
+            or type(value) is bool  # noqa: E721 - exact builtins only
+            or type(value) is int  # noqa: E721 - exact builtins only
+            or type(value) is float  # noqa: E721 - exact builtins only
+        ):
+            raw = str(value)
+        else:
+            raw = "<unrepresentable>"
+        value = mask_error_text(raw)
+    except Exception:
+        # Diagnostic failure cannot change a caller's operation or expose the
+        # original value. Never render the masking exception itself.
+        value = "<unrepresentable>"
+    return sanitize_log_value(value, limit=limit)
+
+
 def sanitize_log_structure(
     data: Any,
     limit: int = _DEFAULT_LOG_VALUE_CHARS,

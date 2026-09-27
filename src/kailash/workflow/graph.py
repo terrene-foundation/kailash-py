@@ -29,6 +29,7 @@ from kailash.sdk_exceptions import (
     WorkflowValidationError,
 )
 from kailash.tracking import TaskManager, TaskStatus
+from kailash.utils.secure_logging import safe_exception_frames, safe_log_field
 from kailash.workflow.state import WorkflowStateWrapper
 
 logger = logging.getLogger(__name__)
@@ -157,7 +158,9 @@ class Workflow:
             None  # H3: immutable tuples
         )
 
-        logger.info(f"Created workflow '{name}' (ID: {workflow_id})")
+        logger.info(
+            f"Created workflow '{safe_log_field(name)}' (ID: {safe_log_field(workflow_id)})"
+        )
 
     def _invalidate_graph_caches(self) -> None:
         """Invalidate cached graph computations after mutation."""
@@ -311,7 +314,9 @@ class Workflow:
             node_id, node=node_instance, type=node_type, config=actual_config
         )
         self._invalidate_graph_caches()
-        logger.info(f"Added node '{node_id}' of type '{node_type}'")
+        logger.info(
+            f"Added node '{safe_log_field(node_id)}' of type '{safe_log_field(node_type)}'"
+        )
 
     def _add_node_internal(
         self, node_id: str, node_type: str, config: dict[str, Any] | None = None
@@ -602,13 +607,19 @@ class Workflow:
 
         # Enhanced logging for cycles
         if cycle:
-            cycle_info = f" (CYCLE: id={cycle_id}, max_iter={max_iterations}, conv={convergence_check})"
             logger.info(
-                f"Connected '{source_node}' to '{target_node}' with mapping: {mapping}{cycle_info}"
+                "Connected '%s' to '%s' with %d mappings (cycle=%s)",
+                safe_log_field(source_node),
+                safe_log_field(target_node),
+                len(mapping),
+                safe_log_field(cycle_id),
             )
         else:
             logger.info(
-                f"Connected '{source_node}' to '{target_node}' with mapping: {mapping}"
+                "Connected '%s' to '%s' with %d mappings",
+                safe_log_field(source_node),
+                safe_log_field(target_node),
+                len(mapping),
             )
 
     def create_cycle(self, cycle_id: str | None = None):
@@ -806,7 +817,10 @@ class Workflow:
                 if target_scc and len(target_scc) > 1:
                     # Multi-node cycle detected - include all SCC nodes
                     logger.debug(
-                        f"Enhanced cycle detection for {cycle_id}: {cycle_nodes} → {target_scc}"
+                        "Enhanced cycle detection for %s: %d cycle nodes, %d component nodes",
+                        safe_log_field(cycle_id),
+                        len(cycle_nodes),
+                        len(target_scc),
                     )
 
                     # Add edges for all nodes in the SCC that are connected
@@ -850,7 +864,9 @@ class Workflow:
                     enhanced_groups[cycle_id] = edges
 
             except Exception as e:
-                logger.warning(f"Could not enhance cycle detection for {cycle_id}: {e}")
+                logger.warning(
+                    f"Could not enhance cycle detection for {safe_log_field(cycle_id)}: {safe_exception_frames(e)}"
+                )
                 # Fall back to original behavior
                 enhanced_groups[cycle_id] = edges
 
@@ -975,7 +991,7 @@ class Workflow:
                     f"Provide these inputs via connections, node configuration, or runtime parameters"
                 )
 
-        logger.info(f"Workflow '{self.name}' validated successfully")
+        logger.info(f"Workflow '{safe_log_field(self.name)}' validated successfully")
 
     def _validate_cycles(self) -> None:
         """Validate cycle configurations and detect potential issues.
@@ -1002,15 +1018,21 @@ class Workflow:
             # Warn about conflicting parameters (but don't fail)
             if len(max_iterations_set) > 1:
                 logger.warning(
-                    f"Cycle group '{cycle_id}' has conflicting max_iterations: {max_iterations_set}"
+                    "Cycle group '%s' has conflicting max_iterations (%d values)",
+                    safe_log_field(cycle_id),
+                    len(max_iterations_set),
                 )
             if len(convergence_checks) > 1:
                 logger.warning(
-                    f"Cycle group '{cycle_id}' has conflicting convergence_check: {convergence_checks}"
+                    "Cycle group '%s' has conflicting convergence_check (%d values)",
+                    safe_log_field(cycle_id),
+                    len(convergence_checks),
                 )
             if len(timeouts) > 1:
                 logger.warning(
-                    f"Cycle group '{cycle_id}' has conflicting timeouts: {timeouts}"
+                    "Cycle group '%s' has conflicting timeouts (%d values)",
+                    safe_log_field(cycle_id),
+                    len(timeouts),
                 )
 
         # Check for nested cycle validity
@@ -1086,7 +1108,7 @@ class Workflow:
                     workflow_name=self.name, metadata={"inputs": inputs}
                 )
             except Exception as e:
-                logger.warning(f"Failed to create task run: {e}")
+                logger.warning(f"Failed to create task run: {safe_exception_frames(e)}")
                 # Continue without task tracking
 
         # Get execution order
@@ -1116,7 +1138,9 @@ class Workflow:
                     )
                     task.update_status(TaskStatus.RUNNING)
                 except Exception as e:
-                    logger.warning(f"Failed to create task for node '{node_id}': {e}")
+                    logger.warning(
+                        f"Failed to create task for node '{safe_log_field(node_id)}': {safe_exception_frames(e)}"
+                    )
 
             try:
                 # Gather inputs from previous nodes
@@ -1136,13 +1160,13 @@ class Workflow:
                     mapping = edge_data.get("mapping", {})
 
                     logger.debug(
-                        "Connection: %s -> %s, from_output=%s, to_input=%s, mapping_keys=%s, source_result_keys=%s",
-                        source_node_id,
-                        node_id,
-                        from_output,
-                        to_input,
-                        list(mapping.keys()),
-                        list(results.get(source_node_id, {}).keys()),
+                        "Connection: %s -> %s, from_output=%s, to_input=%s, mapping_count=%d, source_result_count=%d",
+                        safe_log_field(source_node_id),
+                        safe_log_field(node_id),
+                        safe_log_field(from_output),
+                        safe_log_field(to_input),
+                        len(mapping),
+                        len(results.get(source_node_id, {})),
                     )
 
                     source_results = results.get(source_node_id, {})
@@ -1172,15 +1196,17 @@ class Workflow:
                             node_inputs[target_key] = source_results[source_key]
                             logger.debug(
                                 "Mapping: %s -> %s, value type: %s",
-                                source_key,
-                                target_key,
-                                type(source_results[source_key]).__name__,
+                                safe_log_field(source_key),
+                                safe_log_field(target_key),
+                                safe_log_field(
+                                    type(source_results[source_key]).__name__
+                                ),
                             )
                         else:
                             logger.debug(
-                                "Mapping: source key '%s' not found in source results: %s",
-                                source_key,
-                                list(source_results.keys()),
+                                "Mapping: source key '%s' not found in %d source results",
+                                safe_log_field(source_key),
+                                len(source_results),
                             )
 
                 # Apply overrides
@@ -1189,7 +1215,9 @@ class Workflow:
 
                 # Execute node
                 logger.info(
-                    f"Executing node '{node_id}' with inputs: {list(node_inputs.keys())}"
+                    "Executing node '%s' with %d inputs",
+                    safe_log_field(node_id),
+                    len(node_inputs),
                 )
 
                 # Support both process() and execute() methods
@@ -1212,7 +1240,7 @@ class Workflow:
                         ),
                     )
 
-                logger.info(f"Node '{node_id}' completed successfully")
+                logger.info(f"Node '{safe_log_field(node_id)}' completed successfully")
 
             except Exception as e:
                 failed_nodes.append(node_id)
@@ -1227,8 +1255,7 @@ class Workflow:
                 raise WorkflowExecutionError(error_msg) from e
 
         logger.info(
-            f"Workflow '{self.name}' completed successfully. "
-            f"Executed {len(execution_order)} nodes"
+            f"Workflow '{safe_log_field(self.name)}' completed successfully. Executed {len(execution_order)} nodes"
         )
         return results
 

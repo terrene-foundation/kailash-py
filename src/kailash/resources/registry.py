@@ -12,6 +12,8 @@ import weakref
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, Optional, Set
 
+from kailash.utils.secure_logging import safe_exception_frames, safe_log_field
+
 from .factory import ResourceFactory
 from .health import HealthCheck, HealthStatus
 
@@ -101,7 +103,9 @@ class ResourceRegistry:
             metadata: Optional metadata about the resource
         """
         if name in self._factories:
-            logger.warning(f"Overwriting existing factory for resource: {name}")
+            logger.warning(
+                f"Overwriting existing factory for resource: {safe_log_field(name)}"
+            )
 
         self._factories[name] = factory
         self._locks[name] = asyncio.Lock()
@@ -125,7 +129,7 @@ class ResourceRegistry:
             ),
         }
 
-        logger.info(f"Registered factory for resource: {name}")
+        logger.info(f"Registered factory for resource: {safe_log_field(name)}")
 
     async def get_resource(self, name: str) -> Any:
         """
@@ -164,7 +168,9 @@ class ResourceRegistry:
                         return self._resources[name]
                     else:
                         # Recreate unhealthy resource
-                        logger.warning(f"Resource {name} is unhealthy, recreating")
+                        logger.warning(
+                            f"Resource {safe_log_field(name)} is unhealthy, recreating"
+                        )
                         await self._cleanup_resource(name)
                         if self._enable_metrics:
                             self._metrics["resource_recreations"][name] = (
@@ -177,7 +183,7 @@ class ResourceRegistry:
                         f"No factory registered for resource: {name}"
                     )
 
-                logger.info(f"Creating resource: {name}")
+                logger.info(f"Creating resource: {safe_log_field(name)}")
                 start_time = time.time()
 
                 resource = await self._factories[name].create()
@@ -200,14 +206,18 @@ class ResourceRegistry:
                     self._metrics["resource_creations"][name] = (
                         self._metrics["resource_creations"].get(name, 0) + 1
                     )
-                    logger.info(f"Created resource {name} in {creation_time:.2f}s")
+                    logger.info(
+                        f"Created resource {safe_log_field(name)} in {creation_time:.2f}s"
+                    )
 
                 self._reset_circuit_breaker(name)
                 return resource
 
             except Exception as e:
                 self._record_circuit_breaker_failure(name)
-                logger.error(f"Failed to get resource {name}: {e}")
+                logger.error(
+                    f"Failed to get resource {safe_log_field(name)}: {safe_exception_frames(e)}"
+                )
                 raise
 
     async def _is_healthy(self, name: str) -> bool:
@@ -236,7 +246,9 @@ class ResourceRegistry:
                 return bool(result)
 
         except Exception as e:
-            logger.error(f"Health check failed for {name}: {e}")
+            logger.error(
+                f"Health check failed for {safe_log_field(name)}: {safe_exception_frames(e)}"
+            )
             if self._enable_metrics:
                 self._metrics["health_check_failures"][name] = (
                     self._metrics["health_check_failures"].get(name, 0) + 1
@@ -288,10 +300,12 @@ class ResourceRegistry:
                 else:
                     resource.disconnect()
 
-            logger.info(f"Cleaned up resource: {name}")
+            logger.info(f"Cleaned up resource: {safe_log_field(name)}")
 
         except Exception as e:
-            logger.error(f"Error cleaning up resource {name}: {e}")
+            logger.error(
+                f"Error cleaning up resource {safe_log_field(name)}: {safe_exception_frames(e)}"
+            )
 
     async def cleanup(self) -> None:
         """Clean up all resources."""
@@ -377,7 +391,7 @@ class ResourceRegistry:
 
         if breaker["failures"] >= breaker["threshold"]:
             breaker["state"] = "open"
-            logger.error(f"Circuit breaker opened for resource: {name}")
+            logger.error(f"Circuit breaker opened for resource: {safe_log_field(name)}")
 
     def _reset_circuit_breaker(self, name: str) -> None:
         """Reset circuit breaker on success."""
@@ -398,6 +412,6 @@ class ResourceRegistry:
 
     def _on_resource_collected(self, name: str) -> None:
         """Callback when a resource is garbage collected."""
-        logger.debug(f"Resource {name} was garbage collected")
+        logger.debug(f"Resource {safe_log_field(name)} was garbage collected")
         # Remove from resources dict if still there
         self._resources.pop(name, None)

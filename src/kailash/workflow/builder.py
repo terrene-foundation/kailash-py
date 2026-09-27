@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 
 from kailash.nodes.base import Node, NodeRegistry
 from kailash.sdk_exceptions import ConnectionError, WorkflowValidationError
+from kailash.utils.secure_logging import safe_log_field
 from kailash.workflow.contracts import ConnectionContract, get_contract_registry
 from kailash.workflow.graph import Workflow
 from kailash.workflow.validation import (
@@ -174,12 +175,12 @@ class WorkflowBuilder:
                     if warn_on_issues:
                         if issue.severity == IssueSeverity.ERROR:
                             logger.error(
-                                f"Parameter validation error in node '{node_id}': {issue.message}"
+                                f"Parameter validation error in node '{safe_log_field(node_id)}': {safe_log_field(issue.code)}"
                             )
                         elif issue.severity == IssueSeverity.WARNING:
                             # ADR-002: Changed from WARNING to DEBUG - extra params safely ignored
                             logger.debug(
-                                f"Parameter validation info in node '{node_id}': {issue.message}"
+                                f"Parameter validation info in node '{safe_log_field(node_id)}': {safe_log_field(issue.code)}"
                             )
 
             except Exception as e:
@@ -360,7 +361,9 @@ class WorkflowBuilder:
             "config": config,
             "class": node_class,
         }
-        logger.info(f"Added node '{node_id}' of type '{node_class.__name__}'")
+        logger.info(
+            f"Added node '{safe_log_field(node_id)}' of type '{safe_log_field(node_class.__name__)}'"
+        )
         return node_id
 
     def _add_node_instance(
@@ -402,7 +405,7 @@ class WorkflowBuilder:
             "type": node_instance.__class__.__name__,
         }
         logger.info(
-            f"Added node '{node_id}' with instance of type '{node_instance.__class__.__name__}'"
+            f"Added node '{safe_log_field(node_id)}' with instance of type '{safe_log_field(node_instance.__class__.__name__)}'"
         )
         return node_id
 
@@ -461,12 +464,14 @@ class WorkflowBuilder:
                 "Expected: str (node type name), Node class, or Node instance"
             )
 
-        logger.info(f"Added node '{node_id}' of type '{type_name}'")
+        logger.info(
+            f"Added node '{safe_log_field(node_id)}' of type '{safe_log_field(type_name)}'"
+        )
 
         # Detect edge nodes
         if self._is_edge_node(type_name):
             self._has_edge_nodes = True
-            logger.debug(f"Detected edge node: {type_name}")
+            logger.debug(f"Detected edge node: {safe_log_field(type_name)}")
 
         return node_id
 
@@ -652,15 +657,15 @@ class WorkflowBuilder:
         # Log port usage patterns for debugging
         if from_output not in common_output_ports:
             logger.debug(
-                f"Using non-standard output port '{from_output}' on node '{from_node}'"
+                f"Using non-standard output port '{safe_log_field(from_output)}' on node '{safe_log_field(from_node)}'"
             )
-            logger.debug(f"Common output ports: {common_output_ports}")
+            logger.debug(f"Common output ports: {safe_log_field(common_output_ports)}")
 
         if to_input not in common_input_ports:
             logger.debug(
-                f"Using non-standard input port '{to_input}' on node '{to_node}'"
+                f"Using non-standard input port '{safe_log_field(to_input)}' on node '{safe_log_field(to_node)}'"
             )
-            logger.debug(f"Common input ports: {common_input_ports}")
+            logger.debug(f"Common input ports: {safe_log_field(common_input_ports)}")
 
         # Add connection to list
         connection = {
@@ -671,7 +676,9 @@ class WorkflowBuilder:
         }
         self.connections.append(connection)
 
-        logger.info(f"Connected '{from_node}.{from_output}' -> '{to_node}.{to_input}'")
+        logger.info(
+            f"Connected '{safe_log_field(from_node)}.{safe_log_field(from_output)}' -> '{safe_log_field(to_node)}.{safe_log_field(to_input)}'"
+        )
 
         # Provide helpful tips for common connection patterns
         if from_output == to_input == "data":
@@ -679,7 +686,9 @@ class WorkflowBuilder:
         elif from_output in ["result", "output"] and to_input in ["data", "input"]:
             logger.debug("Using result-to-input connection pattern")
         else:
-            logger.debug(f"Using custom port mapping: {from_output} -> {to_input}")
+            logger.debug(
+                f"Using custom port mapping: {safe_log_field(from_output)} -> {safe_log_field(to_input)}"
+            )
         return self
 
     def connect(
@@ -822,7 +831,7 @@ class WorkflowBuilder:
                 )
 
         logger.info(
-            f"Added typed connection '{connection_id}' with contract '{contract.name}'"
+            f"Added typed connection '{safe_log_field(connection_id)}' with contract '{safe_log_field(contract.name)}'"
         )
 
         return self
@@ -1017,7 +1026,7 @@ class WorkflowBuilder:
                     ):
                         node_config["_edge_infrastructure"] = self._edge_infrastructure
                         logger.debug(
-                            f"Injected edge infrastructure into {node_class.__name__}"
+                            f"Injected edge infrastructure into {safe_log_field(node_class.__name__)}"
                         )
 
                     workflow.add_node(
@@ -1031,7 +1040,9 @@ class WorkflowBuilder:
                     # Inject edge infrastructure if this is an edge node
                     if self._edge_infrastructure and self._is_edge_node(node_type):
                         node_config["_edge_infrastructure"] = self._edge_infrastructure
-                        logger.debug(f"Injected edge infrastructure into {node_type}")
+                        logger.debug(
+                            f"Injected edge infrastructure into {safe_log_field(node_type)}"
+                        )
 
                     workflow.add_node(
                         node_id=node_id, node_or_type=node_type, **node_config
@@ -1103,8 +1114,7 @@ class WorkflowBuilder:
         }
 
         logger.info(
-            f"Built workflow '{workflow_id}' with "
-            f"{len(self.nodes)} nodes and {len(self.connections)} connections"
+            f"Built workflow '{safe_log_field(workflow_id)}' with {len(self.nodes)} nodes and {len(self.connections)} connections"
         )
         return workflow
 
@@ -1219,7 +1229,7 @@ class WorkflowBuilder:
                 # Ensure node_params is a dictionary
                 if not isinstance(node_params, dict):
                     logger.warning(
-                        f"Node '{node_id}' parameters must be a dict, got {type(node_params)}. Using empty dict."
+                        f"Node '{safe_log_field(node_id)}' parameters must be a dict, got {safe_log_field(type(node_params))}. Using empty dict."
                     )
                     node_params = {}
 
@@ -1246,7 +1256,7 @@ class WorkflowBuilder:
                 # Ensure node_params is a dictionary
                 if not isinstance(node_params, dict):
                     logger.warning(
-                        f"Node '{node_id}' parameters must be a dict, got {type(node_params)}. Using empty dict."
+                        f"Node '{safe_log_field(node_id)}' parameters must be a dict, got {safe_log_field(type(node_params))}. Using empty dict."
                     )
                     node_params = {}
 
