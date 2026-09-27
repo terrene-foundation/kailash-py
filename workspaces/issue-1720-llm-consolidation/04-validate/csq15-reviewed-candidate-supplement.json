@@ -1,0 +1,757 @@
+{
+  "ran": true,
+  "verdict": "CLEAN supplemental review mapping; a356wholeunion evidence carries within originalscopes to c8ce, with exactlazy-import repair separatelyexecuted",
+  "reviewed_base": "a35604592eac70584f35acffd23d9ddc4ff615b3",
+  "mapped_target": "c8ce102b8025e0b69bb744cbe636cd3aecb080e8",
+  "ancestry_verified": true,
+  "changed_paths": [
+    [
+      "M",
+      "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py"
+    ],
+    [
+      "A",
+      "workspaces/issue-1720-llm-consolidation/04-validate/csq15-final-reviewed-candidate.json"
+    ],
+    [
+      "M",
+      "workspaces/issue-1720-llm-consolidation/04-validate/csq15-resume-checkpoint.json"
+    ],
+    [
+      "A",
+      "workspaces/issue-1720-llm-consolidation/04-validate/csq15-spec-advisory-records.json"
+    ],
+    [
+      "A",
+      "workspaces/issue-1720-llm-consolidation/04-validate/csq15-spec-advisory-scope-decision.md"
+    ]
+  ],
+  "production_mapping": {
+    "all_production_paths_git_diff_empty": true,
+    "promotion_source_module_sha256_matches": 261,
+    "receipt": "/tmp/csq15-final-production-interfaces.json"
+  },
+  "test_mapping": {
+    "only_changed_python_file": "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+    "base_sha256": "bf89e961b250438f29b554502ae8d7605d1020eb9c88a4f7d6718921a009cdbb",
+    "target_sha256": "fd840ebdd1e4c7f8d98800f1f82b80c109ec2e3de9c08ad2865e40e4d428c605",
+    "all10_named_test_function_ASTs_identical": true,
+    "entire_non_import_AST_identical": true,
+    "import_multisets_identical": true,
+    "new_import_locations": {
+      "_database": [
+        "kailash.runtime.async_local"
+      ],
+      "_run": [
+        "kailash.workflow.builder"
+      ]
+    },
+    "original_assertion_rows": 115,
+    "semantic_dispositions_unchanged": true,
+    "source_hash_rows": [
+      {
+        "file": "packages/kailash-align/tests/test_package.py",
+        "test": "TestLazyImports.test_import_does_not_load_torch",
+        "reviewed_source_sha256": "0a2cadd27964864f18a9e24922658713c76b6e8012d1c7859afa50e2d1445fa3",
+        "target_source_sha256": "0a2cadd27964864f18a9e24922658713c76b6e8012d1c7859afa50e2d1445fa3"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/integration/fabric/test_serving.py",
+        "test": "TestFabricServingLayer.test_batch_handler_rejects_over_cap",
+        "reviewed_source_sha256": "f62f8e7296fea08330a2f7eaffabef1c4b73dff94a8f281a9155bdcab8d7f38c",
+        "target_source_sha256": "f62f8e7296fea08330a2f7eaffabef1c4b73dff94a8f281a9155bdcab8d7f38c"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/cache/test_async_redis_adapter.py",
+        "test": "TestAsyncRedisCacheAdapterCleanup.test_del_emits_resource_warning_when_not_closed",
+        "reviewed_source_sha256": "d5d3170333cb435171df5d7d9fe43d48ead7cd6661525f0119a8db871aecf1ed",
+        "target_source_sha256": "d5d3170333cb435171df5d7d9fe43d48ead7cd6661525f0119a8db871aecf1ed"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/cache/test_async_redis_adapter.py",
+        "test": "TestAsyncRedisCacheAdapterCleanup.test_del_signals_executor_drain_for_clean_shutdown",
+        "reviewed_source_sha256": "d5d3170333cb435171df5d7d9fe43d48ead7cd6661525f0119a8db871aecf1ed",
+        "target_source_sha256": "d5d3170333cb435171df5d7d9fe43d48ead7cd6661525f0119a8db871aecf1ed"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/core/test_logging_levels.py",
+        "test": "TestMaskSensitiveValuesIntegration.test_mask_sensitive_values_imported_in_nodes",
+        "reviewed_source_sha256": "7b2d8124536ab2c10ab4df4463f20eb4a8a534b607e1f9131a59966e4940b85f",
+        "target_source_sha256": "7b2d8124536ab2c10ab4df4463f20eb4a8a534b607e1f9131a59966e4940b85f"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/core/test_sqlite_transaction_lifecycle.py",
+        "test": "TestSQLiteTransactionDel.test_del_attempts_sync_rollback",
+        "reviewed_source_sha256": "53ff8a44e110f24bf00ba1ebb4132a91cafbbb745b5a24ff04e33e4fad76da99",
+        "target_source_sha256": "53ff8a44e110f24bf00ba1ebb4132a91cafbbb745b5a24ff04e33e4fad76da99"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/features/test_express_pagination.py",
+        "test": "TestExpressListOrderBy.test_list_passes_order_by_in_params",
+        "reviewed_source_sha256": "2f3e705f940bc60cc49820fe51af0e209506d12a82ae808fa6fe568faf572db3",
+        "target_source_sha256": "2f3e705f940bc60cc49820fe51af0e209506d12a82ae808fa6fe568faf572db3"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/features/test_read_replica.py",
+        "test": "test_dual_adapter_creation",
+        "reviewed_source_sha256": "d782f072880f480adddb9663d47357ce37ca88c2d36a39934b73b2ca3265f9c8",
+        "target_source_sha256": "d782f072880f480adddb9663d47357ce37ca88c2d36a39934b73b2ca3265f9c8"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/features/test_read_replica.py",
+        "test": "test_connection_manager_url_override",
+        "reviewed_source_sha256": "d782f072880f480adddb9663d47357ce37ca88c2d36a39934b73b2ca3265f9c8",
+        "target_source_sha256": "d782f072880f480adddb9663d47357ce37ca88c2d36a39934b73b2ca3265f9c8"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/migrations/test_batched_migration_executor.py",
+        "test": "TestBatchedMigrationExecutor.test_execute_batched_migrations_single_batch",
+        "reviewed_source_sha256": "65f9b53942f944231d0519a5b348537286ae8ca4f2eb1bd9abf723a46321d4ef",
+        "target_source_sha256": "65f9b53942f944231d0519a5b348537286ae8ca4f2eb1bd9abf723a46321d4ef"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/migrations/test_batched_migration_executor.py",
+        "test": "TestBatchedMigrationExecutor.test_execute_batched_migrations_multiple_batches",
+        "reviewed_source_sha256": "65f9b53942f944231d0519a5b348537286ae8ca4f2eb1bd9abf723a46321d4ef",
+        "target_source_sha256": "65f9b53942f944231d0519a5b348537286ae8ca4f2eb1bd9abf723a46321d4ef"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/migrations/test_batched_migration_executor.py",
+        "test": "TestBatchedMigrationExecutor.test_execute_batched_migrations_parallel_execution",
+        "reviewed_source_sha256": "65f9b53942f944231d0519a5b348537286ae8ca4f2eb1bd9abf723a46321d4ef",
+        "target_source_sha256": "65f9b53942f944231d0519a5b348537286ae8ca4f2eb1bd9abf723a46321d4ef"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/performance/test_simple_coverage_boost.py",
+        "test": "TestSQLDialectsModuleBasic.test_sql_dialects_import_and_basic_usage",
+        "reviewed_source_sha256": "1f6141ab56d00085a19c159b374274999f37f89dc4d72f57238e1e0617eb33cb",
+        "target_source_sha256": "1f6141ab56d00085a19c159b374274999f37f89dc4d72f57238e1e0617eb33cb"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/test_dataflow_bug_fixes_validation.py",
+        "test": "TestDataFlowBugFixesValidation.test_generated_code_has_fixed_parameter_access",
+        "reviewed_source_sha256": "199680a3267be1e44257e184b2bf57def7adc61517782a9844b60a855cdd1917",
+        "target_source_sha256": "199680a3267be1e44257e184b2bf57def7adc61517782a9844b60a855cdd1917"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/test_dataflow_bug_fixes_validation.py",
+        "test": "TestDataFlowBugFixesValidation.test_bug_012_fix_works_in_practice",
+        "reviewed_source_sha256": "199680a3267be1e44257e184b2bf57def7adc61517782a9844b60a855cdd1917",
+        "target_source_sha256": "199680a3267be1e44257e184b2bf57def7adc61517782a9844b60a855cdd1917"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/test_tenant_required_error_alias.py",
+        "test": "test_alias_emits_deprecation_warning_on_access",
+        "reviewed_source_sha256": "8a99211f21a760cbe9242275fe2026fccb2b7beee30a7ec254d477d5179b1d1a",
+        "target_source_sha256": "8a99211f21a760cbe9242275fe2026fccb2b7beee30a7ec254d477d5179b1d1a"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/test_tenant_required_error_alias.py",
+        "test": "test_alias_emits_deprecation_warning_via__errors_module",
+        "reviewed_source_sha256": "8a99211f21a760cbe9242275fe2026fccb2b7beee30a7ec254d477d5179b1d1a",
+        "target_source_sha256": "8a99211f21a760cbe9242275fe2026fccb2b7beee30a7ec254d477d5179b1d1a"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+        "test": "test_tdd_transaction_performance_single",
+        "reviewed_source_sha256": "bf89e961b250438f29b554502ae8d7605d1020eb9c88a4f7d6718921a009cdbb",
+        "target_source_sha256": "fd840ebdd1e4c7f8d98800f1f82b80c109ec2e3de9c08ad2865e40e4d428c605"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+        "test": "test_tdd_savepoint_isolation_performance",
+        "reviewed_source_sha256": "bf89e961b250438f29b554502ae8d7605d1020eb9c88a4f7d6718921a009cdbb",
+        "target_source_sha256": "fd840ebdd1e4c7f8d98800f1f82b80c109ec2e3de9c08ad2865e40e4d428c605"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+        "test": "test_tdd_parallel_performance",
+        "reviewed_source_sha256": "bf89e961b250438f29b554502ae8d7605d1020eb9c88a4f7d6718921a009cdbb",
+        "target_source_sha256": "fd840ebdd1e4c7f8d98800f1f82b80c109ec2e3de9c08ad2865e40e4d428c605"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+        "test": "test_tdd_seeded_data_performance",
+        "reviewed_source_sha256": "bf89e961b250438f29b554502ae8d7605d1020eb9c88a4f7d6718921a009cdbb",
+        "target_source_sha256": "fd840ebdd1e4c7f8d98800f1f82b80c109ec2e3de9c08ad2865e40e4d428c605"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+        "test": "test_tdd_connection_reuse_performance",
+        "reviewed_source_sha256": "bf89e961b250438f29b554502ae8d7605d1020eb9c88a4f7d6718921a009cdbb",
+        "target_source_sha256": "fd840ebdd1e4c7f8d98800f1f82b80c109ec2e3de9c08ad2865e40e4d428c605"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+        "test": "test_tdd_fixture_setup_performance",
+        "reviewed_source_sha256": "bf89e961b250438f29b554502ae8d7605d1020eb9c88a4f7d6718921a009cdbb",
+        "target_source_sha256": "fd840ebdd1e4c7f8d98800f1f82b80c109ec2e3de9c08ad2865e40e4d428c605"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+        "test": "test_memory_usage_performance",
+        "reviewed_source_sha256": "bf89e961b250438f29b554502ae8d7605d1020eb9c88a4f7d6718921a009cdbb",
+        "target_source_sha256": "fd840ebdd1e4c7f8d98800f1f82b80c109ec2e3de9c08ad2865e40e4d428c605"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+        "test": "test_tdd_performance_batch_validation",
+        "reviewed_source_sha256": "bf89e961b250438f29b554502ae8d7605d1020eb9c88a4f7d6718921a009cdbb",
+        "target_source_sha256": "fd840ebdd1e4c7f8d98800f1f82b80c109ec2e3de9c08ad2865e40e4d428c605"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+        "test": "test_performance_comparison_with_traditional",
+        "reviewed_source_sha256": "bf89e961b250438f29b554502ae8d7605d1020eb9c88a4f7d6718921a009cdbb",
+        "target_source_sha256": "fd840ebdd1e4c7f8d98800f1f82b80c109ec2e3de9c08ad2865e40e4d428c605"
+      },
+      {
+        "file": "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+        "test": "test_performance_validator_final_report",
+        "reviewed_source_sha256": "bf89e961b250438f29b554502ae8d7605d1020eb9c88a4f7d6718921a009cdbb",
+        "target_source_sha256": "fd840ebdd1e4c7f8d98800f1f82b80c109ec2e3de9c08ad2865e40e4d428c605"
+      },
+      {
+        "file": "packages/kailash-kaizen/tests/integration/llm/test_llmhttpclient_wiring.py",
+        "test": "test_llmhttpclient_rejects_private_ip_at_resolve_time",
+        "reviewed_source_sha256": "b8729472ac8ef2fbcf4f1834df3fbadaf12fcd48b191648dff0f9cfab51185c3",
+        "target_source_sha256": "b8729472ac8ef2fbcf4f1834df3fbadaf12fcd48b191648dff0f9cfab51185c3"
+      },
+      {
+        "file": "packages/kailash-kaizen/tests/regression/test_issue_1952_keyless_provider_fail_loud.py",
+        "test": "TestAgentSurfaceKeylessFailsLoud.test_agent_get_provider_is_none_when_keyless",
+        "reviewed_source_sha256": "dabd2126b8d95820226c4e9f21035362e6d992d796e4cdfdc0651fdb6667efc6",
+        "target_source_sha256": "dabd2126b8d95820226c4e9f21035362e6d992d796e4cdfdc0651fdb6667efc6"
+      },
+      {
+        "file": "packages/kailash-kaizen/tests/regression/test_issue_1952_keyless_provider_fail_loud.py",
+        "test": "TestAgentSurfaceKeylessFailsLoud.test_agent_execute_keyless_surfaces_error_not_fabricated_content",
+        "reviewed_source_sha256": "dabd2126b8d95820226c4e9f21035362e6d992d796e4cdfdc0651fdb6667efc6",
+        "target_source_sha256": "dabd2126b8d95820226c4e9f21035362e6d992d796e4cdfdc0651fdb6667efc6"
+      },
+      {
+        "file": "packages/kailash-kaizen/tests/regression/test_issue_1974_sanitizer_pattern_gaps.py",
+        "test": "test_known_over_redaction_shapes_are_unchanged_from_before",
+        "reviewed_source_sha256": "8487b2f3963ace2156f4712f04a0926a53318cdd600f114d17ae329c037ee8af",
+        "target_source_sha256": "8487b2f3963ace2156f4712f04a0926a53318cdd600f114d17ae329c037ee8af"
+      },
+      {
+        "file": "packages/kailash-kaizen/tests/regression/test_issue_1974_sanitizer_pattern_gaps.py",
+        "test": "test_scheme_broadening_is_linear_on_input_with_no_scheme",
+        "reviewed_source_sha256": "8487b2f3963ace2156f4712f04a0926a53318cdd600f114d17ae329c037ee8af",
+        "target_source_sha256": "8487b2f3963ace2156f4712f04a0926a53318cdd600f114d17ae329c037ee8af"
+      },
+      {
+        "file": "packages/kailash-kaizen/tests/regression/test_issue_1974e_compact_json_over_redaction.py",
+        "test": "TestRealCredentialsStillRedacted.test_same_string_value_over_redaction_is_an_accepted_residual",
+        "reviewed_source_sha256": "c07ad7c58d715418127c3fe7bf32bc02067dc8549a14c06049d9a4a335064382",
+        "target_source_sha256": "c07ad7c58d715418127c3fe7bf32bc02067dc8549a14c06049d9a4a335064382"
+      },
+      {
+        "file": "packages/kailash-kaizen/tests/regression/test_issue_mock_upgrade_provider_guard.py",
+        "test": "TestMultiModalSignatureCompilerProviderPropagation.test_create_llm_agent_params_uses_env_detected_provider",
+        "reviewed_source_sha256": "2d84bc1578c07d5ad6fae07f54c04a07309c2650b9cad52afde5f85eebd31e04",
+        "target_source_sha256": "2d84bc1578c07d5ad6fae07f54c04a07309c2650b9cad52afde5f85eebd31e04"
+      },
+      {
+        "file": "packages/kailash-kaizen/tests/regression/test_issue_mock_upgrade_provider_guard.py",
+        "test": "TestDeploymentCacheKeyProviderResolution.test_cache_key_differs_when_ambient_provider_availability_changes",
+        "reviewed_source_sha256": "2d84bc1578c07d5ad6fae07f54c04a07309c2650b9cad52afde5f85eebd31e04",
+        "target_source_sha256": "2d84bc1578c07d5ad6fae07f54c04a07309c2650b9cad52afde5f85eebd31e04"
+      },
+      {
+        "file": "packages/kailash-kaizen/tests/regression/test_issue_mock_upgrade_provider_guard.py",
+        "test": "TestBaseAgentToWorkflowMemoRebuildsOnProviderDrift.test_memo_rebuilds_when_ambient_provider_drifts",
+        "reviewed_source_sha256": "2d84bc1578c07d5ad6fae07f54c04a07309c2650b9cad52afde5f85eebd31e04",
+        "target_source_sha256": "2d84bc1578c07d5ad6fae07f54c04a07309c2650b9cad52afde5f85eebd31e04"
+      },
+      {
+        "file": "packages/kailash-kaizen/tests/regression/test_issue_mock_upgrade_provider_guard.py",
+        "test": "TestCompileWorkflowMemoRebuildsOnProviderDrift.test_compile_workflow_rebuilds_when_ambient_provider_drifts",
+        "reviewed_source_sha256": "2d84bc1578c07d5ad6fae07f54c04a07309c2650b9cad52afde5f85eebd31e04",
+        "target_source_sha256": "2d84bc1578c07d5ad6fae07f54c04a07309c2650b9cad52afde5f85eebd31e04"
+      },
+      {
+        "file": "packages/kailash-kaizen/tests/regression/test_issue_mock_upgrade_provider_guard.py",
+        "test": "TestCompileWorkflowMemoRebuildsOnProviderDrift.test_workflow_property_rebuilds_when_ambient_provider_drifts",
+        "reviewed_source_sha256": "2d84bc1578c07d5ad6fae07f54c04a07309c2650b9cad52afde5f85eebd31e04",
+        "target_source_sha256": "2d84bc1578c07d5ad6fae07f54c04a07309c2650b9cad52afde5f85eebd31e04"
+      },
+      {
+        "file": "packages/kailash-kaizen/tests/regression/test_issue_mock_upgrade_provider_guard.py",
+        "test": "TestExecuteWithSignatureCacheRebuildsOnProviderDrift.test_execute_with_signature_rebuilds_when_ambient_provider_drifts",
+        "reviewed_source_sha256": "2d84bc1578c07d5ad6fae07f54c04a07309c2650b9cad52afde5f85eebd31e04",
+        "target_source_sha256": "2d84bc1578c07d5ad6fae07f54c04a07309c2650b9cad52afde5f85eebd31e04"
+      },
+      {
+        "file": "packages/kailash-kaizen/tests/unit/core/test_issue_2022_config_error_not_swallowed.py",
+        "test": "TestResolveAgentProvider.test_unregistered_model_falls_back_to_environment",
+        "reviewed_source_sha256": "bb42fc28e132cdd1cfaf7be276ea66f2b96e2ca2d3033268d6d52db1c601865e",
+        "target_source_sha256": "bb42fc28e132cdd1cfaf7be276ea66f2b96e2ca2d3033268d6d52db1c601865e"
+      },
+      {
+        "file": "packages/kailash-kaizen/tests/unit/llm/security/test_llmhttpclient_ssrf_rejects_private_ips.py",
+        "test": "test_resolver_rejects_ipv4_mapped_ipv6",
+        "reviewed_source_sha256": "75d3893fad16f1322914a4ec30867755aebfd2ae8eda52d20f368074f8c77cce",
+        "target_source_sha256": "75d3893fad16f1322914a4ec30867755aebfd2ae8eda52d20f368074f8c77cce"
+      },
+      {
+        "file": "packages/kailash-kaizen/tests/unit/signatures/test_audio_field.py",
+        "test": "TestAudioFieldDurationExtraction.test_audio_field_duration_validation",
+        "reviewed_source_sha256": "fb7a126dcacb84ecb85261d289b6fbb205f694d4a0557a4920c322ecdd2e108a",
+        "target_source_sha256": "fb7a126dcacb84ecb85261d289b6fbb205f694d4a0557a4920c322ecdd2e108a"
+      },
+      {
+        "file": "packages/kailash-kaizen/tests/unit/strategies/test_parallel_batch_strategy.py",
+        "test": "test_max_concurrent_limits_concurrency",
+        "reviewed_source_sha256": "7f830836fbeb15ec2ceb7aa14fd704a292471cbca370b0668788b219f37c0f80",
+        "target_source_sha256": "7f830836fbeb15ec2ceb7aa14fd704a292471cbca370b0668788b219f37c0f80"
+      },
+      {
+        "file": "packages/kailash-kaizen/tests/unit/strategies/test_parallel_batch_strategy.py",
+        "test": "test_verify_concurrent_execution_timing",
+        "reviewed_source_sha256": "7f830836fbeb15ec2ceb7aa14fd704a292471cbca370b0668788b219f37c0f80",
+        "target_source_sha256": "7f830836fbeb15ec2ceb7aa14fd704a292471cbca370b0668788b219f37c0f80"
+      },
+      {
+        "file": "packages/kailash-kaizen/tests/unit/strategies/test_parallel_batch_strategy.py",
+        "test": "test_max_concurrent_1",
+        "reviewed_source_sha256": "7f830836fbeb15ec2ceb7aa14fd704a292471cbca370b0668788b219f37c0f80",
+        "target_source_sha256": "7f830836fbeb15ec2ceb7aa14fd704a292471cbca370b0668788b219f37c0f80"
+      },
+      {
+        "file": "packages/kailash-kaizen/tests/unit/strategies/test_parallel_batch_strategy.py",
+        "test": "test_semaphore_limits_actual_concurrency",
+        "reviewed_source_sha256": "7f830836fbeb15ec2ceb7aa14fd704a292471cbca370b0668788b219f37c0f80",
+        "target_source_sha256": "7f830836fbeb15ec2ceb7aa14fd704a292471cbca370b0668788b219f37c0f80"
+      },
+      {
+        "file": "packages/kailash-kaizen/tests/unit/test_llm_provider_bug_reproduction.py",
+        "test": "TestAgentLLMProviderAutoDetection.test_auto_detect_davinci_as_openai",
+        "reviewed_source_sha256": "0d78616a0c59a009ec4cfac83c15a185cc9ed941a01e92561855e359d036186b",
+        "target_source_sha256": "0d78616a0c59a009ec4cfac83c15a185cc9ed941a01e92561855e359d036186b"
+      },
+      {
+        "file": "packages/kailash-kaizen/tests/unit/trust/test_audit_store.py",
+        "test": "TestIntegrityVerification.test_verify_integrity_empty_store",
+        "reviewed_source_sha256": "199d15871de8641d3a0f8158000e3ac2f1aa0d073f2370d4c9b4c4b8159ac168",
+        "target_source_sha256": "199d15871de8641d3a0f8158000e3ac2f1aa0d073f2370d4c9b4c4b8159ac168"
+      },
+      {
+        "file": "packages/kailash-kaizen/tests/unit/trust/test_linked_hashing.py",
+        "test": "TestLinkedHashChain.test_empty_chain_valid",
+        "reviewed_source_sha256": "3a7c7e586551a2bd775881a28663d6077cea664efe034e6db5922d7c12e942ae",
+        "target_source_sha256": "3a7c7e586551a2bd775881a28663d6077cea664efe034e6db5922d7c12e942ae"
+      },
+      {
+        "file": "packages/kailash-kaizen/tests/unit/trust/test_linked_hashing.py",
+        "test": "TestEdgeCases.test_from_dict_with_empty_entries",
+        "reviewed_source_sha256": "3a7c7e586551a2bd775881a28663d6077cea664efe034e6db5922d7c12e942ae",
+        "target_source_sha256": "3a7c7e586551a2bd775881a28663d6077cea664efe034e6db5922d7c12e942ae"
+      },
+      {
+        "file": "packages/kailash-ml/tests/unit/test_seed.py",
+        "test": "test_applied_list_order_deterministic",
+        "reviewed_source_sha256": "23406d699cd29b3933a3305e9faaeb902827c38ece81b1348e7024933b5d6cfe",
+        "target_source_sha256": "23406d699cd29b3933a3305e9faaeb902827c38ece81b1348e7024933b5d6cfe"
+      },
+      {
+        "file": "packages/kailash-nexus/tests/unit/test_nexus_resources.py",
+        "test": "TestDataResources.test_data_resource_security_check",
+        "reviewed_source_sha256": "68d6dbe45a459f33e0cda64a3496f5329f134749af749ff6bcadba60038d02a1",
+        "target_source_sha256": "68d6dbe45a459f33e0cda64a3496f5329f134749af749ff6bcadba60038d02a1"
+      },
+      {
+        "file": "packages/kailash-nexus/tests/unit/test_nexus_resources.py",
+        "test": "TestCustomResourceRegistration.test_register_custom_resource",
+        "reviewed_source_sha256": "68d6dbe45a459f33e0cda64a3496f5329f134749af749ff6bcadba60038d02a1",
+        "target_source_sha256": "68d6dbe45a459f33e0cda64a3496f5329f134749af749ff6bcadba60038d02a1"
+      },
+      {
+        "file": "packages/kailash-pact/tests/regression/test_issue_2218_allowed_actions_parity.py",
+        "test": "TestEmptyIsNotAbsent.test_default_pact_envelope_permits_nothing",
+        "reviewed_source_sha256": "1b2cdab53cfd59883f3d8ad3ded46afd6bb34b6fb8b5e927c7a120fe7566f9a3",
+        "target_source_sha256": "1b2cdab53cfd59883f3d8ad3ded46afd6bb34b6fb8b5e927c7a120fe7566f9a3"
+      },
+      {
+        "file": "packages/kailash-pact/tests/unit/governance/test_absorb_capabilities.py",
+        "test": "test_verify_audit_chain_empty_returns_valid",
+        "reviewed_source_sha256": "63dd5d50ed4b68e584e9bd0fa88089ef533163824bc5dde2fd7df786e38ce981",
+        "target_source_sha256": "63dd5d50ed4b68e584e9bd0fa88089ef533163824bc5dde2fd7df786e38ce981"
+      },
+      {
+        "file": "packages/kailash-pact/tests/unit/governance/test_audit_integrity.py",
+        "test": "TestAuditIntegrity.test_verify_audit_integrity_empty",
+        "reviewed_source_sha256": "c7f9c9dd43373a2b066a5fc147b97957b55409a7ee9b92dbcff74882497ea1d8",
+        "target_source_sha256": "c7f9c9dd43373a2b066a5fc147b97957b55409a7ee9b92dbcff74882497ea1d8"
+      },
+      {
+        "file": "packages/kailash-pact/tests/unit/governance/test_audit_integrity.py",
+        "test": "TestEngineAuditIntegrity.test_engine_verify_audit_integrity_no_audit_log",
+        "reviewed_source_sha256": "c7f9c9dd43373a2b066a5fc147b97957b55409a7ee9b92dbcff74882497ea1d8",
+        "target_source_sha256": "c7f9c9dd43373a2b066a5fc147b97957b55409a7ee9b92dbcff74882497ea1d8"
+      },
+      {
+        "file": "packages/kailash-pact/tests/unit/governance/test_envelopes.py",
+        "test": "TestIntersectEnvelopesOperational.test_empty_allowed_stays_empty",
+        "reviewed_source_sha256": "9be18186308caf1512a7a326d03c6d03ee47ac8bef537660c1ce1bcc4fe26b1d",
+        "target_source_sha256": "9be18186308caf1512a7a326d03c6d03ee47ac8bef537660c1ce1bcc4fe26b1d"
+      },
+      {
+        "file": "packages/kailash-pact/tests/unit/test_pact_engine.py",
+        "test": "TestReadOnlyGovernanceViewIsActuallyReadOnly.test_allowed_read_only_methods_still_work",
+        "reviewed_source_sha256": "2d821b849590a02ee0665db55a3eda3165512ef554d0092ed580fe5488975bf2",
+        "target_source_sha256": "2d821b849590a02ee0665db55a3eda3165512ef554d0092ed580fe5488975bf2"
+      },
+      {
+        "file": "packages/kaizen-agents/tests/unit/test_supervisor.py",
+        "test": "TestGovernedSupervisorLayer2.test_envelope_reflects_config",
+        "reviewed_source_sha256": "70510e5224352341be4352d289832d2d8c75e98860c29a1b3ec5ade7a47a3dbf",
+        "target_source_sha256": "70510e5224352341be4352d289832d2d8c75e98860c29a1b3ec5ade7a47a3dbf"
+      },
+      {
+        "file": "packages/kaizen-agents/tests/unit/test_types.py",
+        "test": "TestConstraintEnvelope.test_default_construction",
+        "reviewed_source_sha256": "3b86d335639fbeb43f3157d3c6b1796c8e5fe3ea829f298b17799b0af8a626c7",
+        "target_source_sha256": "3b86d335639fbeb43f3157d3c6b1796c8e5fe3ea829f298b17799b0af8a626c7"
+      },
+      {
+        "file": "packages/kaizen-agents/tests/unit/test_wrapper_security.py",
+        "test": "TestStackingAttack.test_valid_stack_order_accepted",
+        "reviewed_source_sha256": "abe9fd4890be160af52d734c260e339a6f5464365c2d3383b20c911041ad190b",
+        "target_source_sha256": "abe9fd4890be160af52d734c260e339a6f5464365c2d3383b20c911041ad190b"
+      },
+      {
+        "file": "tests/regression/test_dataflow_pool_bridge.py",
+        "test": "test_failed_ddl_does_not_leak_pools_under_saturation",
+        "reviewed_source_sha256": "050a4e0bb1acd20cea8dc074a2947f926e606ed0c4c7272602a51c8c6cd41a5e",
+        "target_source_sha256": "050a4e0bb1acd20cea8dc074a2947f926e606ed0c4c7272602a51c8c6cd41a5e"
+      },
+      {
+        "file": "tests/regression/test_dataflow_pool_bridge.py",
+        "test": "test_failed_ddl_with_warn_mode_still_bounded",
+        "reviewed_source_sha256": "050a4e0bb1acd20cea8dc074a2947f926e606ed0c4c7272602a51c8c6cd41a5e",
+        "target_source_sha256": "050a4e0bb1acd20cea8dc074a2947f926e606ed0c4c7272602a51c8c6cd41a5e"
+      },
+      {
+        "file": "tests/regression/test_issue_2057_dead_attribute_guards.py",
+        "test": "test_create_permission_rule_audits_only_after_registration",
+        "reviewed_source_sha256": "f0401d7d00eb68733e4f77b7f4431bc39c8600b373033141976f9320ca3e087a",
+        "target_source_sha256": "f0401d7d00eb68733e4f77b7f4431bc39c8600b373033141976f9320ca3e087a"
+      },
+      {
+        "file": "tests/regression/test_issue_2081_sync_bridge_join_is_legible.py",
+        "test": "test_sync_bridge_timeout_rejects_a_non_positive_bound",
+        "reviewed_source_sha256": "53e7e9178c139ea1734cf2386fe4c219dc978b201e9db7f8533fe88b3fd295a1",
+        "target_source_sha256": "53e7e9178c139ea1734cf2386fe4c219dc978b201e9db7f8533fe88b3fd295a1"
+      },
+      {
+        "file": "tests/regression/test_provider_registry_backcompat.py",
+        "test": "test_get_provider_remains_exported",
+        "reviewed_source_sha256": "437b1c2f5ce13a4a1b84eaea1dbb2811251ef23cf79d9912b678d7a63d5259fb",
+        "target_source_sha256": "437b1c2f5ce13a4a1b84eaea1dbb2811251ef23cf79d9912b678d7a63d5259fb"
+      },
+      {
+        "file": "tests/tier2_integration/nodes/test_async_sql_event_loop_isolation.py",
+        "test": "TestEventLoopPoolCleanup.test_cleanup_removes_dead_loop_pools",
+        "reviewed_source_sha256": "1fbefbec911e4950f9ed61fdcfa5c1e8e0c9d67e39188222f04d0de0103e25e6",
+        "target_source_sha256": "1fbefbec911e4950f9ed61fdcfa5c1e8e0c9d67e39188222f04d0de0103e25e6"
+      },
+      {
+        "file": "tests/tier2_integration/nodes/test_rest_client.py",
+        "test": "TestRESTClientAsyncUpgrade.test_rest_client_async_get_request",
+        "reviewed_source_sha256": "fd500a493821ee9ee4b474d4e7767785f5ca0dec92372fab0997cc5f0e5b13cf",
+        "target_source_sha256": "fd500a493821ee9ee4b474d4e7767785f5ca0dec92372fab0997cc5f0e5b13cf"
+      },
+      {
+        "file": "tests/tier2_integration/nodes/test_rest_client.py",
+        "test": "TestRESTClientAsyncUpgrade.test_rest_client_async_fallback",
+        "reviewed_source_sha256": "fd500a493821ee9ee4b474d4e7767785f5ca0dec92372fab0997cc5f0e5b13cf",
+        "target_source_sha256": "fd500a493821ee9ee4b474d4e7767785f5ca0dec92372fab0997cc5f0e5b13cf"
+      },
+      {
+        "file": "tests/tier2_integration/nodes/transaction/test_participant_transport.py",
+        "test": "TestHttpTransportPrepare.test_prepare_success",
+        "reviewed_source_sha256": "94dc835d78b9a57c9d205df768592de82dd8235de3bc8e5fba2b863ed46a15ee",
+        "target_source_sha256": "94dc835d78b9a57c9d205df768592de82dd8235de3bc8e5fba2b863ed46a15ee"
+      },
+      {
+        "file": "tests/tier2_integration/nodes/transaction/test_participant_transport.py",
+        "test": "TestHttpTransportCommit.test_commit_success",
+        "reviewed_source_sha256": "94dc835d78b9a57c9d205df768592de82dd8235de3bc8e5fba2b863ed46a15ee",
+        "target_source_sha256": "94dc835d78b9a57c9d205df768592de82dd8235de3bc8e5fba2b863ed46a15ee"
+      },
+      {
+        "file": "tests/tier2_integration/nodes/transaction/test_participant_transport.py",
+        "test": "TestHttpTransportCommit.test_commit_retries_on_server_error",
+        "reviewed_source_sha256": "94dc835d78b9a57c9d205df768592de82dd8235de3bc8e5fba2b863ed46a15ee",
+        "target_source_sha256": "94dc835d78b9a57c9d205df768592de82dd8235de3bc8e5fba2b863ed46a15ee"
+      },
+      {
+        "file": "tests/tier2_integration/nodes/transaction/test_participant_transport.py",
+        "test": "TestHttpTransportAbort.test_abort_success",
+        "reviewed_source_sha256": "94dc835d78b9a57c9d205df768592de82dd8235de3bc8e5fba2b863ed46a15ee",
+        "target_source_sha256": "94dc835d78b9a57c9d205df768592de82dd8235de3bc8e5fba2b863ed46a15ee"
+      },
+      {
+        "file": "tests/tier2_integration/nodes/transaction/test_participant_transport.py",
+        "test": "TestHttpTransportAbort.test_abort_server_error_retries",
+        "reviewed_source_sha256": "94dc835d78b9a57c9d205df768592de82dd8235de3bc8e5fba2b863ed46a15ee",
+        "target_source_sha256": "94dc835d78b9a57c9d205df768592de82dd8235de3bc8e5fba2b863ed46a15ee"
+      },
+      {
+        "file": "tests/tier2_integration/runtime/test_runtime_lifecycle.py",
+        "test": "TestRefCounting.test_del_forces_cleanup",
+        "reviewed_source_sha256": "f00ca3cf37218ba2889b355d43520840a1b8fe72920c4fd4be0d655c67935419",
+        "target_source_sha256": "f00ca3cf37218ba2889b355d43520840a1b8fe72920c4fd4be0d655c67935419"
+      },
+      {
+        "file": "tests/tier2_integration/runtime/test_runtime_lifecycle_async.py",
+        "test": "TestAsyncClose.test_del_forces_cleanup",
+        "reviewed_source_sha256": "517638958be7109ba7aed0cff0cff1204ac479977f11ec7772da9fe382cd3eb1",
+        "target_source_sha256": "517638958be7109ba7aed0cff0cff1204ac479977f11ec7772da9fe382cd3eb1"
+      },
+      {
+        "file": "tests/tier2_integration/test_sqlite_uri_shared_cache.py",
+        "test": "TestSQLiteAdapterFilePrefixParsing.test_simple_file_prefix_stripped",
+        "reviewed_source_sha256": "b9bbd19352d858d94d55acfbb9634a3c8a1733a50610546a27151a61a5117daa",
+        "target_source_sha256": "b9bbd19352d858d94d55acfbb9634a3c8a1733a50610546a27151a61a5117daa"
+      },
+      {
+        "file": "tests/tier2_integration/tracking/storage/test_database.py",
+        "test": "TestDatabaseStorageEdgeCases.test_database_destructor",
+        "reviewed_source_sha256": "094d547899f04148337868f57ec23e3db53cd7634d39fcb7c248c17620b8ca39",
+        "target_source_sha256": "094d547899f04148337868f57ec23e3db53cd7634d39fcb7c248c17620b8ca39"
+      },
+      {
+        "file": "tests/tier2_integration/workflows/test_unit_cyclic_runner_comprehensive.py",
+        "test": "TestCyclicWorkflowExecutorBasic.test_execute_no_cycles_delegates_to_dag_runner",
+        "reviewed_source_sha256": "11e5129e22087ef593762d756805a258f5d30f9d4d67ad011af319cfc4d2c0fb",
+        "target_source_sha256": "11e5129e22087ef593762d756805a258f5d30f9d4d67ad011af319cfc4d2c0fb"
+      },
+      {
+        "file": "tests/tier2_integration/workflows/test_unit_cyclic_runner_comprehensive.py",
+        "test": "TestCyclicWorkflowExecutorInternalMethods.test_execute_with_cycles_with_summaries",
+        "reviewed_source_sha256": "11e5129e22087ef593762d756805a258f5d30f9d4d67ad011af319cfc4d2c0fb",
+        "target_source_sha256": "11e5129e22087ef593762d756805a258f5d30f9d4d67ad011af319cfc4d2c0fb"
+      },
+      {
+        "file": "tests/trust/pact/unit/test_audit_integrity.py",
+        "test": "TestAuditIntegrity.test_verify_audit_integrity_empty",
+        "reviewed_source_sha256": "622571da7a199b955b31c7032f34d6851de7ad9602468330fbace0b66cfbd7ae",
+        "target_source_sha256": "622571da7a199b955b31c7032f34d6851de7ad9602468330fbace0b66cfbd7ae"
+      },
+      {
+        "file": "tests/trust/pact/unit/test_audit_integrity.py",
+        "test": "TestEngineAuditIntegrity.test_engine_verify_audit_integrity_no_audit_log",
+        "reviewed_source_sha256": "622571da7a199b955b31c7032f34d6851de7ad9602468330fbace0b66cfbd7ae",
+        "target_source_sha256": "622571da7a199b955b31c7032f34d6851de7ad9602468330fbace0b66cfbd7ae"
+      },
+      {
+        "file": "tests/trust/pact/unit/test_dimension_scope.py",
+        "test": "TestIntersectEnvelopesDimensionScope.test_no_scope_intersects_all_dimensions",
+        "reviewed_source_sha256": "7837b0ff640e6b2fb8034e757c972f5d65cac4da06d5ccb1ec8ae054461ee289",
+        "target_source_sha256": "7837b0ff640e6b2fb8034e757c972f5d65cac4da06d5ccb1ec8ae054461ee289"
+      },
+      {
+        "file": "tests/trust/pact/unit/test_dimension_scope.py",
+        "test": "TestIntersectEnvelopesDimensionScope.test_operational_and_data_access_scope",
+        "reviewed_source_sha256": "7837b0ff640e6b2fb8034e757c972f5d65cac4da06d5ccb1ec8ae054461ee289",
+        "target_source_sha256": "7837b0ff640e6b2fb8034e757c972f5d65cac4da06d5ccb1ec8ae054461ee289"
+      },
+      {
+        "file": "tests/trust/pact/unit/test_dimension_scope.py",
+        "test": "TestIntersectEnvelopesDimensionScope.test_communication_scope_preserves_parent_financial",
+        "reviewed_source_sha256": "7837b0ff640e6b2fb8034e757c972f5d65cac4da06d5ccb1ec8ae054461ee289",
+        "target_source_sha256": "7837b0ff640e6b2fb8034e757c972f5d65cac4da06d5ccb1ec8ae054461ee289"
+      },
+      {
+        "file": "tests/trust/pact/unit/test_envelopes.py",
+        "test": "TestIntersectEnvelopesOperational.test_empty_allowed_stays_empty",
+        "reviewed_source_sha256": "44ade6ce56c34811b729bb06ddf9ba41fb57ec2dc1e57a1f5ac3bc9c53c1cd40",
+        "target_source_sha256": "44ade6ce56c34811b729bb06ddf9ba41fb57ec2dc1e57a1f5ac3bc9c53c1cd40"
+      },
+      {
+        "file": "tests/trust/pact/unit/test_plan_suspension.py",
+        "test": "TestSerializationRoundTrip.test_all_conditions_met_empty",
+        "reviewed_source_sha256": "15ba6134704b328a35ec7a6af6c36771c6bacde6a2124b9216b121b45a98a629",
+        "target_source_sha256": "15ba6134704b328a35ec7a6af6c36771c6bacde6a2124b9216b121b45a98a629"
+      },
+      {
+        "file": "tests/trust/plane/integration/test_constraints.py",
+        "test": "TestConstraintEnvelopeModel.test_default_envelope",
+        "reviewed_source_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7",
+        "target_source_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7"
+      },
+      {
+        "file": "tests/trust/plane/integration/test_constraints.py",
+        "test": "TestConstraintEnvelopeModel.test_roundtrip",
+        "reviewed_source_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7",
+        "target_source_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7"
+      },
+      {
+        "file": "tests/trust/plane/integration/test_constraints.py",
+        "test": "TestConstraintEnvelopeModel.test_from_dict_ignores_legacy_required_outputs",
+        "reviewed_source_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7",
+        "target_source_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7"
+      },
+      {
+        "file": "tests/trust/plane/integration/test_constraints.py",
+        "test": "TestConstraintEnvelopeModel.test_from_legacy",
+        "reviewed_source_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7",
+        "target_source_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7"
+      },
+      {
+        "file": "tests/trust/plane/integration/test_constraints.py",
+        "test": "TestConstraintEnvelopeModel.test_json_serialization",
+        "reviewed_source_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7",
+        "target_source_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7"
+      },
+      {
+        "file": "tests/trust/plane/integration/test_constraints.py",
+        "test": "TestConstraintEnvelopeInProject.test_create_with_envelope",
+        "reviewed_source_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7",
+        "target_source_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7"
+      },
+      {
+        "file": "tests/trust/plane/integration/test_constraints.py",
+        "test": "TestConstraintEnvelopeInProject.test_envelope_survives_load",
+        "reviewed_source_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7",
+        "target_source_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7"
+      },
+      {
+        "file": "tests/trust/plane/integration/test_constraints.py",
+        "test": "TestConstraintEnvelopeInProject.test_legacy_constraints_still_work",
+        "reviewed_source_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7",
+        "target_source_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7"
+      },
+      {
+        "file": "tests/trust/plane/integration/test_constraints.py",
+        "test": "TestAdversarial.test_tampered_envelope_file_ignored_on_load",
+        "reviewed_source_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7",
+        "target_source_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7"
+      },
+      {
+        "file": "tests/trust/plane/integration/test_shadow.py",
+        "test": "TestConstraintInference.test_infer_empty_session",
+        "reviewed_source_sha256": "9539665f0b9a6698ee61cdf0debb86cafae6dfcd44cc5ae03196ff7606da064a",
+        "target_source_sha256": "9539665f0b9a6698ee61cdf0debb86cafae6dfcd44cc5ae03196ff7606da064a"
+      },
+      {
+        "file": "tests/trust/plane/unit/test_pathutils.py",
+        "test": "TestDataAccessConstraintsNormalization.test_backslash_paths_normalized_on_init",
+        "reviewed_source_sha256": "6b0a835d5cd563113d0bd8c75d6a66d1b5477c37a9b72a72a3b74bfd3130fd52",
+        "target_source_sha256": "6b0a835d5cd563113d0bd8c75d6a66d1b5477c37a9b72a72a3b74bfd3130fd52"
+      },
+      {
+        "file": "tests/trust/plane/unit/test_pathutils.py",
+        "test": "TestDataAccessConstraintsNormalization.test_mixed_separators_normalized_on_init",
+        "reviewed_source_sha256": "6b0a835d5cd563113d0bd8c75d6a66d1b5477c37a9b72a72a3b74bfd3130fd52",
+        "target_source_sha256": "6b0a835d5cd563113d0bd8c75d6a66d1b5477c37a9b72a72a3b74bfd3130fd52"
+      },
+      {
+        "file": "tests/trust/plane/unit/test_pathutils.py",
+        "test": "TestDataAccessConstraintsNormalization.test_double_slashes_collapsed_on_init",
+        "reviewed_source_sha256": "6b0a835d5cd563113d0bd8c75d6a66d1b5477c37a9b72a72a3b74bfd3130fd52",
+        "target_source_sha256": "6b0a835d5cd563113d0bd8c75d6a66d1b5477c37a9b72a72a3b74bfd3130fd52"
+      },
+      {
+        "file": "tests/trust/plane/unit/test_pathutils.py",
+        "test": "TestDataAccessConstraintsNormalization.test_from_dict_normalizes_paths",
+        "reviewed_source_sha256": "6b0a835d5cd563113d0bd8c75d6a66d1b5477c37a9b72a72a3b74bfd3130fd52",
+        "target_source_sha256": "6b0a835d5cd563113d0bd8c75d6a66d1b5477c37a9b72a72a3b74bfd3130fd52"
+      },
+      {
+        "file": "tests/trust/plane/unit/test_pathutils.py",
+        "test": "TestDataAccessConstraintsNormalization.test_already_normalized_paths_unchanged",
+        "reviewed_source_sha256": "6b0a835d5cd563113d0bd8c75d6a66d1b5477c37a9b72a72a3b74bfd3130fd52",
+        "target_source_sha256": "6b0a835d5cd563113d0bd8c75d6a66d1b5477c37a9b72a72a3b74bfd3130fd52"
+      },
+      {
+        "file": "tests/trust/unit/test_in_memory_audit_store.py",
+        "test": "TestInMemoryVerifyChain.test_empty_store_is_valid",
+        "reviewed_source_sha256": "f8c6b015959bf9c7800b1f75f57c8291d7adfe852f9eee6aed59717cdc0fae31",
+        "target_source_sha256": "f8c6b015959bf9c7800b1f75f57c8291d7adfe852f9eee6aed59717cdc0fae31"
+      },
+      {
+        "file": "tests/trust/unit/test_in_memory_audit_store.py",
+        "test": "TestInMemoryBounded.test_bounded_chain_still_verifiable",
+        "reviewed_source_sha256": "f8c6b015959bf9c7800b1f75f57c8291d7adfe852f9eee6aed59717cdc0fae31",
+        "target_source_sha256": "f8c6b015959bf9c7800b1f75f57c8291d7adfe852f9eee6aed59717cdc0fae31"
+      },
+      {
+        "file": "tests/trust/unit/test_models_crypto.py",
+        "test": "TestLinkedHashChain.test_verify_integrity_empty_chain",
+        "reviewed_source_sha256": "b68faf3f51905a141ab0521d5388f5804c72cde149183888b9106b4996fc1b4b",
+        "target_source_sha256": "b68faf3f51905a141ab0521d5388f5804c72cde149183888b9106b4996fc1b4b"
+      },
+      {
+        "file": "tests/trust/unit/test_sqlite_audit_store.py",
+        "test": "TestSqliteVerifyChain.test_empty_store_valid",
+        "reviewed_source_sha256": "06e3f0f1848b6fd4d14a130ae6732bdb4d28793ab8ffb6dc3c5025ed3d7ae17d",
+        "target_source_sha256": "06e3f0f1848b6fd4d14a130ae6732bdb4d28793ab8ffb6dc3c5025ed3d7ae17d"
+      },
+      {
+        "file": "tests/unit/cli/test_commands.py",
+        "test": "TestCLICommands.test_init_command_basic",
+        "reviewed_source_sha256": "acbbc9ff54d5be758d61b74643cbc0df697884fa52cd7c7202f6804f4a6c297e",
+        "target_source_sha256": "acbbc9ff54d5be758d61b74643cbc0df697884fa52cd7c7202f6804f4a6c297e"
+      },
+      {
+        "file": "tests/unit/cli/test_commands.py",
+        "test": "TestCLICommands.test_cli_workflow_validation",
+        "reviewed_source_sha256": "acbbc9ff54d5be758d61b74643cbc0df697884fa52cd7c7202f6804f4a6c297e",
+        "target_source_sha256": "acbbc9ff54d5be758d61b74643cbc0df697884fa52cd7c7202f6804f4a6c297e"
+      },
+      {
+        "file": "tests/unit/nodes/data/test_pool_bounded_fallback.py",
+        "test": "test_dedicated_path_registers_in_process_registry",
+        "reviewed_source_sha256": "1962c64a566077c96f6127f261a3b5739507a573fd9d3942d8617a95ef526881",
+        "target_source_sha256": "1962c64a566077c96f6127f261a3b5739507a573fd9d3942d8617a95ef526881"
+      },
+      {
+        "file": "tests/unit/nodes/data/test_pool_bounded_fallback.py",
+        "test": "test_shared_path_registers_in_process_registry",
+        "reviewed_source_sha256": "1962c64a566077c96f6127f261a3b5739507a573fd9d3942d8617a95ef526881",
+        "target_source_sha256": "1962c64a566077c96f6127f261a3b5739507a573fd9d3942d8617a95ef526881"
+      },
+      {
+        "file": "tests/unit/nodes/data/test_pool_bounded_fallback.py",
+        "test": "test_get_adapter_calls_ensure_reaper_started_on_pool_creation",
+        "reviewed_source_sha256": "1962c64a566077c96f6127f261a3b5739507a573fd9d3942d8617a95ef526881",
+        "target_source_sha256": "1962c64a566077c96f6127f261a3b5739507a573fd9d3942d8617a95ef526881"
+      },
+      {
+        "file": "tests/unit/nodes/test_api_with_real_data.py",
+        "test": "TestAPINodesWithRealData.test_rest_client_with_pagination",
+        "reviewed_source_sha256": "0c2944e2af0200b68b1722c5c25ad092ed35a1de0eeb705b6b2d17bd12131470",
+        "target_source_sha256": "0c2944e2af0200b68b1722c5c25ad092ed35a1de0eeb705b6b2d17bd12131470"
+      },
+      {
+        "file": "tests/unit/nodes/test_mcp_executor.py",
+        "test": "TestEnterpriseMLCPExecutorNode.test_failed_execution_records_failure",
+        "reviewed_source_sha256": "15bcbe726610f8eb1e4cb4903ae81a12f07b5f5870acae8c1517e2c1c06a70a5",
+        "target_source_sha256": "15bcbe726610f8eb1e4cb4903ae81a12f07b5f5870acae8c1517e2c1c06a70a5"
+      },
+      {
+        "file": "tests/unit/workflow/test_graph_comprehensive.py",
+        "test": "TestWorkflowStateWrapper.test_execute_with_state",
+        "reviewed_source_sha256": "a7ae9652a167562c3e1d272c5158e19fed1afd359f363eb0c3fdd95ab71033f1",
+        "target_source_sha256": "a7ae9652a167562c3e1d272c5158e19fed1afd359f363eb0c3fdd95ab71033f1"
+      }
+    ]
+  },
+  "document_scope": "Four validation/checkpoint/advisory artifact paths added or updated; identified as documentation, not runtime behavior evidence and not represented as unchanged bytes.",
+  "carried_review": "/tmp/csq15-whole-promotion-final-coverage-receipt.json",
+  "lazy_import_execution": [
+    "/tmp/csq15-benchmark-lazy-import-receipt.json",
+    "/tmp/csq15-security-benchmark-lazy-receipt.json"
+  ],
+  "opposite_control": "Actual original imports made wholeunit structuralguard fail with2specificviolations; fixedguard+23behavior tests passed24x2author and24x2independent. No testsrerun for thissupplement.",
+  "limits": [
+    "All exclusions and scoped-vs-historical distinctions from originalwholeunionreceipt retained.",
+    "FullLinuxDataFlow and Macgates are root-owned separateexecutions; thismapping does not report their eventualoutcome.",
+    "Existing advisoryscope decisions are documents, not asserted as newly implemented behavior."
+  ],
+  "open_findings": []
+}

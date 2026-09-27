@@ -1,7 +1,7 @@
 {
   "resumed_session": "01a0db1d-b7b7-7441-a2fe-81bfeef99161",
   "starting_head": "e19a9ab73bdf94066d7c2e820619ddcd11e303e7",
-  "status": "Source and fixture scoped reviews complete; DataFlow gate rerun pending after import-only fixture repair; specification-check advisory scope decision pending",
+  "status": "All four local test gates passed and scoped correctness/security reviews complete; pending user scope disposition for173 specification-check advisories before consolidated push/promotion",
   "authorizations": {
     "D1_promotion": true,
     "package_publication": false,
@@ -386,5 +386,117 @@
     "proposal": "csq15-spec-advisory-scope-decision.md",
     "warnings": 173,
     "existing_type_exception_does_not_cover": true
-  }
+  },
+  "local_validated_head": "c8ce102b8025e0b69bb744cbe636cd3aecb080e8",
+  "local_validated_tree": "469f368b09b8e7244d1a4122ecdf8a21969bc916",
+  "final_local_gates": {
+    "root_regression": {
+      "head": "a35604592eac70584f35acffd23d9ddc4ff615b3",
+      "passed": 3888,
+      "skipped": 1,
+      "deselected": 24,
+      "exit": 0,
+      "python_warnings": 0,
+      "carry_map": "csq15-root-gate-carry-map.json",
+      "log": "/tmp/csq15-final-linux.log"
+    },
+    "dataflow_unit": {
+      "head": "c8ce102b8025e0b69bb744cbe636cd3aecb080e8",
+      "passed": 3515,
+      "skipped": 20,
+      "exit": 0,
+      "python_warnings": 0,
+      "log": "/tmp/csq15-final-linux-dataflow.log"
+    },
+    "dataflow_regression": {
+      "head": "c8ce102b8025e0b69bb744cbe636cd3aecb080e8",
+      "passed": 1040,
+      "skipped": 6,
+      "deselected": 187,
+      "exit": 0,
+      "python_warnings": 0,
+      "log": "/tmp/csq15-final-linux-dataflow.log"
+    },
+    "mac_all_files": {
+      "head": "c8ce102b8025e0b69bb744cbe636cd3aecb080e8",
+      "passed": 5156,
+      "skipped": 12,
+      "deselected": 3,
+      "exit": 0,
+      "python_warnings": 0,
+      "SKIP": "unset",
+      "log": "/tmp/csq15-final-mac.log",
+      "caveat": "173 specification-check warnings remain open despite hook exit0; user scope decision pending"
+    }
+  },
+  "next_actions": [
+    "Read pending user scope answer; do not infer approval from elapsed time",
+    "Record authorized advisory disposition or execute approved sharded repair plan",
+    "Consolidated push dev/promotion; all required and previously failing checks green on exact head",
+    "Separate D1 merge PR2229",
+    "Post-main union verification in three newly created sibling trees, then drain those new review trees",
+    "Preserve52historicalrefs/5orderedstashes and restamp handoff"
+  ],
+  "owned_worktree_drain": {
+    "ran": true,
+    "status": "completed owned trees drained after their work landed in dev; promotion still pending",
+    "dev": "c8ce102b8025e0b69bb744cbe636cd3aecb080e8",
+    "worktrees": [
+      {
+        "worktree": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-cycle-final-adversarial",
+        "removed": true,
+        "branch_deleted": null,
+        "backup": "/tmp/csq15-owned-tree-final-backups/csq14-cycle-final-adversarial",
+        "files_preserved": 21
+      },
+      {
+        "worktree": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-final3-correctness",
+        "removed": true,
+        "branch_deleted": null,
+        "backup": "/tmp/csq15-owned-tree-final-backups/csq14-final3-correctness",
+        "files_preserved": 9
+      },
+      {
+        "worktree": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-final3-coverage",
+        "removed": true,
+        "branch_deleted": null,
+        "backup": "/tmp/csq15-owned-tree-final-backups/csq14-final3-coverage",
+        "files_preserved": 1
+      },
+      {
+        "worktree": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-final3-security",
+        "removed": true,
+        "branch_deleted": null,
+        "backup": "/tmp/csq15-owned-tree-final-backups/csq14-final3-security",
+        "files_preserved": 16
+      },
+      {
+        "worktree": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-nexus-dns-binding",
+        "removed": true,
+        "branch_deleted": "fix/csq14-nexus-dns-binding",
+        "backup": "/tmp/csq15-owned-tree-final-backups/csq14-nexus-dns-binding",
+        "files_preserved": 19
+      },
+      {
+        "worktree": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-webhook-safe-delivery",
+        "removed": true,
+        "branch_deleted": "fix/csq14-webhook-safe-delivery",
+        "backup": "/tmp/csq15-owned-tree-final-backups/csq14-webhook-safe-delivery",
+        "files_preserved": 7
+      },
+      {
+        "worktree": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq15-sqlite-nested-owner",
+        "removed": true,
+        "branch_deleted": "fix/csq15-sqlite-nested-owner",
+        "backup": "/tmp/csq15-owned-tree-final-backups/csq15-sqlite-nested-owner",
+        "files_preserved": 4
+      }
+    ],
+    "preserved_historical_refs": 52,
+    "preserved_ordered_stashes": 5,
+    "refs_and_stashes_exact": true,
+    "backup_root": "/tmp/csq15-owned-tree-final-backups",
+    "method": "Verified cp backups, reversed only owned tracked patches, moved untracked files and environment symlink into backup, verified clean target trees, removed without force, deleted ancestor branches with -d."
+  },
+  "final_output_audit": "csq15-final-output-audit.json"
 }

@@ -10,18 +10,35 @@ mutation fails that assertion. Final formatting/lint annotations preserve the
 runtime AST. The exact receipt and fixed eight-item completion list are in
 `04-validate/csq15-resume-checkpoint.json`.
 
-Promotion remains gated. At `6af82971d`, Linux root rerun passed 3853 tests with
-zero Python warnings, and Mac all-files hooks passed including 5153 unit tests.
-Fixture repairs are committed at `76452b524`, replacing stale startup/contract/dialect
-skips and synthetic DataFlow benchmarks. Real execution exposed Core SQLite nested
-file scopes using separate connections. The v3 repair pins the outer connection,
-preserves explicit workflow-task handoff, and admits completion atomically under
-the transaction lock. Earlier v2 consumed scopes on rejected/cancelled completion;
-v3 adds eight real-driver race cases. Independent final reviews and refreshed full
-Linux/Mac gates remain pending; earlier whole-union receipts do not certify v3.
-Then consolidate one push, read every required and formerly failed check on the
-exact PR head, and separately merge #2229 under D1. Post-main review, owned worktree
-drain, and final handoff restamp remain owed.
+All local test gates now passed on the repaired candidate `c8ce102b8`: DataFlow
+3,515 unit and 1,040 regression tests; Mac all-files hooks (SKIP unset) 5,156 unit
+tests. Root regression passed 3,888 at `a356045`; exact source/root-test/config
+continuity to c8ce is recorded in `csq15-root-gate-carry-map.json`. No Python
+warnings were reported. Remaining skips are individually classified optional,
+platform or absent cross-SDK-vector coverage, not passed behavior.
+
+The last fixture repair deferred two benchmark imports after the full DataFlow
+structural guard caught them. Independent correctness/security reviews are clean
+on final source and fixture bytes, including two rounds of 119 SQLite tests per reviewer.
+
+Promotion is waiting on a new scope decision: verbose spec-drift output contains
+173 advisories (111 active expired baseline rows, 55 uncovered-section messages,
+7 public-alias detector warnings). The concrete proposal and independent triage
+are in `csq15-spec-advisory-scope-decision.md` and `csq15-spec-drift-triage.json`.
+The user was asked whether to keep this backlog separate from D1 or resolve it
+before promotion. ANSWER PENDING; no new exception inferred. Do not repeat the
+question if a response has arrived. The previous type #73 exception does not cover
+this separate backlog.
+
+After scope disposition, consolidate one push, verify every required/previously
+failing check on the exact PR head, and separately merge #2229 under existing D1.
+All seven completed owned worktrees were backed up and drained after their work
+landed in dev; 77 dirty/untracked files are preserved in
+`/tmp/csq15-owned-tree-final-backups`. Three completed fix branches were deleted
+with `-d`; only local dev/main remain. The 52 historical refs and five ordered
+stashes are unchanged. Post-main review remains owed: create three NEW sibling
+trees pinned to merged main before dispatch, since all previous reviewer paths
+are now removed. No package publication.
 
 The nine specified CodeQL dismissals and separate DataFlow pools / inherited
 Kaizen base-execution design exceptions remain approved. The advisory type-check

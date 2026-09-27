@@ -1,6 +1,6 @@
 {
   "head": "a35604592eac70584f35acffd23d9ddc4ff615b3",
-  "status": "Source and fixture scoped reviews complete; DataFlow gate rerun pending after import-only fixture repair; specification-check advisory scope decision pending",
+  "status": "Historical a356 review and first full-gate snapshot; corrected final c8ce gate results are in csq15-resume-checkpoint.json and source/assertion continuity in csq15-reviewed-candidate-supplement.json. Specification advisory scope decision remains pending.",
   "receipts": {
     "author": {
       "ran": true,

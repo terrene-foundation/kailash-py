@@ -1,0 +1,161 @@
+{
+  "ran": true,
+  "verdict": "Completed execution gates PASS; advisory scope decision remains OPEN",
+  "candidate": "c8ce102b8025e0b69bb744cbe636cd3aecb080e8",
+  "scope": "Read-only final-output delta audit; no new tests or remote operations. Captured/hidden runtime events excluded.",
+  "logs": {
+    "mac": {
+      "path": "/tmp/csq15-final-mac.log",
+      "sha256": "778a8c92a1e9044e0963b8f093eff4786afc96f089fe764c291c18365f477f6e",
+      "completed_exit": 0
+    },
+    "dataflow": {
+      "path": "/tmp/csq15-final-linux-dataflow.log",
+      "sha256": "85eb68d76b2c965dec9b968b38bbbdbeda7e4eea30d393c26da5ad5fa2ddef21",
+      "completed_exit": 0
+    }
+  },
+  "mac": {
+    "passed": 5156,
+    "skipped": 12,
+    "deselected": 3,
+    "seconds": 36.06,
+    "spec_warn_exact_multiset_equal": true,
+    "spec_warn_count": 173,
+    "warn_breakdown": {
+      "expired_baseline": 111,
+      "zero_section": 55,
+      "B1": 7
+    },
+    "skip_reasons": [
+      {
+        "line": 3,
+        "text": "SKIPPED [1] tests/unit/cross_sdk/test_streaming_equivalence.py:29: kaizen_agents not installed \u2014 streaming equivalence tests require it",
+        "disposition": "optional dependency absent in gate environment"
+      },
+      {
+        "line": 4,
+        "text": "SKIPPED [1] tests/unit/delegate/test_audit_engine.py:576: S7 vendoring: cross-SDK byte-parity test requires vendored kailash-rs kailash-delegate-audit reference vectors. The assertion shape is pinned here so the gap is greppable: py-emitted AuditChainEntry canonical-JSON MUST byte-equal rs-emitted AuditChainRecord serde_json output for the same (event_type, payload, signer, signed_at, signature) inputs.",
+        "disposition": "reference vectors not vendored; parity assertion remains unexecuted"
+      },
+      {
+        "line": 5,
+        "text": "SKIPPED [1] tests/unit/security/test_issue_2078_address_space_limit.py:155: RLIMIT_AS is not enforced on this platform (macOS rejects it)",
+        "disposition": "platform capability absent"
+      },
+      {
+        "line": 6,
+        "text": "SKIPPED [1] tests/unit/security/test_issue_2078_address_space_limit.py:175: RLIMIT_AS is not enforced on this platform (macOS rejects it)",
+        "disposition": "platform capability absent"
+      },
+      {
+        "line": 7,
+        "text": "SKIPPED [1] tests/unit/security/test_issue_2078_address_space_limit.py:183: RLIMIT_AS is not enforced on this platform (macOS rejects it)",
+        "disposition": "platform capability absent"
+      },
+      {
+        "line": 8,
+        "text": "SKIPPED [1] tests/unit/security/test_issue_2078_address_space_limit.py:189: RLIMIT_AS is not enforced on this platform (macOS rejects it)",
+        "disposition": "platform capability absent"
+      },
+      {
+        "line": 9,
+        "text": "SKIPPED [1] tests/unit/security/test_issue_2078_address_space_limit.py:237: RLIMIT_AS is not enforced on this platform (macOS rejects it)",
+        "disposition": "platform capability absent"
+      },
+      {
+        "line": 10,
+        "text": "SKIPPED [1] tests/unit/security/test_issue_2078_address_space_limit.py:245: RLIMIT_AS is not enforced on this platform (macOS rejects it)",
+        "disposition": "platform capability absent"
+      },
+      {
+        "line": 11,
+        "text": "SKIPPED [1] tests/unit/security/test_issue_2078_address_space_limit.py:266: RLIMIT_AS is not enforced on this platform (macOS rejects it)",
+        "disposition": "platform capability absent"
+      },
+      {
+        "line": 12,
+        "text": "SKIPPED [1] tests/unit/security/test_issue_2078_address_space_limit.py:278: RLIMIT_AS is not enforced on this platform (macOS rejects it)",
+        "disposition": "platform capability absent"
+      },
+      {
+        "line": 13,
+        "text": "SKIPPED [1] tests/unit/security/test_issue_2078_address_space_limit.py:312: RLIMIT_AS is not enforced on this platform (macOS rejects it)",
+        "disposition": "platform capability absent"
+      },
+      {
+        "line": 14,
+        "text": "SKIPPED [1] tests/unit/security/test_issue_2078_address_space_limit.py:484: RLIMIT_AS is not enforced on this platform (macOS rejects it)",
+        "disposition": "platform capability absent"
+      }
+    ],
+    "skip_reason_evidence": "Reason rows come from completed prior targeted actual skip audit. Current full hook summary remains12; independently verified a356\u2192c8ce changes contain no root tests/config or production, so carried inventory, not newly printed -rs details."
+  },
+  "dataflow": {
+    "unit": {
+      "passed": 3515,
+      "skipped": 20,
+      "seconds": 147.39
+    },
+    "regression": {
+      "passed": 1040,
+      "skipped": 6,
+      "deselected": 187,
+      "seconds": 74.47
+    },
+    "structural_guard": "tests/regression/test_issue_979_layer3_no_bare_runtime_import.py . [70%]",
+    "old_failure_closed": true,
+    "skip_reason_rows_exact_equal": true,
+    "actual_skip_rows": [
+      "[DATAFLOW_UNIT] SKIPPED [1] tests/unit/adapters/test_mysql_adapter.py:17: aiomysql not installed; install via `[mysql]` extras",
+      "[DATAFLOW_UNIT] SKIPPED [1] tests/unit/cache/test_auto_detection.py:20: redis not installed; install via `[redis]` extras",
+      "[DATAFLOW_UNIT] SKIPPED [1] tests/unit/migrations/test_migration_performance_tracker.py:24: psutil not installed; install via `[monitoring]` extras",
+      "[DATAFLOW_UNIT] SKIPPED [1] tests/unit/migrations/test_migration_validation_pipeline.py:25: psutil not installed; install via `[monitoring]` extras",
+      "[DATAFLOW_UNIT] SKIPPED [1] tests/unit/migrations/test_not_null_performance_boundaries.py:23: psutil not installed; install via `[monitoring]` extras",
+      "[DATAFLOW_UNIT] SKIPPED [1] tests/unit/migrations/test_performance_validator.py:25: psutil not installed; install via `[monitoring]` extras",
+      "[DATAFLOW_UNIT] SKIPPED [1] tests/unit/migrations/test_production_deployment_validator.py:30: psutil not installed; install via `[monitoring]` extras",
+      "[DATAFLOW_UNIT] SKIPPED [1] tests/unit/migrations/test_validation_checkpoints.py:26: psutil not installed; install via `[monitoring]` extras",
+      "[DATAFLOW_UNIT] SKIPPED [1] tests/unit/ml/test_dataflow_ml_symbols.py:25: polars not installed; install via `[ml]` extras",
+      "[DATAFLOW_UNIT] SKIPPED [1] tests/unit/testing/test_parallel_execution_validation.py:37: psutil not installed; install via `[monitoring]` extras",
+      "[DATAFLOW_UNIT] SKIPPED [1] tests/unit/testing/test_performance_regression_suite.py:42: psutil not installed; install via `[monitoring]` extras",
+      "[DATAFLOW_UNIT] SKIPPED [1] tests/unit/adapters/test_mongodb_adapter.py:133: motor not installed (optional async MongoDB driver)",
+      "[DATAFLOW_UNIT] SKIPPED [1] tests/unit/adapters/test_mongodb_adapter.py:153: motor not installed (optional async MongoDB driver)",
+      "[DATAFLOW_UNIT] SKIPPED [1] tests/unit/adapters/test_mongodb_adapter.py:167: motor not installed (optional async MongoDB driver)",
+      "[DATAFLOW_UNIT] SKIPPED [1] tests/unit/adapters/test_mongodb_adapter.py:186: motor not installed (optional async MongoDB driver)",
+      "[DATAFLOW_UNIT] SKIPPED [1] tests/unit/adapters/test_mongodb_adapter.py:198: motor not installed (optional async MongoDB driver)",
+      "[DATAFLOW_UNIT] SKIPPED [1] tests/unit/adapters/test_mongodb_adapter.py:218: motor not installed (optional async MongoDB driver)",
+      "[DATAFLOW_UNIT] SKIPPED [1] tests/unit/core/test_credential_provider_1741_ddl_bulk.py:260: could not import 'psycopg2': No module named 'psycopg2'",
+      "[DATAFLOW_UNIT] SKIPPED [1] tests/unit/core/test_credential_provider_1741_ddl_bulk.py:276: could not import 'psycopg2': No module named 'psycopg2'",
+      "[DATAFLOW_UNIT] SKIPPED [1] tests/unit/core/test_credential_provider_1741_ddl_bulk.py:291: could not import 'psycopg2': No module named 'psycopg2'",
+      "[DATAFLOW_REGRESSION] SKIPPED [1] tests/regression/test_1708_w3_query_duration_histogram.py:56: could not import 'prometheus_client': No module named 'prometheus_client'",
+      "[DATAFLOW_REGRESSION] SKIPPED [1] tests/regression/test_hash_byte_vectors.py:69: could not import 'polars': No module named 'polars'",
+      "[DATAFLOW_REGRESSION] SKIPPED [1] tests/regression/test_issue_753_psycopg2_dep_declared.py:113: postgres-sync extra not installed (async-first baseline env)",
+      "[DATAFLOW_REGRESSION] SKIPPED [1] tests/regression/test_issue_753_psycopg2_dep_declared.py:136: postgres-sync extra not installed (async-first baseline env)",
+      "[DATAFLOW_REGRESSION] SKIPPED [1] tests/regression/test_phase_5_8_fabric_endpoints_registered.py:94: could not import 'nexus': No module named 'janus'",
+      "[DATAFLOW_REGRESSION] SKIPPED [1] tests/regression/test_phase_5_8_fabric_endpoints_registered.py:109: could not import 'nexus': No module named 'janus'"
+    ]
+  },
+  "python_warnings_observed": [],
+  "root_carry": {
+    "passed": 3888,
+    "skipped": 1,
+    "deselected": 24,
+    "base": "a35604592eac70584f35acffd23d9ddc4ff615b3",
+    "carry_map": "/tmp/csq15-root-gate-carry-map.json",
+    "independently_verified_changed_paths": [
+      "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+      "workspaces/issue-1720-llm-consolidation/04-validate/csq15-final-reviewed-candidate.json",
+      "workspaces/issue-1720-llm-consolidation/04-validate/csq15-resume-checkpoint.json",
+      "workspaces/issue-1720-llm-consolidation/04-validate/csq15-spec-advisory-records.json",
+      "workspaces/issue-1720-llm-consolidation/04-validate/csq15-spec-advisory-scope-decision.md"
+    ],
+    "new_execution_claim": false
+  },
+  "instrument_control": "Previously audited failed DF gate emitted actual guard AssertionError and exit1; current same guard reports passed and DF gate exit0. Exact-row comparisons would reject one changed warning or skip reason; retained current173 and26 exact text rows.",
+  "remaining_open": [
+    "173 spec-drift WARN scope decision awaiting user; no exception inferred",
+    "Other hook advisories retained with earlier source-based dispositions; no blanket warning-free claim"
+  ],
+  "prior_audit": "/tmp/csq15-security-final-output-audit.json",
+  "benchmark_fix_review": "/tmp/csq15-security-benchmark-lazy-receipt.json"
+}
