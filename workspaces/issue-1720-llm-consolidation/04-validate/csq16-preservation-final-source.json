@@ -1,0 +1,11 @@
+{
+  "ran": true,
+  "time": "2026-09-27T16:31:58.975814+00:00",
+  "refs_equal": true,
+  "refs_count": 52,
+  "stashes_equal_ordered": true,
+  "stashes_count": 5,
+  "scope": "Exact identities of all52named historicalrefs and five orderedstashes; unrelated livework branches excluded.",
+  "opposite": "Changed historical tip and reversed stash order both rejected by same comparisons",
+  "instrument_correction": "Initial full-row comparison included historical diagnostic keys; failed before receipt. Corrected both sides to declared ref/tip identity fields."
+}

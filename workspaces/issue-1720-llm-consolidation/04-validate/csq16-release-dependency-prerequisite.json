@@ -1,0 +1,140 @@
+{
+  "status": "BLOCKED FOR PACKAGE PUBLICATION; release preparation remains outside authorized D1 code promotion",
+  "published_core": {
+    "package": "kailash",
+    "version": "2.65.0",
+    "wheel": {
+      "url": "https://files.pythonhosted.org/packages/6b/fa/3e312c8c7ac90c065219747b0150a5bc98a72f71de2e959d417732d80e5f/kailash-2.65.0-py3-none-any.whl",
+      "hash": "sha256:3da7c5ba1b618d46f46e8e37ff5ef0b35325615262345c2a7cf7216aec058904",
+      "size": 3940555,
+      "upload-time": "2026-09-11T09:50:27.224Z"
+    },
+    "download_sha256": "3da7c5ba1b618d46f46e8e37ff5ef0b35325615262345c2a7cf7216aec058904",
+    "findings": [
+      {
+        "path": "kailash/utils/secure_logging.py",
+        "exists": true,
+        "symbols": {
+          "safe_log_field": false
+        }
+      },
+      {
+        "path": "kailash/utils/http_logging.py",
+        "exists": false,
+        "symbols": {
+          "DiagnosticAsyncClient": false
+        }
+      },
+      {
+        "path": "kailash/utils/http_transport.py",
+        "exists": false,
+        "symbols": {
+          "DnsPinnedAsyncTransport": false
+        }
+      },
+      {
+        "path": "kailash/runtime/trust/verifier.py",
+        "exists": true,
+        "symbols": {
+          "_safe_trust_log_field": false,
+          "_safe_trust_log_reason": false
+        }
+      }
+    ]
+  },
+  "consumer_release_tag_comparison": [
+    {
+      "tag": "dataflow-v2.20.1",
+      "tag_sha": "4a98750d8cc4d6eca7000818602455cd44b851f3",
+      "path": "packages/kailash-dataflow/src/dataflow/core/config.py",
+      "published_tag_imports": [],
+      "candidate_imports": [
+        {
+          "module": "kailash.utils.secure_logging",
+          "name": "safe_log_field",
+          "line": 17
+        }
+      ]
+    },
+    {
+      "tag": "dataflow-v2.20.1",
+      "tag_sha": "4a98750d8cc4d6eca7000818602455cd44b851f3",
+      "path": "packages/kailash-dataflow/src/dataflow/core/pool_utils.py",
+      "published_tag_imports": [],
+      "candidate_imports": [
+        {
+          "module": "kailash.utils.secure_logging",
+          "name": "safe_log_field",
+          "line": 21
+        }
+      ]
+    },
+    {
+      "tag": "dataflow-v2.20.1",
+      "tag_sha": "4a98750d8cc4d6eca7000818602455cd44b851f3",
+      "path": "packages/kailash-dataflow/src/dataflow/trust/query_wrapper.py",
+      "published_tag_imports": [],
+      "candidate_imports": [
+        {
+          "module": "kailash.runtime.trust.verifier",
+          "name": "_safe_trust_log_field",
+          "line": 42
+        },
+        {
+          "module": "kailash.runtime.trust.verifier",
+          "name": "_safe_trust_log_reason",
+          "line": 42
+        }
+      ]
+    },
+    {
+      "tag": "kaizen-v2.46.1",
+      "tag_sha": "e9f7a8c1b5837fe384dca0fcff8f27509ccb768d",
+      "path": "packages/kailash-kaizen/src/kaizen/llm/http_client.py",
+      "published_tag_imports": [],
+      "candidate_imports": [
+        {
+          "module": "kailash.utils.http_logging",
+          "name": "DiagnosticAsyncClient",
+          "line": 81
+        },
+        {
+          "module": "kailash.utils.http_transport",
+          "name": "DnsPinnedAsyncTransport",
+          "line": 82
+        }
+      ]
+    },
+    {
+      "tag": "nexus-v2.16.0",
+      "tag_sha": "96ab3d87aee462309db1c0de621267da94edc0ad",
+      "path": "packages/kailash-nexus/src/nexus/http_client.py",
+      "published_tag_imports": [],
+      "candidate_imports": [
+        {
+          "module": "kailash.utils.http_logging",
+          "name": "DiagnosticAsyncClient",
+          "line": 62
+        },
+        {
+          "module": "kailash.utils.http_transport",
+          "name": "DnsPinnedAsyncTransport",
+          "line": 63
+        }
+      ]
+    }
+  ],
+  "scope": "The new imports are absent from each current consumer release tag. Candidate monorepo installs explicitly use Core from the same checkout. No currently published consumer compatibility claim is changed by D1 source promotion. Independently publishing these new consumers against current published Core is prohibited.",
+  "release_requirements": [
+    "Choose and ship a new Core version containing all required HTTP, logging and verifier APIs; do not relabel the published2.65.0 wheel as containing them.",
+    "In authorized release preparation, raise DataFlow, Kaizen and Nexus Core minimums to that actual version, regenerate package/workspace locks, and bump all applicable release anchors atomically.",
+    "Build each consumer wheel and install/test independently against that exact published Core minimum before consumer publication.",
+    "Do not publish consumers before Core; code-promotion completion is not package-release readiness."
+  ],
+  "no_changes": [
+    "No speculative>=2.65.0 floor change",
+    "No package versions changed",
+    "No wheels published",
+    "No new specification or source-security exception inferred"
+  ]
+}

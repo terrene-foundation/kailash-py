@@ -1,0 +1,18 @@
+{
+  "Core_methods": 89,
+  "changed": [
+    "LocalRuntime.acquire"
+  ],
+  "original_v1_new_test_assertions_retained": 24,
+  "registry_absolute_SQL_callers": 14,
+  "inherited_runtime_subclasses": [
+    "AsyncLocalRuntime",
+    "ProtectedDataFlowRuntime"
+  ],
+  "runtime_cleaned_flag_owner": "AsyncLocalRuntime.cleanup; ExecutionContext same-file flags are separate class",
+  "acquire_borrower_before_sweep": "/tmp/csq16-registry-v2-acquire-before-sweep.json",
+  "borrowers_before": 27,
+  "borrowers_final": 28,
+  "new_borrower": "ModelRegistry._execute_workflow_sync_safe temporary ref; finally release",
+  "v1_parity": "/tmp/csq16-registry-mechanical.json"
+}

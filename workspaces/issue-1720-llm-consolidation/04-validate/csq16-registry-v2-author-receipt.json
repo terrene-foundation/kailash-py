@@ -1,0 +1,116 @@
+{
+  "ran": true,
+  "status": "AUTHOR_SCOPED_CLEAN_TWO_ROUNDS; independent review pending",
+  "manifest": "/tmp/csq16-registry-v2-manifest.json",
+  "patch": "/tmp/csq16-registry-v2.patch",
+  "delta_from_v1": "/tmp/csq16-registry-v2-delta.patch",
+  "archive": "/tmp/csq16-registry-v2-files.tar.gz",
+  "rounds": [
+    {
+      "scope": "df",
+      "round": 1,
+      "json": "/tmp/csq16-correctness-native-df-registry-v2-df-r1.json",
+      "log": "/tmp/csq16-df-registry-v2-df-r1.log",
+      "passed": 43,
+      "intentional_log_records": 64
+    },
+    {
+      "scope": "df",
+      "round": 2,
+      "json": "/tmp/csq16-correctness-native-df-registry-v2-df-r2.json",
+      "log": "/tmp/csq16-df-registry-v2-df-r2.log",
+      "passed": 43,
+      "intentional_log_records": 64
+    },
+    {
+      "scope": "core",
+      "round": 1,
+      "json": "/tmp/csq16-correctness-native-df-registry-v2-core-r1.json",
+      "log": "/tmp/csq16-df-registry-v2-core-r1.log",
+      "passed": 20,
+      "intentional_log_records": 3
+    },
+    {
+      "scope": "core",
+      "round": 2,
+      "json": "/tmp/csq16-correctness-native-df-registry-v2-core-r2.json",
+      "log": "/tmp/csq16-df-registry-v2-core-r2.log",
+      "passed": 20,
+      "intentional_log_records": 3
+    }
+  ],
+  "selection_df": [
+    "packages/kailash-dataflow/tests/regression/test_issue_1498_model_registry_runtime.py",
+    "packages/kailash-dataflow/tests/regression/test_issue_352_fastapi_startup.py",
+    "packages/kailash-dataflow/tests/regression/test_model_registry_native_owner_bridge.py",
+    "packages/kailash-dataflow/tests/regression/test_issue_1002_close_releases_all_cached_runtimes.py",
+    "packages/kailash-dataflow/tests/unit/core/test_model_registry_runtime_injection.py",
+    "packages/kailash-dataflow/tests/regression/test_issue_1502_sqlite_memory_shared_cache.py"
+  ],
+  "selection_core": [
+    "tests/regression/test_async_runtime_cleanup_ownership.py",
+    "tests/regression/test_runtime_aclose_contract.py"
+  ],
+  "command_prefix": "/Users/esperie/repos/kailash/build/kailash-py/.venv/bin/python -P /tmp/csq16-correctness-native-run.py <mode>",
+  "runner_flags": "-q -Werror --tb=short --timeout=45",
+  "controls": {
+    "lease": {
+      "hits": 6,
+      "exit": 1
+    },
+    "cleaned": {
+      "hits": 8,
+      "exit": 1
+    },
+    "release": {
+      "hits": 2,
+      "exit": 1
+    }
+  },
+  "control_script": "/tmp/csq16-registry-v2-controls.py",
+  "control_logs": {
+    "lease": "/tmp/csq16-registry-v2-control-lease-final.log",
+    "cleaned": "/tmp/csq16-registry-v2-control-cleaned.log",
+    "release": "/tmp/csq16-registry-v2-control-release.log"
+  },
+  "failure_counts": {
+    "lease": 5,
+    "cleaned": 2,
+    "release": 1
+  },
+  "control_scope": "Lease removal exercises4alreadyclosed/cleaned paths and racing creatorclose. Cleanedflag omission exercisesdirect Core acquire aftercleanup(refcount1). Release omission fails retainedref assertion afteractualtrustdenial. Mutated runs may emit ownership warnings; final positive runs emit none. First lease control needed instrument-only closure of wrongly reopened persistentloop; final rerun completed and recordedhits.",
+  "mechanical": "/tmp/csq16-registry-v2-mechanical.json",
+  "original_assertions": "All23#352+24runtimeinjection and allv1newtest assertions retained; original1498 file untouched. Direct Core acquire rejection asserted for acclose0 and cleanup1 states.",
+  "source_contract": "Native resource-owner admission rejects closed and cleaned runtime; LocalRuntime.close explicitly permits reuse by execute, so no blanket Local execution guard. Existing public acquire prevents sharing closed runtime; it now consistently rejects cleaned resources too under same lock. Registry owns temporary public reference around inherited public execute, released in finally. No private native-loop guard weakened.",
+  "diagnostics": "DF each64=46testmode disclosures+10SQLite memory disclosures+8intentional trustdeny; Core each3=actual injected cleanup errors from existingtests. All records read.",
+  "guard": "Actual test_issue_979... passes. UNIT_DIR is PACKAGE_ROOT/tests/unit and only its test_*.py are scanned; newfile is tests/regression, so eager real runtime imports are outside this unit-only contract. Guard unchanged; separate unitfixture deferred imports preserved.",
+  "discarded_runs": [
+    "Initial combined Core+DataFlow collection produced tests.conftest ImportPathMismatchError, exit4, no tests; no evidence counted. Replaced with separate independent commands.",
+    "v1 remainsOPEN dueclosed admission finding; new v2 supersedes it."
+  ],
+  "exclusions": [
+    "No live PostgreSQL/MySQL scoped run",
+    "Not a blanket change to LocalRuntime documented postclose execution",
+    "Arbitrary native workflows still require original ownerloop",
+    "No claim that explicit cleanup may race any unrelated operation safely; the lease serializes refcount close, not directcleanup misuse",
+    "Whole Linux/Mac and final integrated head mapping parent-owned"
+  ],
+  "dependencies": {
+    "src/kailash/runtime/async_local.py": {
+      "base_sha256": "5a5234e0b74b8246816fa0bfbec2229ed018c8cbd6d6ace76b071c93ae54ace2",
+      "sha256": "3763aa80191780730b726d49d0bc360809a7ea4904ffca403a02ad93fe0a0ec3"
+    },
+    "src/kailash/gateway/enhanced_gateway.py": {
+      "base_sha256": "b5ef813c89314379a66da6dd46f419fccc8e137d36b119fa308febd84b356bdf",
+      "sha256": "d1593a21eced16422060942c2369911634ffff262533c6dd573b3ff64eadc21d"
+    },
+    "specs/core-runtime.md": {
+      "base_sha256": "66ac9bb66e8bfc07b5f57e692323d1a0465f3509bea35999509ab60674de7cf0",
+      "sha256": "723f66f52328f3b106c5d44199b9981266a47394e95b70513efcd9f9006d60ce"
+    },
+    "tests/regression/test_runtime_aclose_contract.py": {
+      "base_sha256": null,
+      "sha256": "fecbf5e848be31caec816ba638ebbf68c6d3dd19132e92f72a9373b517ccfb34"
+    }
+  }
+}

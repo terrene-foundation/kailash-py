@@ -1,0 +1,2554 @@
+{
+  "head": "e4a789e73337c4dd8dfd18238f2ad1e44db19881",
+  "rows": [
+    {
+      "file": "packages/kailash-align/tests/test_package.py",
+      "test": "TestLazyImports.test_import_does_not_load_torch",
+      "removed": false,
+      "lost": [
+        "'torch' not in sys.modules"
+      ],
+      "added": [
+        "result.returncode == 0"
+      ],
+      "head_file_sha256": "0a2cadd27964864f18a9e24922658713c76b6e8012d1c7859afa50e2d1445fa3",
+      "disposition": "Fresh isolated interpreter imports exact local package path and asserts torch absent inside subprocess; parent requires zero exit. Replaces process-order-dependent skip with executed invariant.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/integration/fabric/test_serving.py",
+      "test": "TestFabricServingLayer.test_batch_handler_rejects_over_cap",
+      "removed": false,
+      "lost": [
+        "str(_MAX_BATCH_PRODUCTS) in result['error']"
+      ],
+      "added": [
+        "_MAX_BATCH_PRODUCTS == 50",
+        "'50' in result['error']"
+      ],
+      "head_file_sha256": "f62f8e7296fea08330a2f7eaffabef1c4b73dff94a8f281a9155bdcab8d7f38c",
+      "disposition": "Fixes independent literal batch cap50 and expected error50, rather than deriving oracle from same implementation constant.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/cache/test_async_redis_adapter.py",
+      "test": "TestAsyncRedisCacheAdapterCleanup.test_del_emits_resource_warning_when_not_closed",
+      "removed": false,
+      "lost": [
+        "pytest.warns(ResourceWarning, match='AsyncRedisCacheAdapter not closed')"
+      ],
+      "added": [
+        "len(recorded) == 1",
+        "pytest.warns(ResourceWarning, match='Unclosed AsyncRedisCacheAdapter')"
+      ],
+      "head_file_sha256": "d5d3170333cb435171df5d7d9fe43d48ead7cd6661525f0119a8db871aecf1ed",
+      "disposition": "Warn-only finalizer contract (#2107): exact ResourceWarning; executor remains usable until explicit close, and same submit probe raises after close. Cleanup ownership preserved explicitly.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/cache/test_async_redis_adapter.py",
+      "test": "TestAsyncRedisCacheAdapterCleanup.test_del_signals_executor_drain_for_clean_shutdown",
+      "removed": true,
+      "lost": [
+        "pytest.raises(RuntimeError)"
+      ],
+      "added": [],
+      "head_file_sha256": "d5d3170333cb435171df5d7d9fe43d48ead7cd6661525f0119a8db871aecf1ed",
+      "disposition": "Warn-only finalizer contract (#2107): exact ResourceWarning; executor remains usable until explicit close, and same submit probe raises after close. Cleanup ownership preserved explicitly.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/core/test_logging_levels.py",
+      "test": "TestMaskSensitiveValuesIntegration.test_mask_sensitive_values_imported_in_nodes",
+      "removed": true,
+      "lost": [
+        "'from .logging_config import mask_sensitive_values' in source"
+      ],
+      "added": [],
+      "head_file_sha256": "7b2d8124536ab2c10ab4df4463f20eb4a8a534b607e1f9131a59966e4940b85f",
+      "disposition": "Replaced literal import assertion with test_generated_node_diagnostics_omit_private_values: real SQLite Create result retains private note; actual reached input event required, raw and formatted records exclude note; helper masking tests remain.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/core/test_sqlite_transaction_lifecycle.py",
+      "test": "TestSQLiteTransactionDel.test_del_attempts_sync_rollback",
+      "removed": true,
+      "lost": [
+        "fake_conn._conn.rollback_called"
+      ],
+      "added": [],
+      "head_file_sha256": "53ff8a44e110f24bf00ba1ebb4132a91cafbbb745b5a24ff04e33e4fad76da99",
+      "disposition": "Warn-only finalizer intentionally no longer invokes rollback at arbitrary GC point; warning assertions retained and explicit commit/rollback/context-manager paths remain tested.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/features/test_express_pagination.py",
+      "test": "TestExpressListOrderBy.test_list_passes_order_by_in_params",
+      "removed": false,
+      "lost": [
+        "captured_params['order_by'] == 'created_at'"
+      ],
+      "added": [
+        "captured_params['order_by'] == order_by",
+        "captured_params['enable_cache'] is False",
+        "captured_params['cache_ttl'] == 300"
+      ],
+      "head_file_sha256": "2f3e705f940bc60cc49820fe51af0e209506d12a82ae808fa6fe568faf572db3",
+      "disposition": "Parameterized order_by replaces single literal; cache-disabled and TTL300 assertions added.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/features/test_read_replica.py",
+      "test": "test_dual_adapter_creation",
+      "removed": false,
+      "lost": [
+        "db._read_url == 'sqlite:///read_replica.db'"
+      ],
+      "added": [
+        "db._read_url == f'sqlite:///{expected_path}'"
+      ],
+      "head_file_sha256": "d782f072880f480adddb9663d47357ce37ca88c2d36a39934b73b2ca3265f9c8",
+      "disposition": "Both primary/read literal absolute URLs plus real distinct marker rows and PRAGMA physical database filename after CWD drift replace relative URL strings; default public configuration remains relative.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/features/test_read_replica.py",
+      "test": "test_connection_manager_url_override",
+      "removed": false,
+      "lost": [
+        "cm._url_override == 'sqlite:///override.db'"
+      ],
+      "added": [
+        "cm._url_override == f'sqlite:///{expected_path}'"
+      ],
+      "head_file_sha256": "d782f072880f480adddb9663d47357ce37ca88c2d36a39934b73b2ca3265f9c8",
+      "disposition": "Literal absolute constructor-pinned read URL plus actual marker row and physical filename after CWD drift replace relative URL comparison.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/migrations/test_batched_migration_executor.py",
+      "test": "TestBatchedMigrationExecutor.test_execute_batched_migrations_single_batch",
+      "removed": false,
+      "lost": [
+        "result"
+      ],
+      "added": [
+        "await executor.execute_batched_migrations([[sql]]) is True",
+        "mock_connection.execute.assert_awaited_once_with(sql)",
+        "transaction.__aenter__.assert_awaited_once()",
+        "transaction.__aexit__.assert_awaited_once_with(None, None, None)"
+      ],
+      "head_file_sha256": "65f9b53942f944231d0519a5b348537286ae8ca4f2eb1bd9abf723a46321d4ef",
+      "disposition": "Truthiness replaced by exactTrue plus awaited SQL and transaction context protocol checks.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/migrations/test_batched_migration_executor.py",
+      "test": "TestBatchedMigrationExecutor.test_execute_batched_migrations_multiple_batches",
+      "removed": false,
+      "lost": [
+        "result"
+      ],
+      "added": [
+        "await executor.execute_batched_migrations(batches) is True",
+        "mock_connection.execute.await_args_list == [call(sql) for batch in batches for sql in batch]",
+        "transaction.__aenter__.await_count == len(batches)",
+        "transaction.__aexit__.await_args_list == [call(None, None, None) for _ in batches]"
+      ],
+      "head_file_sha256": "65f9b53942f944231d0519a5b348537286ae8ca4f2eb1bd9abf723a46321d4ef",
+      "disposition": "Truthiness replaced by exactTrue plus awaited ordered SQL and per-batch context counts.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/migrations/test_batched_migration_executor.py",
+      "test": "TestBatchedMigrationExecutor.test_execute_batched_migrations_parallel_execution",
+      "removed": true,
+      "lost": [
+        "result"
+      ],
+      "added": [],
+      "head_file_sha256": "65f9b53942f944231d0519a5b348537286ae8ca4f2eb1bd9abf723a46321d4ef",
+      "disposition": "Renamed helper tests actual parallel executor and contextual protocol rather than generic truthiness.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/performance/test_simple_coverage_boost.py",
+      "test": "TestSQLDialectsModuleBasic.test_sql_dialects_import_and_basic_usage",
+      "removed": false,
+      "lost": [
+        "pg_dialect is not None",
+        "mysql_dialect is not None",
+        "sqlite_dialect is not None",
+        "manager is not None"
+      ],
+      "added": [
+        "isinstance(dialect, expected)",
+        "dialect.get_parameter_placeholder(1) == placeholder",
+        "pytest.raises(ValueError, match='Unsupported database type')"
+      ],
+      "head_file_sha256": "1f6141ab56d00085a19c159b374274999f37f89dc4d72f57238e1e0617eb33cb",
+      "disposition": "Absent sql_dialects module+skip replaced by canonical dialect classes from dialect.py, manager dispatch returns each actualtype and expected parameter marker; unsupportedtype raises. No mandatory importcatch.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/test_dataflow_bug_fixes_validation.py",
+      "test": "TestDataFlowBugFixesValidation.test_generated_code_has_fixed_parameter_access",
+      "removed": false,
+      "lost": [
+        "fix_verified",
+        "connection_info is None or isinstance(connection_info, str)",
+        "False"
+      ],
+      "added": [
+        "connection_info == 'postgresql://test_user:@localhost:5432/test_database'"
+      ],
+      "head_file_sha256": "199680a3267be1e44257e184b2bf57def7adc61517782a9844b60a855cdd1917",
+      "disposition": "Explicit active TDD context requires exact default PostgreSQL URL; brittle source/fix_verified and permissive None-or-string checks replaced by direct expected value; non-TDD and error behavior tested separately.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/test_dataflow_bug_fixes_validation.py",
+      "test": "TestDataFlowBugFixesValidation.test_bug_012_fix_works_in_practice",
+      "removed": false,
+      "lost": [
+        "connection_info is None"
+      ],
+      "added": [
+        "connection_info == 'postgresql://test_user:@localhost:5432/test_database'"
+      ],
+      "head_file_sha256": "199680a3267be1e44257e184b2bf57def7adc61517782a9844b60a855cdd1917",
+      "disposition": "Explicit TDD context exact default connection URL replaces None-only assertion; outside TDD remains separately tested.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/test_tenant_required_error_alias.py",
+      "test": "test_alias_emits_deprecation_warning_on_access",
+      "removed": false,
+      "lost": [
+        "len(deprecation_warnings) == 1",
+        "'MLTenantRequiredError' in msg",
+        "'TenantRequiredError' in msg",
+        "'v3.0' in msg"
+      ],
+      "added": [],
+      "head_file_sha256": "8a99211f21a760cbe9242275fe2026fccb2b7beee30a7ec254d477d5179b1d1a",
+      "disposition": "Assertions moved to shared exact warning-set helper rejecting unexpected warnings.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/test_tenant_required_error_alias.py",
+      "test": "test_alias_emits_deprecation_warning_via__errors_module",
+      "removed": false,
+      "lost": [
+        "len(deprecation_warnings) == 1",
+        "'v3.0' in str(deprecation_warnings[0].message)"
+      ],
+      "added": [],
+      "head_file_sha256": "8a99211f21a760cbe9242275fe2026fccb2b7beee30a7ec254d477d5179b1d1a",
+      "disposition": "Assertions moved to shared exact warning-set helper rejecting unexpected warnings.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+      "test": "test_tdd_transaction_performance_single",
+      "removed": false,
+      "lost": [
+        "duration_ms < 10000.0",
+        "'create_user' in results",
+        "results.get('create_user', {}).get('error') is None",
+        "'list_users' in results",
+        "len(list_result['data']) >= 1"
+      ],
+      "added": [
+        "{r['id'] for r in await _rows(state)} == {'committed'}",
+        "{r['id'] for r in await _rows(state, scope)} == {'committed'}"
+      ],
+      "head_file_sha256": "fd840ebdd1e4c7f8d98800f1f82b80c109ec2e3de9c08ad2865e40e4d428c605",
+      "disposition": "Original swallowed all workflow errors and had optional data check. Real generated create/list now committed transaction, exact persisted ID, required errors absent/run_id, actual timing <10s shared helper.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": false,
+      "successor_test_AST_equal": [
+        "test_tdd_transaction_performance_single"
+      ],
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+      "test": "test_tdd_savepoint_isolation_performance",
+      "removed": false,
+      "lost": [
+        "duration_ms < 10000.0",
+        "'begin_transaction' in results"
+      ],
+      "added": [
+        "{r['id'] for r in await _rows(state)} == {'outer'}",
+        "(await save.async_run())['status'] == 'created'",
+        "{r['id'] for r in await _rows(state, outer)} == {'outer', 'inner'}",
+        "(await rollback.async_run())['status'] == 'rolled_back_to_savepoint'",
+        "{r['id'] for r in await _rows(state, outer)} == {'outer'}"
+      ],
+      "head_file_sha256": "fd840ebdd1e4c7f8d98800f1f82b80c109ec2e3de9c08ad2865e40e4d428c605",
+      "disposition": "Independent raw SQL nodes without pinned transaction replaced by DataFlow savepoint and rollback nodes using one live adapter scope. Inner visible before rollback, absent afterward, outer survives commit; <10s retained.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": false,
+      "successor_test_AST_equal": [
+        "test_tdd_savepoint_isolation_performance"
+      ],
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+      "test": "test_tdd_parallel_performance",
+      "removed": false,
+      "lost": [
+        "duration_ms < 10000.0",
+        "'create_table' in results",
+        "f'insert_{i}' in results"
+      ],
+      "added": [
+        "{r['id'] for r in first} == {'first'}",
+        "{r['id'] for r in second} == {'second'}"
+      ],
+      "head_file_sha256": "fd840ebdd1e4c7f8d98800f1f82b80c109ec2e3de9c08ad2865e40e4d428c605",
+      "disposition": "Originally serial file operations hidden by exceptpass. Two DataFlow owners share same modelname, generated classes bound by get_node, concurrent tasks create distinct IDs and exact isolated rows verified; <10s retained.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": false,
+      "successor_test_AST_equal": [
+        "test_tdd_parallel_performance"
+      ],
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+      "test": "test_tdd_seeded_data_performance",
+      "removed": false,
+      "lost": [
+        "duration_ms < 10000.0",
+        "len(users) == 3",
+        "len(products) == 5",
+        "len(orders) == 3"
+      ],
+      "added": [
+        "{r['id'] for r in await _rows(state)} == {'seed-0', 'seed-1', 'seed-2'}"
+      ],
+      "head_file_sha256": "fd840ebdd1e4c7f8d98800f1f82b80c109ec2e3de9c08ad2865e40e4d428c605",
+      "disposition": "Original only counted Python lists 3/5/3 and slept. Three real persisted rows seeded and independently listed by exact IDs; no false multi-model preseed claim. <10s retained.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": false,
+      "successor_test_AST_equal": [
+        "test_tdd_seeded_data_performance"
+      ],
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+      "test": "test_tdd_connection_reuse_performance",
+      "removed": false,
+      "lost": [
+        "duration_ms < 10000.0",
+        "result == i"
+      ],
+      "added": [
+        "len(await _rows(state)) == 5",
+        "scope.connection is connection",
+        "len(await _rows(state, scope)) == i + 1"
+      ],
+      "head_file_sha256": "fd840ebdd1e4c7f8d98800f1f82b80c109ec2e3de9c08ad2865e40e4d428c605",
+      "disposition": "Original result=i self-oracle replaced by five real generated creates/lists within single pinned transaction, scope connection identity and exact rowcount checked before and after commit; <10s retained.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": false,
+      "successor_test_AST_equal": [
+        "test_tdd_connection_reuse_performance"
+      ],
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+      "test": "test_tdd_fixture_setup_performance",
+      "removed": false,
+      "lost": [
+        "setup_time < 20.0",
+        "tdd_benchmark.validate_target(100.0)",
+        "len(tdd_benchmark.measurements['fixture_setup']) == 1"
+      ],
+      "added": [
+        "performance_validator.get_statistics()['count'] == 1",
+        "await _rows(state) == []"
+      ],
+      "head_file_sha256": "fd840ebdd1e4c7f8d98800f1f82b80c109ec2e3de9c08ad2865e40e4d428c605",
+      "disposition": "Local duplicated benchmark +time.sleep5ms removed. Real DB initialization/schema/list-empty/cleanup measured. Synthetic <20ms removed; <10s operational bound and recorded sample count asserted.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": false,
+      "successor_test_AST_equal": [
+        "test_tdd_fixture_setup_performance"
+      ],
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+      "test": "test_memory_usage_performance",
+      "removed": false,
+      "lost": [
+        "delta_mb < 0.5",
+        "peak_mb > 0"
+      ],
+      "added": [
+        "processed[-1] == 1998",
+        "0 < delta_mb < 0.5",
+        "peak > before"
+      ],
+      "head_file_sha256": "fd840ebdd1e4c7f8d98800f1f82b80c109ec2e3de9c08ad2865e40e4d428c605",
+      "disposition": "Real tracemalloc allocation retained with original <0.5MB bound, expected processed output and positive allocation/peak. Bytes recorded as bytes rather than deltaMB*10 synthetic time. Caller-owned tracing preserved.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": false,
+      "successor_test_AST_equal": [
+        "test_memory_usage_performance"
+      ],
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+      "test": "test_tdd_performance_batch_validation",
+      "removed": false,
+      "lost": [
+        "stats['count'] == iteration_count",
+        "stats['mean'] < 50.0",
+        "stats['max'] < 100.0",
+        "duration_ms < 100.0"
+      ],
+      "added": [
+        "stats['count'] == 10",
+        "stats['mean'] == 19.0",
+        "stats['max'] == 100.0",
+        "performance_validator.validate_target_achieved()",
+        "not performance_validator.validate_target_achieved()"
+      ],
+      "head_file_sha256": "fd840ebdd1e4c7f8d98800f1f82b80c109ec2e3de9c08ad2865e40e4d428c605",
+      "disposition": "Ten actualsleep10ms samples did not prove TDD speed. Independent fixed samples9x10+100 exercise exact inclusive100ms boundary and mean19,count10,100%pass;101ms negative makes success target fail. No scheduler-sensitive invented work.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": false,
+      "successor_test_AST_equal": [
+        "test_tdd_performance_batch_validation"
+      ],
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+      "test": "test_performance_comparison_with_traditional",
+      "removed": false,
+      "lost": [
+        "tdd_time_ms < 100.0",
+        "improvement_factor > 20",
+        "improvement_percentage > 95"
+      ],
+      "added": [
+        "await _rows(state) == []",
+        "len(await _rows(fresh)) == 1",
+        "pytest.raises(ValueError, match='rollback benchmark')"
+      ],
+      "head_file_sha256": "fd840ebdd1e4c7f8d98800f1f82b80c109ec2e3de9c08ad2865e40e4d428c605",
+      "disposition": "Hardcoded2500ms vs20ms sleep removed. Real freshschema CRUD/cleanup and rollback timed with <10s bound, properties report both durations; actual committed row and discarded row verified. No cross-machine >20x/95% claim; rootapproved.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": false,
+      "successor_test_AST_equal": [
+        "test_performance_comparison_with_traditional"
+      ],
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+      "test": "test_performance_validator_final_report",
+      "removed": false,
+      "lost": [
+        "stats['target_achieved_pct'] >= 90.0",
+        "stats['mean'] < 75.0"
+      ],
+      "added": [
+        "performance_validator.get_statistics() == {}",
+        "not performance_validator.validate_target_achieved()",
+        "stats['count'] == 10",
+        "stats['target_achieved_pct'] == 90.0",
+        "stats['mean'] == 20.0",
+        "stats['min'] == 10.0",
+        "stats['max'] == 110.0",
+        "stats['median'] == 10.0",
+        "stats['std_dev'] > 0",
+        "performance_validator.validate_target_achieved(90.0)",
+        "not performance_validator.validate_target_achieved(95.0)"
+      ],
+      "head_file_sha256": "fd840ebdd1e4c7f8d98800f1f82b80c109ec2e3de9c08ad2865e40e4d428c605",
+      "disposition": "Empty per-test fixture meant original ifstats asserts never ran. Explicit empty result and rejection plus9x10+110 samples verify90%success,mean20,min/max/median/stddev and acceptance90/rejection95.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": false,
+      "successor_test_AST_equal": [
+        "test_performance_validator_final_report"
+      ],
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-kaizen/tests/integration/llm/test_llmhttpclient_wiring.py",
+      "test": "test_llmhttpclient_rejects_private_ip_at_resolve_time",
+      "removed": true,
+      "lost": [
+        "exc_info.value.reason == 'private_ipv4'",
+        "pytest.raises(InvalidEndpoint)"
+      ],
+      "added": [],
+      "head_file_sha256": "b8729472ac8ef2fbcf4f1834df3fbadaf12fcd48b191648dff0f9cfab51185c3",
+      "disposition": "Old direct resolver-only check replaced with real localhost client delivery and literal-loopback rejection. Private/mixed DNS rejection now covered by test_http_dns_connection_binding every-candidate admission plus resolver private-IP suite.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-kaizen/tests/regression/test_issue_1952_keyless_provider_fail_loud.py",
+      "test": "TestAgentSurfaceKeylessFailsLoud.test_agent_get_provider_is_none_when_keyless",
+      "removed": true,
+      "lost": [
+        "Agent('qa', {})._get_provider_for_config() is None"
+      ],
+      "added": [],
+      "head_file_sha256": "dabd2126b8d95820226c4e9f21035362e6d992d796e4cdfdc0651fdb6667efc6",
+      "disposition": "Registered model/provider identity and explicit declared-provider drift supersede ambient credential-based routing; exact10-row adjudication requested from root.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-kaizen/tests/regression/test_issue_1952_keyless_provider_fail_loud.py",
+      "test": "TestAgentSurfaceKeylessFailsLoud.test_agent_execute_keyless_surfaces_error_not_fabricated_content",
+      "removed": false,
+      "lost": [
+        "'provider' in lowered and ('unresolved' in lowered or '#1947' in surfaced or '#1952' in surfaced)"
+      ],
+      "added": [
+        "'provider openai is not available' in lowered and 'no api key for openai' in lowered"
+      ],
+      "head_file_sha256": "dabd2126b8d95820226c4e9f21035362e6d992d796e4cdfdc0651fdb6667efc6",
+      "disposition": "Registered model/provider identity and explicit declared-provider drift supersede ambient credential-based routing; exact10-row adjudication requested from root.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-kaizen/tests/regression/test_issue_1974_sanitizer_pattern_gaps.py",
+      "test": "test_known_over_redaction_shapes_are_unchanged_from_before",
+      "removed": true,
+      "lost": [
+        "out == f'test error (RuntimeError): {expected}'"
+      ],
+      "added": [],
+      "head_file_sha256": "8487b2f3963ace2156f4712f04a0926a53318cdd600f114d17ae329c037ee8af",
+      "disposition": "Canonical authority parsing replaces explicitly pinned over-redaction defect with exact preservation of path/query prose; credential vectors remain. Timing guard tests unbounded scrub_credentials rather than bounded public error formatter.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-kaizen/tests/regression/test_issue_1974_sanitizer_pattern_gaps.py",
+      "test": "test_scheme_broadening_is_linear_on_input_with_no_scheme",
+      "removed": false,
+      "lost": [
+        "sanitize_provider_error(RuntimeError(small), 't').endswith(small)"
+      ],
+      "added": [
+        "scrub_credentials(small).endswith(small)"
+      ],
+      "head_file_sha256": "8487b2f3963ace2156f4712f04a0926a53318cdd600f114d17ae329c037ee8af",
+      "disposition": "Canonical authority parsing replaces explicitly pinned over-redaction defect with exact preservation of path/query prose; credential vectors remain. Timing guard tests unbounded scrub_credentials rather than bounded public error formatter.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-kaizen/tests/regression/test_issue_1974e_compact_json_over_redaction.py",
+      "test": "TestRealCredentialsStillRedacted.test_same_string_value_over_redaction_is_an_accepted_residual",
+      "removed": true,
+      "lost": [
+        "scrubbed != body"
+      ],
+      "added": [],
+      "head_file_sha256": "c07ad7c58d715418127c3fe7bf32bc02067dc8549a14c06049d9a4a335064382",
+      "disposition": "Former accepted over-redaction residual renamed to exact diagnostic preservation after authority parser fix; real credential vectors retained and prior strict-xfail vectors promoted to executing tests.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-kaizen/tests/regression/test_issue_mock_upgrade_provider_guard.py",
+      "test": "TestMultiModalSignatureCompilerProviderPropagation.test_create_llm_agent_params_uses_env_detected_provider",
+      "removed": true,
+      "lost": [
+        "node_params['provider'] == 'anthropic'"
+      ],
+      "added": [],
+      "head_file_sha256": "2d84bc1578c07d5ad6fae07f54c04a07309c2650b9cad52afde5f85eebd31e04",
+      "disposition": "Registered model/provider identity and explicit declared-provider drift supersede ambient credential-based routing; exact10-row adjudication requested from root.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-kaizen/tests/regression/test_issue_mock_upgrade_provider_guard.py",
+      "test": "TestDeploymentCacheKeyProviderResolution.test_cache_key_differs_when_ambient_provider_availability_changes",
+      "removed": true,
+      "lost": [
+        "key_no_keys != key_with_openai_key"
+      ],
+      "added": [],
+      "head_file_sha256": "2d84bc1578c07d5ad6fae07f54c04a07309c2650b9cad52afde5f85eebd31e04",
+      "disposition": "Registered model/provider identity and explicit declared-provider drift supersede ambient credential-based routing; exact10-row adjudication requested from root.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-kaizen/tests/regression/test_issue_mock_upgrade_provider_guard.py",
+      "test": "TestBaseAgentToWorkflowMemoRebuildsOnProviderDrift.test_memo_rebuilds_when_ambient_provider_drifts",
+      "removed": true,
+      "lost": [
+        "node1['provider'] == 'mock'",
+        "node2['provider'] == 'openai'",
+        "wf1 is not wf2"
+      ],
+      "added": [],
+      "head_file_sha256": "2d84bc1578c07d5ad6fae07f54c04a07309c2650b9cad52afde5f85eebd31e04",
+      "disposition": "Registered model/provider identity and explicit declared-provider drift supersede ambient credential-based routing; exact10-row adjudication requested from root.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-kaizen/tests/regression/test_issue_mock_upgrade_provider_guard.py",
+      "test": "TestCompileWorkflowMemoRebuildsOnProviderDrift.test_compile_workflow_rebuilds_when_ambient_provider_drifts",
+      "removed": true,
+      "lost": [
+        "node1['provider'] == 'mock'",
+        "node2['provider'] == 'openai'",
+        "wf1 is not wf2"
+      ],
+      "added": [],
+      "head_file_sha256": "2d84bc1578c07d5ad6fae07f54c04a07309c2650b9cad52afde5f85eebd31e04",
+      "disposition": "Registered model/provider identity and explicit declared-provider drift supersede ambient credential-based routing; exact10-row adjudication requested from root.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-kaizen/tests/regression/test_issue_mock_upgrade_provider_guard.py",
+      "test": "TestCompileWorkflowMemoRebuildsOnProviderDrift.test_workflow_property_rebuilds_when_ambient_provider_drifts",
+      "removed": true,
+      "lost": [
+        "node1['provider'] == 'mock'",
+        "node2['provider'] == 'openai'"
+      ],
+      "added": [],
+      "head_file_sha256": "2d84bc1578c07d5ad6fae07f54c04a07309c2650b9cad52afde5f85eebd31e04",
+      "disposition": "Registered model/provider identity and explicit declared-provider drift supersede ambient credential-based routing; exact10-row adjudication requested from root.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-kaizen/tests/regression/test_issue_mock_upgrade_provider_guard.py",
+      "test": "TestExecuteWithSignatureCacheRebuildsOnProviderDrift.test_execute_with_signature_rebuilds_when_ambient_provider_drifts",
+      "removed": true,
+      "lost": [
+        "stub.dispatched_providers == ['mock']",
+        "result1['answer'] == real_content",
+        "stub.dispatched_providers == ['mock', 'openai']",
+        "result2['answer'] == real_content"
+      ],
+      "added": [],
+      "head_file_sha256": "2d84bc1578c07d5ad6fae07f54c04a07309c2650b9cad52afde5f85eebd31e04",
+      "disposition": "Registered model/provider identity and explicit declared-provider drift supersede ambient credential-based routing; exact10-row adjudication requested from root.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-kaizen/tests/unit/core/test_issue_2022_config_error_not_swallowed.py",
+      "test": "TestResolveAgentProvider.test_unregistered_model_falls_back_to_environment",
+      "removed": true,
+      "lost": [
+        "resolve_agent_provider('chatgpt-4o-latest') == 'openai'"
+      ],
+      "added": [],
+      "head_file_sha256": "bb42fc28e132cdd1cfaf7be276ea66f2b96e2ca2d3033268d6d52db1c601865e",
+      "disposition": "Registered model/provider identity and explicit declared-provider drift supersede ambient credential-based routing; exact10-row adjudication requested from root.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-kaizen/tests/unit/llm/security/test_llmhttpclient_ssrf_rejects_private_ips.py",
+      "test": "test_resolver_rejects_ipv4_mapped_ipv6",
+      "removed": false,
+      "lost": [
+        "excinfo.value.reason in {'ipv4_mapped', 'metadata_service', 'link_local'}"
+      ],
+      "added": [
+        "excinfo.value.reason == expected_reason"
+      ],
+      "head_file_sha256": "75d3893fad16f1322914a4ec30867755aebfd2ae8eda52d20f368074f8c77cce",
+      "disposition": "Exact parameterized expected_reason replaces permissive membership in several error categories for mapped IPv6 vectors.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-kaizen/tests/unit/signatures/test_audio_field.py",
+      "test": "TestAudioFieldDurationExtraction.test_audio_field_duration_validation",
+      "removed": false,
+      "lost": [
+        "field._duration_sec > 0"
+      ],
+      "added": [
+        "field._duration_sec > field.max_duration_sec",
+        "field.validate() is False"
+      ],
+      "head_file_sha256": "fb7a126dcacb84ecb85261d289b6fbb205f694d4a0557a4920c322ecdd2e108a",
+      "disposition": "Force optional pydub absence reversibly, assert duration actually exceeds bound and validation false; replaces duration merely positive.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-kaizen/tests/unit/strategies/test_parallel_batch_strategy.py",
+      "test": "test_max_concurrent_limits_concurrency",
+      "removed": false,
+      "lost": [
+        "elapsed >= 0.015"
+      ],
+      "added": [
+        "probe.max_overlap == 5"
+      ],
+      "head_file_sha256": "7f830836fbeb15ec2ceb7aa14fd704a292471cbca370b0668788b219f37c0f80",
+      "disposition": "Reached per-item production sleep seam counts actual overlap; capped1/3/5 and fully concurrent cases plus relative serial/concurrent timing replace machine-sensitive absolute thresholds and copied test-only semaphore implementation. Does not claim real LLM execution; base-Kaizen exception remains.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-kaizen/tests/unit/strategies/test_parallel_batch_strategy.py",
+      "test": "test_verify_concurrent_execution_timing",
+      "removed": false,
+      "lost": [
+        "len(results) == 10",
+        "elapsed < 0.05"
+      ],
+      "added": [
+        "all((p.max_overlap == 1 for p in seq_probes))",
+        "all((p.max_overlap == n for p in conc_probes))",
+        "fastest_conc < fastest_seq / 2",
+        "len(results) == n",
+        "len(results) == n"
+      ],
+      "head_file_sha256": "7f830836fbeb15ec2ceb7aa14fd704a292471cbca370b0668788b219f37c0f80",
+      "disposition": "Reached per-item production sleep seam counts actual overlap; capped1/3/5 and fully concurrent cases plus relative serial/concurrent timing replace machine-sensitive absolute thresholds and copied test-only semaphore implementation. Does not claim real LLM execution; base-Kaizen exception remains.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-kaizen/tests/unit/strategies/test_parallel_batch_strategy.py",
+      "test": "test_max_concurrent_1",
+      "removed": false,
+      "lost": [
+        "len(results) == 5",
+        "elapsed >= 0.045"
+      ],
+      "added": [
+        "len(results) == n",
+        "probe.max_overlap == 1",
+        "elapsed >= n * PROBE_DELAY * 0.9"
+      ],
+      "head_file_sha256": "7f830836fbeb15ec2ceb7aa14fd704a292471cbca370b0668788b219f37c0f80",
+      "disposition": "Reached per-item production sleep seam counts actual overlap; capped1/3/5 and fully concurrent cases plus relative serial/concurrent timing replace machine-sensitive absolute thresholds and copied test-only semaphore implementation. Does not claim real LLM execution; base-Kaizen exception remains.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-kaizen/tests/unit/strategies/test_parallel_batch_strategy.py",
+      "test": "test_semaphore_limits_actual_concurrency",
+      "removed": false,
+      "lost": [
+        "max_concurrent <= 3"
+      ],
+      "added": [
+        "probe.max_overlap == 3"
+      ],
+      "head_file_sha256": "7f830836fbeb15ec2ceb7aa14fd704a292471cbca370b0668788b219f37c0f80",
+      "disposition": "Reached per-item production sleep seam counts actual overlap; capped1/3/5 and fully concurrent cases plus relative serial/concurrent timing replace machine-sensitive absolute thresholds and copied test-only semaphore implementation. Does not claim real LLM execution; base-Kaizen exception remains.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-kaizen/tests/unit/test_llm_provider_bug_reproduction.py",
+      "test": "TestAgentLLMProviderAutoDetection.test_auto_detect_davinci_as_openai",
+      "removed": true,
+      "lost": [
+        "config.llm_provider == 'openai'"
+      ],
+      "added": [],
+      "head_file_sha256": "0d78616a0c59a009ec4cfac83c15a185cc9ed941a01e92561855e359d036186b",
+      "disposition": "Registered model/provider identity and explicit declared-provider drift supersede ambient credential-based routing; exact10-row adjudication requested from root.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-kaizen/tests/unit/trust/test_audit_store.py",
+      "test": "TestIntegrityVerification.test_verify_integrity_empty_store",
+      "removed": false,
+      "lost": [
+        "result.valid is True"
+      ],
+      "added": [
+        "result.valid is False",
+        "any(('empty store' in error for error in result.errors))"
+      ],
+      "head_file_sha256": "199d15871de8641d3a0f8158000e3ac2f1aa0d073f2370d4c9b4c4b8159ac168",
+      "disposition": "Intentional fail-closed empty/wiped/unconfigured audit boundary: booleans invalid, diagnostic reason populated, absence distinct from tampered state where typed status exists. Nonempty valid and actual tamper controls pass. Read-only facade delegates same producer result.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-kaizen/tests/unit/trust/test_linked_hashing.py",
+      "test": "TestLinkedHashChain.test_empty_chain_valid",
+      "removed": true,
+      "lost": [
+        "valid is True",
+        "break_index is None",
+        "len(chain) == 0"
+      ],
+      "added": [],
+      "head_file_sha256": "3a7c7e586551a2bd775881a28663d6077cea664efe034e6db5922d7c12e942ae",
+      "disposition": "Empty chain -> (False,None), no fabricated break index; populated structural-only method warns and full cryptographic linkage requires supplied original hashes. Renamed empty test retains len(chain)==0 and break_index None; rehydrated empty case invalid.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-kaizen/tests/unit/trust/test_linked_hashing.py",
+      "test": "TestEdgeCases.test_from_dict_with_empty_entries",
+      "removed": false,
+      "lost": [
+        "valid is True"
+      ],
+      "added": [
+        "valid is False",
+        "break_index is None"
+      ],
+      "head_file_sha256": "3a7c7e586551a2bd775881a28663d6077cea664efe034e6db5922d7c12e942ae",
+      "disposition": "Empty chain -> (False,None), no fabricated break index; populated structural-only method warns and full cryptographic linkage requires supplied original hashes. Renamed empty test retains len(chain)==0 and break_index None; rehydrated empty case invalid.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-ml/tests/unit/test_seed.py",
+      "test": "test_applied_list_order_deterministic",
+      "removed": false,
+      "lost": [
+        "r.applied[0] == 'pythonhashseed'",
+        "r.applied[1] == 'python'"
+      ],
+      "added": [
+        "r.applied == ('pythonhashseed', 'python', 'numpy', 'torch', 'lightning', 'sklearn')"
+      ],
+      "head_file_sha256": "23406d699cd29b3933a3305e9faaeb902827c38ece81b1348e7024933b5d6cfe",
+      "disposition": "Exact complete subsystem application order replaces first-two partial order under deterministic optional-module dispatch fixture; records do not claim live optional ML backend execution.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-nexus/tests/unit/test_nexus_resources.py",
+      "test": "TestDataResources.test_data_resource_security_check",
+      "removed": true,
+      "lost": [
+        "'error' in result",
+        "'Access denied' in result['error']"
+      ],
+      "added": [],
+      "head_file_sha256": "68d6dbe45a459f33e0cda64a3496f5329f134749af749ff6bcadba60038d02a1",
+      "disposition": "Realistic URI-template dispatch replaces literal wildcard mock lookup. Forbidden routed paths still deny content; absolute path separately rejects routing. Custom registration uses parameter-matching template plus concrete routing success test.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-nexus/tests/unit/test_nexus_resources.py",
+      "test": "TestCustomResourceRegistration.test_register_custom_resource",
+      "removed": false,
+      "lost": [
+        "'custom://*' in mock_server._resources",
+        "mock_server._resources['custom://*'] == custom_handler"
+      ],
+      "added": [
+        "'custom://{name}' in mock_server._resources",
+        "mock_server._resources['custom://{name}'] == custom_handler"
+      ],
+      "head_file_sha256": "68d6dbe45a459f33e0cda64a3496f5329f134749af749ff6bcadba60038d02a1",
+      "disposition": "Realistic URI-template dispatch replaces literal wildcard mock lookup. Forbidden routed paths still deny content; absolute path separately rejects routing. Custom registration uses parameter-matching template plus concrete routing success test.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-pact/tests/regression/test_issue_2218_allowed_actions_parity.py",
+      "test": "TestEmptyIsNotAbsent.test_default_pact_envelope_permits_nothing",
+      "removed": false,
+      "lost": [
+        "ConstraintEnvelopeConfig(id='e').operational.allowed_actions == []"
+      ],
+      "added": [
+        "ConstraintEnvelopeConfig(id='e').operational.allowed_actions == ()"
+      ],
+      "head_file_sha256": "1b2cdab53cfd59883f3d8ad3ded46afd6bb34b6fb8b5e927c7a120fe7566f9a3",
+      "disposition": "Immutable envelope tuples replace mutable lists with same ordered elements across constructors/intersection/serialization/path normalization; semantic content retained, storage shape intentionally tightened. Security audits runtime read-only boundary separately.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-pact/tests/unit/governance/test_absorb_capabilities.py",
+      "test": "test_verify_audit_chain_empty_returns_valid",
+      "removed": true,
+      "lost": [
+        "isinstance(result, ChainVerificationResult)",
+        "result.is_valid is True",
+        "result.verified_count == 0",
+        "result.first_break_reason is None",
+        "result.first_break_sequence is None"
+      ],
+      "added": [],
+      "head_file_sha256": "63dd5d50ed4b68e584e9bd0fa88089ef533163824bc5dde2fd7df786e38ce981",
+      "disposition": "Renamed empty test checks ChainVerificationResult, is_valid False, verified_count0, reason present, break sequence None. Missing chain distinguished from empty selection window of a verified nonempty chain.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-pact/tests/unit/governance/test_audit_integrity.py",
+      "test": "TestAuditIntegrity.test_verify_audit_integrity_empty",
+      "removed": false,
+      "lost": [
+        "is_valid is True",
+        "error is None"
+      ],
+      "added": [
+        "is_valid is False",
+        "error is not None",
+        "'empty audit log' in error"
+      ],
+      "head_file_sha256": "c7f9c9dd43373a2b066a5fc147b97957b55409a7ee9b92dbcff74882497ea1d8",
+      "disposition": "Intentional fail-closed empty/wiped/unconfigured audit boundary: booleans invalid, diagnostic reason populated, absence distinct from tampered state where typed status exists. Nonempty valid and actual tamper controls pass. Read-only facade delegates same producer result.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-pact/tests/unit/governance/test_audit_integrity.py",
+      "test": "TestEngineAuditIntegrity.test_engine_verify_audit_integrity_no_audit_log",
+      "removed": false,
+      "lost": [
+        "is_valid is True",
+        "error is None"
+      ],
+      "added": [
+        "is_valid is False",
+        "error is not None",
+        "'no SQLite audit log configured' in error"
+      ],
+      "head_file_sha256": "c7f9c9dd43373a2b066a5fc147b97957b55409a7ee9b92dbcff74882497ea1d8",
+      "disposition": "Intentional fail-closed empty/wiped/unconfigured audit boundary: booleans invalid, diagnostic reason populated, absence distinct from tampered state where typed status exists. Nonempty valid and actual tamper controls pass. Read-only facade delegates same producer result.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-pact/tests/unit/governance/test_envelopes.py",
+      "test": "TestIntersectEnvelopesOperational.test_empty_allowed_stays_empty",
+      "removed": false,
+      "lost": [
+        "result.operational.allowed_actions == []"
+      ],
+      "added": [
+        "result.operational.allowed_actions == ()"
+      ],
+      "head_file_sha256": "9be18186308caf1512a7a326d03c6d03ee47ac8bef537660c1ce1bcc4fe26b1d",
+      "disposition": "Immutable envelope tuples replace mutable lists with same ordered elements across constructors/intersection/serialization/path normalization; semantic content retained, storage shape intentionally tightened. Security audits runtime read-only boundary separately.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kailash-pact/tests/unit/test_pact_engine.py",
+      "test": "TestReadOnlyGovernanceViewIsActuallyReadOnly.test_allowed_read_only_methods_still_work",
+      "removed": false,
+      "lost": [
+        "ok is True"
+      ],
+      "added": [
+        "result == admin.verify_audit_integrity()",
+        "ok is False",
+        "reason is not None",
+        "'no SQLite audit log configured' in reason"
+      ],
+      "head_file_sha256": "2d821b849590a02ee0665db55a3eda3165512ef554d0092ed580fe5488975bf2",
+      "disposition": "Intentional fail-closed empty/wiped/unconfigured audit boundary: booleans invalid, diagnostic reason populated, absence distinct from tampered state where typed status exists. Nonempty valid and actual tamper controls pass. Read-only facade delegates same producer result.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kaizen-agents/tests/unit/test_supervisor.py",
+      "test": "TestGovernedSupervisorLayer2.test_envelope_reflects_config",
+      "removed": false,
+      "lost": [
+        "supervisor.envelope.operational.allowed_actions == ['read', 'write']"
+      ],
+      "added": [
+        "supervisor.envelope.operational.allowed_actions == ('read', 'write')"
+      ],
+      "head_file_sha256": "70510e5224352341be4352d289832d2d8c75e98860c29a1b3ec5ade7a47a3dbf",
+      "disposition": "Immutable envelope tuples replace mutable lists with same ordered elements across constructors/intersection/serialization/path normalization; semantic content retained, storage shape intentionally tightened. Security audits runtime read-only boundary separately.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kaizen-agents/tests/unit/test_types.py",
+      "test": "TestConstraintEnvelope.test_default_construction",
+      "removed": false,
+      "lost": [
+        "ce.operational.allowed_actions == []",
+        "ce.operational.blocked_actions == []"
+      ],
+      "added": [
+        "ce.operational.allowed_actions == ()",
+        "ce.operational.blocked_actions == ()"
+      ],
+      "head_file_sha256": "3b86d335639fbeb43f3157d3c6b1796c8e5fe3ea829f298b17799b0af8a626c7",
+      "disposition": "Immutable envelope tuples replace mutable lists with same ordered elements across constructors/intersection/serialization/path normalization; semantic content retained, storage shape intentionally tightened. Security audits runtime read-only boundary separately.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "packages/kaizen-agents/tests/unit/test_wrapper_security.py",
+      "test": "TestStackingAttack.test_valid_stack_order_accepted",
+      "removed": false,
+      "lost": [
+        "streaming.innermost is agent"
+      ],
+      "added": [
+        "streaming.inner is monitored",
+        "monitored.inner is governed",
+        "governed.envelope is envelope"
+      ],
+      "head_file_sha256": "abe9fd4890be160af52d734c260e339a6f5464365c2d3383b20c911041ad190b",
+      "disposition": "Stack-order assertions preserve canonical construction; separate TestInnermostContainment denies raw-agent execution while allowing config reads and bare ungoverned stack. Raw identity was the superseded containment defect.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/regression/test_dataflow_pool_bridge.py",
+      "test": "test_failed_ddl_does_not_leak_pools_under_saturation",
+      "removed": false,
+      "lost": [
+        "AsyncSQLDatabaseNode.pool_count() <= 5",
+        "len(errors_seen) > 0"
+      ],
+      "added": [
+        "all((r['adapters'] for r in results))",
+        "AsyncSQLDatabaseNode.pool_count() <= POOL_CAP",
+        "len(ddl_errors) == INSTANCE_COUNT"
+      ],
+      "head_file_sha256": "050a4e0bb1acd20cea8dc074a2947f926e606ed0c4c7272602a51c8c6cd41a5e",
+      "disposition": "Real query establishes owned adapters before failure;10concurrent event loops exceed independent cap5 and strong references distinguish slot release from GC. Exact DDL-failure/warn-mode outcomes replace incidental error count. Live PG and separate pools-design exception not inferred covered by static review.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/regression/test_dataflow_pool_bridge.py",
+      "test": "test_failed_ddl_with_warn_mode_still_bounded",
+      "removed": false,
+      "lost": [
+        "AsyncSQLDatabaseNode.pool_count() <= 5"
+      ],
+      "added": [
+        "all((r['ddl_recorded'] for r in results))",
+        "all((r['warn_escape_hatch_taken'] for r in results))",
+        "not any((r['ddl_failed_error'] for r in results))",
+        "not duplicate_key",
+        "all((r['adapters'] for r in results))",
+        "AsyncSQLDatabaseNode.pool_count() <= POOL_CAP"
+      ],
+      "head_file_sha256": "050a4e0bb1acd20cea8dc074a2947f926e606ed0c4c7272602a51c8c6cd41a5e",
+      "disposition": "Real query establishes owned adapters before failure;10concurrent event loops exceed independent cap5 and strong references distinguish slot release from GC. Exact DDL-failure/warn-mode outcomes replace incidental error count. Live PG and separate pools-design exception not inferred covered by static review.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/regression/test_issue_2057_dead_attribute_guards.py",
+      "test": "test_create_permission_rule_audits_only_after_registration",
+      "removed": false,
+      "lost": [
+        "audit.calls[0]['event_type'] == 'permission_rule_created'",
+        "audit.calls[0]['rule_id'] == mgr.access_manager.rules[0].id"
+      ],
+      "added": [
+        "set(call) == {'operation', 'event_data'}",
+        "call['operation'] == 'log_event'",
+        "call['event_data']['action'] == 'permission_rule_created'",
+        "call['event_data']['metadata']['rule_id'] == mgr.access_manager.rules[0].id"
+      ],
+      "head_file_sha256": "f0401d7d00eb68733e4f77b7f4431bc39c8600b373033141976f9320ca3e087a",
+      "disposition": "Audit API uses operation=log_event with metadata nested in event_data; verifies exact call keys, action and registered rule id instead of obsolete flat call shape.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/regression/test_issue_2081_sync_bridge_join_is_legible.py",
+      "test": "test_sync_bridge_timeout_rejects_a_non_positive_bound",
+      "removed": false,
+      "lost": [
+        "LocalRuntime(sync_bridge_timeout=None)._sync_bridge_timeout is None"
+      ],
+      "added": [
+        "runtime._sync_bridge_timeout is None"
+      ],
+      "head_file_sha256": "53e7e9178c139ea1734cf2386fe4c219dc978b201e9db7f8533fe88b3fd295a1",
+      "disposition": "Same None bound assertion uses owned runtime variable with cleanup instead of unclosed constructor expression.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/regression/test_provider_registry_backcompat.py",
+      "test": "test_get_provider_remains_exported",
+      "removed": false,
+      "lost": [
+        "callable(providers.get_provider)"
+      ],
+      "added": [
+        "[(warning.category, str(warning.message)) for warning in caught] == [(DeprecationWarning, message)]",
+        "alias is get_provider",
+        "callable(alias)",
+        "pytest.warns(DeprecationWarning, match=re.escape(message))"
+      ],
+      "head_file_sha256": "437b1c2f5ce13a4a1b84eaea1dbb2811251ef23cf79d9912b678d7a63d5259fb",
+      "disposition": "Alias identity and callable retained through local variable; exact deprecation warning additionally required.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/tier2_integration/nodes/test_async_sql_event_loop_isolation.py",
+      "test": "TestEventLoopPoolCleanup.test_cleanup_removes_dead_loop_pools",
+      "removed": false,
+      "lost": [
+        "fake_pool_key not in AsyncSQLDatabaseNode._shared_pools"
+      ],
+      "added": [
+        "dead_key not in AsyncSQLDatabaseNode._shared_pools",
+        "AsyncSQLDatabaseNode._shared_pools[live_key] == (live_adapter, 0)",
+        "(await cursor.fetchone())[0] == 1",
+        "pytest.raises(ValueError, match='no active connection')"
+      ],
+      "head_file_sha256": "1fbefbec911e4950f9ed61fdcfa5c1e8e0c9d67e39188222f04d0de0103e25e6",
+      "disposition": "Real dead-loop SQLite owner removal and live-owner preservation/query replace synthetic key absence; closed connection assertion provides opposite state.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/tier2_integration/nodes/test_rest_client.py",
+      "test": "TestRESTClientAsyncUpgrade.test_rest_client_async_get_request",
+      "removed": false,
+      "lost": [
+        "result['data'] == {'id': 123, 'name': 'Test User'}",
+        "call_args['method'] == 'GET'",
+        "call_args['url'] == 'https://api.example.com/users/123'",
+        "mock_instance.async_run.assert_called_once()"
+      ],
+      "added": [
+        "result['data'] == payload"
+      ],
+      "head_file_sha256": "fd500a493821ee9ee4b474d4e7767785f5ca0dec92372fab0997cc5f0e5b13cf",
+      "disposition": "Real local HTTP request validates method/path and parsed status/data; httpserver expectations replace fabricated inner envelope and mock call assertions. Renamed second real-response test retains successful200 and original payload.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/tier2_integration/nodes/test_rest_client.py",
+      "test": "TestRESTClientAsyncUpgrade.test_rest_client_async_fallback",
+      "removed": true,
+      "lost": [
+        "result['success'] is True",
+        "result['status_code'] == 200",
+        "result['data']['test'] == 'async works'",
+        "mock_instance.async_run.assert_called_once()"
+      ],
+      "added": [],
+      "head_file_sha256": "fd500a493821ee9ee4b474d4e7767785f5ca0dec92372fab0997cc5f0e5b13cf",
+      "disposition": "Real local HTTP request validates method/path and parsed status/data; httpserver expectations replace fabricated inner envelope and mock call assertions. Renamed second real-response test retains successful200 and original payload.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/tier2_integration/nodes/transaction/test_participant_transport.py",
+      "test": "TestHttpTransportPrepare.test_prepare_success",
+      "removed": false,
+      "lost": [
+        "len(app['call_log']) == 1"
+      ],
+      "added": [
+        "len(app[_CALL_LOG_KEY]) == 1"
+      ],
+      "head_file_sha256": "94dc835d78b9a57c9d205df768592de82dd8235de3bc8e5fba2b863ed46a15ee",
+      "disposition": "Typed aiohttp AppKey replaces string map key only; counts and transaction-id/body assertions unchanged.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/tier2_integration/nodes/transaction/test_participant_transport.py",
+      "test": "TestHttpTransportCommit.test_commit_success",
+      "removed": false,
+      "lost": [
+        "app['call_log'][0]['body']['transaction_id'] == 'tx-300'"
+      ],
+      "added": [
+        "app[_CALL_LOG_KEY][0]['body']['transaction_id'] == 'tx-300'"
+      ],
+      "head_file_sha256": "94dc835d78b9a57c9d205df768592de82dd8235de3bc8e5fba2b863ed46a15ee",
+      "disposition": "Typed aiohttp AppKey replaces string map key only; counts and transaction-id/body assertions unchanged.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/tier2_integration/nodes/transaction/test_participant_transport.py",
+      "test": "TestHttpTransportCommit.test_commit_retries_on_server_error",
+      "removed": false,
+      "lost": [
+        "len(app['call_log']) == 3"
+      ],
+      "added": [
+        "len(app[_CALL_LOG_KEY]) == 3"
+      ],
+      "head_file_sha256": "94dc835d78b9a57c9d205df768592de82dd8235de3bc8e5fba2b863ed46a15ee",
+      "disposition": "Typed aiohttp AppKey replaces string map key only; counts and transaction-id/body assertions unchanged.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/tier2_integration/nodes/transaction/test_participant_transport.py",
+      "test": "TestHttpTransportAbort.test_abort_success",
+      "removed": false,
+      "lost": [
+        "app['call_log'][0]['body']['transaction_id'] == 'tx-400'"
+      ],
+      "added": [
+        "app[_CALL_LOG_KEY][0]['body']['transaction_id'] == 'tx-400'"
+      ],
+      "head_file_sha256": "94dc835d78b9a57c9d205df768592de82dd8235de3bc8e5fba2b863ed46a15ee",
+      "disposition": "Typed aiohttp AppKey replaces string map key only; counts and transaction-id/body assertions unchanged.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/tier2_integration/nodes/transaction/test_participant_transport.py",
+      "test": "TestHttpTransportAbort.test_abort_server_error_retries",
+      "removed": false,
+      "lost": [
+        "len(app['call_log']) == 2"
+      ],
+      "added": [
+        "len(app[_CALL_LOG_KEY]) == 2"
+      ],
+      "head_file_sha256": "94dc835d78b9a57c9d205df768592de82dd8235de3bc8e5fba2b863ed46a15ee",
+      "disposition": "Typed aiohttp AppKey replaces string map key only; counts and transaction-id/body assertions unchanged.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/tier2_integration/runtime/test_connection_validation.py",
+      "test": "TestLocalRuntimeConnectionValidation.test_prepare_node_inputs_calls_validate_inputs",
+      "removed": false,
+      "lost": [
+        "inputs == {'validated': True}",
+        "mock_node.validate_inputs.assert_called_once()"
+      ],
+      "added": [
+        "config_only == {}",
+        "node.validation_calls == [{'count': 7}, {'count': '9'}]",
+        "inputs == {'count': 9}"
+      ],
+      "head_file_sha256": "43bade3a03d19a65e1b52a271410fa7ab0d5fb5d0fe7747d75b17e4c1cc16b4d",
+      "disposition": "Real Node records raw string count9, returns integer9, separately checks config7/runtime override; reached omitted-return control fails.",
+      "evidence": "/tmp/csq16-runtime-fixture-v2-receipt.json",
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/tier2_integration/runtime/test_connection_validation.py",
+      "test": "TestLocalRuntimeConnectionValidation.test_validation_modes_behavior",
+      "removed": false,
+      "lost": [
+        "mock_node.validate_inputs.assert_not_called()",
+        "'connection validation error' in mock_warning.call_args[0][0].lower()",
+        "mock_warning.assert_called_once()"
+      ],
+      "added": [
+        "node.validation_calls == []",
+        "inputs == parameters['test_node']",
+        "inputs == parameters['test_node']",
+        "not _validation_warnings(caplog)",
+        "len(node.validation_calls) == 1",
+        "len(warnings) == 1",
+        "'NodeValidationError' in warnings[0].getMessage()",
+        "'private-input-marker' not in caplog.text",
+        "len(node.validation_calls) == 2"
+      ],
+      "head_file_sha256": "43bade3a03d19a65e1b52a271410fa7ab0d5fb5d0fe7747d75b17e4c1cc16b4d",
+      "disposition": "Real off/warn/strict validation call counts, exactone classified warning without privateinput, preserved strict error.",
+      "evidence": "/tmp/csq16-runtime-fixture-v2-receipt.json",
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/tier2_integration/runtime/test_connection_validation.py",
+      "test": "TestLocalRuntimeConnectionValidation.test_mixed_parameter_sources",
+      "removed": false,
+      "lost": [
+        "'param1' in call_args",
+        "'param2' in call_args",
+        "mock_node.validate_inputs.assert_called_once()"
+      ],
+      "added": [
+        "node.validation_calls == [validated_result]",
+        "'param1' in node.validation_calls[0]",
+        "'param2' in node.validation_calls[0]"
+      ],
+      "head_file_sha256": "43bade3a03d19a65e1b52a271410fa7ab0d5fb5d0fe7747d75b17e4c1cc16b4d",
+      "disposition": "Real connection/config/runtime merge exactmapping, bothmembership checks via actual recorded call, validatorresult asserted.",
+      "evidence": "/tmp/csq16-runtime-fixture-v2-receipt.json",
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/tier2_integration/runtime/test_contract_enforcement.py",
+      "test": "TestRuntimeContractEnforcement.test_contract_validation_warn_mode",
+      "removed": false,
+      "lost": [
+        "any((term in all_warnings for term in ['contract validation failed', 'contract', 'violation']))",
+        "mock_warning.assert_called()"
+      ],
+      "added": [
+        "results['target']['result'] == 123",
+        "len(warnings) == 1",
+        "'WorkflowExecutionError' in warnings[0]",
+        "'string_data' not in warnings[0]",
+        "'123' not in warnings[0]"
+      ],
+      "head_file_sha256": "0fea25184b2004d756241686ad09a449c95ad75a4b3431a9cf9e9bfdef3460b2",
+      "disposition": "Rendered one WorkflowExecutionError diagnostic, nonempty successful results, omitted private contractname/value; replaces unsafe rawtemplate expectation.",
+      "evidence": "/tmp/csq16-runtime-fixture-v2-receipt.json",
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/tier2_integration/runtime/test_runtime_lifecycle.py",
+      "test": "TestRefCounting.test_del_forces_cleanup",
+      "removed": true,
+      "lost": [
+        "rt._persistent_loop is not None",
+        "rt.ref_count == 1",
+        "len(resource_warnings) == 1",
+        "'Unclosed LocalRuntime' in str(resource_warnings[0].message)",
+        "rt._persistent_loop is None",
+        "rt.ref_count == 0"
+      ],
+      "added": [],
+      "head_file_sha256": "f00ca3cf37218ba2889b355d43520840a1b8fe72920c4fd4be0d655c67935419",
+      "disposition": "Finalizer renamed to warn without reentrant cleanup; original refcount/loop before state and exact ResourceWarning retained, explicit close in finally and sibling close cases own cleanup.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/tier2_integration/runtime/test_runtime_lifecycle_async.py",
+      "test": "TestAsyncClose.test_del_forces_cleanup",
+      "removed": true,
+      "lost": [
+        "rt._persistent_loop is not None",
+        "rt.ref_count == 1",
+        "len(resource_warnings) == 1",
+        "'Unclosed AsyncLocalRuntime' in str(resource_warnings[0].message)",
+        "rt._persistent_loop is None",
+        "rt.ref_count == 0"
+      ],
+      "added": [],
+      "head_file_sha256": "517638958be7109ba7aed0cff0cff1204ac479977f11ec7772da9fe382cd3eb1",
+      "disposition": "Async finalizer renamed to warn without forced cleanup; exact one warning prevents duplicate parent-finalizer chaining; explicit close owns teardown.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/tier2_integration/runtime/trust/test_trust_verifier.py",
+      "test": "TestTrustVerifierCaching.test_clear_cache",
+      "removed": false,
+      "lost": [
+        "verifier._get_cached('key1') is not None",
+        "verifier._get_cached('key2') is not None",
+        "verifier._get_cached('key1') is None",
+        "verifier._get_cached('key2') is None"
+      ],
+      "added": [
+        "verifier._get_cached(('key1',)) is not None",
+        "verifier._get_cached(('key2',)) is not None",
+        "verifier._get_cached(('key1',)) is None",
+        "verifier._get_cached(('key2',)) is None"
+      ],
+      "head_file_sha256": "cde7a42ffd9648ea5c836fee45a0179047238b1b93cfbd0032d4b0bc8046f784",
+      "disposition": "Same presence/absence assertions after clear or expiry, private cache key represented as tuple.",
+      "evidence": "/tmp/csq16-security-cache-final-receipt.json",
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/tier2_integration/runtime/trust/test_trust_verifier.py",
+      "test": "TestTrustVerifierCaching.test_cache_expiry",
+      "removed": false,
+      "lost": [
+        "verifier._get_cached('expiring-key') is not None",
+        "verifier._get_cached('expiring-key') is None"
+      ],
+      "added": [
+        "verifier._get_cached(('expiring-key',)) is not None",
+        "verifier._get_cached(('expiring-key',)) is None"
+      ],
+      "head_file_sha256": "cde7a42ffd9648ea5c836fee45a0179047238b1b93cfbd0032d4b0bc8046f784",
+      "disposition": "Same presence/absence assertions after clear or expiry, private cache key represented as tuple.",
+      "evidence": "/tmp/csq16-security-cache-final-receipt.json",
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/tier2_integration/runtime/trust/test_trust_verifier.py",
+      "test": "TestCacheKeyCollisionPrevention.test_cache_key_uses_null_byte_separator",
+      "removed": true,
+      "lost": [
+        "expected_key in verifier._cache",
+        "'\\x00' in expected_key"
+      ],
+      "added": [],
+      "head_file_sha256": "cde7a42ffd9648ea5c836fee45a0179047238b1b93cfbd0032d4b0bc8046f784",
+      "disposition": "Successor test_cache_key_preserves_exact_fields verifies collision-free exacttuple components, no forbidden-byte assumption; realdelimiter/context/metaclass/generation opposites delivered.",
+      "evidence": "/tmp/csq16-security-cache-final-receipt.json",
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/tier2_integration/test_sqlite_uri_shared_cache.py",
+      "test": "TestSQLiteAdapterFilePrefixParsing.test_simple_file_prefix_stripped",
+      "removed": true,
+      "lost": [
+        "adapter._db_path == db_path"
+      ],
+      "added": [],
+      "head_file_sha256": "b9bbd19352d858d94d55acfbb9634a3c8a1733a50610546a27151a61a5117daa",
+      "disposition": "Renamed test_simple_file_uri_reaches_literal_filename: replaces internal stripped-string expectation with real adapter.execute PRAGMA database_list exact physical filename, including percent-encoded hash filename; native URI must retain uri=True semantics. Explicit disconnect added. No public filename contract removed.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/tier2_integration/tracking/storage/test_database.py",
+      "test": "TestDatabaseStorageInitialization.test_init_with_user_path_expansion",
+      "removed": false,
+      "lost": [
+        "mock_expand.assert_called_once_with('~/.kailash/tracking.db')",
+        "mock_makedirs.assert_called_once_with('/home/user/.kailash', exist_ok=True)"
+      ],
+      "added": [
+        "storage.db_path == str(db_path)",
+        "db_path.is_file()",
+        "Path(storage.conn.execute('PRAGMA database_list').fetchone()[2]).resolve() == db_path.resolve()"
+      ],
+      "head_file_sha256": "cfe7c17d95b330775bb1d9dacb34e0df4f665c2cd87c870ea8b13d7054b69c0c",
+      "disposition": "Real HOME-scoped SQLite path/file/PRAGMA database identity replace mocked expanduser and mkdircalls.",
+      "evidence": "/tmp/csq16-storage-independent-receipt.json",
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/tier2_integration/tracking/storage/test_database.py",
+      "test": "TestDatabaseStorageEdgeCases.test_database_destructor",
+      "removed": true,
+      "lost": [
+        "pytest.raises(sqlite3.ProgrammingError)"
+      ],
+      "added": [],
+      "head_file_sha256": "cfe7c17d95b330775bb1d9dacb34e0df4f665c2cd87c870ea8b13d7054b69c0c",
+      "disposition": "Destructor warns without lock-taking close; real connection remains usable until explicit close. New deterministic-close test retains ProgrammingError on post-close execute.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": false,
+      "successor_test_AST_equal": [
+        "TestDatabaseStorageEdgeCases.test_database_destructor_warns_and_performs_no_cleanup",
+        "TestDatabaseStorageEdgeCases.test_database_close_is_deterministic"
+      ],
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/tier2_integration/workflows/test_unit_cyclic_runner_comprehensive.py",
+      "test": "TestCyclicWorkflowExecutorBasic.test_execute_no_cycles_delegates_to_dag_runner",
+      "removed": true,
+      "lost": [
+        "results == {'result': 'dag_success'}",
+        "run_id is not None",
+        "mock_execute.assert_called_once_with(self.workflow, None)"
+      ],
+      "added": [],
+      "head_file_sha256": "11e5129e22087ef593762d756805a258f5d30f9d4d67ad011af319cfc4d2c0fb",
+      "disposition": "Replaced incorrect WorkflowRunner mock-delegation oracle with real two-node public DAG execution: expected node outputs, UUID run ID, once-only execution and connected input delivery. Old result/delegation expressions explicitly replaced; old named test maps to real DAG successor.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/tier2_integration/workflows/test_unit_cyclic_runner_comprehensive.py",
+      "test": "TestCyclicWorkflowExecutorInternalMethods.test_execute_with_cycles_with_summaries",
+      "removed": false,
+      "lost": [
+        "mock_logger.info.assert_any_call(\"Cycle cycle1 summary: {'iterations': 5, 'converged': True}\")",
+        "mock_logger.info.assert_any_call(\"Cycle cycle2 summary: {'iterations': 3, 'converged': False}\")"
+      ],
+      "added": [
+        "result == {'result': 'success'}",
+        "messages.count('Cycle cycle1 summary: iterations=5') == 1",
+        "messages.count('Cycle cycle2 summary: iterations=3') == 1",
+        "private not in caplog.text",
+        "all((private not in repr(record.__dict__) for record in caplog.records))"
+      ],
+      "head_file_sha256": "11e5129e22087ef593762d756805a258f5d30f9d4d67ad011af319cfc4d2c0fb",
+      "disposition": "Raw summary-dict logging expectations replaced by exact iteration count events and absence of injected private summary payload in raw/formatted logs. Actual producer raw-summary control fails while retaining count events.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/pact/unit/test_audit_integrity.py",
+      "test": "TestAuditIntegrity.test_verify_audit_integrity_empty",
+      "removed": false,
+      "lost": [
+        "is_valid is True",
+        "error is None"
+      ],
+      "added": [
+        "is_valid is False",
+        "error is not None",
+        "'empty' in error.lower()"
+      ],
+      "head_file_sha256": "622571da7a199b955b31c7032f34d6851de7ad9602468330fbace0b66cfbd7ae",
+      "disposition": "Intentional fail-closed empty/wiped/unconfigured audit boundary: booleans invalid, diagnostic reason populated, absence distinct from tampered state where typed status exists. Nonempty valid and actual tamper controls pass. Read-only facade delegates same producer result.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/pact/unit/test_audit_integrity.py",
+      "test": "TestEngineAuditIntegrity.test_engine_verify_audit_integrity_no_audit_log",
+      "removed": false,
+      "lost": [
+        "is_valid is True",
+        "error is None"
+      ],
+      "added": [
+        "is_valid is False",
+        "error is not None",
+        "'unverifiable' in error.lower()"
+      ],
+      "head_file_sha256": "622571da7a199b955b31c7032f34d6851de7ad9602468330fbace0b66cfbd7ae",
+      "disposition": "Intentional fail-closed empty/wiped/unconfigured audit boundary: booleans invalid, diagnostic reason populated, absence distinct from tampered state where typed status exists. Nonempty valid and actual tamper controls pass. Read-only facade delegates same producer result.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/pact/unit/test_dimension_scope.py",
+      "test": "TestIntersectEnvelopesDimensionScope.test_no_scope_intersects_all_dimensions",
+      "removed": false,
+      "lost": [
+        "result.data_access.read_paths == ['/data/public']"
+      ],
+      "added": [
+        "result.data_access.read_paths == ('/data/public',)"
+      ],
+      "head_file_sha256": "7837b0ff640e6b2fb8034e757c972f5d65cac4da06d5ccb1ec8ae054461ee289",
+      "disposition": "Immutable envelope tuples replace mutable lists with same ordered elements across constructors/intersection/serialization/path normalization; semantic content retained, storage shape intentionally tightened. Security audits runtime read-only boundary separately.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/pact/unit/test_dimension_scope.py",
+      "test": "TestIntersectEnvelopesDimensionScope.test_operational_and_data_access_scope",
+      "removed": false,
+      "lost": [
+        "result.data_access.read_paths == ['/data/public']"
+      ],
+      "added": [
+        "result.data_access.read_paths == ('/data/public',)"
+      ],
+      "head_file_sha256": "7837b0ff640e6b2fb8034e757c972f5d65cac4da06d5ccb1ec8ae054461ee289",
+      "disposition": "Immutable envelope tuples replace mutable lists with same ordered elements across constructors/intersection/serialization/path normalization; semantic content retained, storage shape intentionally tightened. Security audits runtime read-only boundary separately.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/pact/unit/test_dimension_scope.py",
+      "test": "TestIntersectEnvelopesDimensionScope.test_communication_scope_preserves_parent_financial",
+      "removed": false,
+      "lost": [
+        "result.communication.allowed_channels == ['internal']"
+      ],
+      "added": [
+        "result.communication.allowed_channels == ('internal',)"
+      ],
+      "head_file_sha256": "7837b0ff640e6b2fb8034e757c972f5d65cac4da06d5ccb1ec8ae054461ee289",
+      "disposition": "Immutable envelope tuples replace mutable lists with same ordered elements across constructors/intersection/serialization/path normalization; semantic content retained, storage shape intentionally tightened. Security audits runtime read-only boundary separately.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/pact/unit/test_envelopes.py",
+      "test": "TestIntersectEnvelopesOperational.test_empty_allowed_stays_empty",
+      "removed": false,
+      "lost": [
+        "result.operational.allowed_actions == []"
+      ],
+      "added": [
+        "result.operational.allowed_actions == ()"
+      ],
+      "head_file_sha256": "44ade6ce56c34811b729bb06ddf9ba41fb57ec2dc1e57a1f5ac3bc9c53c1cd40",
+      "disposition": "Immutable envelope tuples replace mutable lists with same ordered elements across constructors/intersection/serialization/path normalization; semantic content retained, storage shape intentionally tightened. Security audits runtime read-only boundary separately.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/pact/unit/test_plan_suspension.py",
+      "test": "TestSerializationRoundTrip.test_all_conditions_met_empty",
+      "removed": false,
+      "lost": [
+        "suspension.all_conditions_met() is True"
+      ],
+      "added": [
+        "suspension.all_conditions_met() is False"
+      ],
+      "head_file_sha256": "15ba6134704b328a35ec7a6af6c36771c6bacde6a2124b9216b121b45a98a629",
+      "disposition": "Empty resume conditions now false; nonempty all-met remains true, unmet remains false. Reached vacuous-all mutation fails both empty tests.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/plane/integration/test_constraints.py",
+      "test": "TestConstraintEnvelopeModel.test_default_envelope",
+      "removed": false,
+      "lost": [
+        "env.operational.blocked_actions == []",
+        "env.data_access.blocked_paths == []",
+        "env.communication.blocked_channels == []"
+      ],
+      "added": [
+        "env.operational.blocked_actions == ()",
+        "env.data_access.blocked_paths == ()",
+        "env.communication.blocked_channels == ()"
+      ],
+      "head_file_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7",
+      "disposition": "Immutable envelope tuples replace mutable lists with same ordered elements across constructors/intersection/serialization/path normalization; semantic content retained, storage shape intentionally tightened. Security audits runtime read-only boundary separately.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/plane/integration/test_constraints.py",
+      "test": "TestConstraintEnvelopeModel.test_roundtrip",
+      "removed": false,
+      "lost": [
+        "restored.operational.blocked_actions == ['fabricate', 'delete_project']",
+        "restored.data_access.blocked_paths == ['keys', '.env']",
+        "restored.communication.requires_review == ['pr_merge']"
+      ],
+      "added": [
+        "restored.operational.blocked_actions == ('fabricate', 'delete_project')",
+        "restored.data_access.blocked_paths == ('keys', '.env')",
+        "restored.communication.requires_review == ('pr_merge',)"
+      ],
+      "head_file_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7",
+      "disposition": "Immutable envelope tuples replace mutable lists with same ordered elements across constructors/intersection/serialization/path normalization; semantic content retained, storage shape intentionally tightened. Security audits runtime read-only boundary separately.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/plane/integration/test_constraints.py",
+      "test": "TestConstraintEnvelopeModel.test_from_dict_ignores_legacy_required_outputs",
+      "removed": false,
+      "lost": [
+        "env.operational.blocked_actions == ['fabricate']",
+        "env.operational.allowed_actions == ['draft']"
+      ],
+      "added": [
+        "env.operational.blocked_actions == ('fabricate',)",
+        "env.operational.allowed_actions == ('draft',)"
+      ],
+      "head_file_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7",
+      "disposition": "Immutable envelope tuples replace mutable lists with same ordered elements across constructors/intersection/serialization/path normalization; semantic content retained, storage shape intentionally tightened. Security audits runtime read-only boundary separately.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/plane/integration/test_constraints.py",
+      "test": "TestConstraintEnvelopeModel.test_from_legacy",
+      "removed": false,
+      "lost": [
+        "env.operational.blocked_actions == ['no_fabrication', 'honest_limitations']",
+        "env.data_access.blocked_paths == []"
+      ],
+      "added": [
+        "env.operational.blocked_actions == ('no_fabrication', 'honest_limitations')",
+        "env.data_access.blocked_paths == ()"
+      ],
+      "head_file_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7",
+      "disposition": "Immutable envelope tuples replace mutable lists with same ordered elements across constructors/intersection/serialization/path normalization; semantic content retained, storage shape intentionally tightened. Security audits runtime read-only boundary separately.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/plane/integration/test_constraints.py",
+      "test": "TestConstraintEnvelopeModel.test_json_serialization",
+      "removed": false,
+      "lost": [
+        "restored.operational.blocked_actions == ['fabricate']"
+      ],
+      "added": [
+        "restored.operational.blocked_actions == ('fabricate',)"
+      ],
+      "head_file_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7",
+      "disposition": "Immutable envelope tuples replace mutable lists with same ordered elements across constructors/intersection/serialization/path normalization; semantic content retained, storage shape intentionally tightened. Security audits runtime read-only boundary separately.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/plane/integration/test_constraints.py",
+      "test": "TestConstraintEnvelopeInProject.test_create_with_envelope",
+      "removed": false,
+      "lost": [
+        "project.constraint_envelope.operational.blocked_actions == ['fabricate']"
+      ],
+      "added": [
+        "project.constraint_envelope.operational.blocked_actions == ('fabricate',)"
+      ],
+      "head_file_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7",
+      "disposition": "Immutable envelope tuples replace mutable lists with same ordered elements across constructors/intersection/serialization/path normalization; semantic content retained, storage shape intentionally tightened. Security audits runtime read-only boundary separately.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/plane/integration/test_constraints.py",
+      "test": "TestConstraintEnvelopeInProject.test_envelope_survives_load",
+      "removed": false,
+      "lost": [
+        "loaded.constraint_envelope.operational.blocked_actions == ['delete']"
+      ],
+      "added": [
+        "loaded.constraint_envelope.operational.blocked_actions == ('delete',)"
+      ],
+      "head_file_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7",
+      "disposition": "Immutable envelope tuples replace mutable lists with same ordered elements across constructors/intersection/serialization/path normalization; semantic content retained, storage shape intentionally tightened. Security audits runtime read-only boundary separately.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/plane/integration/test_constraints.py",
+      "test": "TestConstraintEnvelopeInProject.test_legacy_constraints_still_work",
+      "removed": false,
+      "lost": [
+        "project.constraint_envelope.operational.blocked_actions == ['no_fabrication', 'honest_limitations']"
+      ],
+      "added": [
+        "project.constraint_envelope.operational.blocked_actions == ('no_fabrication', 'honest_limitations')"
+      ],
+      "head_file_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7",
+      "disposition": "Immutable envelope tuples replace mutable lists with same ordered elements across constructors/intersection/serialization/path normalization; semantic content retained, storage shape intentionally tightened. Security audits runtime read-only boundary separately.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/plane/integration/test_constraints.py",
+      "test": "TestAdversarial.test_tampered_envelope_file_ignored_on_load",
+      "removed": false,
+      "lost": [
+        "loaded.constraint_envelope.operational.blocked_actions == ['fabricate']"
+      ],
+      "added": [
+        "loaded.constraint_envelope.operational.blocked_actions == ('fabricate',)"
+      ],
+      "head_file_sha256": "4b3ae9b71f839309457d132defc0ac5a583e88a7825a02ac000daf1f036032f7",
+      "disposition": "Immutable envelope tuples replace mutable lists with same ordered elements across constructors/intersection/serialization/path normalization; semantic content retained, storage shape intentionally tightened. Security audits runtime read-only boundary separately.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/plane/integration/test_key_protection.py",
+      "test": "TestWindowsKeyProtection.test_key_write_does_not_raise",
+      "removed": true,
+      "lost": [
+        "priv_path.exists()",
+        "priv_path.read_text() == 'fake-private-key'"
+      ],
+      "added": [],
+      "head_file_sha256": "a8711c50c56bf35c101738f9dd02f0b6cdf2ad265cd1a31a78437de95c9b1f01",
+      "disposition": "Windows failclosed successor asserts missingACLprovider PermissionError beforeprivatebytes; presentprovider retains exactsuccessfulbytes. No nativeWindows execution claimed.",
+      "evidence": "/tmp/csq16-security-key-fifo-receipt.json",
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/plane/integration/test_shadow.py",
+      "test": "TestConstraintInference.test_infer_empty_session",
+      "removed": false,
+      "lost": [
+        "envelope.operational.allowed_actions == []",
+        "envelope.data_access.read_paths == []",
+        "envelope.data_access.write_paths == []"
+      ],
+      "added": [
+        "envelope.operational.allowed_actions == ()",
+        "envelope.data_access.read_paths == ()",
+        "envelope.data_access.write_paths == ()"
+      ],
+      "head_file_sha256": "9539665f0b9a6698ee61cdf0debb86cafae6dfcd44cc5ae03196ff7606da064a",
+      "disposition": "Immutable envelope tuples replace mutable lists with same ordered elements across constructors/intersection/serialization/path normalization; semantic content retained, storage shape intentionally tightened. Security audits runtime read-only boundary separately.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/plane/unit/test_pathutils.py",
+      "test": "TestDataAccessConstraintsNormalization.test_backslash_paths_normalized_on_init",
+      "removed": false,
+      "lost": [
+        "dac.read_paths == ['src/trustplane/models.py', 'docs/readme.md']",
+        "dac.write_paths == ['output/results']",
+        "dac.blocked_paths == ['keys', '.env']",
+        "dac.blocked_patterns == ['*.key', 'credentials*']"
+      ],
+      "added": [
+        "dac.read_paths == ('src/trustplane/models.py', 'docs/readme.md')",
+        "dac.write_paths == ('output/results',)",
+        "dac.blocked_paths == ('keys', '.env')",
+        "dac.blocked_patterns == ('*.key', 'credentials*')"
+      ],
+      "head_file_sha256": "6b0a835d5cd563113d0bd8c75d6a66d1b5477c37a9b72a72a3b74bfd3130fd52",
+      "disposition": "Immutable envelope tuples replace mutable lists with same ordered elements across constructors/intersection/serialization/path normalization; semantic content retained, storage shape intentionally tightened. Security audits runtime read-only boundary separately.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/plane/unit/test_pathutils.py",
+      "test": "TestDataAccessConstraintsNormalization.test_mixed_separators_normalized_on_init",
+      "removed": false,
+      "lost": [
+        "dac.read_paths == ['src/trustplane/models.py']"
+      ],
+      "added": [
+        "dac.read_paths == ('src/trustplane/models.py',)"
+      ],
+      "head_file_sha256": "6b0a835d5cd563113d0bd8c75d6a66d1b5477c37a9b72a72a3b74bfd3130fd52",
+      "disposition": "Immutable envelope tuples replace mutable lists with same ordered elements across constructors/intersection/serialization/path normalization; semantic content retained, storage shape intentionally tightened. Security audits runtime read-only boundary separately.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/plane/unit/test_pathutils.py",
+      "test": "TestDataAccessConstraintsNormalization.test_double_slashes_collapsed_on_init",
+      "removed": false,
+      "lost": [
+        "dac.read_paths == ['src/trustplane/models.py']"
+      ],
+      "added": [
+        "dac.read_paths == ('src/trustplane/models.py',)"
+      ],
+      "head_file_sha256": "6b0a835d5cd563113d0bd8c75d6a66d1b5477c37a9b72a72a3b74bfd3130fd52",
+      "disposition": "Immutable envelope tuples replace mutable lists with same ordered elements across constructors/intersection/serialization/path normalization; semantic content retained, storage shape intentionally tightened. Security audits runtime read-only boundary separately.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/plane/unit/test_pathutils.py",
+      "test": "TestDataAccessConstraintsNormalization.test_from_dict_normalizes_paths",
+      "removed": false,
+      "lost": [
+        "dac.read_paths == ['src/trustplane/models.py']",
+        "dac.write_paths == ['output/results']",
+        "dac.blocked_paths == ['keys']",
+        "dac.blocked_patterns == ['*.key']"
+      ],
+      "added": [
+        "dac.read_paths == ('src/trustplane/models.py',)",
+        "dac.write_paths == ('output/results',)",
+        "dac.blocked_paths == ('keys',)",
+        "dac.blocked_patterns == ('*.key',)"
+      ],
+      "head_file_sha256": "6b0a835d5cd563113d0bd8c75d6a66d1b5477c37a9b72a72a3b74bfd3130fd52",
+      "disposition": "Immutable envelope tuples replace mutable lists with same ordered elements across constructors/intersection/serialization/path normalization; semantic content retained, storage shape intentionally tightened. Security audits runtime read-only boundary separately.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/plane/unit/test_pathutils.py",
+      "test": "TestDataAccessConstraintsNormalization.test_already_normalized_paths_unchanged",
+      "removed": false,
+      "lost": [
+        "dac.read_paths == ['src/trustplane/models.py']",
+        "dac.write_paths == ['output/results']",
+        "dac.blocked_paths == ['keys', '.env']",
+        "dac.blocked_patterns == ['*.key']"
+      ],
+      "added": [
+        "dac.read_paths == ('src/trustplane/models.py',)",
+        "dac.write_paths == ('output/results',)",
+        "dac.blocked_paths == ('keys', '.env')",
+        "dac.blocked_patterns == ('*.key',)"
+      ],
+      "head_file_sha256": "6b0a835d5cd563113d0bd8c75d6a66d1b5477c37a9b72a72a3b74bfd3130fd52",
+      "disposition": "Immutable envelope tuples replace mutable lists with same ordered elements across constructors/intersection/serialization/path normalization; semantic content retained, storage shape intentionally tightened. Security audits runtime read-only boundary separately.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/unit/test_in_memory_audit_store.py",
+      "test": "TestInMemoryVerifyChain.test_empty_store_is_valid",
+      "removed": true,
+      "lost": [
+        "await store.verify_chain() is True"
+      ],
+      "added": [],
+      "head_file_sha256": "f8c6b015959bf9c7800b1f75f57c8291d7adfe852f9eee6aed59717cdc0fae31",
+      "disposition": "Intentional fail-closed empty/wiped/unconfigured audit boundary: booleans invalid, diagnostic reason populated, absence distinct from tampered state where typed status exists. Nonempty valid and actual tamper controls pass. Read-only facade delegates same producer result.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/unit/test_in_memory_audit_store.py",
+      "test": "TestInMemoryBounded.test_bounded_chain_still_verifiable",
+      "removed": true,
+      "lost": [
+        "event.verify_integrity() is True"
+      ],
+      "added": [],
+      "head_file_sha256": "f8c6b015959bf9c7800b1f75f57c8291d7adfe852f9eee6aed59717cdc0fae31",
+      "disposition": "Renamed to test_wrapped_bounded_chain_verifies_intact. All surviving event.verify_integrity assertions retained; adds total append/ChainStatus.INTACT and paired broken surviving linkage TAMPERED test. Evicted prefix is intentionally outside bounded retained history; not a full-history attestation.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/unit/test_models_crypto.py",
+      "test": "TestLinkedHashChain.test_verify_integrity_empty_chain",
+      "removed": false,
+      "lost": [
+        "valid is True"
+      ],
+      "added": [
+        "valid is False"
+      ],
+      "head_file_sha256": "b68faf3f51905a141ab0521d5388f5804c72cde149183888b9106b4996fc1b4b",
+      "disposition": "Intentional fail-closed empty/wiped/unconfigured audit boundary: booleans invalid, diagnostic reason populated, absence distinct from tampered state where typed status exists. Nonempty valid and actual tamper controls pass. Read-only facade delegates same producer result.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/trust/unit/test_sqlite_audit_store.py",
+      "test": "TestSqliteVerifyChain.test_empty_store_valid",
+      "removed": true,
+      "lost": [
+        "await store.verify_chain() is True"
+      ],
+      "added": [],
+      "head_file_sha256": "06e3f0f1848b6fd4d14a130ae6732bdb4d28793ab8ffb6dc3c5025ed3d7ae17d",
+      "disposition": "Intentional fail-closed empty/wiped/unconfigured audit boundary: booleans invalid, diagnostic reason populated, absence distinct from tampered state where typed status exists. Nonempty valid and actual tamper controls pass. Read-only facade delegates same producer result.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/unit/cli/test_commands.py",
+      "test": "TestCLICommands.test_init_command_basic",
+      "removed": false,
+      "lost": [
+        "result.exit_code in [0, 1, 2]"
+      ],
+      "added": [
+        "result.exit_code == 0",
+        "'Created new Kailash project: test-project' in result.output",
+        "(tmp_path / 'test-project' / 'README.md').is_file()",
+        "(tmp_path / 'test-project' / 'workflows' / 'example_workflow.py').is_file()"
+      ],
+      "head_file_sha256": "acbbc9ff54d5be758d61b74643cbc0df697884fa52cd7c7202f6804f4a6c297e",
+      "disposition": "Successful CLI init/validation now require exit0 and actual files/output, replacing acceptance of error exits0/1/2.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/unit/cli/test_commands.py",
+      "test": "TestCLICommands.test_cli_workflow_validation",
+      "removed": false,
+      "lost": [
+        "result.exit_code in [0, 1, 2]"
+      ],
+      "added": [
+        "result.exit_code == 0",
+        "'is valid' in result.output"
+      ],
+      "head_file_sha256": "acbbc9ff54d5be758d61b74643cbc0df697884fa52cd7c7202f6804f4a6c297e",
+      "disposition": "Successful CLI init/validation now require exit0 and actual files/output, replacing acceptance of error exits0/1/2.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/unit/nodes/data/test_pool_bounded_fallback.py",
+      "test": "test_dedicated_path_registers_in_process_registry",
+      "removed": false,
+      "lost": [
+        "'dedicated_key = f\"dedicated_{id(self)}\"' in source",
+        "'_PROCESS_POOL_REGISTRY[dedicated_key] = self._adapter' in source"
+      ],
+      "added": [
+        "AsyncSQLDatabaseNode.pool_count() == before + 1",
+        "keys",
+        "any((_PROCESS_POOL_REGISTRY[k] is node._adapter for k in keys))"
+      ],
+      "head_file_sha256": "1962c64a566077c96f6127f261a3b5739507a573fd9d3942d8617a95ef526881",
+      "disposition": "Actual SQLite pool allocation/registry identity and live-loop reaper startup replace source-string assertions; shared/dedicated/fallback registration paths use same helper.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/unit/nodes/data/test_pool_bounded_fallback.py",
+      "test": "test_shared_path_registers_in_process_registry",
+      "removed": false,
+      "lost": [
+        "'_PROCESS_POOL_REGISTRY[self._pool_key] = self._adapter' in source"
+      ],
+      "added": [
+        "AsyncSQLDatabaseNode.pool_count() == before + 1",
+        "node._pool_key is not None",
+        "_PROCESS_POOL_REGISTRY.get(node._pool_key) is node._adapter"
+      ],
+      "head_file_sha256": "1962c64a566077c96f6127f261a3b5739507a573fd9d3942d8617a95ef526881",
+      "disposition": "Actual SQLite pool allocation/registry identity and live-loop reaper startup replace source-string assertions; shared/dedicated/fallback registration paths use same helper.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/unit/nodes/data/test_pool_bounded_fallback.py",
+      "test": "test_get_adapter_calls_ensure_reaper_started_on_pool_creation",
+      "removed": true,
+      "lost": [
+        "source.count('_ensure_reaper_started()') >= 3"
+      ],
+      "added": [],
+      "head_file_sha256": "1962c64a566077c96f6127f261a3b5739507a573fd9d3942d8617a95ef526881",
+      "disposition": "Actual SQLite pool allocation/registry identity and live-loop reaper startup replace source-string assertions; shared/dedicated/fallback registration paths use same helper.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/unit/nodes/test_api_with_real_data.py",
+      "test": "TestAPINodesWithRealData.test_rest_client_with_pagination",
+      "removed": true,
+      "lost": [
+        "result1['status_code'] == 200",
+        "len(result1['data']['users']) == 2",
+        "result1['data']['has_next'] is True",
+        "result2['status_code'] == 200",
+        "len(result2['data']['users']) == 1",
+        "result2['data']['has_next'] is False"
+      ],
+      "added": [],
+      "head_file_sha256": "0c2944e2af0200b68b1722c5c25ad092ed35a1de0eeb705b6b2d17bd12131470",
+      "disposition": "Original manual two-page assertions preserved under accurate renamed test; added paginate=True path requires merged3items and actual follow-up request page/auth parameters.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/unit/nodes/test_mcp_executor.py",
+      "test": "TestEnterpriseMLCPExecutorNode.test_failed_execution_records_failure",
+      "removed": false,
+      "lost": [
+        "pytest.raises(NodeExecutionError)"
+      ],
+      "added": [
+        "mock_execute.assert_awaited_once_with('bad-server', 'test', {})",
+        "pytest.raises(NodeExecutionError, match='connection refused')"
+      ],
+      "head_file_sha256": "15bcbe726610f8eb1e4cb4903ae81a12f07b5f5870acae8c1517e2c1c06a70a5",
+      "disposition": "Moved file retains18original tests, with failed-execution check strengthened to exact error text and awaited-once call; new bridge-loop ownership case added.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/unit/runtime/test_parameter_injector.py",
+      "test": "TestWorkflowParameterInjector.test_inject_parameters_placeholder",
+      "removed": true,
+      "lost": [],
+      "added": [],
+      "head_file_sha256": "394df12b6b0aa83c0e6a748dc9de99b84de5846705bfe6b2d96a2e70ffb7188f",
+      "disposition": "Assertion-free placeholder successor preserves ordinarynodeconfig; separate actual deferredinjection tests check mapping/precedence/noeagerinit with reached omissioncontrols.",
+      "evidence": "/tmp/csq16-security-injection-receipt.json",
+      "final_file_exact_prior": true
+    },
+    {
+      "file": "tests/unit/workflow/test_graph_comprehensive.py",
+      "test": "TestWorkflowStateWrapper.test_execute_with_state",
+      "removed": false,
+      "lost": [
+        "results == {'node1': {'result': 'success'}}"
+      ],
+      "added": [
+        "set(results) == {'node1'}",
+        "set(results['node1']) == {'result', 'state_wrapper'}",
+        "results['node1']['result'] == 'success'",
+        "results['node1']['state_wrapper'].get_state() is final_state",
+        "final_state.counter == 6",
+        "final_state.data == 'updated'",
+        "state.counter == 5",
+        "state.data == 'initial'",
+        "final_state is not state",
+        "not [r for r in caplog.records if r.levelno >= logging.WARNING]"
+      ],
+      "head_file_sha256": "a7ae9652a167562c3e1d272c5158e19fed1afd359f363eb0c3fdd95ab71033f1",
+      "disposition": "Success result retained; exact output now additionally requires state_wrapper identity, counter6/data updated, original counter5/data initial unchanged; original StateModel and no-LocalRuntime assertions retained. Actual missing-state producer opposite fails.",
+      "evidence": "/tmp/csq15-final-head-assertion-reconciliation.json",
+      "prior_file_exact": true,
+      "final_file_exact_prior": true
+    }
+  ],
+  "late_rows": [
+    {
+      "file": "tests/tier2_integration/runtime/test_connection_validation.py",
+      "test": "TestLocalRuntimeConnectionValidation.test_prepare_node_inputs_calls_validate_inputs",
+      "removed": false,
+      "lost": [
+        "inputs == {'validated': True}",
+        "mock_node.validate_inputs.assert_called_once()"
+      ],
+      "added": [
+        "config_only == {}",
+        "node.validation_calls == [{'count': 7}, {'count': '9'}]",
+        "inputs == {'count': 9}"
+      ],
+      "head_file_sha256": "43bade3a03d19a65e1b52a271410fa7ab0d5fb5d0fe7747d75b17e4c1cc16b4d",
+      "disposition": "Real Node records raw string count9, returns integer9, separately checks config7/runtime override; reached omitted-return control fails.",
+      "evidence": "/tmp/csq16-runtime-fixture-v2-receipt.json"
+    },
+    {
+      "file": "tests/tier2_integration/runtime/test_connection_validation.py",
+      "test": "TestLocalRuntimeConnectionValidation.test_validation_modes_behavior",
+      "removed": false,
+      "lost": [
+        "mock_node.validate_inputs.assert_not_called()",
+        "'connection validation error' in mock_warning.call_args[0][0].lower()",
+        "mock_warning.assert_called_once()"
+      ],
+      "added": [
+        "node.validation_calls == []",
+        "inputs == parameters['test_node']",
+        "inputs == parameters['test_node']",
+        "not _validation_warnings(caplog)",
+        "len(node.validation_calls) == 1",
+        "len(warnings) == 1",
+        "'NodeValidationError' in warnings[0].getMessage()",
+        "'private-input-marker' not in caplog.text",
+        "len(node.validation_calls) == 2"
+      ],
+      "head_file_sha256": "43bade3a03d19a65e1b52a271410fa7ab0d5fb5d0fe7747d75b17e4c1cc16b4d",
+      "disposition": "Real off/warn/strict validation call counts, exactone classified warning without privateinput, preserved strict error.",
+      "evidence": "/tmp/csq16-runtime-fixture-v2-receipt.json"
+    },
+    {
+      "file": "tests/tier2_integration/runtime/test_connection_validation.py",
+      "test": "TestLocalRuntimeConnectionValidation.test_mixed_parameter_sources",
+      "removed": false,
+      "lost": [
+        "'param1' in call_args",
+        "'param2' in call_args",
+        "mock_node.validate_inputs.assert_called_once()"
+      ],
+      "added": [
+        "node.validation_calls == [validated_result]",
+        "'param1' in node.validation_calls[0]",
+        "'param2' in node.validation_calls[0]"
+      ],
+      "head_file_sha256": "43bade3a03d19a65e1b52a271410fa7ab0d5fb5d0fe7747d75b17e4c1cc16b4d",
+      "disposition": "Real connection/config/runtime merge exactmapping, bothmembership checks via actual recorded call, validatorresult asserted.",
+      "evidence": "/tmp/csq16-runtime-fixture-v2-receipt.json"
+    },
+    {
+      "file": "tests/tier2_integration/runtime/test_contract_enforcement.py",
+      "test": "TestRuntimeContractEnforcement.test_contract_validation_warn_mode",
+      "removed": false,
+      "lost": [
+        "any((term in all_warnings for term in ['contract validation failed', 'contract', 'violation']))",
+        "mock_warning.assert_called()"
+      ],
+      "added": [
+        "results['target']['result'] == 123",
+        "len(warnings) == 1",
+        "'WorkflowExecutionError' in warnings[0]",
+        "'string_data' not in warnings[0]",
+        "'123' not in warnings[0]"
+      ],
+      "head_file_sha256": "0fea25184b2004d756241686ad09a449c95ad75a4b3431a9cf9e9bfdef3460b2",
+      "disposition": "Rendered one WorkflowExecutionError diagnostic, nonempty successful results, omitted private contractname/value; replaces unsafe rawtemplate expectation.",
+      "evidence": "/tmp/csq16-runtime-fixture-v2-receipt.json"
+    },
+    {
+      "file": "tests/tier2_integration/runtime/trust/test_trust_verifier.py",
+      "test": "TestTrustVerifierCaching.test_clear_cache",
+      "removed": false,
+      "lost": [
+        "verifier._get_cached('key1') is not None",
+        "verifier._get_cached('key2') is not None",
+        "verifier._get_cached('key1') is None",
+        "verifier._get_cached('key2') is None"
+      ],
+      "added": [
+        "verifier._get_cached(('key1',)) is not None",
+        "verifier._get_cached(('key2',)) is not None",
+        "verifier._get_cached(('key1',)) is None",
+        "verifier._get_cached(('key2',)) is None"
+      ],
+      "head_file_sha256": "cde7a42ffd9648ea5c836fee45a0179047238b1b93cfbd0032d4b0bc8046f784",
+      "disposition": "Same presence/absence assertions after clear or expiry, private cache key represented as tuple.",
+      "evidence": "/tmp/csq16-security-cache-final-receipt.json"
+    },
+    {
+      "file": "tests/tier2_integration/runtime/trust/test_trust_verifier.py",
+      "test": "TestTrustVerifierCaching.test_cache_expiry",
+      "removed": false,
+      "lost": [
+        "verifier._get_cached('expiring-key') is not None",
+        "verifier._get_cached('expiring-key') is None"
+      ],
+      "added": [
+        "verifier._get_cached(('expiring-key',)) is not None",
+        "verifier._get_cached(('expiring-key',)) is None"
+      ],
+      "head_file_sha256": "cde7a42ffd9648ea5c836fee45a0179047238b1b93cfbd0032d4b0bc8046f784",
+      "disposition": "Same presence/absence assertions after clear or expiry, private cache key represented as tuple.",
+      "evidence": "/tmp/csq16-security-cache-final-receipt.json"
+    },
+    {
+      "file": "tests/tier2_integration/runtime/trust/test_trust_verifier.py",
+      "test": "TestCacheKeyCollisionPrevention.test_cache_key_uses_null_byte_separator",
+      "removed": true,
+      "lost": [
+        "expected_key in verifier._cache",
+        "'\\x00' in expected_key"
+      ],
+      "added": [],
+      "head_file_sha256": "cde7a42ffd9648ea5c836fee45a0179047238b1b93cfbd0032d4b0bc8046f784",
+      "disposition": "Successor test_cache_key_preserves_exact_fields verifies collision-free exacttuple components, no forbidden-byte assumption; realdelimiter/context/metaclass/generation opposites delivered.",
+      "evidence": "/tmp/csq16-security-cache-final-receipt.json"
+    },
+    {
+      "file": "tests/tier2_integration/tracking/storage/test_database.py",
+      "test": "TestDatabaseStorageInitialization.test_init_with_user_path_expansion",
+      "removed": false,
+      "lost": [
+        "mock_expand.assert_called_once_with('~/.kailash/tracking.db')",
+        "mock_makedirs.assert_called_once_with('/home/user/.kailash', exist_ok=True)"
+      ],
+      "added": [
+        "storage.db_path == str(db_path)",
+        "db_path.is_file()",
+        "Path(storage.conn.execute('PRAGMA database_list').fetchone()[2]).resolve() == db_path.resolve()"
+      ],
+      "head_file_sha256": "cfe7c17d95b330775bb1d9dacb34e0df4f665c2cd87c870ea8b13d7054b69c0c",
+      "disposition": "Real HOME-scoped SQLite path/file/PRAGMA database identity replace mocked expanduser and mkdircalls.",
+      "evidence": "/tmp/csq16-storage-independent-receipt.json"
+    },
+    {
+      "file": "tests/trust/plane/integration/test_key_protection.py",
+      "test": "TestWindowsKeyProtection.test_key_write_does_not_raise",
+      "removed": true,
+      "lost": [
+        "priv_path.exists()",
+        "priv_path.read_text() == 'fake-private-key'"
+      ],
+      "added": [],
+      "head_file_sha256": "a8711c50c56bf35c101738f9dd02f0b6cdf2ad265cd1a31a78437de95c9b1f01",
+      "disposition": "Windows failclosed successor asserts missingACLprovider PermissionError beforeprivatebytes; presentprovider retains exactsuccessfulbytes. No nativeWindows execution claimed.",
+      "evidence": "/tmp/csq16-security-key-fifo-receipt.json"
+    },
+    {
+      "file": "tests/unit/runtime/test_parameter_injector.py",
+      "test": "TestWorkflowParameterInjector.test_inject_parameters_placeholder",
+      "removed": true,
+      "lost": [],
+      "added": [],
+      "head_file_sha256": "394df12b6b0aa83c0e6a748dc9de99b84de5846705bfe6b2d96a2e70ffb7188f",
+      "disposition": "Assertion-free placeholder successor preserves ordinarynodeconfig; separate actual deferredinjection tests check mapping/precedence/noeagerinit with reached omissioncontrols.",
+      "evidence": "/tmp/csq16-security-injection-receipt.json"
+    }
+  ],
+  "counts": {
+    "original": 6375,
+    "current": 7672,
+    "retained": 6250,
+    "reconcile": 125,
+    "new": 1330
+  },
+  "missing": [],
+  "scope": "Counter-based assertion occurrences and semantic successor review; not a behavior coverage percentage.",
+  "prior_history": "/tmp/csq16-union-original-assertion-reconciliation-376bf-history.json",
+  "final_all125_rows_exact": true,
+  "post376bf_test_delta": [
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/engine.py",
+      "status": "M",
+      "before_sha256": "cf67fc195ee0f525e6010b965378975fa38816156b0cc47a9cb72a07248c6990",
+      "after_sha256": "d62f287c61a146bea09eeccc69d97601270ce29d45255f538fd96bb94b377dac"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/model_registry.py",
+      "status": "M",
+      "before_sha256": "089c339b47587f955041d38e2031b8f60b1511ea0f832ab9acacaa992b493f5d",
+      "after_sha256": "926b5a66ab1dbc22e77eda97a2d4aab728760a52bd8546a8e9cacc28b2642a8b"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_issue_352_fastapi_startup.py",
+      "status": "M",
+      "before_sha256": "aabef59ed8049a2625af5b0cde3a2116cee9da0043de5411f96b0470fb11c42c",
+      "after_sha256": "a0d9ebda2dece7b8cc90bf13c8cdefdab28cdb3886e5b22df573f53f40d8d73f",
+      "original_tests": 9,
+      "current_tests": 9,
+      "lost_rows": [],
+      "original_assertion_occurrences": 23
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_model_registry_native_owner_bridge.py",
+      "status": "A",
+      "before_sha256": null,
+      "after_sha256": "e325a8df4a2a9c19a22e6464ac9fa3d8d9ad7170627c082e7e98b08fdff51530",
+      "original_tests": 0,
+      "current_tests": 5,
+      "lost_rows": [],
+      "original_assertion_occurrences": 0
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/core/test_model_registry_runtime_injection.py",
+      "status": "M",
+      "before_sha256": "9a1400a52886eff4e872d2a6b70a08246e64de92a0745671f8df4c367989776b",
+      "after_sha256": "a6a700d8c76f540894fbd18fd838e094cca593eddcdd50ada9745ae98c9319bb",
+      "original_tests": 12,
+      "current_tests": 12,
+      "lost_rows": [],
+      "original_assertion_occurrences": 24
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/trust/test_query_diagnostic_hygiene.py",
+      "status": "M",
+      "before_sha256": "d6396342b4ab822057db332c885725eea3d984d9d2bba710b62fbef3fb0bc5ed",
+      "after_sha256": "0e7ccc305cc298bca2c6585bed998e8466485708b302f04a2bc9c7119ac4b59e",
+      "original_tests": 4,
+      "current_tests": 4,
+      "lost_rows": [],
+      "original_assertion_occurrences": 24
+    },
+    {
+      "path": "specs/core-runtime.md",
+      "status": "M",
+      "before_sha256": "66ac9bb66e8bfc07b5f57e692323d1a0465f3509bea35999509ab60674de7cf0",
+      "after_sha256": "723f66f52328f3b106c5d44199b9981266a47394e95b70513efcd9f9006d60ce"
+    },
+    {
+      "path": "specs/dataflow-core.md",
+      "status": "M",
+      "before_sha256": "2346c62c8c30fc8f91a7911b5ae0baf0685c4f5ac5fc8bf53a484a2b64df461f",
+      "after_sha256": "d7d519663556ba8592ae08a1e506778f274d0cf6e2947cf2ae502588b3c2fa00"
+    },
+    {
+      "path": "src/kailash/gateway/enhanced_gateway.py",
+      "status": "M",
+      "before_sha256": "b5ef813c89314379a66da6dd46f419fccc8e137d36b119fa308febd84b356bdf",
+      "after_sha256": "d1593a21eced16422060942c2369911634ffff262533c6dd573b3ff64eadc21d"
+    },
+    {
+      "path": "src/kailash/runtime/async_local.py",
+      "status": "M",
+      "before_sha256": "5a5234e0b74b8246816fa0bfbec2229ed018c8cbd6d6ace76b071c93ae54ace2",
+      "after_sha256": "3763aa80191780730b726d49d0bc360809a7ea4904ffca403a02ad93fe0a0ec3"
+    },
+    {
+      "path": "src/kailash/runtime/local.py",
+      "status": "M",
+      "before_sha256": "8c31a931391e4c6197aa34c5de4f6615b2f3aef2424ef20f067bf1596df3248c",
+      "after_sha256": "afaf1197c3308adbe86b641566ed86cad6e0ac30ace98f2aa8c93fb87e3b44fe"
+    },
+    {
+      "path": "tests/regression/test_async_content_failure_contract.py",
+      "status": "M",
+      "before_sha256": "32116560ebbed5c3a1ec9d4f842e45a310309a3fc2201aeeb457316d58321eb2",
+      "after_sha256": "12f5774b47874b4f3b1421df21273ad335bf9319767459fb605ee219e6dce11b",
+      "original_tests": 8,
+      "current_tests": 8,
+      "lost_rows": [
+        {
+          "test": "test_local_async_entry_preserves_typed_error_and_failure_bookkeeping",
+          "lost": [
+            "'local async failure' in audit_events[-1][1]['error']"
+          ],
+          "added": [
+            "'local async failure' in str(caught.value)",
+            "diagnostic.startswith('ContentAwareExecutionError@')",
+            "':_execute_async' in diagnostic",
+            "'local async failure' not in diagnostic"
+          ]
+        }
+      ],
+      "original_assertion_occurrences": 50,
+      "semantic_disposition": {
+        "disposition": "Public ContentAwareExecutionError retains raw message. Automatic audit now checks typed source-frame provenance and explicitly excludes raw exception payload, matching reviewed runtime audit contract.",
+        "evidence": "/tmp/csq16-union-content-author-receipt.json"
+      }
+    },
+    {
+      "path": "tests/regression/test_parameter_caller_log_safety.py",
+      "status": "M",
+      "before_sha256": "8657e40955d283fe7d0b9fd5cde3fc807b6c8520434530979c7dfd909be703c1",
+      "after_sha256": "3ad79c81570e92c46226b7948e595c95108ef3c4aec0414694d467e4747a0ade",
+      "original_tests": 5,
+      "current_tests": 5,
+      "lost_rows": [],
+      "original_assertion_occurrences": 17
+    },
+    {
+      "path": "tests/regression/test_runtime_aclose_contract.py",
+      "status": "A",
+      "before_sha256": null,
+      "after_sha256": "fecbf5e848be31caec816ba638ebbf68c6d3dd19132e92f72a9373b517ccfb34",
+      "original_tests": 0,
+      "current_tests": 2,
+      "lost_rows": [],
+      "original_assertion_occurrences": 0
+    },
+    {
+      "path": "tests/regression/test_signal_wait_input_boundary.py",
+      "status": "M",
+      "before_sha256": "51abf6c10c8a1a5329fe96c1afad4168ead8ffb08b38e29c680566885cbaa884",
+      "after_sha256": "b384a03ae1e7942e56cab3b835a6a15d1f9a8f8edfa9ca7296accb5610526c8f",
+      "original_tests": 9,
+      "current_tests": 9,
+      "lost_rows": [
+        {
+          "test": "test_default_unknown_parameter_warning_is_retained",
+          "lost": [
+            "\"Unknown parameter(s) for SignalWaitNode: ['unknown_option']\" in caplog.records[0].getMessage()"
+          ],
+          "added": [
+            "'Unknown parameter(s) for SignalWaitNode: unknown_option.' in caplog.records[0].getMessage()",
+            "'Valid parameters: input_data, signal_name, timeout.' in caplog.records[0].getMessage()"
+          ]
+        }
+      ],
+      "original_assertion_occurrences": 32,
+      "semantic_disposition": {
+        "disposition": "Same unknown-parameter warning retains single event and successful result; expectation now follows safe scalar field formatting and additionally asserts declared parameter names.",
+        "evidence": "/tmp/csq16-integration-fixture-independent-receipt.json"
+      }
+    }
+  ],
+  "post376bf_semantic_rows": [
+    [
+      "tests/regression/test_async_content_failure_contract.py",
+      "test_local_async_entry_preserves_typed_error_and_failure_bookkeeping"
+    ],
+    [
+      "tests/regression/test_signal_wait_input_boundary.py",
+      "test_default_unknown_parameter_warning_is_retained"
+    ]
+  ]
+}

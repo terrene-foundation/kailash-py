@@ -1,3 +1,13 @@
+# Current D1 checkpoint — 2026-09-27T16:42:19.504660+00:00
+
+The user-approved exception covers exactly 173 specification advisories; do not ask again. Final source candidate `e4a789e73337c4dd8dfd18238f2ad1e44db19881` records full-gate follow-ups: diagnostic test contracts, gateway awaited shutdown, DataFlow registry ownership/admission and deferred test imports. Scoped correctness/security receipts are in `04-validate/csq16-gate-repair-rollup.json` and the registry review receipts.
+
+The earlier full candidate 376bf passed Mac hooks and Linux Tier2 but failed eight root and two DataFlow regression cases. These are repaired; the new full-candidate runs are still required. No promotion completion is claimed. Run all-files hooks with SKIP unset and Linux root/DataFlow/Tier2, push consolidated dev plus existing PR #2229 branch only after success, require exact-head CI, then merge separately. Three holistic post-main reviews and owned-tree drain remain owed.
+
+Package publishing remains excluded. A new helper-bearing Core release and consumer dependency-floor/lock updates are explicit release prerequisites, documented separately. Preserve all 52 historical refs and five ordered stashes. Current four sibling worktrees remain active; backup before drain.
+
+## Earlier checkpoints (superseded by the entry above)
+
 # CSQ14 continuation — promotion remains authorized
 
 ## Current checkpoint — session 01a0db1d resumed

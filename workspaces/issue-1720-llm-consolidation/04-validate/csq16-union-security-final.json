@@ -1,0 +1,159 @@
+{
+  "ran": true,
+  "verdict": "CLEAN bounded holistic source security review mapped to final e4a; scoped findings closed, full promotion CI/CodeQL decision remains parent-owned",
+  "head": "e4a789e73337c4dd8dfd18238f2ad1e44db19881",
+  "base": "50f98afe403a468bb478462182b73ebc4e0287d1",
+  "scope": "Full origin/main...HEAD production union, with exact-source carry mapping plus fresh cross-shard cohorts; not merely last runtime repair.",
+  "files": {
+    "all_changed": 951,
+    "production_changed": 291,
+    "unchanged_from_a356_review": 251,
+    "later_production_files": 40,
+    "absolute_python_AST_parsed": 2109,
+    "targeted_boundary_calls": 241,
+    "historical_376bf_all_changed": 947,
+    "count_head": "e4a789e73337c4dd8dfd18238f2ad1e44db19881"
+  },
+  "source_map": "/tmp/csq16-union-security-source-map.json",
+  "delta_receipt_map": "/tmp/csq16-union-security-delta-map.json",
+  "absolute_calls": "/tmp/csq16-union-security-absolute-calls.json",
+  "old_whole_union": "/tmp/csq15-security-final-committed-receipt.json",
+  "old_review_evidence": "/tmp/csq15-security-final-receipt.json",
+  "new_scoped_evidence": [
+    "/tmp/csq16-security-cache-final-receipt.json",
+    "/tmp/csq16-security-namespace-final-receipt.json",
+    "/tmp/csq16-security-runtime-final-receipt.json",
+    "/tmp/csq16-security-key-fifo-receipt.json",
+    "/tmp/csq16-security-byok-final-receipt.json",
+    "/tmp/csq16-security-injection-receipt.json",
+    "/tmp/csq16-pool-independent-receipt.json",
+    "/tmp/csq16-security-dev-fp-review-receipt.json"
+  ],
+  "manual_delta_dispositions": {
+    "src/kailash/runtime/resource_manager.py": "Only two unused retry timing assignments removed; attempt timing remains initialized at each actual use. No new security boundary.",
+    "src/kailash/security.py": "Non-string parameter keys now rejected before sanitize_input. Fresh test_security_parameter_key_types execution included.",
+    "packages/kailash-dataflow/src/dataflow/trust/query_wrapper.py": "Read all delta and access path. Fresh real verifier/provenance/query execution tests cross shared safe_log_field dependency; disabled bypass explicit, permissive logs/allows and enforcing raises retained.",
+    "src/kailash/trust/security.py": "Fresh isolated nh3 HTML bound/parsing cohort58 passed; exact final source hash matched authored bounded-parser receipt. No whole-object budget or browser execution claim.",
+    "core_logging": "builder/graph/registry callers use shared safe_log_field; fresh workflow_resource_log_safety cohort covers final dependency. Structural-only sanitize_log_value remains distinct API."
+  },
+  "fresh_cohorts": {
+    "union-core": {
+      "receipt": "/tmp/csq16-security-runtime-union-core.json",
+      "counts": {
+        "passed": 586
+      },
+      "python_warnings": [],
+      "skips": [],
+      "warn_plus": 640,
+      "diagnostic_sources": {
+        "kailash.workflow.builder": 2,
+        "kailash.resources.registry": 13,
+        "kailash.workflow.graph": 2,
+        "kailash.security": 1,
+        "kailash.runtime.parameter_injector": 1,
+        "kailash.runtime.base": 76,
+        "kailash.nodes.base": 9,
+        "kailash.runtime.trust.verifier": 464,
+        "kailash.nodes.auth.mfa": 10,
+        "audit.audit-privacy": 20,
+        "security.event-privacy": 10,
+        "kailash.nodes.security.security_event": 5,
+        "security.invalid-severity": 5,
+        "security.https://***@host.invalid/?token=***.id-a9751e2ec4f00bc84b57895532c01c78f452d2b5d2f5443553c158e06d8239f6": 1,
+        "security.{\"password\":\"***\"}_security_events.id-ec53bca801d5d584b172887bc650eda27648e3f0aedf71674dd9673e99fcf71c": 1,
+        "security.https://***@host.invalid/?token=***.id-4cdd28fc5c3c165b63bffcc4a549ad95a93e7c68d78a4cd8fd86b7bdd913ee50": 1,
+        "kailash.trust.enforce.selective_disclosure": 3,
+        "audit.runtime_audit": 4,
+        "kailash.nodes.code.python": 10,
+        "kailash.runtime.async_local": 2
+      }
+    },
+    "union-dataflow": {
+      "receipt": "/tmp/csq16-security-runtime-union-dataflow.json",
+      "counts": {
+        "passed": 46
+      },
+      "python_warnings": [],
+      "skips": [],
+      "warn_plus": 81,
+      "diagnostic_sources": {
+        "kailash.runtime.trust.verifier": 38,
+        "dataflow.trust.query_wrapper": 19,
+        "dataflow.core.engine": 12,
+        "dataflow.core.pool_utils": 11,
+        "dataflow.core.config": 1
+      }
+    },
+    "union-kaizen": {
+      "receipt": "/tmp/csq16-security-runtime-union-kaizen.json",
+      "counts": {
+        "passed": 11
+      },
+      "python_warnings": [],
+      "skips": [],
+      "warn_plus": 0,
+      "diagnostic_sources": {}
+    }
+  },
+  "html": {
+    "log": "/tmp/csq16-union-html.log",
+    "passed": 58,
+    "interpreter": "/tmp/csq16-html-venv/bin/python",
+    "nh3": "isolated0.3.7",
+    "warnings": 0,
+    "skips": 0
+  },
+  "total_fresh_passes": 701,
+  "opposite_control": {
+    "ran": true,
+    "hits": 112,
+    "pytest_exit": 1,
+    "failed_tests": 7,
+    "log": "/tmp/csq16-union-shared-control.log",
+    "scope": "In-memory shared mask_error_text bypass reaches final parameter caller pipeline; 112 hits, URL/JSON canaries exposed; seven assertions fail. No production writes."
+  },
+  "control_trigger_bytes": {
+    "URL": "https://user:parameter-caller-canary-418275@example.invalid/?token=parameter-caller-canary-418275",
+    "JSON": "{\"password\":\"parameter-caller-canary-418275\"}"
+  },
+  "spec_quotes": [
+    "specs/security-threats.md:32 Token creation with user_id (no token content).",
+    "specs/security-threats.md:33 Token verification failures with error classification.",
+    "specs/trust-crypto.md:45 HMAC alone is NEVER sufficient for external verification.",
+    "specs/trust-crypto.md:360 Hooks cannot overwrite agent_id, authority_id, action, resource, hook_type, trace_id.",
+    "specs/core-runtime.md:123 configured workflow trust precedes checkpoint load and node execution; :222 native async likewise."
+  ],
+  "cross_shard_review": [
+    "All six verifier cache producers preserve raw identity/context with exact-type canonicalization, generation publication fence, and per-request trace; final shared helper does not enter cache identity.",
+    "DataFlow query logging consumes safe reason provenance rather than raw backend exception, preserving public PermissionError reason.",
+    "21 dynamic Core/Kaizen audit child producers retain raw node IDs and pass component identities; Enterprise intermediates preserve component boundaries. Constant/default runtime producers now explicitly name runtime_audit. Access_control imports distinct admin aliases; no false missing-name classification.",
+    "Key descriptor public/private readers remain regular-file/final-component checks; bundle public reader shares primitive. Ed25519 dual_verify always verifies Ed25519 before optional HMAC; fresh dual-signature test suite executes.",
+    "Runtime audit consumes sanitized logger copy and frames; public exceptions and raw configuration retained. Gateway lifecycle findings are closed by the final v2 independent review; final gateway/runtime bytes are mapped to e4a in final_source_map."
+  ],
+  "diagnostics": "640 Core and81DataFlow WARN+ observed: deliberate denial/failure/invalid metadata probes, explicit auth-disabled and DataFlow test-mode disclosures, plus existing platform memory-limit disclosure. Zero Python warnings. No unsuppressed coroutine/unclosed-resource warning in selected successful cohorts. No claim of in-process memory enforcement.",
+  "open_findings": [],
+  "instrument_errors_not_banked": [
+    "Cross-package root+DataFlow tests.conftest collision in combined pytest collection; split processes reran actual cohorts successfully.",
+    "First shared helper rebinding control had zero hits and passed; inert due earlier imported aliases, not evidence. Replaced with reached mask_error_text global control112hits7fails."
+  ],
+  "limits": [
+    "Existing explicit user exceptions carried only through parent recorded scope; not blanket waiver for security defects.",
+    "Scanner427 aggregate current required-gate membership is not inferred from58 branch-only or changed-file counts; no new scanner result claimed.",
+    "No remote operations, alert dismissals, commits or tracked-file edits. Parent owns full Linux/Mac gates.",
+    "Inherited prior review exclusions remain scoped: approved pools/baseKaizen/type and173spec advisory decisions; no third-party dependency audit or exhaustive proof of every route."
+  ],
+  "tracked_tree_clean": true,
+  "gateway_followup": {
+    "receipt": "/tmp/csq16-gateway-close-security-review.json",
+    "status": "Both gateway double-cleanup and independently found retained foreign-task failure closed on final v2 manifest; the final source map verifies the reviewed gateway/runtime bytes at e4a789e73337c4dd8dfd18238f2ad1e44db19881."
+  },
+  "historical_376bf_receipt": "/tmp/csq16-union-security-376bf-open-history.json",
+  "initial_review_head": "376bf4914e76c09c6a3107c919ee653e1e13ccb6",
+  "final_source_map": "/tmp/csq16-union-security-final-source-map.json",
+  "final_delta_evidence": [
+    "/tmp/csq16-registry-security-review.json",
+    "/tmp/csq16-gateway-close-security-review.json"
+  ],
+  "final_mapping_summary": "All291 production files at e4a byte-equal isolated reviewed tree;286 unchanged from376bf union, five changed files covered by final registry/gateway reviews. 251a356-era files initially mapped; no unconditional old evidence used for altered source.",
+  "final_review_exclusions": "Explicit parent-recorded user exceptions only; pending full checks, published Corefloor/version changes outside D1, no new scanner dismissal or waiver."
+}
