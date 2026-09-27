@@ -189,7 +189,11 @@ async def test_local_async_entry_preserves_typed_error_and_failure_bookkeeping(
             "workflow_execution_start",
             "workflow_execution_failed",
         ]
-        assert "local async failure" in audit_events[-1][1]["error"]
+        assert "local async failure" in str(caught.value)
+        diagnostic = audit_events[-1][1]["error"]
+        assert diagnostic.startswith("ContentAwareExecutionError@")
+        assert ":_execute_async" in diagnostic
+        assert "local async failure" not in diagnostic
     finally:
         runtime.close()
 
