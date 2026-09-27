@@ -1394,6 +1394,8 @@ def validate_node_parameters(
     validated_params = {}
 
     for key, value in parameters.items():
+        if not isinstance(key, str):
+            raise SecurityError("Node parameter names must be strings")
         # Sanitize parameter key
         clean_key = sanitize_input(key, config=config, context=context)
 
