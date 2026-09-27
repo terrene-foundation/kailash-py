@@ -12,13 +12,13 @@ runtime AST. The exact receipt and fixed eight-item completion list are in
 
 Promotion remains gated. At `6af82971d`, Linux root rerun passed 3853 tests with
 zero Python warnings, and Mac all-files hooks passed including 5153 unit tests.
-A complete skip audit is closing obsolete contract imports, startup/auth fixtures,
-and synthetic DataFlow performance tests. Real benchmark execution then reproduced
-Core SQLite nested file transactions using different inner/outer connections.
-The SDK ownership fix is active in `csq15-sqlite-nested-owner`, not deferred.
-Three whole-union review receipts are delivered for the earlier source; they do
-not certify that new adapter fix. Next finish its independent correctness/security
-rounds, refresh assertion parity, and rerun relevant full Linux/Mac gates.
+Fixture repairs are committed at `76452b524`, replacing stale startup/contract/dialect
+skips and synthetic DataFlow benchmarks. Real execution exposed Core SQLite nested
+file scopes using separate connections. The v3 repair pins the outer connection,
+preserves explicit workflow-task handoff, and admits completion atomically under
+the transaction lock. Earlier v2 consumed scopes on rejected/cancelled completion;
+v3 adds eight real-driver race cases. Independent final reviews and refreshed full
+Linux/Mac gates remain pending; earlier whole-union receipts do not certify v3.
 Then consolidate one push, read every required and formerly failed check on the
 exact PR head, and separately merge #2229 under D1. Post-main review, owned worktree
 drain, and final handoff restamp remain owed.

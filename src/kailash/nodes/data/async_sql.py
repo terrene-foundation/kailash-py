@@ -1495,23 +1495,12 @@ class _AdapterTransactionScope:
     async def commit(self) -> None:
         if self._committed or self._rolled_back:
             return
-        # Single-shot: mark terminal BEFORE the await. A commit_transaction that
-        # partially completes then raises mid-teardown (e.g. SQLite ``db.close()``
-        # after the depth decrement, or PG ``pool.release`` after ``tx.commit``)
-        # MUST NOT let a fallback ``__aexit__`` re-enter ``rollback`` over the
-        # half-torn-down transaction — that double-decrements the SQLite nesting
-        # depth (issue #1070 class) / double-releases the pooled connection. The
-        # exception still propagates to the caller; the scope is simply spent.
-        self._committed = True
-        await self._adapter.commit_transaction(self._txn)
+        await self._adapter._complete_transaction_scope(self, commit=True)
 
     async def rollback(self) -> None:
         if self._committed or self._rolled_back:
             return
-        # Single-shot (see commit above): an attempted rollback is terminal even
-        # if the primitive raises mid-teardown.
-        self._rolled_back = True
-        await self._adapter.rollback_transaction(self._txn)
+        await self._adapter._complete_transaction_scope(self, commit=False)
 
     @property
     def transaction(self) -> Any:
@@ -1579,6 +1568,22 @@ class DatabaseAdapter(ABC):
         self._connected: bool = False
         self._runtime_coordinated: bool = False
         self._runtime_pool: Any | None = None
+
+    async def _complete_transaction_scope(
+        self, scope: _AdapterTransactionScope, *, commit: bool
+    ) -> None:
+        """Driver-owned scopes become single-shot before their terminal attempt.
+
+        Nesting adapters override this admission boundary to validate their
+        current stack before consuming the scope. Once admitted, a driver
+        failure still consumes it: retrying teardown could double-release.
+        """
+        scope._committed = commit
+        scope._rolled_back = not commit
+        if commit:
+            await self.commit_transaction(scope.transaction)
+        else:
+            await self.rollback_transaction(scope.transaction)
 
     def _convert_row(self, row: dict) -> dict:
         """Convert database-specific types to JSON-serializable types."""
@@ -2557,6 +2562,11 @@ class SQLiteAdapter(DatabaseAdapter):
         # Transaction nesting support (for SQLite nested transaction bug fix)
         self._transaction_depth = 0
         self._savepoint_counter = 0
+        self._transaction_connection = None
+        self._transaction_owner = None
+        self._memory_operation_owner = None
+        self._transaction_lock = asyncio.Lock()
+        self._transaction_stack: list[tuple] = []
         # Import aiosqlite on init
         try:
             import aiosqlite
@@ -2642,6 +2652,23 @@ class SQLiteAdapter(DatabaseAdapter):
                 return self._connection
         return await self._open_connection()
 
+    @contextlib.asynccontextmanager
+    async def _unscoped_memory_connection(self):
+        """Keep auto-commit operations outside another scope's transaction."""
+        task = asyncio.current_task()
+        if self._memory_operation_owner is task:
+            raise RuntimeError("SQLite shared-memory operation is already active")
+        async with self._transaction_lock:
+            if self._transaction_owner is not None:
+                raise RuntimeError(
+                    "Pass the active SQLite transaction handle explicitly"
+                )
+            self._memory_operation_owner = task
+            try:
+                yield await self._get_connection()
+            finally:
+                self._memory_operation_owner = None
+
     async def _open_connection(self):
         """Open and configure one owned connection before publishing it."""
         assert self._aiosqlite is not None
@@ -2679,6 +2706,10 @@ class SQLiteAdapter(DatabaseAdapter):
         that fact, so a future adapter registering without an enterprise pool
         does not inherit a silent leak.
         """
+        if self._memory_operation_owner is asyncio.current_task():
+            raise RuntimeError(
+                "Close the SQLite shared-memory operation before disconnect"
+            )
         pool = self._pool
         if pool is not None:
             self._pool = None
@@ -2696,18 +2727,26 @@ class SQLiteAdapter(DatabaseAdapter):
         from kailash.utils.resource_manager import _await_cleanup
 
         async def close_connection():
-            async with self._connection_lock:
-                connection = self._connection
-                if connection is not None:
-                    # Claim before awaiting, for the same reason the pool is claimed:
-                    # aiosqlite's Connection.close() joins its worker THREAD, and two
-                    # concurrent joins on one connection is the same overlapping-close
-                    # hazard one layer down (issue #2079).
-                    self._connection = None
-                    await _close_pool_bounded(
-                        connection.close(),
-                        label=f"sqlite connection {id(connection)}",
-                    )
+            async with self._transaction_lock:
+                db = self._transaction_connection
+                self._transaction_connection = None
+                self._transaction_owner = None
+                self._transaction_stack.clear()
+                self._transaction_depth = 0
+                if db is not None and not self._is_memory_db:
+                    await self._close_quietly(db)
+                async with self._connection_lock:
+                    connection = self._connection
+                    if connection is not None:
+                        # Claim before awaiting, for the same reason the pool is claimed:
+                        # aiosqlite's Connection.close() joins its worker THREAD, and two
+                        # concurrent joins on one connection is the same overlapping-close
+                        # hazard one layer down (issue #2079).
+                        self._connection = None
+                        await _close_pool_bounded(
+                            connection.close(),
+                            label=f"sqlite connection {id(connection)}",
+                        )
 
         # Waiting for a cold creator is part of disposal ownership. A cancelled
         # caller must not abandon the connection that creator is publishing.
@@ -2724,7 +2763,14 @@ class SQLiteAdapter(DatabaseAdapter):
     ) -> Any:
         """Execute query and return results."""
         assert self._aiosqlite is not None
+        if (
+            transaction is None
+            and self._is_memory_db
+            and self._transaction_owner is not None
+        ):
+            raise RuntimeError("Pass the active SQLite transaction handle explicitly")
         if transaction:
+            transaction = self._check_transaction(transaction)
             # Handle both old API (just connection) and new API (tuple)
             # begin_transaction() returns (db, savepoint_name, depth) tuple
             if isinstance(transaction, tuple):
@@ -2790,10 +2836,10 @@ class SQLiteAdapter(DatabaseAdapter):
                     )
             elif self._is_memory_db:
                 # Fallback: shared connection for memory databases (no pool)
-                db = await self._get_connection()
-                return await self._execute_on_connection(
-                    db, query, params, fetch_mode, fetch_size
-                )
+                async with self._unscoped_memory_connection() as db:
+                    return await self._execute_on_connection(
+                        db, query, params, fetch_mode, fetch_size
+                    )
             else:
                 # Fallback: inline connection for file databases (no pool)
                 async with self._aiosqlite.connect(
@@ -2895,12 +2941,12 @@ class SQLiteAdapter(DatabaseAdapter):
                     await cursor.close()
         elif self._is_memory_db:
             # Shared :memory: connection — owned by disconnect(); do NOT close.
-            db = await self._get_connection()
-            cursor = await db.execute(query, params or [])
-            try:
-                yield _iter_rows(cursor)
-            finally:
-                await cursor.close()
+            async with self._unscoped_memory_connection() as db:
+                cursor = await db.execute(query, params or [])
+                try:
+                    yield _iter_rows(cursor)
+                finally:
+                    await cursor.close()
         else:
             # File DB with no pool — own the connection for the iteration's
             # lifetime; the ``async with aiosqlite.connect`` closes it on
@@ -2926,7 +2972,14 @@ class SQLiteAdapter(DatabaseAdapter):
     ) -> None:
         """Execute query multiple times with different parameters."""
         assert self._aiosqlite is not None
+        if (
+            transaction is None
+            and self._is_memory_db
+            and self._transaction_owner is not None
+        ):
+            raise RuntimeError("Pass the active SQLite transaction handle explicitly")
         if transaction:
+            transaction = self._check_transaction(transaction)
             # Handle both old API (just connection) and new API (tuple)
             # begin_transaction() returns (db, savepoint_name, depth) tuple
             if isinstance(transaction, tuple):
@@ -2941,9 +2994,10 @@ class SQLiteAdapter(DatabaseAdapter):
                     await db.executemany(query, params_list)
                     await db.commit()
             elif self._is_memory_db:
-                db = await self._get_connection()
-                await db.executemany(query, params_list)
-                await db.commit()
+                async with self._unscoped_memory_connection() as db:
+                    async with db.executemany(query, params_list):
+                        pass
+                    await db.commit()
             else:
                 async with self._aiosqlite.connect(
                     self._db_path, **self._connect_kwargs
@@ -2953,67 +3007,81 @@ class SQLiteAdapter(DatabaseAdapter):
                     await db.commit()
 
     async def begin_transaction(self) -> Any:
+        """Begin an owned transaction, or nest on its pinned connection.
+
+        Implicit nesting belongs to the task that opened the outer scope.
+        Other tasks must use a separate adapter or an explicitly borrowed
+        transaction handle; they must never become somebody else's savepoint.
         """
-        Begin a transaction with nested transaction support.
-
-        SQLite Nested Transaction Fix:
-        - First call: BEGIN (outer transaction)
-        - Nested calls: SAVEPOINT sp_N (nested transactions)
-
-        This prevents "cannot start a transaction within a transaction" error
-        that occurs when BEGIN is called while already in a transaction.
-
-        Returns:
-            tuple: (connection, savepoint_name or None, transaction_depth)
-        """
-        assert self._aiosqlite is not None
-        db = await self._get_connection()
-
-        # Issue #1070: capture pre-call state so the abort path can restore it
-        # exactly. Without a try/except here, a caller cancelled/raising
-        # *between* begin_transaction() and its paired commit/rollback leaves
-        # _transaction_depth > 0 and the underlying :memory: connection
-        # mid-BEGIN. Because :memory: reuses one per-adapter connection, the
-        # NEXT begin_transaction() then observes depth > 0, takes the SAVEPOINT
-        # branch, and issues SAVEPOINT against a poisoned outer transaction.
-        depth_before = self._transaction_depth
-        savepoint_counter_before = self._savepoint_counter
-
-        # Check current transaction depth
-        if self._transaction_depth == 0:
-            # First transaction - use BEGIN IMMEDIATE to acquire write lock
-            # immediately, preventing "database is locked" under concurrency.
-            # Mirrors the Rust SDK's begin_immediate() API.
+        task = asyncio.current_task()
+        if self._memory_operation_owner is task:
+            raise RuntimeError(
+                "Close the SQLite shared-memory operation before beginning a transaction"
+            )
+        if self._transaction_owner not in (None, task):
+            raise RuntimeError("SQLite transaction is owned by another task")
+        async with self._transaction_lock:
+            if self._transaction_owner not in (None, task):
+                raise RuntimeError("SQLite transaction is owned by another task")
+            self._transaction_owner = task
+            depth_before = self._transaction_depth
+            counter_before = self._savepoint_counter
+            db = self._transaction_connection
+            savepoint = None
             try:
-                await db.execute("BEGIN IMMEDIATE")
+                if db is None:
+                    db = await self._get_connection()
+                    self._transaction_connection = db
+                if depth_before:
+                    self._savepoint_counter += 1
+                    savepoint = f"sp_{self._savepoint_counter}"
+                    async with db.execute(f"SAVEPOINT {savepoint}"):
+                        pass
+                else:
+                    async with db.execute("BEGIN IMMEDIATE"):
+                        pass
                 self._transaction_depth += 1
-                return (db, None, self._transaction_depth)
+                handle = (db, savepoint, self._transaction_depth)
+                self._transaction_stack.append(handle)
+                return handle
             except BaseException:
-                # BaseException (not Exception) so asyncio.CancelledError is
-                # also caught — cancellation is the primary trigger for #1070.
-                await self._abort_begin(
-                    db,
-                    savepoint_name=None,
-                    depth_before=depth_before,
-                    savepoint_counter_before=savepoint_counter_before,
-                )
+                from kailash.utils.resource_manager import _await_cleanup
+
+                if db is not None:
+                    await _await_cleanup(
+                        self._abort_begin(
+                            db,
+                            savepoint_name=savepoint,
+                            depth_before=depth_before,
+                            savepoint_counter_before=counter_before,
+                        )
+                    )
+                else:
+                    self._transaction_owner = None
                 raise
-        else:
-            # Nested transaction - use SAVEPOINT
-            savepoint_name = f"sp_{self._savepoint_counter + 1}"
-            try:
-                self._savepoint_counter += 1
-                await db.execute(f"SAVEPOINT {savepoint_name}")
-                self._transaction_depth += 1
-                return (db, savepoint_name, self._transaction_depth)
-            except BaseException:
-                await self._abort_begin(
-                    db,
-                    savepoint_name=savepoint_name,
-                    depth_before=depth_before,
-                    savepoint_counter_before=savepoint_counter_before,
-                )
-                raise
+
+    async def _complete_transaction_scope(
+        self, scope: _AdapterTransactionScope, *, commit: bool
+    ) -> None:
+        await self._finish_transaction(scope.transaction, commit=commit, scope=scope)
+
+    def _check_transaction(self, transaction: Any, *, terminal: bool = False):
+        """Check tracked handles while retaining legacy bare-connection support."""
+        if not self._transaction_stack:
+            if isinstance(transaction, tuple) and self._transaction_depth == 0:
+                raise RuntimeError("SQLite transaction is no longer active")
+            return transaction
+        if not isinstance(transaction, tuple):
+            if transaction is not self._transaction_connection:
+                raise RuntimeError("SQLite connection does not own this transaction")
+            if terminal and len(self._transaction_stack) != 1:
+                raise RuntimeError("Finish nested SQLite transactions first")
+            return self._transaction_stack[-1]
+        if not any(transaction is handle for handle in self._transaction_stack):
+            raise RuntimeError("SQLite transaction handle is not active")
+        if terminal and transaction is not self._transaction_stack[-1]:
+            raise RuntimeError("Finish nested SQLite transactions first")
+        return transaction
 
     async def _abort_begin(
         self,
@@ -3076,10 +3144,11 @@ class SQLiteAdapter(DatabaseAdapter):
                 },
             )
         finally:
-            if not self._is_memory_db:
-                from kailash.utils.resource_manager import _await_cleanup
-
-                await _await_cleanup(self._close_quietly(db))
+            if depth_before == 0:
+                self._transaction_connection = None
+                self._transaction_owner = None
+                if not self._is_memory_db:
+                    await self._close_quietly(db)
 
     async def _close_quietly(self, db: Any) -> None:
         """Close ``db``, logging (not raising) a close error.
@@ -3098,100 +3167,76 @@ class SQLiteAdapter(DatabaseAdapter):
             )
 
     async def commit_transaction(self, transaction: Any) -> None:
-        """
-        Commit a transaction or release a savepoint.
-
-        SQLite Nested Transaction Fix:
-        - If savepoint: RELEASE SAVEPOINT sp_N
-        - If outer transaction: COMMIT
-
-        Args:
-            transaction: tuple of (connection, savepoint_name or None, depth)
-        """
-        # Handle both old API (just connection) and new API (tuple)
-        if isinstance(transaction, tuple):
-            db, savepoint_name, depth = transaction
-
-            try:
-                if savepoint_name:
-                    # Nested transaction - release savepoint
-                    await db.execute(f"RELEASE SAVEPOINT {savepoint_name}")
-                else:
-                    # Outer transaction - commit
-                    await db.commit()
-            except BaseException:
-                # Commit / RELEASE SAVEPOINT failed: roll the SQLite transaction
-                # back so a shared :memory: connection is not left mid-transaction
-                # (which would poison the next begin_transaction with "cannot
-                # start a transaction within a transaction"). The finally still
-                # performs the single depth-decrement + close, so the caller MUST
-                # NOT issue a separate rollback_transaction after a failed commit
-                # — that double-decrements _transaction_depth (issue #1070 class,
-                # #1580 redteam HIGH). Best-effort; the original commit error
-                # propagates via the bare raise.
-                try:
-                    if savepoint_name:
-                        await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
-                        await db.execute(f"RELEASE SAVEPOINT {savepoint_name}")
-                    else:
-                        await db.rollback()
-                except BaseException:
-                    logger.error(
-                        "async_sql.sqlite.commit_cleanup_rollback_failed",
-                        exc_info=True,
-                    )
-                raise
-            finally:
-                # Decrement transaction depth exactly once (success OR failure)
-                # and close the connection (non-memory) when the outermost
-                # transaction ends — mirrors the PG/MySQL "always release" contract.
-                self._transaction_depth -= 1
-                if not self._is_memory_db and self._transaction_depth == 0:
-                    await self._close_quietly(db)
-        else:
-            # Old API - just commit (backward compatibility)
-            await transaction.commit()
-            # Don't close shared memory connections
-            if not self._is_memory_db:
-                await transaction.close()
+        """Commit the outer scope or release the innermost savepoint."""
+        await self._finish_transaction(transaction, commit=True)
 
     async def rollback_transaction(self, transaction: Any) -> None:
-        """
-        Rollback a transaction or rollback to a savepoint.
+        """Roll back the outer scope or only the innermost savepoint."""
+        await self._finish_transaction(transaction, commit=False)
 
-        SQLite Nested Transaction Fix:
-        - If savepoint: ROLLBACK TO SAVEPOINT sp_N
-        - If outer transaction: ROLLBACK
+    async def _finish_transaction(
+        self,
+        transaction: Any,
+        *,
+        commit: bool,
+        scope: Optional[_AdapterTransactionScope] = None,
+    ) -> None:
+        from kailash.utils.resource_manager import _await_cleanup
 
-        Args:
-            transaction: tuple of (connection, savepoint_name or None, depth)
-        """
-        # Handle both old API (just connection) and new API (tuple)
-        if isinstance(transaction, tuple):
-            db, savepoint_name, depth = transaction
+        async with self._transaction_lock:
+            if scope is not None and (scope._committed or scope._rolled_back):
+                return
+            transaction = self._check_transaction(transaction, terminal=True)
+            # Admission and consumption are atomic with stack mutations. A
+            # cancelled waiter or rejected out-of-order completion stays usable.
+            if scope is not None:
+                scope._committed = commit
+                scope._rolled_back = not commit
+            if isinstance(transaction, tuple):
+                db, savepoint, depth = transaction
+            else:
+                db, savepoint, depth = transaction, None, 1
+
+            async def rollback():
+                if savepoint:
+                    async with db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}"):
+                        pass
+                    async with db.execute(f"RELEASE SAVEPOINT {savepoint}"):
+                        pass
+                else:
+                    await db.rollback()
+
+            async def release():
+                if self._transaction_stack:
+                    self._transaction_stack.pop()
+                self._transaction_depth = max(0, depth - 1)
+                if self._transaction_depth == 0:
+                    self._transaction_connection = None
+                    self._transaction_owner = None
+                    if not self._is_memory_db:
+                        await self._close_quietly(db)
 
             try:
-                if savepoint_name:
-                    # Nested transaction - rollback to savepoint
-                    await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
-                    await db.execute(f"RELEASE SAVEPOINT {savepoint_name}")
+                if commit:
+                    try:
+                        if savepoint:
+                            async with db.execute(f"RELEASE SAVEPOINT {savepoint}"):
+                                pass
+                        else:
+                            await db.commit()
+                    except BaseException:
+                        try:
+                            await _await_cleanup(rollback())
+                        except BaseException:
+                            logger.error(
+                                "async_sql.sqlite.commit_cleanup_rollback_failed",
+                                exc_info=True,
+                            )
+                        raise
                 else:
-                    # Outer transaction - rollback
-                    await db.rollback()
+                    await _await_cleanup(rollback())
             finally:
-                # Decrement transaction depth exactly once and close (non-memory)
-                # even if the driver rollback raises — otherwise a failed rollback
-                # leaves _transaction_depth > 0 and poisons the next
-                # begin_transaction (issue #1070 class; mirrors commit_transaction).
-                self._transaction_depth -= 1
-                if not self._is_memory_db and self._transaction_depth == 0:
-                    await self._close_quietly(db)
-        else:
-            # Old API - just rollback (backward compatibility)
-            await transaction.rollback()
-            # Don't close shared memory connections
-            if not self._is_memory_db:
-                await transaction.close()
+                await _await_cleanup(release())
 
 
 class DatabaseConfigManager:

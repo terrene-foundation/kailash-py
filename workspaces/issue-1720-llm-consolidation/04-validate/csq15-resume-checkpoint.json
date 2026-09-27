@@ -1,7 +1,7 @@
 {
   "resumed_session": "01a0db1d-b7b7-7441-a2fe-81bfeef99161",
   "starting_head": "e19a9ab73bdf94066d7c2e820619ddcd11e303e7",
-  "status": "Root and Mac reruns passed at6af; skip audit closing obsolete fixtures and repairing newly reproduced Core SQLite nested file transaction ownership before promotion",
+  "status": "Fixture repairs committed76452b524; Core SQLite v3 integrated, independent final review and full Linux/Mac gates pending; D1 promotion remains authorized and unmerged",
   "authorizations": {
     "D1_promotion": true,
     "package_publication": false,
@@ -298,5 +298,48 @@
     "mac": "10 platform RLIMIT_AS,1 optional kaizen_agents,1 absent cross-SDK vectors;3 obsolete contract imports repaired",
     "root": "1 optional rfc3161;2 stale startup/auth fixture skips being repaired",
     "dataflow": "10 obsolete skipped synthetic benchmarks being replaced with real async CRUD/savepoint measurements;1 obsolete dialect import being corrected"
+  },
+  "sqlite_nested_owner": {
+    "manifest": {
+      "head": "6af82971d84687dc670e233a35b2a5c6d8a13b40",
+      "files": [
+        {
+          "path": "src/kailash/nodes/data/async_sql.py",
+          "sha256": "3a9a724aa558bca87924bcd3faa82c15c946f5c6460837bfe42f9d285705a87b"
+        },
+        {
+          "path": "specs/dataflow-cache.md",
+          "sha256": "80ddee519098fa7d8cda3ce0ac36c68fabe69714585714413ecb2654a747c2aa"
+        },
+        {
+          "path": "tests/regression/test_sqlite_nested_transaction_ownership.py",
+          "sha256": "8241938e4af8e2fe2f17d7aeae5eaf63b056754c607b5d13e4eaa642d0ba0aa1"
+        },
+        {
+          "path": "packages/kailash-dataflow/tests/regression/test_sqlite_transaction_task_handoff.py",
+          "sha256": "c3b6e9b6b8de06ee271dbf5856e29b302fed30294a0f1a7b860013134dab5522"
+        }
+      ]
+    },
+    "status": "v3 independent correctness and adversarial reviews pending",
+    "superseded_findings": [
+      "Original nested file scopes opened different connections",
+      "v1 rejected legitimate explicit transaction completion across workflow tasks",
+      "v2 marked scope spent before lock admission, leaving scope consumed on LIFO rejection or cancellation"
+    ],
+    "new_regressions": "real file/memory nested rollback, task handoff, cancellation, completion order, stale handles, cleanup and eight real-driver admission race cases",
+    "author_logs": [
+      "/tmp/csq15-sqlite-owner-v3-r1.log",
+      "/tmp/csq15-sqlite-owner-v3-r2.log",
+      "/tmp/csq15-sqlite-owner-v3-existing.log"
+    ],
+    "scope": "Core SQLite lifecycle; shared completion dispatch must preserve other adapter behavior. No publishing."
+  },
+  "preservation_check": {
+    "historical_refs": 52,
+    "ordered_stashes": 5,
+    "matches_recovered_baseline": true,
+    "controls": "extra ref and reversed stash list rejected",
+    "scope": "Exact ref names/SHA and ordered stash SHA; no reachability/content landing claim."
   }
 }
