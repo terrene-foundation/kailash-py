@@ -1,41 +1,26 @@
-"""
-TDD Performance Benchmark Tests
+"""Real SQLite workflow timings and deterministic benchmark-statistics checks.
 
-Validates that the enhanced TDD fixtures achieve the <100ms execution target
-and provides performance benchmarking for the savepoint-based isolation system.
-
-This test suite specifically focuses on performance validation and does not
-test functional aspects (which are covered in other test files).
+The 10s bound detects stalled local operations. Machine-dependent durations are
+reported, not substituted for evidence of PostgreSQL TDD speedup guarantees.
 """
 
 import asyncio
-import os
 import statistics
 import time
-from typing import Any, Dict, List
+import tracemalloc
+from contextlib import asynccontextmanager
+from typing import Dict, List
 
 import pytest
+import pytest_asyncio
 
-# Enable TDD mode for performance testing
-os.environ["DATAFLOW_TDD_MODE"] = "true"
-
-# SKIP REASON: every test in this file is `async def` and calls the synchronous
-# `LocalRuntime.execute(workflow.build())`. `LocalRuntime.execute` internally
-# uses `asyncio.run_until_complete` on the already-running pytest-asyncio
-# event loop, producing a deadlock that hangs the test indefinitely.
-#
-# The correct pattern in an async context is `AsyncLocalRuntime` +
-# `await runtime.execute_workflow_async(workflow.build())` (see
-# `rules/patterns.md` § "Async vs Sync Runtime"). These tests need to be
-# rewritten to use the async runtime before they can run — tracking in
-# a follow-up since they're benchmarks, not functional coverage.
-pytestmark = pytest.mark.skip(
-    reason=(
-        "async/sync runtime deadlock — tests call LocalRuntime.execute() "
-        "inside async def. Rewrite to use AsyncLocalRuntime. "
-        "See rules/patterns.md § Async vs Sync Runtime."
-    )
+from dataflow import DataFlow
+from dataflow.nodes.transaction_nodes import (
+    TransactionRollbackToSavepointNode,
+    TransactionSavepointNode,
 )
+from kailash.runtime.async_local import AsyncLocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 class PerformanceValidator:
@@ -85,23 +70,81 @@ def performance_validator():
     return PerformanceValidator()
 
 
-@pytest.fixture
-async def tdd_transaction_dataflow():
-    """Mock fixture for TDD transaction dataflow.
+@asynccontextmanager
+async def _database(path):
+    db = DataFlow(f"sqlite:///{path}", auto_migrate=True)
+    try:
 
-    NOTE: This whole file is `pytest.mark.skip`-ped (see pytestmark above),
-    so this fixture never executes. Migrated to yield+close for hygiene.
-    """
-    import uuid
-    from unittest.mock import Mock
+        class PerfTestUser:
+            id: str
+            name: str
+            email: str
+            active: bool = True
 
-    from dataflow import DataFlow
+        model_name = "PerfTestUser"
+        db.model(PerfTestUser)
+        assert await db.initialize()
+        async with AsyncLocalRuntime() as runtime:
+            yield db, runtime, model_name
+    finally:
+        await db.close_async()
 
-    # Create a simple in-memory dataflow for testing
-    with DataFlow(":memory:") as df:
-        context = Mock()
-        context.test_id = "test_" + str(uuid.uuid4())[:8]
-        yield df, context
+
+@pytest_asyncio.fixture
+async def tdd_transaction_dataflow(tmp_path):
+    async with _database(tmp_path / "benchmark.db") as state:
+        yield state
+
+
+async def _run(state, operation, parameters, scope=None):
+    db, runtime, model_name = state
+    workflow = WorkflowBuilder()
+    workflow.add_node(
+        node_type=db.get_node(f"{model_name}{operation}Node"),
+        node_id="operation",
+        config=parameters,
+    )
+    built = workflow.build()
+    node = built.get_node("operation")
+    assert node.dataflow_instance is db
+    node.set_workflow_context("dataflow_instance", db)
+    if scope is not None:
+        node.set_workflow_context("active_transaction", scope)
+    results, run_id = await runtime.execute_workflow_async(built, inputs={})
+    assert run_id
+    assert results["operation"].get("error") is None
+    return results["operation"]
+
+
+async def _create(state, key, scope=None):
+    return await _run(
+        state,
+        "Create",
+        {
+            "id": key,
+            "name": key,
+            "email": f"{key}@example.test",
+            "active": True,
+        },
+        scope,
+    )
+
+
+async def _rows(state, scope=None):
+    result = await _run(state, "List", {"filter": {"active": True}}, scope)
+    return result["records"]
+
+
+def _record(validator, start):
+    elapsed = (time.perf_counter() - start) * 1000
+    validator.record_measurement(elapsed)
+    assert 0 < elapsed < 10000, f"Database operation exceeded 10s: {elapsed}ms"
+    return elapsed
+
+
+async def _adapter(state):
+    db, _, model_name = state
+    return await db._get_or_create_async_sql_node("sqlite")._get_adapter()
 
 
 @pytest.mark.asyncio
@@ -109,623 +152,170 @@ async def tdd_transaction_dataflow():
 async def test_tdd_transaction_performance_single(
     tdd_transaction_dataflow, performance_validator
 ):
-    """Test performance of a single TDD transaction using DataFlow's node-based architecture."""
-    from kailash.runtime.local import LocalRuntime
-    from kailash.workflow.builder import WorkflowBuilder
-
-    start_time = time.time()
-
-    df, context = tdd_transaction_dataflow
-
-    # Define a simple model for testing
-    @df.model
-    class PerfTestUser:
-        name: str
-        email: str
-        active: bool = True
-
-    # Create tables - handle async context by catching the error (expected in async tests)
-    try:
-        df.create_tables()
-    except RuntimeError as e:
-        if "async context" in str(e):
-            # Expected in async test context - tables may already exist or
-            # we'll create them via the node execution
-            pass
-        else:
-            raise
-
-    # Use DataFlow's actual node-based API
-    workflow = WorkflowBuilder()
-
-    # Add create node (DataFlow generates PerfTestUserCreateNode)
-    workflow.add_node(
-        "PerfTestUserCreateNode",
-        "create_user",
-        {"name": "Performance Test User", "email": "perf@example.com", "active": True},
-    )
-
-    # Add list node to query the created user
-    workflow.add_node(
-        "PerfTestUserListNode", "list_users", {"filter": {"active": True}}
-    )
-
-    # Connect the nodes
-    workflow.add_connection("create_user", "result", "list_users", "trigger")
-
-    # Execute the workflow
-    runtime = LocalRuntime()
-    try:
-        results, run_id = runtime.execute(workflow.build())
-
-        # Verify creation succeeded
-        assert "create_user" in results
-        assert results.get("create_user", {}).get("error") is None
-
-        # Verify list operation succeeded
-        assert "list_users" in results
-        list_result = results.get("list_users", {})
-        if "data" in list_result:
-            # Verify we got at least one user
-            assert len(list_result["data"]) >= 1
-    except Exception as e:
-        # For unit tests with :memory: SQLite, nodes might not be fully registered
-        # This is OK - we're testing the performance of the workflow execution pattern
-        pass
-
-    end_time = time.time()
-    duration_ms = (end_time - start_time) * 1000
-
-    performance_validator.record_measurement(duration_ms)
-
-    # Validate reasonable performance for unit test with workflow overhead
-    # Creating DataFlow instances and workflows has significant overhead
-    # Relaxed threshold to account for system load variability and CI environments
-    assert duration_ms < 10000.0, f"Test exceeded 10000ms target: {duration_ms:.2f}ms"
+    state = tdd_transaction_dataflow
+    start = time.perf_counter()
+    adapter = await _adapter(state)
+    async with adapter.transaction() as scope:
+        await _create(state, "committed", scope)
+        assert {r["id"] for r in await _rows(state, scope)} == {"committed"}
+    assert {r["id"] for r in await _rows(state)} == {"committed"}
+    _record(performance_validator, start)
 
 
 @pytest.mark.asyncio
 @pytest.mark.tdd
-async def test_tdd_savepoint_isolation_performance(performance_validator, tmp_path):
-    """Test performance of savepoint-based isolation concept using workflow patterns."""
-    from kailash.runtime.local import LocalRuntime
-    from kailash.workflow.builder import WorkflowBuilder
-
-    start_time = time.time()
-
-    # Simulate savepoint-based isolation using SQLite's transaction capabilities
-    db_path = tmp_path / "savepoint_isolation.db"
-
-    # Create workflow for database operations
-    workflow = WorkflowBuilder()
-
-    # Begin transaction (simulating savepoint)
-    workflow.add_node(
-        "AsyncSQLDatabaseNode",
-        "begin_transaction",
-        {
-            "connection_string": f"sqlite:///{db_path}",
-            "query": "BEGIN TRANSACTION",
-            "validate_queries": False,
-        },
-    )
-
-    # Create a test table within transaction
-    workflow.add_node(
-        "AsyncSQLDatabaseNode",
-        "create_table",
-        {
-            "connection_string": f"sqlite:///{db_path}",
-            "query": """
-            CREATE TABLE IF NOT EXISTS perf_test_table (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """,
-            "validate_queries": False,
-        },
-    )
-
-    # Insert test data within transaction
-    for i in range(10):
-        workflow.add_node(
-            "AsyncSQLDatabaseNode",
-            f"insert_{i}",
-            {
-                "connection_string": f"sqlite:///{db_path}",
-                "query": f"INSERT INTO perf_test_table (name) VALUES ('Test Record {i}')",
-                "validate_queries": False,
-            },
+async def test_tdd_savepoint_isolation_performance(
+    tdd_transaction_dataflow, performance_validator
+):
+    state = tdd_transaction_dataflow
+    start = time.perf_counter()
+    adapter = await _adapter(state)
+    async with adapter.transaction() as outer:
+        await _create(state, "outer", outer)
+        save = TransactionSavepointNode(name="inner")
+        rollback = TransactionRollbackToSavepointNode(savepoint="inner")
+        save.set_workflow_context("active_transaction", outer)
+        rollback.set_workflow_context("active_transaction", outer)
+        assert (await save.async_run())["status"] == "created"
+        rollback.set_workflow_context(
+            "savepoints", save.get_workflow_context("savepoints")
         )
-
-    # Rollback transaction (simulating savepoint rollback for isolation)
-    workflow.add_node(
-        "AsyncSQLDatabaseNode",
-        "rollback",
-        {
-            "connection_string": f"sqlite:///{db_path}",
-            "query": "ROLLBACK",
-            "validate_queries": False,
-        },
-    )
-
-    # Execute workflow
-    runtime = LocalRuntime()
-    try:
-        results, run_id = runtime.execute(workflow.build())
-        # Check that operations executed (even if rolled back)
-        assert "begin_transaction" in results
-    except Exception:
-        # SQLite transaction handling might vary - that's OK for performance test
-        pass
-
-    end_time = time.time()
-    duration_ms = (end_time - start_time) * 1000
-
-    performance_validator.record_measurement(duration_ms)
-
-    # Validate savepoint-style operations are reasonably fast
-    # SQLite operations with workflow and DataFlow initialization overhead
-    # Relaxed threshold to account for system load variability and CI environments
-    assert (
-        duration_ms < 10000.0
-    ), f"Savepoint-style operations exceeded 10000ms: {duration_ms:.2f}ms"
+        await _create(state, "inner", outer)
+        assert {r["id"] for r in await _rows(state, outer)} == {"outer", "inner"}
+        assert (await rollback.async_run())["status"] == "rolled_back_to_savepoint"
+        assert {r["id"] for r in await _rows(state, outer)} == {"outer"}
+    assert {r["id"] for r in await _rows(state)} == {"outer"}
+    _record(performance_validator, start)
 
 
 @pytest.mark.asyncio
 @pytest.mark.tdd
 async def test_tdd_parallel_performance(performance_validator, tmp_path):
-    """Test performance of parallel-safe TDD execution using isolated SQLite databases."""
-    import uuid
+    async with _database(tmp_path / "one.db") as one:
+        async with _database(tmp_path / "two.db") as two:
+            start = time.perf_counter()
 
-    from kailash.runtime.local import LocalRuntime
-    from kailash.workflow.builder import WorkflowBuilder
+            async def exercise(state, key):
+                await _create(state, key)
+                return await _rows(state)
 
-    start_time = time.time()
-
-    # Create unique identifier for parallel isolation
-    unique_id = f"test_{uuid.uuid4().hex[:8]}"
-
-    # Use separate SQLite database for isolation (simulating parallel-safe execution)
-    db_path = tmp_path / f"parallel_{unique_id}.db"
-    table_name = f"parallel_perf_test_{unique_id}"
-
-    # Create workflow for parallel-safe operations
-    workflow = WorkflowBuilder()
-
-    # Create unique test table
-    workflow.add_node(
-        "AsyncSQLDatabaseNode",
-        "create_table",
-        {
-            "connection_string": f"sqlite:///{db_path}",
-            "query": f"""
-            CREATE TABLE IF NOT EXISTS {table_name} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                data TEXT,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            first, second = await asyncio.gather(
+                exercise(one, "first"), exercise(two, "second")
             )
-        """,
-            "validate_queries": False,
-        },
-    )
+            assert {r["id"] for r in first} == {"first"}
+            assert {r["id"] for r in second} == {"second"}
+            _record(performance_validator, start)
 
-    # Perform concurrent-style operations
-    for i in range(5):
-        workflow.add_node(
-            "AsyncSQLDatabaseNode",
-            f"insert_{i}",
-            {
-                "connection_string": f"sqlite:///{db_path}",
-                "query": f"INSERT INTO {table_name} (data) VALUES ('Parallel test data {i}')",
-                "validate_queries": False,
-            },
-        )
-        if i > 0:
-            workflow.add_connection(
-                f"insert_{i - 1}", "result", f"insert_{i}", "trigger"
-            )
-        else:
-            workflow.add_connection("create_table", "result", "insert_0", "trigger")
 
-    # Query data count
-    workflow.add_node(
-        "AsyncSQLDatabaseNode",
-        "count_records",
-        {
-            "connection_string": f"sqlite:///{db_path}",
-            "query": f"SELECT COUNT(*) as count FROM {table_name}",
-            "validate_queries": False,
-        },
-    )
-    workflow.add_connection("insert_4", "result", "count_records", "trigger")
+@pytest.mark.asyncio
+@pytest.mark.tdd
+async def test_tdd_seeded_data_performance(
+    tdd_transaction_dataflow, performance_validator
+):
+    state = tdd_transaction_dataflow
+    for i in range(3):
+        await _create(state, f"seed-{i}")
+    start = time.perf_counter()
+    assert {r["id"] for r in await _rows(state)} == {"seed-0", "seed-1", "seed-2"}
+    _record(performance_validator, start)
 
-    # Execute workflow
-    runtime = LocalRuntime()
+
+@pytest.mark.asyncio
+@pytest.mark.tdd
+async def test_tdd_connection_reuse_performance(
+    tdd_transaction_dataflow, performance_validator
+):
+    state = tdd_transaction_dataflow
+    adapter = await _adapter(state)
+    start = time.perf_counter()
+    async with adapter.transaction() as scope:
+        connection = scope.connection
+        for i in range(5):
+            await _create(state, f"reuse-{i}", scope)
+            assert scope.connection is connection
+            assert len(await _rows(state, scope)) == i + 1
+    assert len(await _rows(state)) == 5
+    _record(performance_validator, start)
+
+
+@pytest.mark.asyncio
+async def test_tdd_fixture_setup_performance(performance_validator, tmp_path):
+    start = time.perf_counter()
+    async with _database(tmp_path / "setup.db") as state:
+        assert await _rows(state) == []
+    _record(performance_validator, start)
+    assert performance_validator.get_statistics()["count"] == 1
+
+
+def test_memory_usage_performance(record_property):
+    already_tracing = tracemalloc.is_tracing()
+    if not already_tracing:
+        tracemalloc.start()
     try:
-        results, run_id = runtime.execute(workflow.build())
-        # Verify operations completed
-        assert "create_table" in results
-        for i in range(5):
-            assert f"insert_{i}" in results
-    except Exception:
-        # SQLite operations might vary - that's OK for performance test
-        pass
-
-    end_time = time.time()
-    duration_ms = (end_time - start_time) * 1000
-
-    performance_validator.record_measurement(duration_ms)
-
-    # Validate parallel-safe operations are reasonably fast
-    # SQLite with workflow creation and DataFlow initialization has overhead
-    # Relaxed threshold to account for system load variability and CI environments
-    assert (
-        duration_ms < 10000.0
-    ), f"Parallel-safe test exceeded 10000ms: {duration_ms:.2f}ms"
-
-
-@pytest.mark.asyncio
-@pytest.mark.tdd
-async def test_tdd_seeded_data_performance(performance_validator, tmp_path):
-    """Test performance of pre-seeded data scenarios using DataFlow patterns."""
-    from dataflow import DataFlow
-
-    start_time = time.time()
-
-    # Create DataFlow with pre-seeded data
-    db_path = tmp_path / "seeded_data.db"
-    with DataFlow(f"sqlite:///{db_path}") as df:
-        # Define models (simulating pre-seeded schema)
-        @df.model
-        class User:
-            name: str
-            email: str
-            active: bool = True
-
-        @df.model
-        class Product:
-            name: str
-            price: float
-            category: str = "general"
-
-        @df.model
-        class Order:
-            user_id: int
-            product_id: int
-            quantity: int = 1
-
-        # Create tables - handle async context by catching the error (expected in async tests)
-        try:
-            df.create_tables()
-        except RuntimeError as e:
-            if "async context" in str(e):
-                # Expected in async test context - tables may already exist or
-                # we'll skip table creation for this performance test
-                pass
-            else:
-                raise
-
-        # Simulate pre-seeded data by preparing test data
-        users = [
-            {"name": "Alice", "email": "alice@example.com", "active": True},
-            {"name": "Bob", "email": "bob@example.com", "active": True},
-            {"name": "Charlie", "email": "charlie@example.com", "active": False},
-        ]
-
-        products = [
-            {"name": "Laptop", "price": 999.99, "category": "electronics"},
-            {"name": "Mouse", "price": 29.99, "category": "electronics"},
-            {"name": "Keyboard", "price": 79.99, "category": "electronics"},
-            {"name": "Coffee", "price": 12.99, "category": "food"},
-            {"name": "Tea", "price": 8.99, "category": "food"},
-        ]
-
-        orders = [
-            {"user_id": 1, "product_id": 1, "quantity": 1},
-            {"user_id": 2, "product_id": 2, "quantity": 2},
-            {"user_id": 1, "product_id": 5, "quantity": 3},
-        ]
-
-        # Verify data structures are available (no additional setup time needed)
-        assert len(users) == 3
-        assert len(products) == 5
-        assert len(orders) == 3
-
-        # Simulate operations that would use the seeded data
-        # In a real TDD scenario, this data would already be in the database
-        await asyncio.sleep(0.001)  # Minimal processing time
-
-    end_time = time.time()
-    duration_ms = (end_time - start_time) * 1000
-
-    performance_validator.record_measurement(duration_ms)
-
-    # Seeded data setup with DataFlow initialization can take time
-    # Multiple model registration and table creation has overhead
-    assert (
-        duration_ms < 10000.0
-    ), f"Seeded data test exceeded 10000ms: {duration_ms:.2f}ms"
-
-
-@pytest.mark.asyncio
-@pytest.mark.tdd
-async def test_tdd_connection_reuse_performance(performance_validator, tmp_path):
-    """Test performance benefits of connection reuse using DataFlow's connection pooling."""
-    from dataflow import DataFlow
-
-    start_time = time.time()
-
-    # Create DataFlow with connection pooling enabled
-    db_path = tmp_path / "connection_reuse.db"
-
-    # DataFlow manages its own connection pool
-    with DataFlow(
-        f"sqlite:///{db_path}",
-        pool_size=5,  # Simulate connection pool
-        pool_max_overflow=0,
-    ) as df:
-        # Perform multiple operations simulating connection reuse
-        for i in range(5):
-            # Each operation would reuse connections from the pool
-            # In SQLite, this is fast as it's file-based
-            try:
-                # Simulate a quick database operation
-                await asyncio.sleep(0.001)  # Minimal async operation
-                # In real scenario, DataFlow would execute:
-                # result = await df.connection.execute(f"SELECT {i}")
-                result = i  # Simulate successful result
-                assert result == i
-            except Exception:
-                # SQLite doesn't have true connection pooling like PostgreSQL
-                # But the test validates the performance pattern
-                pass
-
-    end_time = time.time()
-    duration_ms = (end_time - start_time) * 1000
-
-    performance_validator.record_measurement(duration_ms)
-
-    # Connection reuse with DataFlow initialization has overhead
-    # Creating and closing DataFlow instances takes time
-    # Relaxed threshold to account for system load variability and CI environments
-    assert (
-        duration_ms < 10000.0
-    ), f"Connection reuse exceeded 10000ms: {duration_ms:.2f}ms"
-
-
-def test_tdd_fixture_setup_performance(performance_validator):
-    """Test performance of TDD fixture setup overhead."""
-
-    # Simple benchmark implementation for fixture setup
-    class SimpleBenchmark:
-        def __init__(self):
-            self.measurements = {}
-            self.last_measurement = None
-
-        def measure(self, name):
-            class MeasureContext:
-                def __init__(self, benchmark, name):
-                    self.benchmark = benchmark
-                    self.name = name
-                    self.start_time = None
-
-                def __enter__(self):
-                    self.start_time = time.time()
-                    return self
-
-                def __exit__(self, *args):
-                    duration_ms = (time.time() - self.start_time) * 1000
-                    if self.name not in self.benchmark.measurements:
-                        self.benchmark.measurements[self.name] = []
-                    self.benchmark.measurements[self.name].append(duration_ms)
-                    self.benchmark.last_measurement = duration_ms
-
-            return MeasureContext(self, name)
-
-        def validate_target(self, target_ms):
-            if not self.measurements:
-                return True
-            all_measurements = []
-            for measurements in self.measurements.values():
-                all_measurements.extend(measurements)
-            return all(m < target_ms for m in all_measurements)
-
-    tdd_benchmark = SimpleBenchmark()
-
-    # Measure fixture setup time
-    with tdd_benchmark.measure("fixture_setup"):
-        # Simulate fixture setup overhead
-        time.sleep(0.005)  # 5ms simulated setup
-
-    setup_time = tdd_benchmark.last_measurement
-    performance_validator.record_measurement(setup_time)
-
-    # Fixture setup should be minimal
-    assert setup_time < 20.0, f"Fixture setup exceeded 20ms: {setup_time:.2f}ms"
-
-    # Validate benchmark utilities work correctly
-    assert tdd_benchmark.validate_target(100.0)
-    assert len(tdd_benchmark.measurements["fixture_setup"]) == 1
-
-
-def test_memory_usage_performance(performance_validator):
-    """Test memory usage efficiency of TDD fixtures."""
-    import tracemalloc
-
-    # Simple memory monitor implementation
-    class SimpleMemoryMonitor:
-        def __init__(self):
-            self.start_memory = None
-            self.peak_usage_mb = 0
-            self.current_usage_mb = 0
-
-        def track(self):
-            class TrackContext:
-                def __init__(self, monitor):
-                    self.monitor = monitor
-
-                def __enter__(self):
-                    tracemalloc.start()
-                    self.monitor.start_memory = tracemalloc.get_traced_memory()[0]
-                    return self
-
-                def __exit__(self, *args):
-                    current, peak = tracemalloc.get_traced_memory()
-                    tracemalloc.stop()
-                    self.monitor.current_usage_mb = current / 1024 / 1024
-                    self.monitor.peak_usage_mb = peak / 1024 / 1024
-
-            return TrackContext(self)
-
-        def update_tracking(self):
-            # In a real implementation, this would update metrics
-            pass
-
-        def get_delta_mb(self):
-            if self.start_memory is None:
-                return 0.0
-            return (
-                (self.current_usage_mb * 1024 * 1024 - self.start_memory) / 1024 / 1024
-            )
-
-    tdd_memory_monitor = SimpleMemoryMonitor()
-
-    with tdd_memory_monitor.track():
-        # Simulate typical test operations
+        before, _ = tracemalloc.get_traced_memory()
         data = list(range(1000))
         processed = [x * 2 for x in data]
-
-        # Update tracking
-        tdd_memory_monitor.update_tracking()
-
-    # Validate memory usage is minimal
-    delta_mb = tdd_memory_monitor.get_delta_mb()
-    peak_mb = tdd_memory_monitor.peak_usage_mb
-
-    # Memory usage should be very low for simple operations
-    assert delta_mb < 0.5, f"Memory delta exceeded 0.5MB: {delta_mb:.2f}MB"
-    assert peak_mb > 0, "Peak memory usage should be tracked"
-
-    # Record memory performance (treat as time metric for consistency)
-    performance_validator.record_measurement(delta_mb * 10)  # Scale for comparison
+        after, peak = tracemalloc.get_traced_memory()
+        assert processed[-1] == 1998
+        delta_mb = (after - before) / (1024 * 1024)
+        assert 0 < delta_mb < 0.5
+        assert peak > before
+        record_property("memory_delta_bytes", after - before)
+        record_property("memory_peak_bytes", peak)
+    finally:
+        if not already_tracing:
+            tracemalloc.stop()
 
 
-@pytest.mark.asyncio
-@pytest.mark.tdd
-async def test_tdd_performance_batch_validation(performance_validator):
-    """Run multiple TDD operations to validate consistent performance."""
-    # Run multiple iterations to get statistical validation
-    iteration_count = 10
-
-    for i in range(iteration_count):
-        start_time = time.time()
-
-        # Simulate a typical TDD test operation
-        await asyncio.sleep(0.01)  # 10ms simulated work
-
-        end_time = time.time()
-        duration_ms = (end_time - start_time) * 1000
-
-        performance_validator.record_measurement(duration_ms)
-
-        # Each iteration should meet target
-        assert duration_ms < 100.0, f"Iteration {i} exceeded 100ms: {duration_ms:.2f}ms"
-
-    # Validate statistical performance
+def test_tdd_performance_batch_validation(performance_validator):
+    # Exact samples test the 100ms boundary without asserting scheduler latency.
+    for duration in [10.0] * 9 + [100.0]:
+        performance_validator.record_measurement(duration)
     stats = performance_validator.get_statistics()
-
-    assert stats["count"] == iteration_count
-    assert stats["mean"] < 50.0, f"Average time exceeded 50ms: {stats['mean']:.2f}ms"
-    assert stats["max"] < 100.0, f"Max time exceeded 100ms: {stats['max']:.2f}ms"
-    assert (
-        stats["target_achieved_pct"] == 100.0
-    ), f"Not all iterations met target: {stats['target_achieved_pct']:.1f}%"
+    assert stats["count"] == 10
+    assert stats["mean"] == 19.0
+    assert stats["max"] == 100.0
+    assert stats["target_achieved_pct"] == 100.0
+    assert performance_validator.validate_target_achieved()
+    performance_validator.record_measurement(101.0)
+    assert not performance_validator.validate_target_achieved()
 
 
 @pytest.mark.asyncio
-@pytest.mark.tdd
-async def test_performance_comparison_with_traditional():
-    """
-    Document performance improvement over traditional approach.
-
-    This test demonstrates the performance improvement over the traditional
-    DROP SCHEMA CASCADE approach (>2000ms) vs savepoint approach (<100ms).
-    """
-    # Traditional approach simulation (for documentation only - not actually run)
-    traditional_time_ms = 2500.0  # Typical DROP SCHEMA CASCADE time
-
-    # TDD approach measurement
-    start_time = time.time()
-
-    # Simulate typical TDD test with savepoint
-    await asyncio.sleep(0.02)  # 20ms typical savepoint operation
-
-    end_time = time.time()
-    tdd_time_ms = (end_time - start_time) * 1000
-
-    # Calculate improvement
-    improvement_factor = traditional_time_ms / tdd_time_ms
-    improvement_percentage = (
-        (traditional_time_ms - tdd_time_ms) / traditional_time_ms
-    ) * 100
-
-    # Validate significant improvement
-    assert tdd_time_ms < 100.0, f"TDD approach exceeded target: {tdd_time_ms:.2f}ms"
-    assert (
-        improvement_factor > 20
-    ), f"Improvement factor too low: {improvement_factor:.1f}x"
-    assert (
-        improvement_percentage > 95
-    ), f"Improvement percentage too low: {improvement_percentage:.1f}%"
-
-    # Log performance improvement for documentation
-    print("\nPerformance Improvement Summary:")
-    print(f"Traditional approach: {traditional_time_ms:.0f}ms")
-    print(f"TDD approach: {tdd_time_ms:.2f}ms")
-    print(f"Improvement factor: {improvement_factor:.1f}x faster")
-    print(f"Improvement percentage: {improvement_percentage:.1f}% reduction")
+async def test_performance_comparison_with_traditional(
+    tdd_transaction_dataflow, performance_validator, tmp_path, record_property
+):
+    # Measure two real paths; do not invent a fixed cross-machine speed ratio.
+    start = time.perf_counter()
+    async with _database(tmp_path / "fresh-schema.db") as fresh:
+        await _create(fresh, "fresh")
+        assert len(await _rows(fresh)) == 1
+    recreation_ms = _record(performance_validator, start)
+    state = tdd_transaction_dataflow
+    adapter = await _adapter(state)
+    start = time.perf_counter()
+    with pytest.raises(ValueError, match="rollback benchmark"):
+        async with adapter.transaction() as scope:
+            await _create(state, "discard", scope)
+            raise ValueError("rollback benchmark")
+    assert await _rows(state) == []
+    rollback_ms = _record(performance_validator, start)
+    record_property("schema_recreation_ms", recreation_ms)
+    record_property("transaction_rollback_ms", rollback_ms)
 
 
 def test_performance_validator_final_report(performance_validator):
-    """Generate final performance report for all measurements."""
-    # This test should run last to get complete statistics
+    assert performance_validator.get_statistics() == {}
+    assert not performance_validator.validate_target_achieved()
+    for duration in [10.0] * 9 + [110.0]:
+        performance_validator.record_measurement(duration)
     stats = performance_validator.get_statistics()
-
-    if stats:
-        print("\nTDD Performance Final Report:")
-        print(f"Total measurements: {stats['count']}")
-        print(f"Average time: {stats['mean']:.2f}ms")
-        print(f"Median time: {stats['median']:.2f}ms")
-        print(f"Min time: {stats['min']:.2f}ms")
-        print(f"Max time: {stats['max']:.2f}ms")
-        print(f"Standard deviation: {stats['std_dev']:.2f}ms")
-        print(f"Target achieved rate: {stats['target_achieved_pct']:.1f}%")
-
-        # Validate overall performance
-        assert (
-            stats["target_achieved_pct"] >= 90.0
-        ), f"Overall target achievement too low: {stats['target_achieved_pct']:.1f}%"
-
-        assert stats["mean"] < 75.0, f"Average time too high: {stats['mean']:.2f}ms"
-
-    else:
-        print("\nNo performance measurements recorded")
-
-
-# Configure test execution order
-def pytest_collection_modifyitems(config, items):
-    """Ensure final report runs last."""
-    final_report_test = None
-    other_tests = []
-
-    for item in items:
-        if "final_report" in item.name:
-            final_report_test = item
-        else:
-            other_tests.append(item)
-
-    # Reorder so final report runs last
-    if final_report_test:
-        items[:] = other_tests + [final_report_test]
+    assert stats["count"] == 10
+    assert stats["target_achieved_pct"] == 90.0
+    assert stats["mean"] == 20.0
+    assert stats["min"] == 10.0
+    assert stats["max"] == 110.0
+    assert stats["median"] == 10.0
+    assert stats["std_dev"] > 0
+    assert performance_validator.validate_target_achieved(90.0)
+    assert not performance_validator.validate_target_achieved(95.0)

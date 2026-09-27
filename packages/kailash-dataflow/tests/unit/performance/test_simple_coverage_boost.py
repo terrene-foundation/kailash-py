@@ -3,6 +3,7 @@ Simple, reliable tests to boost coverage using only verified working API pattern
 Focus on methods that definitely exist and work.
 """
 
+from contextlib import closing
 from unittest.mock import Mock, patch
 
 import pytest
@@ -54,7 +55,6 @@ class TestDataFlowCoreEngineCoverage:
     def test_model_management_methods(self):
         """Test model management methods that exist."""
         with DataFlow(_test_db_url(), existing_schema_mode=True) as db:
-
             # Test initial state
             models = db.get_models()
             assert isinstance(models, dict)
@@ -252,30 +252,23 @@ class TestSQLDialectsModuleBasic:
 
     def test_sql_dialects_import_and_basic_usage(self):
         """Test SQL dialect classes."""
-        try:
-            from dataflow.adapters.sql_dialects import (
-                DialectManager,
-                MySQLDialect,
-                PostgreSQLDialect,
-                SQLiteDialect,
-            )
+        from dataflow.adapters.dialect import (
+            DialectManager,
+            MySQLDialect,
+            PostgreSQLDialect,
+            SQLiteDialect,
+        )
 
-            # Test dialect creation
-            pg_dialect = PostgreSQLDialect()
-            assert pg_dialect is not None
-
-            mysql_dialect = MySQLDialect()
-            assert mysql_dialect is not None
-
-            sqlite_dialect = SQLiteDialect()
-            assert sqlite_dialect is not None
-
-            # Test dialect manager
-            manager = DialectManager()
-            assert manager is not None
-
-        except (ImportError, TypeError) as e:
-            pytest.skip(f"SQL dialects not available: {e}")
+        for name, expected, placeholder in (
+            ("postgresql", PostgreSQLDialect, "$1"),
+            ("mysql", MySQLDialect, "%s"),
+            ("sqlite", SQLiteDialect, "?"),
+        ):
+            dialect = DialectManager.get_dialect(name)
+            assert isinstance(dialect, expected)
+            assert dialect.get_parameter_placeholder(1) == placeholder
+        with pytest.raises(ValueError, match="Unsupported database type"):
+            DialectManager.get_dialect("unknown")
 
 
 class TestAutoMigrationSystemBasic:
@@ -283,14 +276,8 @@ class TestAutoMigrationSystemBasic:
 
     def test_auto_migration_system_import(self):
         """Test auto-migration system import and basic functionality."""
-        try:
-            from dataflow.migrations.auto_migration_system import AutoMigrationSystem
+        from dataflow.migrations.auto_migration_system import AutoMigrationSystem
 
-            migration_system = AutoMigrationSystem(_test_db_url())
+        with closing(AutoMigrationSystem(_test_db_url())) as migration_system:
             assert migration_system is not None
-
-            # Check for expected methods that actually exist
             assert hasattr(migration_system, "auto_migrate")
-
-        except (ImportError, TypeError) as e:
-            pytest.skip(f"Auto-migration system not available: {e}")

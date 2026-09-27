@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from kailash.workflow import Workflow
 from kailash.workflow.builder import WorkflowBuilder
+from kailash.workflow.contracts import ConnectionContract
 
 
 def create_minimal_workflow() -> Workflow:
@@ -200,15 +201,18 @@ def create_workflow_with_contracts() -> Workflow:
 
     workflow = builder.build()
 
-    # Add connection contract to metadata
+    schema = {
+        "type": "object",
+        "required": ["data", "type"],
+        "properties": {
+            "data": {"type": "array", "items": {"type": "integer"}},
+            "type": {"type": "string"},
+        },
+    }
     workflow.metadata["connection_contracts"] = {
-        "source.result → target.data": {
-            "name": "data_transfer",
-            "source_output": "result",
-            "target_input": "data",
-            "required": True,
-            "type": "dict",
-        }
+        "source.result → target.data": ConnectionContract(
+            name="data_transfer", source_schema=schema, target_schema=schema
+        ).to_dict()
     }
 
     return workflow

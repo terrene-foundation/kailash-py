@@ -1,7 +1,7 @@
 {
   "resumed_session": "01a0db1d-b7b7-7441-a2fe-81bfeef99161",
   "starting_head": "e19a9ab73bdf94066d7c2e820619ddcd11e303e7",
-  "status": "Production repairs committed; whole-promotion review found test lifecycle and timing defects being repaired before final rerun and push",
+  "status": "Root and Mac reruns passed at6af; skip audit closing obsolete fixtures and repairing newly reproduced Core SQLite nested file transaction ownership before promotion",
   "authorizations": {
     "D1_promotion": true,
     "package_publication": false,
@@ -267,5 +267,36 @@
     "SQLite audit test owners close real stores including implicit engine stores",
     "AsyncLocalRuntime test owners close channel runtimes and durable engines",
     "Legacy Agent compatibility tests explicitly assert intended import deprecation"
-  ]
+  ],
+  "final_gate_attempt_2": {
+    "candidate": "6af82971d84687dc670e233a35b2a5c6d8a13b40",
+    "linux_root": {
+      "passed": 3853,
+      "skipped": 3,
+      "deselected": 24,
+      "warnings": 0,
+      "exit": 0
+    },
+    "mac_all_files": {
+      "passed": 5153,
+      "skipped": 15,
+      "deselected": 3,
+      "exit": 0,
+      "SKIP": "unset"
+    },
+    "gate": "not final: obsolete skipped fixtures under repair; production SQLite nested ownership finding subsequently reproduced"
+  },
+  "active_nested_sqlite_repair": {
+    "worktree": "csq15-sqlite-nested-owner",
+    "branch": "fix/csq15-sqlite-nested-owner",
+    "author": "http_correctness acting DataFlow specialist",
+    "repro": "/tmp/csq15-sqlite-nested-repro.py",
+    "observation": "assert inner.connection is outer.connection fails on file SQLite; fresh connection obtained before nested-depth branch",
+    "scope": "Core SQLiteAdapter ownership, savepoints, cancellation/failure state, cleanup and task isolation; <=500 load-bearing LOC; root cause not deferred"
+  },
+  "skip_audit": {
+    "mac": "10 platform RLIMIT_AS,1 optional kaizen_agents,1 absent cross-SDK vectors;3 obsolete contract imports repaired",
+    "root": "1 optional rfc3161;2 stale startup/auth fixture skips being repaired",
+    "dataflow": "10 obsolete skipped synthetic benchmarks being replaced with real async CRUD/savepoint measurements;1 obsolete dialect import being corrected"
+  }
 }

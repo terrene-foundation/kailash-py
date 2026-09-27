@@ -169,10 +169,6 @@ class TestValidateConnectionContracts:
 
     def test_validate_connection_contracts_with_contracts(self):
         """Test validation with defined contracts."""
-        pytest.importorskip(
-            "kailash.contracts", reason="Contracts module not available"
-        )
-
         runtime = ConcreteRuntimeWithValidation()
         workflow = create_workflow_with_contracts()
         target_node_id = "target"
@@ -183,28 +179,18 @@ class TestValidateConnectionContracts:
             workflow, target_node_id, target_inputs, node_outputs
         )
 
-        # Valid data should pass
+        # Valid data must satisfy the actual source and target schemas.
         assert isinstance(violations, list)
+        assert violations == []
 
     def test_validate_connection_contracts_invalid_data(self):
         """Test validation catches contract violations."""
-        pytest.importorskip(
-            "kailash.contracts", reason="Contracts module not available"
-        )
-
         runtime = ConcreteRuntimeWithValidation()
         workflow = create_workflow_with_contracts()
 
-        # Set up contract that will be violated
-        workflow.metadata["connection_contracts"]["source.result → target.data"] = {
-            "name": "strict_contract",
-            "source_output": "result",
-            "target_input": "data",
-            "required": True,
-            "type": "dict",
-            "source_schema": {"type": "dict", "required_keys": ["data", "type"]},
-            "target_schema": {"type": "dict", "required_keys": ["data", "type"]},
-        }
+        workflow.metadata["connection_contracts"]["source.result → target.data"][
+            "name"
+        ] = "strict_contract"
 
         target_node_id = "target"
         # Invalid data (wrong type)
@@ -215,19 +201,19 @@ class TestValidateConnectionContracts:
             workflow, target_node_id, target_inputs, node_outputs
         )
 
-        # May have violations depending on contract validator implementation
         assert isinstance(violations, list)
+        assert len(violations) == 1
+        assert violations[0]["connection"] == "source.result → target.data"
+        assert violations[0]["contract"] == "strict_contract"
+        assert "Source validation" in violations[0]["error"]
+        assert "Target validation" in violations[0]["error"]
 
     def test_validate_connection_contracts_missing_source_data(self):
         """Test validation handles missing source data."""
-        pytest.importorskip(
-            "kailash.contracts", reason="Contracts module not available"
-        )
-
         runtime = ConcreteRuntimeWithValidation()
         workflow = create_workflow_with_contracts()
         target_node_id = "target"
-        target_inputs = {"data": [1, 2, 3]}
+        target_inputs = {"data": {"data": [1, 2, 3], "type": "numbers"}}
         # Missing source node outputs
         node_outputs = {}
 
@@ -235,8 +221,12 @@ class TestValidateConnectionContracts:
             workflow, target_node_id, target_inputs, node_outputs
         )
 
-        # Should handle gracefully
         assert isinstance(violations, list)
+        assert len(violations) == 1
+        assert violations[0]["connection"] == "source.result → target.data"
+        assert violations[0]["contract"] == "data_transfer"
+        assert "Source validation" in violations[0]["error"]
+        assert "Target validation" not in violations[0]["error"]
 
 
 class TestValidateConditionalExecutionPrerequisites:
@@ -497,18 +487,12 @@ class TestValidationMixinIntegration:
         warnings = runtime.validate_workflow(workflow)
         assert isinstance(warnings, list)
 
-        # Connection contract validation (if contracts module available)
-        try:
-            violations = runtime._validate_connection_contracts(
-                workflow,
-                "target",
-                {"data": [1, 2, 3]},
-                {"source": {"result": [1, 2, 3]}},
-            )
-            assert isinstance(violations, list)
-        except ModuleNotFoundError:
-            # Contracts module not available - skip this part
-            pass
+        data = {"data": [1, 2, 3], "type": "numbers"}
+        violations = runtime._validate_connection_contracts(
+            workflow, "target", {"data": data}, {"source": {"result": data}}
+        )
+        assert isinstance(violations, list)
+        assert violations == []
 
     def test_validation_mixin_stateless(self):
         """Test ValidationMixin is stateless and doesn't add attributes."""

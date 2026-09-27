@@ -10,13 +10,15 @@ mutation fails that assertion. Final formatting/lint annotations preserve the
 runtime AST. The exact receipt and fixed eight-item completion list are in
 `04-validate/csq15-resume-checkpoint.json`.
 
-Promotion remains gated. First full Linux run passed 3853 root and 4542 DataFlow
-tests; root emitted one unclosed-runtime warning. Mac all-files hooks passed,
-including 5153 unit tests. Independent union review traced test-owned runtime and
-SQLite leaks, a DNS worker-start timing race, and a legacy import warning contract.
-These test-only repairs are being closed with explicit owners and reached controls.
-Next rerun affected Linux root regression and Mac all-files hooks with SKIP unset;
-finish three delivered union reviews and the complete original-assertion inventory.
+Promotion remains gated. At `6af82971d`, Linux root rerun passed 3853 tests with
+zero Python warnings, and Mac all-files hooks passed including 5153 unit tests.
+A complete skip audit is closing obsolete contract imports, startup/auth fixtures,
+and synthetic DataFlow performance tests. Real benchmark execution then reproduced
+Core SQLite nested file transactions using different inner/outer connections.
+The SDK ownership fix is active in `csq15-sqlite-nested-owner`, not deferred.
+Three whole-union review receipts are delivered for the earlier source; they do
+not certify that new adapter fix. Next finish its independent correctness/security
+rounds, refresh assertion parity, and rerun relevant full Linux/Mac gates.
 Then consolidate one push, read every required and formerly failed check on the
 exact PR head, and separately merge #2229 under D1. Post-main review, owned worktree
 drain, and final handoff restamp remain owed.

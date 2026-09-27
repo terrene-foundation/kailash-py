@@ -15,9 +15,29 @@ from __future__ import annotations
 
 import hashlib
 import json
+from contextlib import ExitStack
+
+import pytest
 
 from kailash.trust.pact.compilation import CompiledOrg, OrgNode
 from kailash.trust.pact.config import ConfidentialityLevel
+
+
+@pytest.fixture(autouse=True)
+def _close_sqlite_test_owners(monkeypatch):
+    """Close real audit stores, including stores created inside engines."""
+    from kailash.trust.pact.stores.sqlite import _SqliteBase
+
+    initialize = _SqliteBase.__init__
+    with ExitStack() as owners:
+
+        def initialize_owned(self, *args, **kwargs):
+            initialize(self, *args, **kwargs)
+            owners.callback(self.close)
+
+        monkeypatch.setattr(_SqliteBase, "__init__", initialize_owned)
+        yield
+
 
 # ---------------------------------------------------------------------------
 # Helpers
