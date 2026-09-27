@@ -1,7 +1,7 @@
 {
   "resumed_session": "01a0db1d-b7b7-7441-a2fe-81bfeef99161",
   "starting_head": "e19a9ab73bdf94066d7c2e820619ddcd11e303e7",
-  "status": "All four local test gates passed and scoped correctness/security reviews complete; pending user scope disposition for173 specification-check advisories before consolidated push/promotion",
+  "status": "User approved separate spec-check cleanup; local tests and scoped reviews passed; proceed with consolidated push, exact-head CI and D1 merge",
   "authorizations": {
     "D1_promotion": true,
     "package_publication": false,
@@ -10,7 +10,8 @@
       "inherited KaizenNode base execution"
     ],
     "advisory_type_backlog": "outside D1 by explicit user approval",
-    "historical_refs_and_stashes": "preserve"
+    "historical_refs_and_stashes": "preserve",
+    "specification_check_advisories": "173 inventoried messages outside D1 by explicit 2026-09-27 user approval; separate repair plan"
   },
   "completion_list_ratified_by": "independent http_correctness reviewer",
   "completion_list": [
@@ -382,10 +383,13 @@
     "skip_scope": "10 macOS RLIMIT_AS unsupported; missing optional kaizen_agents; absent cross-SDK reference vectors"
   },
   "spec_advisory_decision": {
-    "status": "pending user answer",
+    "status": "approved",
+    "date": "2026-09-27",
+    "user_quote": "Approve separate spec-check cleanup; finish D1 (Recommended)",
     "proposal": "csq15-spec-advisory-scope-decision.md",
+    "separate_plan": "csq16-spec-check-cleanup-plan.md",
     "warnings": 173,
-    "existing_type_exception_does_not_cover": true
+    "waives_tests_required_CI_or_source_security": false
   },
   "local_validated_head": "c8ce102b8025e0b69bb744cbe636cd3aecb080e8",
   "local_validated_tree": "469f368b09b8e7244d1a4122ecdf8a21969bc916",
@@ -430,12 +434,11 @@
     }
   },
   "next_actions": [
-    "Read pending user scope answer; do not infer approval from elapsed time",
-    "Record authorized advisory disposition or execute approved sharded repair plan",
-    "Consolidated push dev/promotion; all required and previously failing checks green on exact head",
-    "Separate D1 merge PR2229",
-    "Post-main union verification in three newly created sibling trees, then drain those new review trees",
-    "Preserve52historicalrefs/5orderedstashes and restamp handoff"
+    "Push consolidated dev and existing promotion branch",
+    "Read all required and formerly failing checks on exact PR head",
+    "Separately merge PR2229 under D1",
+    "Create three sibling review trees on merged main for post-main union verification, then drain those trees",
+    "Preserve52 historicalrefs/5 orderedstashes and restamp handoff"
   ],
   "owned_worktree_drain": {
     "ran": true,

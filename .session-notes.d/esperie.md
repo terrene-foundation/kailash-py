@@ -21,16 +21,12 @@ The last fixture repair deferred two benchmark imports after the full DataFlow
 structural guard caught them. Independent correctness/security reviews are clean
 on final source and fixture bytes, including two rounds of 119 SQLite tests per reviewer.
 
-Promotion is waiting on a new scope decision: verbose spec-drift output contains
-173 advisories (111 active expired baseline rows, 55 uncovered-section messages,
-7 public-alias detector warnings). The concrete proposal and independent triage
-are in `csq15-spec-advisory-scope-decision.md` and `csq15-spec-drift-triage.json`.
-The user was asked whether to keep this backlog separate from D1 or resolve it
-before promotion. ANSWER PENDING; no new exception inferred. Do not repeat the
-question if a response has arrived. The previous type #73 exception does not cover
-this separate backlog.
-
-After scope disposition, consolidate one push, verify every required/previously
+The user explicitly approved separate cleanup of the 173 specification-check
+advisories on 2026-09-27: “Approve separate spec-check cleanup; finish D1
+(Recommended)”. The exception and separate plan are recorded in
+`csq15-spec-advisory-scope-decision.md` and `csq16-spec-check-cleanup-plan.md`.
+It waives no failing test, required CI check or unresolved source-security finding.
+Do not ask again. Next consolidate one push, verify every required/previously
 failing check on the exact PR head, and separately merge #2229 under existing D1.
 All seven completed owned worktrees were backed up and drained after their work
 landed in dev; 77 dirty/untracked files are preserved in
