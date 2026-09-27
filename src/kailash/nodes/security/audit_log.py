@@ -10,9 +10,26 @@ from typing import Any, Dict
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.utils.secure_logging import (
     redact_mapping,
+    safe_log_field,
     sanitize_log_structure,
     sanitize_log_value,
 )
+
+
+def _safe_audit_log_structure(data: Any, depth: int = 0) -> Any:
+    """Render a log-only copy using the shared credential-aware field helper."""
+    if depth >= 6:
+        return "<depth-limited>"
+    if type(data) is dict:  # noqa: E721 - exact builtin avoids custom traversal
+        return {
+            safe_log_field(key): _safe_audit_log_structure(value, depth + 1)
+            for key, value in data.items()
+        }
+    if any(type(data) is kind for kind in (list, tuple, set, frozenset)):
+        return [_safe_audit_log_structure(value, depth + 1) for value in data]
+    if data is None or any(type(data) is kind for kind in (bool, int, float)):
+        return data
+    return safe_log_field(data)
 
 
 @register_node()
@@ -31,7 +48,7 @@ class AuditLogNode(Node):
         self.log_level = log_level
         self.include_timestamp = include_timestamp
         self.output_format = output_format
-        self.logger = logging.getLogger(f"audit.{name}")
+        self.logger = logging.getLogger(f"audit.{safe_log_field(name)}")
 
         # Set logger level
         level = getattr(logging, log_level.upper(), logging.INFO)
@@ -107,9 +124,8 @@ class AuditLogNode(Node):
         # "one layer down ... so that EVERY caller in the SDK is covered
         # rather than only this package's". Redact FIRST: the sanitizer then
         # never handles the credential at all.
-        event_data = sanitize_log_structure(
-            redact_mapping(inputs.get("event_data", {}))
-        )
+        redacted_data = redact_mapping(inputs.get("event_data", {}))
+        event_data = sanitize_log_structure(redacted_data)
         event_type = sanitize_log_value(inputs.get("event_type", "info"), 128)
         raw_user_id = inputs.get("user_id")
         # Preserve the None/absent distinction rather than recording the
@@ -128,12 +144,23 @@ class AuditLogNode(Node):
         if self.include_timestamp:
             audit_entry["timestamp"] = datetime.now(timezone.utc).isoformat()
 
-        # Log the event
+        # Mask original fields before structural formatting obscures credential
+        # boundaries. The public audit entry keeps its existing representation.
+        log_entry = {
+            **audit_entry,
+            "event_type": safe_log_field(inputs.get("event_type", "info"), 128),
+            "message": safe_log_field(inputs.get("message", ""), 512),
+            "user_id": (
+                None if raw_user_id is None else safe_log_field(raw_user_id, 128)
+            ),
+            "data": _safe_audit_log_structure(redacted_data),
+        }
         if self.output_format == "json":
-            log_message = json.dumps(audit_entry)
+            log_message = json.dumps(log_entry)
         else:
             log_message = (
-                f"[{event_type}] {message} - User: {user_id} - Data: {event_data}"
+                f"[{log_entry['event_type']}] {log_entry['message']} - "
+                f"User: {log_entry['user_id']} - Data: {log_entry['data']}"
             )
 
         # Use appropriate log level

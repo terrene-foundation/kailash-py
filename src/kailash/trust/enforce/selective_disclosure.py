@@ -22,6 +22,7 @@ from kailash.trust.audit_store import AuditRecord
 from kailash.trust.pact.audit import GENESIS_HASH
 from kailash.trust.reasoning.traces import ConfidentialityLevel
 from kailash.trust.signing.crypto import sign, verify_signature
+from kailash.utils.secure_logging import safe_log_field
 
 logger = logging.getLogger(__name__)
 
@@ -209,7 +210,7 @@ def _should_keep_reasoning_trace(value: Any) -> bool:
     except ValueError:
         logger.warning(
             f"[SELECTIVE_DISCLOSURE] Unknown confidentiality level "
-            f"'{confidentiality_str}' in reasoning_trace — redacting"
+            f"'{safe_log_field(confidentiality_str)}' in reasoning_trace — redacting"
         )
         return False
 

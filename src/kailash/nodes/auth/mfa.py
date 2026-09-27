@@ -36,6 +36,7 @@ from kailash.sdk_exceptions import NodeExecutionError
 from kailash.utils.secure_logging import (
     redact_mapping,
     safe_exception_frames,
+    safe_log_field,
     safe_type_name,
 )
 
@@ -91,7 +92,7 @@ def _warn_actor_enforcement_disabled(node_name: str) -> None:
         "dispatch. To enable enforcement, pass "
         "MultiFactorAuthNode(actor_resolver=..., require_actor=True) and send "
         "actor_session_id on every call. Emitted once per node name.",
-        node_name,
+        safe_log_field(node_name),
     )
 
 
@@ -418,6 +419,14 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         # audit-node involvement.
         self.audit_log_node = AuditLogNode(name=f"{name}_audit_log")
         self.security_event_node = SecurityEventNode(name=f"{name}_security_events")
+        # Derive logger namespaces from the original metadata field before a
+        # suffix obscures JSON credentials. Child node identities stay raw.
+        self.audit_log_node.logger = logging.getLogger(
+            f"audit.{safe_log_field(name)}_audit_log"
+        )
+        self.security_event_node.logger = logging.getLogger(
+            f"security.{safe_log_field(name)}_security_events"
+        )
 
         # User MFA data storage (in production, this would be a database)
         self.user_mfa_data: Dict[str, Dict[str, Any]] = {}
