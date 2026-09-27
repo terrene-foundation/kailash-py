@@ -54,15 +54,22 @@ class TestWindowsKeyProtection:
     """Verify Windows key protection doesn't crash (actual ACL verification
     requires pywin32 which is optional)."""
 
-    def test_key_write_does_not_raise(self, tmp_path: Path) -> None:
-        """Key write must succeed on Windows regardless of pywin32 availability."""
+    def test_key_write_requires_acl_provider(self, tmp_path: Path) -> None:
+        """No private bytes are persisted when the Windows ACL provider is absent."""
+        import importlib.util
+
         from kailash.trust.plane.project import _save_keys
 
-        _save_keys(tmp_path / "keys", "fake-private-key", "fake-public-key")
-
         priv_path = tmp_path / "keys" / "private.key"
-        assert priv_path.exists()
-        assert priv_path.read_text() == "fake-private-key"
+        if importlib.util.find_spec("win32security") is None:
+            with pytest.raises(PermissionError, match="pywin32"):
+                _save_keys(
+                    tmp_path / "keys", "private-test-content", "public-test-content"
+                )
+            assert not priv_path.exists() or not priv_path.read_bytes()
+        else:
+            _save_keys(tmp_path / "keys", "private-test-content", "public-test-content")
+            assert priv_path.read_text() == "private-test-content"
 
 
 class TestKeyProtectionCrossPlatform:

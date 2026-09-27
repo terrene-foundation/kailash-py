@@ -23,18 +23,17 @@ Design decision: prototype in TrustPlane first, extract to EATP SDK
 after the abstraction proves correct in real use.
 """
 
-import errno
 import hashlib
 import hmac as hmac_mod
 import html as html_mod
 import json
 import logging
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from kailash.trust._locking import safe_read_json
+from kailash.trust.plane._key_files import read_public_key
 from kailash.trust.plane.store.filesystem import sort_anchor_files
 from kailash.trust.reasoning.traces import ConfidentialityLevel
 
@@ -149,28 +148,12 @@ class VerificationBundle:
                 anchor_copy = {k: v for k, v in data.items() if k != "reasoning_trace"}
                 anchors.append(anchor_copy)
 
-        # Public key (symlink-safe read)
+        # Public key: shared descriptor check rejects symlinks and special files.
         pub_key_path = trust_dir / "keys" / "public.key"
-        public_key = ""
-        if pub_key_path.exists():
-            flags = os.O_RDONLY
-            if hasattr(os, "O_NOFOLLOW"):
-                flags |= os.O_NOFOLLOW
-            try:
-                fd = os.open(str(pub_key_path), flags)
-            except OSError as e:
-                if e.errno == errno.ELOOP:
-                    raise OSError(
-                        f"Refusing to read symlink (possible attack): {pub_key_path}"
-                    ) from e
-                raise
-            try:
-                f = os.fdopen(fd, "r")
-            except Exception:
-                os.close(fd)
-                raise
-            with f:
-                public_key = f.read()
+        try:
+            public_key = read_public_key(pub_key_path).decode("utf-8")
+        except FileNotFoundError:
+            public_key = ""
 
         # Compute chain hash from anchors
         chain_content = json.dumps(
