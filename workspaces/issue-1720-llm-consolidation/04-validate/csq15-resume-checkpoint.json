@@ -1,0 +1,234 @@
+{
+  "resumed_session": "01a0db1d-b7b7-7441-a2fe-81bfeef99161",
+  "starting_head": "e19a9ab73bdf94066d7c2e820619ddcd11e303e7",
+  "status": "HTTP repairs committed and scoped reviews clean; whole-promotion gates remain open",
+  "authorizations": {
+    "D1_promotion": true,
+    "package_publication": false,
+    "design_exceptions": [
+      "DataFlow pools argument contract",
+      "inherited KaizenNode base execution"
+    ],
+    "advisory_type_backlog": "outside D1 by explicit user approval",
+    "historical_refs_and_stashes": "preserve"
+  },
+  "completion_list_ratified_by": "independent http_correctness reviewer",
+  "completion_list": [
+    "webhook behavior and two independent correctness/security rounds",
+    "owned HTTP diagnostic callbacks and DNS fixture isolation with same reviews",
+    "exact committed candidate Linux root/DataFlow and Mac all-files hooks with SKIP unset",
+    "three delivered whole-promotion union reviews with absolute assertion/caller inventory",
+    "consolidated push; required and formerly failing checks green on exact PR head",
+    "separate D1-authorized PR2229 merge",
+    "post-main verification and owned worktree drain preserving historical refs/stashes",
+    "current repository checkpoint and authorized external handoff pair"
+  ],
+  "lanes": [
+    {
+      "task_set": [
+        "callback logging repair",
+        "DNS fixture isolation"
+      ],
+      "agent": "http_repair",
+      "worktree": "csq14-nexus-dns-binding"
+    },
+    {
+      "task_set": [
+        "webhook correctness",
+        "HTTP logging correctness",
+        "final union preparation"
+      ],
+      "agent": "http_correctness",
+      "worktree": "csq14-final3-correctness"
+    },
+    {
+      "task_set": [
+        "webhook security",
+        "HTTP logging security",
+        "final union preparation"
+      ],
+      "agent": "http_security",
+      "worktree": "csq14-cycle-final-adversarial"
+    }
+  ],
+  "primary_backup": "/tmp/csq15-resume-primary-backup",
+  "preserved_refs": 52,
+  "preserved_stashes": 5,
+  "live_PR_head_at_resume": "ce4c9de676f1ab1e0a159cb8c273dcf2e47a2cb4",
+  "webhook_parent_test": {
+    "passed": 101,
+    "python_warnings": 0,
+    "skips": 0,
+    "intentional_negative_path_log_records": 20,
+    "log": "/tmp/csq15-webhook-parent.log"
+  },
+  "webhook_reviews": [
+    "/tmp/csq14-resume-webhook-correctness-receipt.json",
+    "/tmp/csq14-resume-security-webhook-receipt.json"
+  ],
+  "limitation": "Scoped webhook reviews precede refined shared logging integration; no final-candidate or promotion convergence claim.",
+  "commits": {
+    "http_logging": "21ee01682",
+    "webhook": "057c3ac83"
+  },
+  "http_reviews": {
+    "correctness": {
+      "ran": true,
+      "verdict": "CLEAN",
+      "scope": "Owned HTTP callback diagnostic semantics, DNS fixture isolation, all webhook behavior on final shared callee",
+      "manifest": {
+        "src/kailash/utils/http_logging.py": "b24e02b39b3580c4d3e357c115e34d9d023b5a30cb4c073f80bf59617721e421",
+        "src/kailash/utils/http_transport.py": "a21f90acc2740b167a38d272fe68b51607cb1b2e6fddc5af6862e24b1cb6a0bd",
+        "tests/regression/test_owned_http_diagnostic_privacy.py": "6a8f9d1ad73bbf48b60f2bed31c79f90ddc781cb97c2d275ec646aa59de2f7cb",
+        "tests/regression/test_http_dns_connection_binding.py": "69961dffa296621682c4b4fe9e6226736342621586bc3b783783b23779ea0796",
+        "specs/nexus-services.md": "3efa6fd321621cbaecd841deb226ad6c3cde21f67b5263428e44fbd20949778b",
+        "specs/kaizen-providers-provider-system.md": "7ff13ea9860f2ea8e86588e0c02bb3d29b2898a48e085ab65758b98b1c3a69bf",
+        "packages/kailash-nexus/src/nexus/transports/webhook.py": "495663043b8b8ceb20f2c6172245fe1509faa800c663adf12b39c5e8bebe64aa",
+        "packages/kailash-nexus/tests/unit/transports/test_webhook_safe_delivery.py": "be65780372d9a7fa5130e525a1274cc28fb2843bf71aa2a78fc0057ddf37d9d9",
+        "packages/kailash-nexus/tests/unit/transports/test_webhook.py": "f038d9073083916fff3783d5ee3f1c34cf238c93579864d99d1d715d0c79c897",
+        "packages/kailash-nexus/src/nexus/http_client.py": "c1e6bed85b9f95ee158d385883e3de8dc26ebdf37aeedeaaf266e3fdee4b4ac9",
+        "packages/kailash-kaizen/src/kaizen/llm/http_client.py": "1a465f7abb7f7ee30d5ff06c2eb5c03c335921255b6d66d9f36a4270bc360ccd",
+        "src/kailash/utils/network_guard.py": "87d700e283fc96399790334a4151bb92b98c4a9e2ec5d6a208dad5c164aacda5"
+      },
+      "rounds": [
+        {
+          "name": "current DNS/logging/webhook",
+          "passed": 161,
+          "seconds": 31.18,
+          "python_warnings": 0,
+          "skips": 0,
+          "log": "/tmp/csq14-resume-combined-r1.log"
+        },
+        {
+          "name": "minimum webhook/logging/DNS",
+          "passed": 161,
+          "seconds": 26.59,
+          "python_warnings": 0,
+          "skips": 0,
+          "log": "/tmp/csq14-resume-combined-r2.log"
+        }
+      ],
+      "runtime_logs": "44 each: all intended negative signature/DNS/timeout/protocol outcomes; complete semantic inventory equal across both runs",
+      "independent_probes": {
+        "mutable_callbacks": "append/full setter/auth reassignment: previously exit1, refined exit0; raw control and DiagnosticAsyncClient both scope false and raw logging visible",
+        "iterator_factory": "previously exit1, refined exit0; task inherited unowned scope and separate client raw logs retained"
+      },
+      "absolute_sweep": "/tmp/csq14-resume-http-correctness-absolute.json",
+      "exclusions": "This is scoped correctness, not whole-promotion/security/main convergence. Does not cover arbitrary replacement logging factories which discard registered chain or unsupported dependency producers.",
+      "dns_fixture_negative_control": {
+        "mutation": "restore original outer-fixture monkeypatch lifetime via nullcontext(monkeypatch)",
+        "reached": 4,
+        "failures": 4,
+        "pytest_exit": 1,
+        "failure_site": "socket.getaddrinfo is original assertion",
+        "log": "/tmp/csq14-resume-dns-fixture-control.log"
+      },
+      "final_fixture_refinement": {
+        "scope": "Test-only budget oracle and2 doc line ranges; all production hashes unchanged",
+        "current": "32 passed6.26s, warnings0/skips0",
+        "minimum": "32 passed8.13s, warnings0/skips0",
+        "negative": "Reached2 candidates; per-candidate deadline-reset mutation fails equality; pytest exit1",
+        "negative_log": "/tmp/csq14-resume-budget-correctness-control.log",
+        "retention": "Both old budget assertions retained,3 stronger assertions added; all other test functions AST-identical",
+        "format": "bad55f7 to69961df Black-only AST-identical independently verified"
+      }
+    },
+    "security": {
+      "ran": true,
+      "role": "independent adversarial security reviewer",
+      "verdict": "CLEAN; two consecutive clean scoped final rounds",
+      "manifest": {
+        "src/kailash/utils/http_logging.py": "29fcdca49a5d7e3f812a2c38e8e64e7c447a109ce3fca228af81fd3e4c713991",
+        "src/kailash/utils/http_transport.py": "a21f90acc2740b167a38d272fe68b51607cb1b2e6fddc5af6862e24b1cb6a0bd",
+        "tests/regression/test_owned_http_diagnostic_privacy.py": "6a8f9d1ad73bbf48b60f2bed31c79f90ddc781cb97c2d275ec646aa59de2f7cb",
+        "tests/regression/test_http_dns_connection_binding.py": "69961dffa296621682c4b4fe9e6226736342621586bc3b783783b23779ea0796",
+        "specs/nexus-services.md": "3efa6fd321621cbaecd841deb226ad6c3cde21f67b5263428e44fbd20949778b",
+        "specs/kaizen-providers-provider-system.md": "7ff13ea9860f2ea8e86588e0c02bb3d29b2898a48e085ab65758b98b1c3a69bf",
+        "packages/kailash-nexus/src/nexus/transports/webhook.py": "495663043b8b8ceb20f2c6172245fe1509faa800c663adf12b39c5e8bebe64aa",
+        "packages/kailash-nexus/tests/unit/transports/test_webhook_safe_delivery.py": "be65780372d9a7fa5130e525a1274cc28fb2843bf71aa2a78fc0057ddf37d9d9",
+        "packages/kailash-nexus/tests/unit/transports/test_webhook.py": "f038d9073083916fff3783d5ee3f1c34cf238c93579864d99d1d715d0c79c897",
+        "packages/kailash-nexus/src/nexus/http_client.py": "c1e6bed85b9f95ee158d385883e3de8dc26ebdf37aeedeaaf266e3fdee4b4ac9",
+        "packages/kailash-kaizen/src/kaizen/llm/http_client.py": "1a465f7abb7f7ee30d5ff06c2eb5c03c335921255b6d66d9f36a4270bc360ccd",
+        "packages/kailash-kaizen/src/kaizen/llm/url_safety.py": "37e0b892070f2494cab7fb3aeabd99a47949343683c5419c3663d30b5942ec99",
+        "src/kailash/utils/network_guard.py": "87d700e283fc96399790334a4151bb92b98c4a9e2ec5d6a208dad5c164aacda5",
+        "specs/nexus-channels.md": "0edd79fb1e6cb98acb499a9e87072fb39e7055f25bbed8376b524f988b53900d"
+      },
+      "rounds": {
+        "current": "95 passed in35.00s; DNS then logging then webhook",
+        "minimum": "95 passed in32.22s; logging then DNS then webhook; httpx0.25/httpcore0.18/anyio4.1"
+      },
+      "source_identity": "All production hashes unchanged across both rounds. DNS test formatting changed bad55f7 to69961df after round1; reviewer independently proved exact AST equality; round2 final formatted bytes.",
+      "independent_execution": {
+        "privacy": "16 actual socket cases each current/minimum, previous LogRecord factory/raw records/formatted logs captured; zero owned markers; HTTP Nexus/Kaizen/webhook, malformed public errors preserved, stream yield/close/cancel/unowned callbacks and parallel traffic",
+        "replacement_auth": "2 cases each current/minimum: replacement trace/body execute; unowned HTTPX query reaches raw handler and previous factory exactly once each. These probes measure callback isolation only; their placeholder leaks arrays are NOT privacy evidence.",
+        "resolver": "1 case each current/minimum: nested unowned client query visible twice (handler+factory); callback isolation only",
+        "mutable_and_iterator": "Plain HTTPX opposing reference compared; fixed owned contexts false, actual foreign requests and raw/formatted records retained; suite covers both dependency versions",
+        "tls_minimum": "actual TLS original SNI/Host, HMAC body, numeric TCP;17 records including2 configuration events; private CA path absent before prior factory and handlers"
+      },
+      "opposing_controls": {
+        "factory": "30 reached;2 privacy assertion failures",
+        "callback_scope": "24 reached;6 live mutable-hook assertion failures",
+        "constructor_scope_minimum": "1 reached; CA-path privacy assertion failure",
+        "per_candidate_timeout": "2 reached; exact shared-deadline assertion failed",
+        "webhook_prior_scoped": "falsey4/4fail,numericTLS2/1fail,offline12/4fail; final unmodified webhook reexecuted both union rounds"
+      },
+      "mechanical": [
+        "Absolute AST/grep of all logging wrappers, request cleanup and caller wiring; three resets located in finally, removed-reset control changes result",
+        "Current/minimum installed dependency producer scans identify _client/_trace and minimum _config; full actual matches reviewed",
+        "Fourteen final files pinned; specifications source ranges reviewed and corrected through transport line141"
+      ],
+      "warnings": "No Python warnings/skips. Each final suite emits34 expected deliberate failure records:22 DNS policy/TLS/deadline/hook denials,2 malformed HTTP errors,10 webhook negative delivery scenarios. Full records /tmp/csq14-webhook-resumed-security-v2-r1-warnings.json and r2.",
+      "resolved_finding": "Round2 earlier fixture exact-two attempt assertion failed under narrow40ms/60ms timing. Author replaced with actual equal finite deadlines plus cancellation, independently proven against reset-per-attempt mutation. Superseded failed run retained /tmp/csq14-resume-security-union-r2.log.",
+      "scope": "Owned HTTP diagnostics and numeric DNS connection admission of Nexus/Kaizen plus webhook consumer. Real locally routed HTTP/TLS tests; not arbitrary caller logging factories or external network deployment.",
+      "open_findings": [],
+      "evidence_prefix": "/tmp/csq14-resume-security-",
+      "post_review_lint_refinement": {
+        "commit": "21ee01682",
+        "old_hash": "b24e02b39b3580c4d3e357c115e34d9d023b5a30cb4c073f80bf59617721e421",
+        "new_hash": "29fcdca49a5d7e3f812a2c38e8e64e7c447a109ce3fca228af81fd3e4c713991",
+        "reviewer_ast_identical": true,
+        "change": "Four E721 justified noqa comments preserve exact builtin type comparisons; no runtime AST change",
+        "opposing_control": "str subclass GET/int subclass200 pass isinstance+allowlist/range yet custom repr enters metadata; exact type rejects both",
+        "verdict": "Security verdict retained; no behavior-round reset"
+      }
+    }
+  },
+  "comment_only_lint_refinement": {
+    "old": "b24e02b39b3580c4d3e357c115e34d9d023b5a30cb4c073f80bf59617721e421",
+    "new": "29fcdca49a5d7e3f812a2c38e8e64e7c447a109ce3fca228af81fd3e4c713991",
+    "ast_identical": true,
+    "reason": "Exact builtin guards are deliberate; specific E721 annotations preserve payload boundary."
+  },
+  "parent_combined": {
+    "passed": 161,
+    "python_warnings": 0,
+    "skips": 0,
+    "intentional_negative_records": 44,
+    "scope": "pre-deadline-fixture refinement; final fixture independently reviewed"
+  },
+  "remaining": [
+    "exact committed candidate Linux root/DataFlow and Mac all-files hooks with SKIP unset",
+    "three delivered whole-promotion union reviews with absolute assertion/caller inventory",
+    "consolidated push; required and formerly failing checks green on exact PR head",
+    "separate D1-authorized PR2229 merge",
+    "post-main verification and owned worktree drain preserving historical refs/stashes",
+    "current repository checkpoint and authorized external handoff pair"
+  ],
+  "final_primary_manifest": {
+    "src/kailash/utils/http_logging.py": "29fcdca49a5d7e3f812a2c38e8e64e7c447a109ce3fca228af81fd3e4c713991",
+    "src/kailash/utils/http_transport.py": "a21f90acc2740b167a38d272fe68b51607cb1b2e6fddc5af6862e24b1cb6a0bd",
+    "tests/regression/test_owned_http_diagnostic_privacy.py": "6a8f9d1ad73bbf48b60f2bed31c79f90ddc781cb97c2d275ec646aa59de2f7cb",
+    "tests/regression/test_http_dns_connection_binding.py": "69961dffa296621682c4b4fe9e6226736342621586bc3b783783b23779ea0796",
+    "specs/nexus-services.md": "4265cbd457054861e7ee667426518fcccf40baeb901998520e6078c427163105",
+    "specs/kaizen-providers-provider-system.md": "e89b92bbd5d48131534f00a2147c01e377c6e1f63749cc319ebd857532c27b91",
+    "packages/kailash-nexus/src/nexus/transports/webhook.py": "495663043b8b8ceb20f2c6172245fe1509faa800c663adf12b39c5e8bebe64aa",
+    "packages/kailash-nexus/tests/unit/transports/test_webhook_safe_delivery.py": "be65780372d9a7fa5130e525a1274cc28fb2843bf71aa2a78fc0057ddf37d9d9",
+    "packages/kailash-nexus/tests/unit/transports/test_webhook.py": "f038d9073083916fff3783d5ee3f1c34cf238c93579864d99d1d715d0c79c897",
+    "packages/kailash-nexus/src/nexus/http_client.py": "c1e6bed85b9f95ee158d385883e3de8dc26ebdf37aeedeaaf266e3fdee4b4ac9",
+    "packages/kailash-kaizen/src/kaizen/llm/http_client.py": "1a465f7abb7f7ee30d5ff06c2eb5c03c335921255b6d66d9f36a4270bc360ccd",
+    "packages/kailash-kaizen/src/kaizen/llm/url_safety.py": "37e0b892070f2494cab7fb3aeabd99a47949343683c5419c3663d30b5942ec99",
+    "src/kailash/utils/network_guard.py": "87d700e283fc96399790334a4151bb92b98c4a9e2ec5d6a208dad5c164aacda5",
+    "specs/nexus-channels.md": "0edd79fb1e6cb98acb499a9e87072fb39e7055f25bbed8376b524f988b53900d"
+  },
+  "doc_citation_refinement": "Only helper range endpoints moved from355 to357 after comment-only lint annotations."
+}

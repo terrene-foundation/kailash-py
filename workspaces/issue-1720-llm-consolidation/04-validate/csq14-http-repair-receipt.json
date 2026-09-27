@@ -124,5 +124,6 @@
     "post-main review, owned worktree drain, bounded vault pair update"
   ],
   "permissions": "Nine specified CodeQL dispositions and both API design exceptions approved. D1 promotion authorized; no publishing. Preserve52 historical refs and5 stashes.",
-  "future_release_boundary": "A helper-bearing Core release and corresponding dependent floors must precede future package publishing. Checkout uv source mappings are not published metadata."
+  "future_release_boundary": "A helper-bearing Core release and corresponding dependent floors must precede future package publishing. Checkout uv source mappings are not published metadata.",
+  "continuation": "csq15-resume-checkpoint.json supersedes current HTTP repair status; historical findings/evidence retained"
 }

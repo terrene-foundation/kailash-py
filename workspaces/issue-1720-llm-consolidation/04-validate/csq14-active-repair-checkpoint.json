@@ -603,5 +603,6 @@
     ],
     "status": "DNS production committed; author currently repairs separate HTTP logging callback scope and DNS test fixture isolation"
   },
-  "current_http_receipt": "04-validate/csq14-http-repair-receipt.json"
+  "current_http_receipt": "04-validate/csq14-http-repair-receipt.json",
+  "continuation": "csq15-resume-checkpoint.json supersedes current HTTP repair status; historical findings/evidence retained"
 }

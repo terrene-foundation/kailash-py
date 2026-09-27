@@ -1,40 +1,28 @@
 # CSQ14 continuation — promotion remains authorized
 
-## Current checkpoint — supersedes historical statuses
+## Current checkpoint — session 01a0db1d resumed
 
-Source commit `b05f02798` on dev contains reviewed DNS connection binding and
-checkout lock corrections. Both correctness and security delivered two scoped
-clean rounds. All 15 committed file hashes match their receipts; parent DNS suite
-32 passed with no Python warnings. Both tracked locks and isolated locked installs
-passed; standalone Kaizen uses the paired local Core source. Details are in
-`04-validate/csq14-http-repair-receipt.json`.
+HTTP logging and webhook repairs are committed as `21ee01682` and `057c3ac83`.
+Independent correctness and adversarial security each delivered two scoped clean
+rounds on the combined HTTP surfaces. Final DNS deadline fixture checks identical
+finite absolute deadlines and real cancellation; a reached per-candidate-reset
+mutation fails that assertion. Final formatting/lint annotations preserve the
+runtime AST. The exact receipt and fixed eight-item completion list are in
+`04-validate/csq15-resume-checkpoint.json`.
 
-Promotion is NOT ready. Webhook custom sender selection must preserve falsey
-callables. The initial logging repair needs callback ownership corrections for
-new auth Requests, synchronous upload iterator factories and custom resolver hooks.
-A DNS-first combined run also exposed a fixture restoration leak (14 failed,
-33 passed); its test-only correction is pending. Authors and independent reviewers
-remain active in their isolated sibling trees. No push, merge or publishing here.
+Promotion is NOT ready. Next: pin the complete committed candidate, run Linux
+root/DataFlow and Mac all-files hooks with SKIP unset, and obtain three delivered
+whole-promotion reviews with fresh assertion/caller inventory. Then consolidate
+one push, read every required and formerly failed check on the exact PR head,
+and separately merge PR #2229 under the recovered D1 approval. Post-main review,
+owned worktree drain and the authorized external handoff pair remain owed.
 
-The nine approved CodeQL alerts were re-read through GitHub: all remain dismissed
-as false positives. The user approved BOTH separate API design tasks: DataFlow pools
-and inherited Kaizen base execution. No approval question remains pending.
-Required checks and the D1 promotion authorization persist; publishing is excluded.
-
-Cycle A/B/C remain committed with FINAL6 two-round correctness/security evidence.
-There are now 21 bounded committed repairs. Interim commits document
-SKIP=pytest-check; final all-files hooks MUST run with SKIP unset before pushing.
-After the remaining repairs: regenerate final assertion/caller inventory; run
-exact-candidate Linux/Mac gates and three delivered whole-promotion reviews; push
-once, verify every required check on the exact PR head, then separately merge
-PR2229 under D1. Post-main review, clean owned worktree drain and the authorized
-vault-pair update follow. Future publishing requires a helper-bearing Core release
-and coordinated dependent floors; checkout source mappings do not establish that.
-
-All 52 historical refs (51 archive plus 1 original) and five ordered stashes were
-rechecked unchanged after `b05f02798`. Preserve them. Completed cycle/convergence
-worktrees were already backed up and drained; current HTTP/review trees remain
-owned and active.
+The nine specified CodeQL dismissals and separate DataFlow pools / inherited
+Kaizen base-execution design exceptions remain approved. The advisory type-check
+backlog remains outside D1 by explicit user decision. Publishing is excluded.
+Preserve all 52 historical refs and five ordered stashes; resume backup is
+`/tmp/csq15-resume-primary-backup`. Per-commit pytest-check skips are documented;
+they do not discharge the final all-files hook obligation.
 
 ## Historical checkpoints (superseded)
 

@@ -635,7 +635,7 @@ protocol and exception-type metadata before invoking the prior factory or any
 handler. It neither drops records nor changes handler configuration. Public URLs,
 headers, request bytes, responses, errors and raw trace callback data remain
 unchanged. Source: `packages/kailash-nexus/src/nexus/http_client.py:339-350` and
-`src/kailash/utils/http_logging.py:1-355`.
+`src/kailash/utils/http_logging.py:1-357`.
 
 Factory registration is process-wide, idempotent and chains the existing factory;
 its effects are scoped by ContextVar to owned operations and the installed
@@ -646,4 +646,4 @@ construction. Stream consumers run outside the owned scope between chunks, and
 cancellation restores the context. This boundary covers the supported dependency
 producers; it does not sanitize arbitrary caller code or replacement logging
 factories that discard the registered chain. Source:
-`src/kailash/utils/http_logging.py:28-355`.
+`src/kailash/utils/http_logging.py:28-357`.

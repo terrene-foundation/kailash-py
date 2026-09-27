@@ -199,4 +199,4 @@ remain unchanged. Registration chains the existing LogRecord factory; unowned
 clients and caller-authored logging remain outside this scope, as detailed in
 `nexus-services.md` under "Owned HTTP dependency diagnostics". Source:
 `packages/kailash-kaizen/src/kaizen/llm/http_client.py:333-333` and
-`src/kailash/utils/http_logging.py:1-355`.
+`src/kailash/utils/http_logging.py:1-357`.
