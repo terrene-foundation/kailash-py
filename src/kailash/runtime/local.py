@@ -55,6 +55,7 @@ from kailash.runtime.resource_manager import (
 )
 from kailash.utils.secure_logging import (
     safe_exception_frames,
+    safe_log_field,
     safe_type_name,
 )
 
@@ -4255,7 +4256,7 @@ class LocalRuntime(
             # Use existing AuditLogNode pattern
             from kailash.nodes.security.audit_log import AuditLogNode
 
-            audit_node = AuditLogNode()
+            audit_node = AuditLogNode(name="runtime_audit")
             # Use the SDK pattern - execute the node
             audit_node.execute(
                 event_type=event_type,
@@ -4265,7 +4266,11 @@ class LocalRuntime(
             )
         except ImportError:
             # Audit logging not available, fall back to standard logging
-            self.logger.info(f"AUDIT: {event_type} - {event_data}")
+            self.logger.info(
+                "AUDIT: %s - data_fields=%d",
+                safe_log_field(event_type),
+                len(event_data),
+            )
         except Exception as e:
             # Audit logging failures shouldn't stop execution
             self.logger.warning(f"Audit logging failed: {safe_exception_frames(e)}")
@@ -4328,7 +4333,7 @@ class LocalRuntime(
             # Use existing AuditLogNode pattern
             from kailash.nodes.security.audit_log import AuditLogNode
 
-            audit_node = AuditLogNode()
+            audit_node = AuditLogNode(name="runtime_audit")
             # Use the SDK pattern - try async first, fallback to sync
             _async_run = getattr(audit_node, "async_run", None)
             if _async_run is not None:
@@ -4348,7 +4353,11 @@ class LocalRuntime(
                 )
         except ImportError:
             # Audit logging not available, fall back to standard logging
-            self.logger.info(f"AUDIT: {event_type} - {event_data}")
+            self.logger.info(
+                "AUDIT: %s - data_fields=%d",
+                safe_log_field(event_type),
+                len(event_data),
+            )
         except Exception as e:
             # Audit logging failures shouldn't stop execution
             self.logger.warning(f"Audit logging failed: {safe_exception_frames(e)}")
