@@ -151,7 +151,12 @@
     "prior_control": "provenance14reached5failed",
     "status": "Scoped root independent correctness/security clean"
   },
-  "remaining_gates": "Runtime native audit and idle-loop cleanup follow-up; namespace independent security review; frozen candidate fullLinux/Mac gates, requiredremoteCI, exact-headpromotion and3holisticmainreviews. No promotion claimed.",
+  "remaining_gates": [
+    "Full committed candidate Linux root/DataFlow/Tier2 and Mac all-files hooks with SKIP unset",
+    "Consolidated push and exact-head remote checks",
+    "Separate authorized PR2229 merge",
+    "Three holistic post-main reviewers and preserved worktree drain"
+  ],
   "pool_diagnostics_final": {
     "ran": true,
     "rounds": [
@@ -200,5 +205,202 @@
     "warnings": "113 WARN+ records in each round, normalized message sets equal; all are explicit configuration/severity/denial or injected failure cases. No Python warnings/skips.",
     "status": "Scoped independent correctness and adversarial security clean, two final rounds each; csq16-audit-namespace-review.json",
     "scope": "Actual nested Enterprise constructors and21 dynamic producers, component masking, publicidentity, keyed logger isolation; external identity provider/network not exercised."
+  },
+  "runtime_final": {
+    "ran": true,
+    "source_manifest": "csq16-candidate-source-manifest.json",
+    "root_rounds": [
+      "219 passed in6.55s",
+      "219 passed in7.53s"
+    ],
+    "correctness": "Independent native219x2 and5extra casesx2; Local bookkeeping/flush independentlychecked byroot/security. See csq16-runtime-audit-review.json.",
+    "controls": [
+      "cancelledrunstate6reached6failed",
+      "deferredflushwarning5reached5failed",
+      "cleanupcancellationwait2reached2failed"
+    ],
+    "scope": "Audit emission, cancellation persistence/provenance, owned loop/resource cleanup and compatibility; one live PostgreSQL case excluded. FullLinux/Mac/remoteCI stillpending."
+  },
+  "runtime_final_security": {
+    "ran": true,
+    "verdict": "CLEAN within specified runtime lifecycle, audit, cancellation persistence and deferred-flush scope",
+    "open_findings": [],
+    "workspace": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq16-promotion-verification",
+    "manifest": "/tmp/csq16-security-runtime-final-manifest.json",
+    "final_source_hashes": {
+      "src/kailash/runtime/local.py": "8c31a931391e4c6197aa34c5de4f6615b2f3aef2424ef20f067bf1596df3248c",
+      "src/kailash/runtime/async_local.py": "5a5234e0b74b8246816fa0bfbec2229ed018c8cbd6d6ace76b071c93ae54ace2",
+      "specs/core-runtime.md": "66ac9bb66e8bfc07b5f57e692323d1a0465f3509bea35999509ab60674de7cf0"
+    },
+    "rounds": [
+      {
+        "json": "/tmp/csq16-security-runtime-canonical-r1.json",
+        "log": "/tmp/csq16-security-runtime-canonical-r1.log",
+        "passed": 248,
+        "deselected": 1,
+        "python_warnings": [],
+        "skips": [],
+        "warn_plus_records": 43
+      },
+      {
+        "json": "/tmp/csq16-security-runtime-canonical-r2.json",
+        "log": "/tmp/csq16-security-runtime-canonical-r2.log",
+        "passed": 248,
+        "deselected": 1,
+        "python_warnings": [],
+        "skips": [],
+        "warn_plus_records": 43
+      }
+    ],
+    "command": "primary .venv/bin/python -P /tmp/csq16-security-runtime-run.py canonical-rN [files from final-files.json]; pytest -q -Werror --tb=short --timeout=45 -m not integration",
+    "cohort_manifest": "/tmp/csq16-security-runtime-final-files.json",
+    "mechanical": "/tmp/csq16-security-runtime-final-mechanical.json",
+    "controls": [
+      {
+        "mode": "registry",
+        "hits": 2,
+        "exit": 1,
+        "failures": 2,
+        "log": "/tmp/csq16-security-runtime-final-control-registry.log"
+      },
+      {
+        "mode": "scope",
+        "hits": 1,
+        "exit": 1,
+        "failures": 1,
+        "log": "/tmp/csq16-security-runtime-final-control-scope.log"
+      },
+      {
+        "mode": "wait",
+        "hits": 2,
+        "exit": 1,
+        "failures": 2,
+        "log": "/tmp/csq16-security-runtime-final-control-wait.log"
+      },
+      {
+        "mode": "admission",
+        "hits": 2,
+        "exit": 1,
+        "failures": 1,
+        "log": "/tmp/csq16-security-runtime-final-control-admission.log"
+      },
+      {
+        "mode": "guard",
+        "hits": 4,
+        "exit": 1,
+        "failures": 2,
+        "log": "/tmp/csq16-security-runtime-final-control-guard.log"
+      },
+      {
+        "mode": "state",
+        "hits": 8,
+        "exit": 1,
+        "failures": 6,
+        "log": "/tmp/csq16-security-runtime-canonical-control-state.log"
+      },
+      {
+        "mode": "privacy",
+        "hits": 2,
+        "exit": 1,
+        "failures": 2,
+        "log": "/tmp/csq16-security-runtime-canonical-control-privacy.log"
+      },
+      {
+        "mode": "silence",
+        "hits": 2,
+        "exit": 1,
+        "failures": 2,
+        "log": "/tmp/csq16-security-runtime-canonical-control-silence.log"
+      },
+      {
+        "hits": 5,
+        "exit": 1,
+        "mode": "flush",
+        "failures": 5,
+        "log": "/tmp/csq16-security-runtime-canonical-control-flush.log"
+      }
+    ],
+    "doc_mapping": {
+      "tested_async": "d272d6594f02334ca4e5c0730ec89930d20156374a463d1481870fe4165a05fe",
+      "final_async": "5a5234e0b74b8246816fa0bfbec2229ed018c8cbd6d6ace76b071c93ae54ace2",
+      "proof": "Read exact one-line execute docstring diff; full AST excluding docstrings equal. No executable source delta. Spec paragraph explicitly says new running loop after previous caller loop closes. Same source citations retained.",
+      "backup": "/tmp/csq16-security-runtime-doc-final-backup"
+    },
+    "format_mapping": {
+      "local": "6f82 to 8c31 full AST equal; both final rounds used 8c31",
+      "lifecycle_test": "821d to dbff import set and all non-import AST equal; both final rounds used dbff"
+    },
+    "independent_probes": {
+      "real_tcp_lifecycle": 6,
+      "actual_race_regressions": 3,
+      "additional_ownership": 4,
+      "other_audit_cancel_progress_real_sqlite": 16,
+      "total_additional_to_219": 29
+    },
+    "closed_findings": [
+      {
+        "finding": "Native synchronous repeated execution and close lacked actual resource completion",
+        "before": "Six baseline probes failed; resource close count remained 0 at refcount 0 and sequential execution loop IDs differed.",
+        "evidence": "/tmp/csq16-security-runtime-lifecycle-six-baseline.json",
+        "after": "Six real TCP probes pass in both final rounds; same loop, no Thread.start, actual socket closure, caller-owned loop remains usable."
+      },
+      {
+        "finding": "Cancelled async context exit could outlive host loop and leave socket open",
+        "before": "CANCELLED_EXIT completed=False socket_open=True ref_count=0",
+        "after": "completed=True socket_open=False ref_count=0; repeated cancellation regression and reached wait omission fail."
+      },
+      {
+        "finding": "Overlapping native sync execution created orphan coroutine",
+        "before": "coroutine 'AsyncLocalRuntime.execute_workflow_async' was never awaited",
+        "after": "orphaned=[]; atomic admission mutation reaches and fails."
+      },
+      {
+        "finding": "Close from active foreign caller loop blocked dependent loops",
+        "before": "watchdog_rescue=True",
+        "after": "FOREIGN_ACTIVE_CALLER watchdog_rescue=False closed=True"
+      },
+      {
+        "finding": "Local asyncio cancellation lacked terminal audit/progress restoration",
+        "before": "start-only event on actual cancellation",
+        "after": "original CancelledError retained; exactly start+cancelled terminal and progress ContextVar restored."
+      },
+      {
+        "finding": "Cancellation used unsupported run state",
+        "before": "Run terminal cancelled rejected by tracking contract",
+        "after": "run failed terminal while audit remains cancelled; reached state omission 8 hits, 6 failing tests."
+      },
+      {
+        "finding": "Error-path deferred SQLite flush failures were silent",
+        "before": "Actual SQLite directory-path OperationalError with persistence_diagnostics=[]",
+        "after": "Safe WARNING recorded on all five outcomes; original public exceptions preserved; reached omission 5 hits/5 failures."
+      }
+    ],
+    "diagnostics": {
+      "reviewed_all_records": true,
+      "rounds_normalized_equal": true,
+      "python_warnings": 0,
+      "warn_plus_per_round": 43,
+      "classification": {
+        "deliberate_registry_callback_failure": 2,
+        "explicit_audit_warning_error_level_tests": 4,
+        "platform_memory_limit_disclosure": 1,
+        "deliberate_python_node_errors": 10,
+        "dependent_node_errors": 4,
+        "deliberate_timeout": 2,
+        "forced_tracking_failure": 2,
+        "real_sqlite_forced_flush_failure": 6,
+        "forced_shape_drift": 5,
+        "missing_parallel_node_negative_case": 3,
+        "progress_probe_execution_failure": 4
+      },
+      "platform_disclosure": "Memory limit is NOT enforced for in-process code execution on this platform (address-space usage is not readable). No claim of memory-limit enforcement; existing explicit platform boundary."
+    },
+    "scope_limits": [
+      "One live PostgreSQL integration case deselected; SQL cleanup verified using actual delegated clear_shared_pools owner-loop argument plus scoped #1248 cohort, not a live PostgreSQL service.",
+      "Actual macOS/Python asyncio TCP resource lifecycle and SQLite persistence failure evidence; no Windows runtime claim.",
+      "No overall promotion, unrelated HTTP/trust/key or arbitrary application resource safety claim.",
+      "Synchronous close on an active caller loop retains observed asynchronous cleanup; awaited completion guaranteed by async context exit. Resource callbacks themselves may fail and are safely logged."
+    ],
+    "initial_instrument_error": "System python3 invocation exited 139 before verification; zero evidence banked. Repeated STEP0 and every verification with project .venv/bin/python -P exited 0."
   }
 }

@@ -1,0 +1,9 @@
+{
+  "ran": true,
+  "proposition": "Current specification warnings remain within exactly the approved173 recorded warning messages",
+  "approved_rows": 173,
+  "current_rows": 173,
+  "exact_multiset_equal": true,
+  "opposite": "Adding one synthetic unapproved warning is rejected by same Counter comparison",
+  "scope": "Full human-format specification gate on final source cde4d563e9e2114304b5e231e7091de92c39e518, including runtime lifecycle specification follow-up. Exactly 173 approved warning messages; no added or removed warning. Excludes all test, scanner and source-security gates."
+}

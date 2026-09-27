@@ -26,15 +26,32 @@ advisories on 2026-09-27: “Approve separate spec-check cleanup; finish D1
 (Recommended)”. The exception and separate plan are recorded in
 `csq15-spec-advisory-scope-decision.md` and `csq16-spec-check-cleanup-plan.md`.
 It waives no failing test, required CI check or unresolved source-security finding.
-Do not ask again. Next consolidate one push, verify every required/previously
-failing check on the exact PR head, and separately merge #2229 under existing D1.
-All seven completed owned worktrees were backed up and drained after their work
-landed in dev; 77 dirty/untracked files are preserved in
-`/tmp/csq15-owned-tree-final-backups`. Three completed fix branches were deleted
-with `-d`; only local dev/main remain. The 52 historical refs and five ordered
-stashes are unchanged. Post-main review remains owed: create three NEW sibling
-trees pinned to merged main before dispatch, since all previous reviewer paths
-are now removed. No package publication.
+Do not ask again. The consolidated candidate `68d4dbd41` is now pushed to dev
+and PR #2229. Root regression, DataFlow unit and infrastructure checks passed.
+The Core Tier2 job reported five failures (four runtime validation, one SQLite URL
+fixture); the five failures are repaired in the current local candidate.
+No merge has occurred. Five fixture failures are repaired locally and independently
+reviewed; a lost assertion in v1 was fixed before accepting v2. CodeQL now reports
+427 aggregate alerts; this is distinct from 58 identities absent from current main
+SARIF. Actual log-injection, metadata sanitizer and partial-key-file findings are
+under repair. No CSQ16 source changes have been committed/pushed yet. Independent
+review found a real NUL-delimiter trust-cache identity collision (cached allow vs
+uncached deny), DataFlow safe-reason re-entry, credential-bearing Core log fields,
+and blocking public-key FIFO reads. Owners are repairing these bounded siblings:
+http_repair cache identity; http_correctness public-key regular-file reads;
+http_security shared safe_log_field/Core diagnostics; root parameter injection.
+HTML, key v1, trust v2, DataFlow caller and fixture patches are integrated locally;
+OPEN findings supersede earlier author/partial clean rounds. Parameter injection
+now actually applies deferred mappings; tests pass but shared-helper adoption and
+independent review remain pending. The current checkpoint lists evidence. Run Linux
+CI-parity and full hooks after those repairs, then require every gate on the exact head.
+
+All seven earlier owned worktrees were backed up and drained, preserving 77 file
+versions under `/tmp/csq15-owned-tree-final-backups`. Current new sibling trees:
+`csq16-promotion-verification`, `csq16-runtime-ci`, `csq16-storage-ci`. All three current
+repair branches remain in play. Historical 52 refs and five ordered stashes are
+unchanged. Post-main three-reviewer verification and final drain remain owed.
+No package publication.
 
 The nine specified CodeQL dismissals and separate DataFlow pools / inherited
 Kaizen base-execution design exceptions remain approved. The advisory type-check
@@ -260,3 +277,54 @@ csq14-holistic-security (branchtest/csq14-owned-socket-fixture); DataFlowTestUti
 and shared VisualMigrationBuilder finalization in csq14-holistic-coverage
 (branchfix/csq14-dataflow-test-utils). Remaining detached holistic-correctness
 sibling supports read-only security disposition research. Final hooks stay open.
+
+
+## CSQ16 source closure update (2026-09-27 14:45 UTC)
+
+Primary dev and remote PR head remain68d4dbd41. Ten reviewed logical commits are
+assembled in siblingcsq16-source-integration, branchfix/d1-source-gate-closure,
+throughd8d1a27f8. Primary retains matching dirty source. Scoped final evidence is
+04-validate/csq16-root-independent-reviews.json and csq16-{cache,parameter}-security-review.json.
+Trustcache285x2 plus64independentadversarialcasesx2 passed; Corelogs159x2, HTML58x2,
+keyfiles149x2 (oneWindows-onlyskip), DataFlowcaller98x2. Tests fail under reached
+negativecontrols. No fullcandidate gate or remote scanner clearance is claimed.
+
+Remaining bounded source owners: promotion-verification handles audit/MFA/
+SecurityEvent/selective metadata logs; storage-ci handlesDataFlowpooldiagnostics;
+runtime-ci handlesKaizenclientcache delimiter collision. Allthree isolatedtrees
+remain uncommitted and must be backed up/drained after final source integration.
+Root owns cleanintegrationtree andLinux/Macmirrors. CurrentCodeQLsummary427 is
+not equivalent to branch2208 or58absent-main alerts; precise PR membership is
+not exposed by downloaded100annotations/SARIF. Concrete FPcandidate receipts
+do not authorize new dismissals. Percommitpytest skip remains tracked to full
+SKIP-unset allfiles gate beforepush. Approved173specadvisories remain separate.
+
+
+## CSQ16 checkpoint (2026-09-27 15:21 UTC)
+
+The earlier 14:45 checkpoint is superseded by this entry. Primary dev and remote
+PR2229 remain68d4. Source integration holds19logical commits through7b2ad3f4a,
+including scoped independent closures for DataFlow pool diagnostics/dev drivers,
+Kaizen client identity and audit namespace propagation/configuration isolation.
+The audit namespace union passed321tests twice for each independent reviewer;
+reached negative controls and final source hashes are in
+04-validate/csq16-audit-namespace-review.json. Specification warnings were rerun:
+exactly the approved173messages, zeroadded/removed. No source/security waiver.
+
+Runtime remains OPEN: native audit emission/exception provenance is committed
+atc6857465b, but LocalRuntime cancellation and caller timeout emit only a start
+event. Native sync shutdown logs "AsyncLocalRuntime cleanup timed out after 5s".
+The runtime-ci author is repairing cancellation bookkeeping and loop/resource
+ownership, including async context exit; storage-ci and promotion-verification
+are independent correctness/security reviewers. No fullcandidate gate, remote
+rescan or promotion is claimed. Root owns integration and Linux/Mac mirrors.
+Complete frozen source reviews, preserve/fast-forward primary without stash,
+run full exact-candidate gates with SKIP unset, then push once and verify exact
+PRhead CI before a separate merge command. Three holistic main reviewers and
+safe owned-tree drainage remain required; preserve52historicalrefs/5orderedstashes.
+
+## 2026-09-27 15:56 UTC — final source freeze
+
+The 24 source/review commits through `cde4d563e` are assembled in the clean integration worktree. All 75 source/test/spec/dependency paths match the candidate manifest. Runtime correctness passed 219 cases twice plus five independent ownership cases twice; security passed 248 twice with nine reached opposing controls. Both reviewers delivered scoped CLEAN receipts. Earlier open findings in the receipts are historical and superseded by their final rows. The final specification run still matches exactly the 173 approved warnings. All 52 historical refs and five ordered stashes remain intact.
+
+Next: commit final metadata, transfer the byte-matched candidate to dev with backups, run Linux root/DataFlow/Tier2 and Mac all-files hooks with SKIP unset, then consolidate the push and inspect exact-head remote CI. PR2229 remains unmerged; D1 is not complete. Package publishing remains excluded. No additional scanner dismissal is authorized.

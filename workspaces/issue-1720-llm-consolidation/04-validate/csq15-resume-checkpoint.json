@@ -1,7 +1,7 @@
 {
   "resumed_session": "01a0db1d-b7b7-7441-a2fe-81bfeef99161",
   "starting_head": "e19a9ab73bdf94066d7c2e820619ddcd11e303e7",
-  "status": "User approved separate spec-check cleanup; local tests and scoped reviews passed; proceed with consolidated push, exact-head CI and D1 merge",
+  "status": "D1 authorized and active. All known source repairs integrated and scoped independent reviews clean. Specification exception remains exactly173. Full final candidate gates, remote CI, promotion and post-main verification remain pending.",
   "authorizations": {
     "D1_promotion": true,
     "package_publication": false,
@@ -430,15 +430,15 @@
       "python_warnings": 0,
       "SKIP": "unset",
       "log": "/tmp/csq15-final-mac.log",
-      "caveat": "173 specification-check warnings remain open despite hook exit0; user scope decision pending"
+      "caveat": "173 inventoried specification-check advisories explicitly approved outside D1; separate cleanup plan"
     }
   },
   "next_actions": [
-    "Push consolidated dev and existing promotion branch",
-    "Read all required and formerly failing checks on exact PR head",
-    "Separately merge PR2229 under D1",
-    "Create three sibling review trees on merged main for post-main union verification, then drain those trees",
-    "Preserve52 historicalrefs/5 orderedstashes and restamp handoff"
+    "Complete frozen runtime/cleanup and namespace independent correctness/security reviews with two clean rounds and reached opposing controls.",
+    "Commit all owned source and validation notes in isolated integration tree, preserve then fast-forward primary dev to exact candidate.",
+    "Run full Linux suites and SKIP-unset all-files Mac hooks; resolve failures and warnings.",
+    "Push one consolidated dev/promotion update; verify current PR head and every required CI check. No new CodeQL dismissal without specific authorization.",
+    "Merge existing PR2229 only after required checks pass at exact head; run three holistic main reviewers; preserve refs/stashes, drain owned trees, update authorized handoff."
   ],
   "owned_worktree_drain": {
     "ran": true,
@@ -501,5 +501,53 @@
     "backup_root": "/tmp/csq15-owned-tree-final-backups",
     "method": "Verified cp backups, reversed only owned tracked patches, moved untracked files and environment symlink into backup, verified clean target trees, removed without force, deleted ancestor branches with -d."
   },
-  "final_output_audit": "csq15-final-output-audit.json"
+  "final_output_audit": "csq15-final-output-audit.json",
+  "current_PR_head": "68d4dbd4185435a03cd43604c12966558c9c934e",
+  "ci_68d4": {
+    "snapshot": "csq16-pr-first-push-ci.json",
+    "failed_job": "Test (Python 3.11)",
+    "failed_step": "Tier2 integration",
+    "summary": "5 failed,2563 passed,44 skipped,4 deselected,1 xpassed",
+    "repair_trees": [
+      "csq16-runtime-ci",
+      "csq16-storage-ci"
+    ],
+    "root_regression": "SUCCESS",
+    "dataflow_unit": "SUCCESS",
+    "source_security": "CodeQL FAILURE: aggregate427; actual trust-log newline finding reproduced at11629/11630; bounded repair in progress; no source-security exception",
+    "codeql_audit": "csq16-codeql-current-audit.json",
+    "confirmed_followups": [
+      "Trust log newline injection; v1 exception-origin diagnostic reentry found and v2 in progress",
+      "Core builder/graph/registry public log injection (three-file repair wave)",
+      "Metadata sanitizer closing-space script failure and document script/style text extraction defect",
+      "Partial trust-key regeneration retains existing0644 private inode mode; bounded repair owed"
+    ],
+    "metadata_contract_question": "Optional clarification asked; after a reasonable response window, root stated compatibility assumption: preserve safe HTML formatting. No answer treated as authorization; routine repair remains within D1.",
+    "active_repair_shards": {
+      "http_repair": "Core builder, graph and registry log hygiene; source and public API canary probes",
+      "http_correctness": "Maintained HTML sanitizer integration and parser-based document extraction; then trust v2 correctness review",
+      "http_security": "Trust diagnostic exception provenance v2; then private-key partial-file lifecycle repair"
+    }
+  },
+  "active_csq16_followups": {
+    "as_of": "2026-09-27T15:21:06Z",
+    "completed_scoped": "Runtime/storage fixtures, Core logs, HTML, key files/key types, retry, trust cache, parameter injection, DataFlow trust callers/pool diagnostics/dependencies and Kaizen client identity have independent scoped evidence.",
+    "audit_namespace": "Integrated e6c9d47e5; independent correctness and security321x2 each, negativecontrolsreached; scopedclean.",
+    "runtime_audit": "Native auditv2 c6857465b integrated. Remaining LocalRuntime cancellation terminal-event gap and native loop/resource cleanup repair under http_repair; reviewers http_correctness/http_security awaitfinaldelta.",
+    "integration": "Root owns clean sibling csq16-source-integration, branch fix/d1-source-gate-closure, 19 logical commits through7b2ad3f4a; primary dev remainsdirty68d4.",
+    "codeql": "Remote68d4 fails; no new dismissals authorized/performed. Nine concrete false-positive candidates independently investigated; approval packet is not authorization."
+  },
+  "spec_advisory_boundary_recheck": "csq16-spec-exception-boundary.json: current fullchecker warning multiset exactly matches approved173; noadditions/removals.",
+  "final_source_freeze": {
+    "source_commit": "cde4d563e9e2114304b5e231e7091de92c39e518",
+    "primary_before_transfer": "68d4dbd4185435a03cd43604c12966558c9c934e",
+    "manifest": "csq16-candidate-source-manifest.json",
+    "source_files": 75,
+    "correctness": "219 passed twice plus five independent ownership cases twice",
+    "security": "248 passed twice; nine reached opposing controls",
+    "root": "219 passed twice; three reached opposing controls",
+    "spec_advisories": 173,
+    "preservation": "52 refs and 5 ordered stashes verified at freeze",
+    "next": "Commit final metadata, guarded fast-forward primary, run full gates"
+  }
 }

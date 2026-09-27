@@ -1,0 +1,1710 @@
+{
+  "status": "Scoped runtime correctness and adversarial security clean in two delivered rounds each on final source; earlier OPEN rows retained as history. Full candidate gates and remote CI remain pending.",
+  "author_v2": {
+    "status": "FROZEN audit behavior; separate native synchronous cleanup warning remains OPEN and assigned follow-up",
+    "manifest": {
+      "src/kailash/runtime/local.py": {
+        "base_sha256": "5893d4a1aab8879aceac8b77e93b7a5522a4e1f071513273b4b62cf741ceabea",
+        "sha256": "b635336e114cff35a851ca0ce82f616322e1b9f9c61a850b1aa76cca37b5a4af"
+      },
+      "src/kailash/runtime/async_local.py": {
+        "base_sha256": "6a4123919d362ce0c093d7b1aa2cdc6d689ee87b0ffdf9894f7907e392c35652",
+        "sha256": "1917849fd5d187dbbc85eb84fa4bafe0d8ca68610f1bd5f2720df80d0720a27d"
+      },
+      "tests/regression/test_runtime_audit_emission.py": {
+        "base_sha256": "181d7748bd8c2f111a396b89fe061ecd54d0dcbdeb5744aac838accc6a041df3",
+        "sha256": "54815cf5ae1eeac07fb6001219a214558ca0f9306632b23d052a4e77d958def9"
+      }
+    },
+    "archive": "/tmp/csq16-runtime-audit-v2-files.tar.gz",
+    "base": "Primary formatted local5893d4a and async6a412391; v1 newtest181d7748",
+    "change": "Local denied/failed audit errors use provenance frames. Native shared engine emits inherited start/terminal audit, uses explicit completion flag for audit/metrics to exclude handled caller exceptions. Public errors and cleanup paths unchanged.",
+    "spec_quotes": [
+      {
+        "source": "specs/core-runtime.md:165-167",
+        "quote": "Inherits: LocalRuntime. Async-first runtime extending LocalRuntime with concurrent execution, workflow optimization, and integrated resource management."
+      },
+      {
+        "source": "specs/core-runtime.md:35",
+        "quote": "enable_audit: bool = False"
+      },
+      {
+        "source": "specs/security-threats.md:31",
+        "quote": "Token creation with user_id (no token content)."
+      }
+    ],
+    "tests": {
+      "round1": "36 passed in24.29s",
+      "round2": "36 passed in21.93s",
+      "command": "/tmp/csq16-html-venv/bin/python -P /tmp/csq16-html-security-run.py tests/regression/test_runtime_audit_emission.py -q -Werror --tb=short",
+      "scope": "Local sync/async and native sync/async/direct, enabled/disabled, real success/failure, denial, cancellation and timeout. Original11tests retained."
+    },
+    "controls": {
+      "native_omission": {
+        "hits": 20,
+        "result": "10 failed,6 passed,20 deselected"
+      },
+      "provenance_removal": {
+        "hits": 10,
+        "result": "6 failed,10 passed,20 deselected"
+      }
+    },
+    "ast": {
+      "src/kailash/runtime/local.py": {
+        "original_functions": 106,
+        "changed": [
+          "_execute_async"
+        ],
+        "added": []
+      },
+      "src/kailash/runtime/async_local.py": {
+        "original_functions": 44,
+        "changed": [
+          "execute_workflow_async"
+        ],
+        "added": []
+      },
+      "tests/regression/test_runtime_audit_emission.py": {
+        "original_functions": 5,
+        "changed": [],
+        "added": [
+          "async_run",
+          "execute",
+          "exercise",
+          "get_parameters",
+          "run_async",
+          "test_local_access_denial_audit_preserves_public_error_and_uses_frames",
+          "test_native_audit_records_cancel_and_timeout",
+          "test_public_execution_audit_outcome_and_exception_privacy"
+        ]
+      }
+    },
+    "open_cleanup": {
+      "trigger": "with AsyncLocalRuntime(...): runtime.execute(workflow)",
+      "observed": "AsyncLocalRuntime cleanup timed out after 5s",
+      "reason": "close schedules cleanup onto non-running persistent loop; separate authorized root-cause follow-up, not suppressed or classified clean."
+    },
+    "warnings": "No Python warnings/skips. Intentional severity/failure diagnostics plus known cleanup warning; whole runtime convergence explicitly OPEN.",
+    "source_results_initialization": "Single successful inner return follows tracker_result extraction to results; execution_succeeded becomes true immediately before that return. Other exits stayfalse."
+  },
+  "independent_security_v2": {
+    "ran": true,
+    "verdict": "OPEN - no clean security round banked",
+    "manifest": {
+      "src/kailash/runtime/local.py": {
+        "base_sha256": "5893d4a1aab8879aceac8b77e93b7a5522a4e1f071513273b4b62cf741ceabea",
+        "sha256": "b635336e114cff35a851ca0ce82f616322e1b9f9c61a850b1aa76cca37b5a4af"
+      },
+      "src/kailash/runtime/async_local.py": {
+        "base_sha256": "6a4123919d362ce0c093d7b1aa2cdc6d689ee87b0ffdf9894f7907e392c35652",
+        "sha256": "1917849fd5d187dbbc85eb84fa4bafe0d8ca68610f1bd5f2720df80d0720a27d"
+      },
+      "tests/regression/test_runtime_audit_emission.py": {
+        "base_sha256": "181d7748bd8c2f111a396b89fe061ecd54d0dcbdeb5744aac838accc6a041df3",
+        "sha256": "54815cf5ae1eeac07fb6001219a214558ca0f9306632b23d052a4e77d958def9"
+      }
+    },
+    "dependency_helper": "543fc9635b5f91014ae0fcb07a0ae12039e7e528f4a3a66a955c8842b00f23db",
+    "spec_quotes": [
+      "specs/core-runtime.md:165-167: Inherits: LocalRuntime. Async-first runtime extending LocalRuntime with concurrent execution, workflow optimization, and integrated resource management.",
+      "specs/core-runtime.md:35: enable_audit: bool = False",
+      "specs/security-threats.md:31: Token creation with user_id (no token content)."
+    ],
+    "finding": {
+      "surface": "LocalRuntime.execute_async / _execute_async",
+      "repro": "Real Waiting AsyncNode signals entered; cancel running task or await asyncio.wait_for(task,.01); assert public CancelledError/TimeoutError and stopped Event. Capture actual audit.runtime_audit logger entries.",
+      "observed": "OBSERVED_LOCAL_AUDIT cancel ['workflow_execution_start']; OBSERVED_LOCAL_AUDIT timeout ['workflow_execution_start']",
+      "required": "Started execution emits one terminal cancellation/failure event without altering public exception propagation.",
+      "source": "Local _execute_async handlers cover WorkflowCancelledError and Exception, not asyncio.CancelledError (BaseException).",
+      "log": "/tmp/csq16-security-runtime-cancel.log",
+      "script": "/tmp/csq16-security-runtime-extra.py",
+      "result": "2 reached assertion failures, no Python warnings/skips; not a constructor/import failure."
+    },
+    "actual_runs": [
+      {
+        "log": "/tmp/csq16-security-runtime-r1.log",
+        "result": "36 passed in21.85s; no Pythonwarnings/skips; does not cover Local asyncio cancellation"
+      },
+      {
+        "log": "/tmp/csq16-security-runtime-extra.log",
+        "result": "5 actual ambient handled-exception tests passed, one per public route. Initial two cancellation fixture tests errored on missing Workflow.name and are zero evidence; corrected and rerun separately as recorded above."
+      }
+    ],
+    "controls": [
+      {
+        "mode": "native",
+        "hits": 20,
+        "exit": 1
+      },
+      {
+        "mode": "provenance",
+        "hits": 10,
+        "exit": 1
+      }
+    ],
+    "mechanical": "/tmp/csq16-security-runtime-mechanical.json",
+    "warnings": {
+      "total": 25,
+      "open": "four native synchronous cleanup timed out after5s; separately author-owned",
+      "platform_disclosure": "Memory limit is NOT enforced for in-process code execution on this platform (address-space usage is not readable). Existing platform limitation disclosed; parent informed; no broad runtime-clean claim.",
+      "intentional": "Audit warning/error severity test records, deliberately raised opaque PythonCodeNode failures with safe frames, two execution_timeout negative cases."
+    },
+    "actions": "No production edits. Verified archive hashes, cp-backed overlays, AST-identical canonical namespace helper mapped. Finding reported to parent and author; final convergence requires repaired exact source and two fresh clean rounds."
+  },
+  "root_v2": {
+    "ran": true,
+    "result": "36 passed in24.21s",
+    "scope": "Native emission/provenance v2; discovered Local cancellation and nativecleanup gaps remain open. No final clean round."
+  },
+  "independent_correctness_v2": {
+    "ran": true,
+    "verdict": "OPEN",
+    "scope": "Independent runtime audit v2 correctness; not final lifecycle convergence",
+    "files": {
+      "src/kailash/runtime/local.py": "b635336e114cff35a851ca0ce82f616322e1b9f9c61a850b1aa76cca37b5a4af",
+      "src/kailash/runtime/async_local.py": "1917849fd5d187dbbc85eb84fa4bafe0d8ca68610f1bd5f2720df80d0720a27d",
+      "tests/regression/test_runtime_audit_emission.py": "54815cf5ae1eeac07fb6001219a214558ca0f9306632b23d052a4e77d958def9"
+    },
+    "rounds": [
+      {
+        "ran": true,
+        "mode": "r1",
+        "exit": 0,
+        "counts": {
+          "passed": 36
+        },
+        "warnings": [],
+        "skips": [],
+        "events": [
+          {
+            "logger": "audit.runtime_audit",
+            "message": "{\"event_type\": \"warning\", \"message\": \"\", \"user_id\": null, \"data\": {\"action\": \"read\", \"nested\": {\"count\": 3}}, \"timestamp\": \"2026-09-27T15:18:24.992036+00:00\"}",
+            "level": "WARNING"
+          },
+          {
+            "logger": "audit.runtime_audit",
+            "message": "{\"event_type\": \"warning\", \"message\": \"\", \"user_id\": null, \"data\": {\"action\": \"read\", \"nested\": {\"count\": 3}}, \"timestamp\": \"2026-09-27T15:18:24.993433+00:00\"}",
+            "level": "WARNING"
+          },
+          {
+            "logger": "audit.runtime_audit",
+            "message": "{\"event_type\": \"error\", \"message\": \"\", \"user_id\": null, \"data\": {\"action\": \"read\", \"nested\": {\"count\": 3}}, \"timestamp\": \"2026-09-27T15:18:24.994903+00:00\"}",
+            "level": "ERROR"
+          },
+          {
+            "logger": "audit.runtime_audit",
+            "message": "{\"event_type\": \"error\", \"message\": \"\", \"user_id\": null, \"data\": {\"action\": \"read\", \"nested\": {\"count\": 3}}, \"timestamp\": \"2026-09-27T15:18:24.995954+00:00\"}",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.security",
+            "message": "Memory limit is NOT enforced for in-process code execution on this platform (address-space usage is not readable). Code executed by PythonCodeNode may allocate without bound. Run untrusted code in a subprocess if the limit must hold.",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.async_local",
+            "message": "AsyncLocalRuntime cleanup timed out after 5s",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.async_local",
+            "message": "AsyncLocalRuntime cleanup timed out after 5s",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Node first failed: NodeExecutionError@src/kailash/runtime/local.py:3448:_execute_workflow_async>src/kailash/nodes/base.py:1626:execute>src/kailash/nodes/code/python.py:1592:run>src/kailash/nodes/code/python.py:686:execute_code <- RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Node first failed: NodeExecutionError@src/kailash/runtime/local.py:3448:_execute_workflow_async>src/kailash/nodes/base.py:1626:execute>src/kailash/nodes/code/python.py:1592:run>src/kailash/nodes/code/python.py:686:execute_code <- RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.async_local",
+            "message": "AsyncLocalRuntime cleanup timed out after 5s",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Node first failed: NodeExecutionError@src/kailash/runtime/local.py:3448:_execute_workflow_async>src/kailash/nodes/base.py:1626:execute>src/kailash/nodes/code/python.py:1592:run>src/kailash/nodes/code/python.py:686:execute_code <- RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Node first failed: NodeExecutionError@src/kailash/runtime/local.py:3448:_execute_workflow_async>src/kailash/nodes/base.py:1626:execute>src/kailash/nodes/code/python.py:1592:run>src/kailash/nodes/code/python.py:686:execute_code <- RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.async_local",
+            "message": "AsyncLocalRuntime cleanup timed out after 5s",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.async_local",
+            "message": "Workflow execution timeout after 0.1s",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.async_local",
+            "message": "Workflow execution timeout after 0.1s",
+            "level": "ERROR"
+          }
+        ]
+      },
+      {
+        "ran": true,
+        "mode": "r2",
+        "exit": 0,
+        "counts": {
+          "passed": 36
+        },
+        "warnings": [],
+        "skips": [],
+        "events": [
+          {
+            "logger": "audit.runtime_audit",
+            "message": "{\"event_type\": \"warning\", \"message\": \"\", \"user_id\": null, \"data\": {\"action\": \"read\", \"nested\": {\"count\": 3}}, \"timestamp\": \"2026-09-27T15:18:49.592945+00:00\"}",
+            "level": "WARNING"
+          },
+          {
+            "logger": "audit.runtime_audit",
+            "message": "{\"event_type\": \"warning\", \"message\": \"\", \"user_id\": null, \"data\": {\"action\": \"read\", \"nested\": {\"count\": 3}}, \"timestamp\": \"2026-09-27T15:18:49.594406+00:00\"}",
+            "level": "WARNING"
+          },
+          {
+            "logger": "audit.runtime_audit",
+            "message": "{\"event_type\": \"error\", \"message\": \"\", \"user_id\": null, \"data\": {\"action\": \"read\", \"nested\": {\"count\": 3}}, \"timestamp\": \"2026-09-27T15:18:49.596882+00:00\"}",
+            "level": "ERROR"
+          },
+          {
+            "logger": "audit.runtime_audit",
+            "message": "{\"event_type\": \"error\", \"message\": \"\", \"user_id\": null, \"data\": {\"action\": \"read\", \"nested\": {\"count\": 3}}, \"timestamp\": \"2026-09-27T15:18:49.598470+00:00\"}",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.security",
+            "message": "Memory limit is NOT enforced for in-process code execution on this platform (address-space usage is not readable). Code executed by PythonCodeNode may allocate without bound. Run untrusted code in a subprocess if the limit must hold.",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.async_local",
+            "message": "AsyncLocalRuntime cleanup timed out after 5s",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.async_local",
+            "message": "AsyncLocalRuntime cleanup timed out after 5s",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Node first failed: NodeExecutionError@src/kailash/runtime/local.py:3448:_execute_workflow_async>src/kailash/nodes/base.py:1626:execute>src/kailash/nodes/code/python.py:1592:run>src/kailash/nodes/code/python.py:686:execute_code <- RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Node first failed: NodeExecutionError@src/kailash/runtime/local.py:3448:_execute_workflow_async>src/kailash/nodes/base.py:1626:execute>src/kailash/nodes/code/python.py:1592:run>src/kailash/nodes/code/python.py:686:execute_code <- RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.async_local",
+            "message": "AsyncLocalRuntime cleanup timed out after 5s",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Node first failed: NodeExecutionError@src/kailash/runtime/local.py:3448:_execute_workflow_async>src/kailash/nodes/base.py:1626:execute>src/kailash/nodes/code/python.py:1592:run>src/kailash/nodes/code/python.py:686:execute_code <- RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Node first failed: NodeExecutionError@src/kailash/runtime/local.py:3448:_execute_workflow_async>src/kailash/nodes/base.py:1626:execute>src/kailash/nodes/code/python.py:1592:run>src/kailash/nodes/code/python.py:686:execute_code <- RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.async_local",
+            "message": "AsyncLocalRuntime cleanup timed out after 5s",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.async_local",
+            "message": "Workflow execution timeout after 0.1s",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.async_local",
+            "message": "Workflow execution timeout after 0.1s",
+            "level": "ERROR"
+          }
+        ]
+      }
+    ],
+    "closed_observations": [
+      "Local and native actual success/failure workflows emit two audit records; public opaque exception preserved while its message excluded from audit.",
+      "Prior parameter processing methods preserved; 105 other Local methods and 43 other Async methods AST identical.",
+      "19 original assertions retained, 32 final."
+    ],
+    "open_findings": [
+      "Four AsyncLocalRuntime cleanup timed out after 5s records each round; author owns root-cause follow-up.",
+      "Security reviewer actual LocalRuntime.execute_async cancellation/timeout emits only start; author owns same-class follow-up."
+    ],
+    "controls": {
+      "native_omission": {
+        "hits": 20,
+        "failed": 10,
+        "passed": 6,
+        "deselected": 20,
+        "exit": 1
+      },
+      "exception_string_reentry": {
+        "hits": 10,
+        "failed": 6,
+        "passed": 10,
+        "deselected": 20,
+        "exit": 1
+      }
+    },
+    "artifacts": [
+      "/tmp/csq16-correctness-runtime-v2-mechanical.json",
+      "/tmp/csq16-correctness-runtime-v2-probe.json",
+      "/tmp/csq16-correctness-runtime-v2-control-native.log",
+      "/tmp/csq16-correctness-runtime-v2-control-frames.log"
+    ],
+    "exclusions": [
+      "36 passing tests do not cover the discovered Local external cancellation terminal event gap.",
+      "No whole-runtime clean claim; final bytes and two final clean rounds pending."
+    ]
+  },
+  "cancellation_author": {
+    "status": "FROZEN cancellation follow-up; lifecycle close remains separate OPEN",
+    "manifest": {
+      "src/kailash/runtime/local.py": {
+        "base_sha256": "b635336e114cff35a851ca0ce82f616322e1b9f9c61a850b1aa76cca37b5a4af",
+        "sha256": "56466160a76c674b95cd57c314f2adae891305c30afeeb49ca816f63e679d914"
+      },
+      "tests/regression/test_runtime_audit_emission.py": {
+        "base_sha256": "54815cf5ae1eeac07fb6001219a214558ca0f9306632b23d052a4e77d958def9",
+        "sha256": "1539cdde211e039bf4b7c62bfe18066d94cc5bbd38fd0a930fe58e16e8105441"
+      }
+    },
+    "scope": "Catch asyncio.CancelledError alongside WorkflowCancelledError; inherited task status/deferred flush/signal removal retained, raw exception re-raised. Progress ContextVar restored in finally for every post-token exit.",
+    "rounds": [
+      "3passed36deselected2.25s",
+      "3passed36deselected2.42s"
+    ],
+    "controls": {
+      "handler": {
+        "hits": 3,
+        "result": "3failed"
+      },
+      "progress": {
+        "hits": 3,
+        "result": "1failed2passed"
+      }
+    },
+    "retention": "All prior36testcases function AST unchanged;2newfunctions add3cases",
+    "warnings": "No Python warnings/skips; scoped cancellation tests no unexpected diagnostic warnings",
+    "command": "/tmp/csq16-html-venv/bin/python -P /tmp/csq16-html-security-run.py tests/regression/test_runtime_audit_emission.py -k \"local_async_task_cancellation or local_direct_cancellation\" -q -Werror --tb=short",
+    "archive": "/tmp/csq16-runtime-audit-cancel-files.tar.gz",
+    "full39union": "Will run after independent lifecycle cleanup repair; prior36 historical scope not counted final39."
+  },
+  "cancellation_root": {
+    "ran": true,
+    "rounds": [
+      "3 passed,36 deselected in0.98s",
+      "3 passed,36 deselected in1.04s"
+    ],
+    "scope": "Task cancellation,wait_for timeout,originalexceptionidentity andprogress/signal cleanup; fullruntimeclosure remainsOPEN."
+  },
+  "cancellation_persistence_author": {
+    "ran": true,
+    "status": "FROZEN author validation; independent review pending",
+    "manifest": {
+      "src/kailash/runtime/local.py": {
+        "base_sha256": "56466160a76c674b95cd57c314f2adae891305c30afeeb49ca816f63e679d914",
+        "sha256": "d9a63f1b24c9309c5b31553877b486a94c7e022970df84240720ed595908d994"
+      },
+      "tests/regression/test_runtime_cancelled_run_tracking.py": {
+        "base_sha256": null,
+        "sha256": "e6b8a7a0b31e36b3a6c7c1c535a25282b56901f141865ffec68178b28d1a67cc"
+      }
+    },
+    "spec": {
+      "path": "specs/task-tracking.md:65-82",
+      "quote": "runs do not have skipped, cancelled, or separate creation/running semantics",
+      "transition_map": {
+        "pending": [
+          "running",
+          "failed"
+        ],
+        "running": [
+          "completed",
+          "failed"
+        ],
+        "completed": [],
+        "failed": []
+      }
+    },
+    "invariants": [
+      "Both asyncio and cooperative SDK cancellation store failed terminal run with ended_at through real provided SQLiteStorage and deferred SQLite flush.",
+      "Cancellation audit event and public exception reason are preserved; asyncio original exception object identity preserved.",
+      "Tracking failure logs WARNING frames only without opaque error contents or exc_info; original cancellation still propagated.",
+      "Progress ContextVar restored on success/failure/cancellation and signal registry empty.",
+      "No run schema/state/API expansion; existing audit tests unchanged."
+    ],
+    "rounds": [
+      {
+        "ran": true,
+        "mode": "frozen-r1",
+        "exit": 0,
+        "counts": {
+          "passed": 17
+        },
+        "warnings": [],
+        "skips": [],
+        "events": [
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist cancelled workflow status: RuntimeError@src/kailash/runtime/local.py:3107:_execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:127:update_run_status <- CancelledError@src/kailash/runtime/local.py:2970:_execute_async>src/kailash/runtime/local.py:3458:_execute_workflow_async>src/kailash/nodes/base_async.py:255:execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:31:async_run",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist cancelled workflow status: RuntimeError@src/kailash/runtime/local.py:3107:_execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:127:update_run_status <- WorkflowCancelledError@src/kailash/runtime/local.py:2970:_execute_async>src/kailash/runtime/local.py:3291:_execute_workflow_async",
+            "level": "WARNING"
+          },
+          {
+            "logger": "First",
+            "message": "Node first execution failed: RuntimeError (at RuntimeError@src/kailash/nodes/base_async.py:255:execute_async>csq16-correctness-local-cancel-extra.py:49:async_run)",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Node first failed: NodeExecutionError@src/kailash/runtime/local.py:3458:_execute_workflow_async>src/kailash/nodes/base_async.py:297:execute_async <- RuntimeError@src/kailash/nodes/base_async.py:255:execute_async>csq16-correctness-local-cancel-extra.py:49:async_run",
+            "level": "ERROR"
+          },
+          {
+            "logger": "First",
+            "message": "Node first execution failed: RuntimeError (at RuntimeError@src/kailash/nodes/base_async.py:255:execute_async>csq16-correctness-local-cancel-extra.py:49:async_run)",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Node first failed: NodeExecutionError@src/kailash/runtime/local.py:3458:_execute_workflow_async>src/kailash/nodes/base_async.py:297:execute_async <- RuntimeError@src/kailash/nodes/base_async.py:255:execute_async>csq16-correctness-local-cancel-extra.py:49:async_run",
+            "level": "ERROR"
+          }
+        ]
+      },
+      {
+        "ran": true,
+        "mode": "frozen-r2",
+        "exit": 0,
+        "counts": {
+          "passed": 17
+        },
+        "warnings": [],
+        "skips": [],
+        "events": [
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist cancelled workflow status: RuntimeError@src/kailash/runtime/local.py:3107:_execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:127:update_run_status <- CancelledError@src/kailash/runtime/local.py:2970:_execute_async>src/kailash/runtime/local.py:3458:_execute_workflow_async>src/kailash/nodes/base_async.py:255:execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:31:async_run",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist cancelled workflow status: RuntimeError@src/kailash/runtime/local.py:3107:_execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:127:update_run_status <- WorkflowCancelledError@src/kailash/runtime/local.py:2970:_execute_async>src/kailash/runtime/local.py:3291:_execute_workflow_async",
+            "level": "WARNING"
+          },
+          {
+            "logger": "First",
+            "message": "Node first execution failed: RuntimeError (at RuntimeError@src/kailash/nodes/base_async.py:255:execute_async>csq16-correctness-local-cancel-extra.py:49:async_run)",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Node first failed: NodeExecutionError@src/kailash/runtime/local.py:3458:_execute_workflow_async>src/kailash/nodes/base_async.py:297:execute_async <- RuntimeError@src/kailash/nodes/base_async.py:255:execute_async>csq16-correctness-local-cancel-extra.py:49:async_run",
+            "level": "ERROR"
+          },
+          {
+            "logger": "First",
+            "message": "Node first execution failed: RuntimeError (at RuntimeError@src/kailash/nodes/base_async.py:255:execute_async>csq16-correctness-local-cancel-extra.py:49:async_run)",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Node first failed: NodeExecutionError@src/kailash/runtime/local.py:3458:_execute_workflow_async>src/kailash/nodes/base_async.py:297:execute_async <- RuntimeError@src/kailash/nodes/base_async.py:255:execute_async>csq16-correctness-local-cancel-extra.py:49:async_run",
+            "level": "ERROR"
+          }
+        ]
+      }
+    ],
+    "controls": {
+      "state": {
+        "mode": "state",
+        "hits": 6,
+        "exit": 1
+      },
+      "privacy": {
+        "mode": "privacy",
+        "hits": 2,
+        "exit": 1
+      },
+      "silence": {
+        "mode": "silence",
+        "hits": 2,
+        "exit": 1
+      }
+    },
+    "control_results": {
+      "state": "6 failed",
+      "privacy": "2 failed,4 passed",
+      "silence": "2 failed,4 passed"
+    },
+    "mechanical": "/tmp/csq16-run-cancel-state-mechanical.json",
+    "absolute_sweep": "14 production update_run_status call sites; zero remaining cancelled state arguments. 105 other Local methods AST unchanged.",
+    "tests": "6 new tests plus 3 prior Local cancellation tests, 2 independently recovered external cancellation tests, 6 independent success/failure/cancel progress and tracking probes =17 each round.",
+    "warnings": "Six intentional records each: two injected bookkeeping WARNING frames; four error-path records from deliberate failing workflows. Zero Python warnings/skips.",
+    "excluded_initial_runs": [
+      "Initial SDK fixture raised a WorkflowCancelledError inside AsyncNode instead of using the public cancellation token; replaced with actual token route.",
+      "An intermediate SDK fixture omitted forwarding its token argument; corrected before both frozen rounds."
+    ],
+    "limits": [
+      "No native AsyncLocalRuntime lifecycle verdict; sibling remains independently owned.",
+      "No claim tracking persistence can succeed under forced storage failure; that path retains original cancellation and emits safe warning.",
+      "No independent self-review claim: author role assigned after discovering producer mismatch."
+    ]
+  },
+  "persistence_security_historical": {
+    "ran": true,
+    "status": "OPEN persistence observability finding; two positive rounds do not count final clean",
+    "source_sha256": "d9a63f1b24c9309c5b31553877b486a94c7e022970df84240720ed595908d994",
+    "new_test_final_sha256": "a81c952a873b14dea021929114c4c1487a1cf88f866d9c12e338333577cd6f79",
+    "test_mapping": "Author e6b8 imports sorted by parent to a81c; independent AST import-set and allnonimport body equal; ourpositive17rounds pre-isort, controls on exacta81c.",
+    "positive_rounds": [
+      {
+        "log": "/tmp/csq16-security-cancel-state-r1.log",
+        "result": "17passed36deselected8.69s"
+      },
+      {
+        "log": "/tmp/csq16-security-cancel-state-r2.log",
+        "result": "17passed36deselected1.74s"
+      }
+    ],
+    "controls": [
+      {
+        "mode": "state",
+        "hits": 6,
+        "exit": 1
+      },
+      {
+        "mode": "privacy",
+        "hits": 2,
+        "exit": 1
+      },
+      {
+        "mode": "silence",
+        "hits": 2,
+        "exit": 1
+      }
+    ],
+    "spec": "specs/task-tracking.md65-82 VALID_RUN_TRANSITIONS pending\u2192running/failed,running\u2192completed/failed; completed/failed terminal; runs do not have skipped,cancelled.",
+    "mechanical": "/tmp/csq16-security-cancel-state-mechanical.json; all14production callers use validstates, invalidcancelledopposite rejected;105source-wide uniquefunctions unchanged (88directLocalRuntime methods unchanged), only_execute_async changed.",
+    "finding": {
+      "scope": "Real deferred persistence failure on cancellation remains silent, independent of TaskManager.update_run_status failure seam",
+      "steps": "Create real filesystem directory and pass its path to original DeferredStorageBackend.flush_to_sqlite; real SQLite cannot open it as database. Run actual cancelling AsyncNode with enable_monitoring=True and enable_audit=True. Capture exception class/message at original delegate then rethrow; observe automatic logger records.",
+      "actual": "REAL_FLUSH_FAILURE {'attempts':1,'actual_errors':[('OperationalError','unable to open database file')],'persistence_diagnostics':[]}",
+      "public_exception": "Original asyncio.CancelledError object identity preserved",
+      "source": "Cancellation branch invokes _flush_deferred_storage_sqlite(...,log_warning=False); helper catches actualstoragefailure but skips WARN entirely. Four siblingFalse callers at3056,3081,3115,3139.",
+      "probe": "/tmp/csq16-security-cancel-flush.py",
+      "log": "/tmp/csq16-security-cancel-flush.log",
+      "result": "1 reached assertion failure; zeroPythonwarnings/skips"
+    },
+    "warnings": "Positive rounds6intentionalrecords each:2forcedTaskManagererror warnings safeexceptionframes and4deliberateworkflowfailure logs. Actualdeferredflush failure emitsno warning. No new production changes by reviewer.",
+    "exclusions": "Native runtime lifecycle separate working snapshot; not certified by theseLocal cancellation tests.",
+    "delivery": "Parent and correctness/author informed; awaiting bounded repair ownership and finalsource."
+  },
+  "flush_author": {
+    "ran": true,
+    "status": "FROZEN author validation; independent review pending",
+    "manifest": {
+      "src/kailash/runtime/local.py": {
+        "base_sha256": "d9a63f1b24c9309c5b31553877b486a94c7e022970df84240720ed595908d994",
+        "sha256": "6f82c610b05675dd3bc0c8b1f681472cd4cc41a65f1a8648b67ce95790667b87"
+      },
+      "tests/regression/test_runtime_cancelled_run_tracking.py": {
+        "base_sha256": "a81c952a873b14dea021929114c4c1487a1cf88f866d9c12e338333577cd6f79",
+        "sha256": "4c15b28c858dc7b5ea52a12f9415fe3c4a39fc414120476557e0e1a161d5e6bb"
+      }
+    },
+    "scope": "Four independent LocalRuntime error-path callers now enable existing safe frames-only deferred persistence warning; validation/denial/cancellation/execution failure. Existing success caller unchanged.",
+    "spec": "specs/task-tracking.md:65-82 defines failed as the valid unsuccessful terminal run state; deferred storage persists workflow/task/audit records. Multi-site kwarg plumbing requires every same-class caller.",
+    "rounds": [
+      {
+        "ran": true,
+        "mode": "r1",
+        "exit": 0,
+        "counts": {
+          "passed": 22
+        },
+        "warnings": [],
+        "skips": [],
+        "events": [
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist cancelled workflow status: RuntimeError@src/kailash/runtime/local.py:3107:_execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:127:update_run_status <- CancelledError@src/kailash/runtime/local.py:2970:_execute_async>src/kailash/runtime/local.py:3458:_execute_workflow_async>src/kailash/nodes/base_async.py:255:execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:31:async_run",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist cancelled workflow status: RuntimeError@src/kailash/runtime/local.py:3107:_execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:127:update_run_status <- WorkflowCancelledError@src/kailash/runtime/local.py:2970:_execute_async>src/kailash/runtime/local.py:3291:_execute_workflow_async",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist deferred tracking data: OperationalError@src/kailash/runtime/local.py:4327:_flush_deferred_storage_sqlite>tests/regression/test_runtime_cancelled_run_tracking.py:177:real_failed_flush>src/kailash/tracking/storage/deferred.py:140:flush_to_sqlite>src/kailash/tracking/storage/database.py:59:__init__ <- CancelledError@src/kailash/runtime/local.py:2970:_execute_async>src/kailash/runtime/local.py:3458:_execute_workflow_async>src/kailash/nodes/base_async.py:255:execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:31:async_run",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist deferred tracking data: OperationalError@src/kailash/runtime/local.py:4327:_flush_deferred_storage_sqlite>tests/regression/test_runtime_cancelled_run_tracking.py:177:real_failed_flush>src/kailash/tracking/storage/deferred.py:140:flush_to_sqlite>src/kailash/tracking/storage/database.py:59:__init__ <- WorkflowCancelledError@src/kailash/runtime/local.py:2970:_execute_async>src/kailash/runtime/local.py:3291:_execute_workflow_async",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist deferred tracking data: OperationalError@src/kailash/runtime/local.py:4327:_flush_deferred_storage_sqlite>tests/regression/test_runtime_cancelled_run_tracking.py:177:real_failed_flush>src/kailash/tracking/storage/deferred.py:140:flush_to_sqlite>src/kailash/tracking/storage/database.py:59:__init__ <- WorkflowValidationError@src/kailash/runtime/local.py:2970:_execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:195:_execute_workflow_async",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist deferred tracking data: OperationalError@src/kailash/runtime/local.py:4327:_flush_deferred_storage_sqlite>tests/regression/test_runtime_cancelled_run_tracking.py:177:real_failed_flush>src/kailash/tracking/storage/deferred.py:140:flush_to_sqlite>src/kailash/tracking/storage/database.py:59:__init__ <- PermissionError@src/kailash/runtime/local.py:2970:_execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:195:_execute_workflow_async",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist deferred tracking data: OperationalError@src/kailash/runtime/local.py:4327:_flush_deferred_storage_sqlite>tests/regression/test_runtime_cancelled_run_tracking.py:177:real_failed_flush>src/kailash/tracking/storage/deferred.py:140:flush_to_sqlite>src/kailash/tracking/storage/database.py:59:__init__ <- RuntimeError@src/kailash/runtime/local.py:2970:_execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:195:_execute_workflow_async",
+            "level": "WARNING"
+          },
+          {
+            "logger": "First",
+            "message": "Node first execution failed: RuntimeError (at RuntimeError@src/kailash/nodes/base_async.py:255:execute_async>csq16-correctness-local-cancel-extra.py:49:async_run)",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Node first failed: NodeExecutionError@src/kailash/runtime/local.py:3458:_execute_workflow_async>src/kailash/nodes/base_async.py:297:execute_async <- RuntimeError@src/kailash/nodes/base_async.py:255:execute_async>csq16-correctness-local-cancel-extra.py:49:async_run",
+            "level": "ERROR"
+          },
+          {
+            "logger": "First",
+            "message": "Node first execution failed: RuntimeError (at RuntimeError@src/kailash/nodes/base_async.py:255:execute_async>csq16-correctness-local-cancel-extra.py:49:async_run)",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Node first failed: NodeExecutionError@src/kailash/runtime/local.py:3458:_execute_workflow_async>src/kailash/nodes/base_async.py:297:execute_async <- RuntimeError@src/kailash/nodes/base_async.py:255:execute_async>csq16-correctness-local-cancel-extra.py:49:async_run",
+            "level": "ERROR"
+          }
+        ]
+      },
+      {
+        "ran": true,
+        "mode": "r2",
+        "exit": 0,
+        "counts": {
+          "passed": 22
+        },
+        "warnings": [],
+        "skips": [],
+        "events": [
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist cancelled workflow status: RuntimeError@src/kailash/runtime/local.py:3107:_execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:127:update_run_status <- CancelledError@src/kailash/runtime/local.py:2970:_execute_async>src/kailash/runtime/local.py:3458:_execute_workflow_async>src/kailash/nodes/base_async.py:255:execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:31:async_run",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist cancelled workflow status: RuntimeError@src/kailash/runtime/local.py:3107:_execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:127:update_run_status <- WorkflowCancelledError@src/kailash/runtime/local.py:2970:_execute_async>src/kailash/runtime/local.py:3291:_execute_workflow_async",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist deferred tracking data: OperationalError@src/kailash/runtime/local.py:4327:_flush_deferred_storage_sqlite>tests/regression/test_runtime_cancelled_run_tracking.py:177:real_failed_flush>src/kailash/tracking/storage/deferred.py:140:flush_to_sqlite>src/kailash/tracking/storage/database.py:59:__init__ <- CancelledError@src/kailash/runtime/local.py:2970:_execute_async>src/kailash/runtime/local.py:3458:_execute_workflow_async>src/kailash/nodes/base_async.py:255:execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:31:async_run",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist deferred tracking data: OperationalError@src/kailash/runtime/local.py:4327:_flush_deferred_storage_sqlite>tests/regression/test_runtime_cancelled_run_tracking.py:177:real_failed_flush>src/kailash/tracking/storage/deferred.py:140:flush_to_sqlite>src/kailash/tracking/storage/database.py:59:__init__ <- WorkflowCancelledError@src/kailash/runtime/local.py:2970:_execute_async>src/kailash/runtime/local.py:3291:_execute_workflow_async",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist deferred tracking data: OperationalError@src/kailash/runtime/local.py:4327:_flush_deferred_storage_sqlite>tests/regression/test_runtime_cancelled_run_tracking.py:177:real_failed_flush>src/kailash/tracking/storage/deferred.py:140:flush_to_sqlite>src/kailash/tracking/storage/database.py:59:__init__ <- WorkflowValidationError@src/kailash/runtime/local.py:2970:_execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:195:_execute_workflow_async",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist deferred tracking data: OperationalError@src/kailash/runtime/local.py:4327:_flush_deferred_storage_sqlite>tests/regression/test_runtime_cancelled_run_tracking.py:177:real_failed_flush>src/kailash/tracking/storage/deferred.py:140:flush_to_sqlite>src/kailash/tracking/storage/database.py:59:__init__ <- PermissionError@src/kailash/runtime/local.py:2970:_execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:195:_execute_workflow_async",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist deferred tracking data: OperationalError@src/kailash/runtime/local.py:4327:_flush_deferred_storage_sqlite>tests/regression/test_runtime_cancelled_run_tracking.py:177:real_failed_flush>src/kailash/tracking/storage/deferred.py:140:flush_to_sqlite>src/kailash/tracking/storage/database.py:59:__init__ <- RuntimeError@src/kailash/runtime/local.py:2970:_execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:195:_execute_workflow_async",
+            "level": "WARNING"
+          },
+          {
+            "logger": "First",
+            "message": "Node first execution failed: RuntimeError (at RuntimeError@src/kailash/nodes/base_async.py:255:execute_async>csq16-correctness-local-cancel-extra.py:49:async_run)",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Node first failed: NodeExecutionError@src/kailash/runtime/local.py:3458:_execute_workflow_async>src/kailash/nodes/base_async.py:297:execute_async <- RuntimeError@src/kailash/nodes/base_async.py:255:execute_async>csq16-correctness-local-cancel-extra.py:49:async_run",
+            "level": "ERROR"
+          },
+          {
+            "logger": "First",
+            "message": "Node first execution failed: RuntimeError (at RuntimeError@src/kailash/nodes/base_async.py:255:execute_async>csq16-correctness-local-cancel-extra.py:49:async_run)",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Node first failed: NodeExecutionError@src/kailash/runtime/local.py:3458:_execute_workflow_async>src/kailash/nodes/base_async.py:297:execute_async <- RuntimeError@src/kailash/nodes/base_async.py:255:execute_async>csq16-correctness-local-cancel-extra.py:49:async_run",
+            "level": "ERROR"
+          }
+        ]
+      }
+    ],
+    "control": {
+      "hits": 5,
+      "exit": 1
+    },
+    "control_result": "False omission reached5,5regressions fail",
+    "independent_original_reproduction": "/tmp/csq16-run-flush-security-repro.log: 1 passed",
+    "mechanical": "/tmp/csq16-run-flush-mechanical.json: whole production AST equal except four False\u2192True keyword values; all original test bodies unchanged. Five absolute callers inspected.",
+    "intentional_diagnostics": "11 records per22-case round: 5 actual SQLite OperationalError safe warnings,2 unit-injected bookkeeping warnings,4 deliberate workflow-failure records; zero Python warnings/skips.",
+    "test_scope": "Asyncio and SDK cancellation execute actual workflow/cancellation paths; validation/denial/generic failure use explicit unit runtime fault injection after tracking initialization, all five use actual SQLite driver with directory path. No mock database.",
+    "exclusions": [
+      "No native lifecycle verdict; sibling independent review follows.",
+      "No storage-success claim when real flush fails; existing safe warning emitted and original workflow exception preserved."
+    ]
+  },
+  "native_lifecycle_author": {
+    "status": "FROZEN author scoped verification complete; independent final review pending",
+    "ran": true,
+    "worktree": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq16-runtime-ci",
+    "manifest": {
+      "src/kailash/runtime/async_local.py": {
+        "base_sha256": "1917849fd5d187dbbc85eb84fa4bafe0d8ca68610f1bd5f2720df80d0720a27d",
+        "final_sha256": "d272d6594f02334ca4e5c0730ec89930d20156374a463d1481870fe4165a05fe"
+      },
+      "specs/core-runtime.md": {
+        "base_sha256": "f87df904923c88df7f5e398cd931c0ad8b933282b053b08f7e5a48d901370d7c",
+        "final_sha256": "010160a65bde0a70f959879f05a02ef6408716b61b6d0e64fdd82ba82c879ff7"
+      },
+      "tests/regression/test_async_runtime_cleanup_ownership.py": {
+        "base_sha256": null,
+        "final_sha256": "821d340108f72f200747d01d0aca14db8e09e5200dd6953bc9ef9a3034764e9a"
+      }
+    },
+    "dependencies": {
+      "tests/regression/test_runtime_audit_emission.py": "1539cdde211e039bf4b7c62bfe18066d94cc5bbd38fd0a930fe58e16e8105441",
+      "tests/regression/test_runtime_cancelled_run_tracking.py": "a81c952a873b14dea021929114c4c1487a1cf88f866d9c12e338333577cd6f79",
+      "tests/regression/test_async_runtime_option_forwarding.py": "4c3f92e960df98f8c48dae160150549024717f737201093767c25f13ee58c69c",
+      "tests/regression/test_runtime_control_contract.py": "fd6062749f2f7097a7b469b3fd6c72b69802b4b4f5cb20bc9ad013900775a365",
+      "tests/regression/test_issue_1248_localruntime_cross_loop_pool_disposal.py": "f8e309b37a146cd77ff45b7e3cd29b376e682fdaa64188bd5f15d6b0f9d7b54b",
+      "src/kailash/runtime/local.py": "d9a63f1b24c9309c5b31553877b486a94c7e022970df84240720ed595908d994",
+      "src/kailash/resources/registry.py": "570430625b1f3ffcfa2df0756256a5df78a18181828f521bd5075645c42f2a84",
+      "src/kailash/utils/secure_logging.py": "a7480350b249222dce9952eda0d288084eb2a13b910da12894aa4828fdda5d97"
+    },
+    "command": "/tmp/csq16-html-venv/bin/python -P /tmp/csq16-repair-runtime-run.py canonical-r{1,2} tests/regression/test_async_runtime_cleanup_ownership.py tests/regression/test_runtime_audit_emission.py tests/regression/test_runtime_cancelled_run_tracking.py tests/regression/test_async_runtime_option_forwarding.py tests/regression/test_runtime_control_contract.py tests/regression/test_issue_1248_localruntime_cross_loop_pool_disposal.py -m 'not integration'",
+    "runner_flags": [
+      "-q",
+      "-Werror",
+      "--tb=short",
+      "--timeout=45"
+    ],
+    "rounds": [
+      {
+        "artifact": "/tmp/csq16-repair-runtime-canonical-r1.json",
+        "ran": true,
+        "exit": 0,
+        "counts": {
+          "passed": 214
+        },
+        "warnings": [],
+        "skips": []
+      },
+      {
+        "artifact": "/tmp/csq16-repair-runtime-canonical-r2.json",
+        "ran": true,
+        "exit": 0,
+        "counts": {
+          "passed": 214
+        },
+        "warnings": [],
+        "skips": []
+      }
+    ],
+    "excluded": "One live PostgreSQL integration test deselected by -m not integration; no live PostgreSQL coverage claimed. All 214 selected tests executed, zero skips/Python warnings.",
+    "controls": {
+      "registry": {
+        "mode": "registry",
+        "hits": 2,
+        "exit": 1
+      },
+      "scope": {
+        "mode": "scope",
+        "hits": 1,
+        "exit": 1
+      },
+      "wait": {
+        "mode": "wait",
+        "hits": 2,
+        "exit": 1
+      },
+      "admission": {
+        "mode": "admission",
+        "hits": 2,
+        "exit": 1
+      },
+      "guard": {
+        "mode": "guard",
+        "hits": 4,
+        "exit": 1
+      }
+    },
+    "control_expected_failures": {
+      "registry": 2,
+      "scope": 1,
+      "wait": 2,
+      "admission": 1,
+      "guard": 2
+    },
+    "log_disposition": {
+      "count_each_round": 32,
+      "intentional": [
+        "One injected real registry callback failure, safe RuntimeError frame only",
+        "Four explicit audit severity warning/error events",
+        "One existing platform memory-enforcement disclosure: Memory limit is NOT enforced for in-process code execution on this platform (address-space usage is not readable).",
+        "Ten intentionally failing PythonCodeNode executions and four dependent-node failure records",
+        "Two deliberately triggered workflow timeouts",
+        "Two deliberately failing cancellation-status persistence warnings",
+        "Five explicitly forced durable shape-drift notices",
+        "Three deliberately absent-node parallel-runtime failure records"
+      ],
+      "unexpected_cleanup_timeout_or_unawaited_coroutine": false
+    },
+    "contracts": [
+      "Synchronous execution uses one runtime-owned caller-thread loop and atomic admission; no thread bridge.",
+      "Only resource-free closed-loop reuse is permitted; live loop mismatch rejects before user side effects.",
+      "Last reference owns cleanup once; real async registry cleanup completes before synchronous close or async context exit returns.",
+      "Caller loops survive; SQL cleanup receives the actual owner loop ID.",
+      "Async exit waits through repeated caller cancellation then propagates the original cancellation.",
+      "Public signatures, validation ordering and runtime results/control forwarding remain covered."
+    ],
+    "spec_citations": [
+      "src/kailash/runtime/async_local.py:756-871",
+      "src/kailash/runtime/async_local.py:2158-2459"
+    ],
+    "limits": [
+      "Independent correctness/security final review not yet delivered.",
+      "Parent is separately integrating a LocalRuntime deferred-flush warning follow-up; current cohort dependency is exact local d9a63f1b.",
+      "Mechanical caller inventory is navigation evidence, not a claim that every production caller was executed."
+    ]
+  },
+  "final_test_formatting": {
+    "tracking_test": "a81c952a isort-only refinement after e6b8; subsequent flush test4c15b28c retains it",
+    "lifecycle_test": "dbff94c4 isort-only refinement after821d3401; original function bodies and import set unchanged. Final combined tests run exact formatted sources."
+  },
+  "native_correctness_final": {
+    "ran": true,
+    "delivered": true,
+    "verdict": "CLEAN independent native lifecycle correctness; two consecutive behavioral rounds",
+    "scope": "AsyncLocalRuntime three-file lifecycle repair and integration with current Local audit/cancellation/deferred-flush dependency. No self-certification of my authored Local bookkeeping changes.",
+    "final_exact_primary_manifest": {
+      "src/kailash/runtime/async_local.py": "5a5234e0b74b8246816fa0bfbec2229ed018c8cbd6d6ace76b071c93ae54ace2",
+      "specs/core-runtime.md": "66ac9bb66e8bfc07b5f57e692323d1a0465f3509bea35999509ab60674de7cf0",
+      "tests/regression/test_async_runtime_cleanup_ownership.py": "dbff94c4501bee5f5d5895459819519da028ebf0d8eab20775e342267ceac1b2",
+      "tests/regression/test_runtime_audit_emission.py": "1539cdde211e039bf4b7c62bfe18066d94cc5bbd38fd0a930fe58e16e8105441",
+      "tests/regression/test_runtime_cancelled_run_tracking.py": "4c15b28c858dc7b5ea52a12f9415fe3c4a39fc414120476557e0e1a161d5e6bb",
+      "tests/regression/test_async_runtime_option_forwarding.py": "4c3f92e960df98f8c48dae160150549024717f737201093767c25f13ee58c69c",
+      "tests/regression/test_runtime_control_contract.py": "fd6062749f2f7097a7b469b3fd6c72b69802b4b4f5cb20bc9ad013900775a365",
+      "tests/regression/test_issue_1248_localruntime_cross_loop_pool_disposal.py": "f8e309b37a146cd77ff45b7e3cd29b376e682fdaa64188bd5f15d6b0f9d7b54b",
+      "src/kailash/runtime/local.py": "8c31a931391e4c6197aa34c5de4f6615b2f3aef2424ef20f067bf1596df3248c",
+      "src/kailash/resources/registry.py": "570430625b1f3ffcfa2df0756256a5df78a18181828f521bd5075645c42f2a84",
+      "src/kailash/utils/secure_logging.py": "a7480350b249222dce9952eda0d288084eb2a13b910da12894aa4828fdda5d97",
+      "src/kailash/nodes/security/_log_identity.py": "543fc9635b5f91014ae0fcb07a0ae12039e7e528f4a3a66a955c8842b00f23db",
+      "src/kailash/nodes/security/audit_log.py": "f5fff7dc589c42d7763e36e23ecaed2c4e6984bd43196cd2820be1a3ebf93e22",
+      "src/kailash/nodes/security/security_event.py": "c7c0845fd648e53b283b40188ed2e6c1d55912be8035cf3159dc8e9c8110e22f"
+    },
+    "tested_native_sha": "d272d6594f02334ca4e5c0730ec89930d20156374a463d1481870fe4165a05fe",
+    "final_doc_only_native_sha": "5a5234e0b74b8246816fa0bfbec2229ed018c8cbd6d6ace76b071c93ae54ace2",
+    "doc_continuity": "/tmp/csq16-correctness-native-doc-mapping.json: final source differs by one docstring line, all executable AST identical; spec wording corrected and source citations rechecked. No behavior rerun needed solely for docstrings.",
+    "rounds": [
+      {
+        "ran": true,
+        "exit": 0,
+        "counts": {
+          "passed": 219
+        },
+        "warnings": [],
+        "skips": [],
+        "events": [
+          {
+            "logger": "kailash.resources.registry",
+            "message": "Error cleaning up resource socket: RuntimeError@src/kailash/resources/registry.py:284:_cleanup_resource>tests/regression/test_async_runtime_cleanup_ownership.py:625:failing",
+            "level": "ERROR"
+          },
+          {
+            "logger": "audit.runtime_audit",
+            "message": "{\"event_type\": \"warning\", \"message\": \"\", \"user_id\": null, \"data\": {\"action\": \"read\", \"nested\": {\"count\": 3}}, \"timestamp\": \"2026-09-27T15:44:49.635460+00:00\"}",
+            "level": "WARNING"
+          },
+          {
+            "logger": "audit.runtime_audit",
+            "message": "{\"event_type\": \"warning\", \"message\": \"\", \"user_id\": null, \"data\": {\"action\": \"read\", \"nested\": {\"count\": 3}}, \"timestamp\": \"2026-09-27T15:44:49.636556+00:00\"}",
+            "level": "WARNING"
+          },
+          {
+            "logger": "audit.runtime_audit",
+            "message": "{\"event_type\": \"error\", \"message\": \"\", \"user_id\": null, \"data\": {\"action\": \"read\", \"nested\": {\"count\": 3}}, \"timestamp\": \"2026-09-27T15:44:49.637712+00:00\"}",
+            "level": "ERROR"
+          },
+          {
+            "logger": "audit.runtime_audit",
+            "message": "{\"event_type\": \"error\", \"message\": \"\", \"user_id\": null, \"data\": {\"action\": \"read\", \"nested\": {\"count\": 3}}, \"timestamp\": \"2026-09-27T15:44:49.638621+00:00\"}",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.security",
+            "message": "Memory limit is NOT enforced for in-process code execution on this platform (address-space usage is not readable). Code executed by PythonCodeNode may allocate without bound. Run untrusted code in a subprocess if the limit must hold.",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Node first failed: NodeExecutionError@src/kailash/runtime/local.py:3452:_execute_workflow_async>src/kailash/nodes/base.py:1626:execute>src/kailash/nodes/code/python.py:1592:run>src/kailash/nodes/code/python.py:686:execute_code <- RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Node first failed: NodeExecutionError@src/kailash/runtime/local.py:3452:_execute_workflow_async>src/kailash/nodes/base.py:1626:execute>src/kailash/nodes/code/python.py:1592:run>src/kailash/nodes/code/python.py:686:execute_code <- RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Node first failed: NodeExecutionError@src/kailash/runtime/local.py:3452:_execute_workflow_async>src/kailash/nodes/base.py:1626:execute>src/kailash/nodes/code/python.py:1592:run>src/kailash/nodes/code/python.py:686:execute_code <- RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Node first failed: NodeExecutionError@src/kailash/runtime/local.py:3452:_execute_workflow_async>src/kailash/nodes/base.py:1626:execute>src/kailash/nodes/code/python.py:1592:run>src/kailash/nodes/code/python.py:686:execute_code <- RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.async_local",
+            "message": "Workflow execution timeout after 0.1s",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.async_local",
+            "message": "Workflow execution timeout after 0.1s",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist cancelled workflow status: RuntimeError@src/kailash/runtime/local.py:3103:_execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:127:update_run_status <- CancelledError@src/kailash/runtime/local.py:2970:_execute_async>src/kailash/runtime/local.py:3450:_execute_workflow_async>src/kailash/nodes/base_async.py:255:execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:31:async_run",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist cancelled workflow status: RuntimeError@src/kailash/runtime/local.py:3103:_execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:127:update_run_status <- WorkflowCancelledError@src/kailash/runtime/local.py:2970:_execute_async>src/kailash/runtime/local.py:3283:_execute_workflow_async",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist deferred tracking data: OperationalError@src/kailash/runtime/local.py:4319:_flush_deferred_storage_sqlite>tests/regression/test_runtime_cancelled_run_tracking.py:177:real_failed_flush>src/kailash/tracking/storage/deferred.py:140:flush_to_sqlite>src/kailash/tracking/storage/database.py:59:__init__ <- CancelledError@src/kailash/runtime/local.py:2970:_execute_async>src/kailash/runtime/local.py:3450:_execute_workflow_async>src/kailash/nodes/base_async.py:255:execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:31:async_run",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist deferred tracking data: OperationalError@src/kailash/runtime/local.py:4319:_flush_deferred_storage_sqlite>tests/regression/test_runtime_cancelled_run_tracking.py:177:real_failed_flush>src/kailash/tracking/storage/deferred.py:140:flush_to_sqlite>src/kailash/tracking/storage/database.py:59:__init__ <- WorkflowCancelledError@src/kailash/runtime/local.py:2970:_execute_async>src/kailash/runtime/local.py:3283:_execute_workflow_async",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist deferred tracking data: OperationalError@src/kailash/runtime/local.py:4319:_flush_deferred_storage_sqlite>tests/regression/test_runtime_cancelled_run_tracking.py:177:real_failed_flush>src/kailash/tracking/storage/deferred.py:140:flush_to_sqlite>src/kailash/tracking/storage/database.py:59:__init__ <- WorkflowValidationError@src/kailash/runtime/local.py:2970:_execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:195:_execute_workflow_async",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist deferred tracking data: OperationalError@src/kailash/runtime/local.py:4319:_flush_deferred_storage_sqlite>tests/regression/test_runtime_cancelled_run_tracking.py:177:real_failed_flush>src/kailash/tracking/storage/deferred.py:140:flush_to_sqlite>src/kailash/tracking/storage/database.py:59:__init__ <- PermissionError@src/kailash/runtime/local.py:2970:_execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:195:_execute_workflow_async",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist deferred tracking data: OperationalError@src/kailash/runtime/local.py:4319:_flush_deferred_storage_sqlite>tests/regression/test_runtime_cancelled_run_tracking.py:177:real_failed_flush>src/kailash/tracking/storage/deferred.py:140:flush_to_sqlite>src/kailash/tracking/storage/database.py:59:__init__ <- RuntimeError@src/kailash/runtime/local.py:2970:_execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:195:_execute_workflow_async",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.durable",
+            "message": "durable.resume.shape_drift_forced",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.durable",
+            "message": "durable.resume.shape_drift_forced",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.durable",
+            "message": "durable.resume.shape_drift_forced",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.parallel",
+            "message": "Node instance 'missing' not found in workflow",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.parallel",
+            "message": "Node missing failed",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.parallel",
+            "message": "Unexpected error in node missing: Node 'missing' failed",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.durable",
+            "message": "durable.resume.shape_drift_forced",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.durable",
+            "message": "durable.resume.shape_drift_forced",
+            "level": "WARNING"
+          }
+        ]
+      },
+      {
+        "ran": true,
+        "exit": 0,
+        "counts": {
+          "passed": 219
+        },
+        "warnings": [],
+        "skips": [],
+        "events": [
+          {
+            "logger": "kailash.resources.registry",
+            "message": "Error cleaning up resource socket: RuntimeError@src/kailash/resources/registry.py:284:_cleanup_resource>tests/regression/test_async_runtime_cleanup_ownership.py:625:failing",
+            "level": "ERROR"
+          },
+          {
+            "logger": "audit.runtime_audit",
+            "message": "{\"event_type\": \"warning\", \"message\": \"\", \"user_id\": null, \"data\": {\"action\": \"read\", \"nested\": {\"count\": 3}}, \"timestamp\": \"2026-09-27T15:45:19.717851+00:00\"}",
+            "level": "WARNING"
+          },
+          {
+            "logger": "audit.runtime_audit",
+            "message": "{\"event_type\": \"warning\", \"message\": \"\", \"user_id\": null, \"data\": {\"action\": \"read\", \"nested\": {\"count\": 3}}, \"timestamp\": \"2026-09-27T15:45:19.721578+00:00\"}",
+            "level": "WARNING"
+          },
+          {
+            "logger": "audit.runtime_audit",
+            "message": "{\"event_type\": \"error\", \"message\": \"\", \"user_id\": null, \"data\": {\"action\": \"read\", \"nested\": {\"count\": 3}}, \"timestamp\": \"2026-09-27T15:45:19.723517+00:00\"}",
+            "level": "ERROR"
+          },
+          {
+            "logger": "audit.runtime_audit",
+            "message": "{\"event_type\": \"error\", \"message\": \"\", \"user_id\": null, \"data\": {\"action\": \"read\", \"nested\": {\"count\": 3}}, \"timestamp\": \"2026-09-27T15:45:19.725876+00:00\"}",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.security",
+            "message": "Memory limit is NOT enforced for in-process code execution on this platform (address-space usage is not readable). Code executed by PythonCodeNode may allocate without bound. Run untrusted code in a subprocess if the limit must hold.",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Node first failed: NodeExecutionError@src/kailash/runtime/local.py:3452:_execute_workflow_async>src/kailash/nodes/base.py:1626:execute>src/kailash/nodes/code/python.py:1592:run>src/kailash/nodes/code/python.py:686:execute_code <- RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Node first failed: NodeExecutionError@src/kailash/runtime/local.py:3452:_execute_workflow_async>src/kailash/nodes/base.py:1626:execute>src/kailash/nodes/code/python.py:1592:run>src/kailash/nodes/code/python.py:686:execute_code <- RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Node first failed: NodeExecutionError@src/kailash/runtime/local.py:3452:_execute_workflow_async>src/kailash/nodes/base.py:1626:execute>src/kailash/nodes/code/python.py:1592:run>src/kailash/nodes/code/python.py:686:execute_code <- RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Node first failed: NodeExecutionError@src/kailash/runtime/local.py:3452:_execute_workflow_async>src/kailash/nodes/base.py:1626:execute>src/kailash/nodes/code/python.py:1592:run>src/kailash/nodes/code/python.py:686:execute_code <- RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.nodes.code.python",
+            "message": "Code execution failed (RuntimeError): RuntimeError@src/kailash/nodes/code/python.py:657:execute_code><string>:1:<module>",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.async_local",
+            "message": "Workflow execution timeout after 0.1s",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.async_local",
+            "message": "Workflow execution timeout after 0.1s",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist cancelled workflow status: RuntimeError@src/kailash/runtime/local.py:3103:_execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:127:update_run_status <- CancelledError@src/kailash/runtime/local.py:2970:_execute_async>src/kailash/runtime/local.py:3450:_execute_workflow_async>src/kailash/nodes/base_async.py:255:execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:31:async_run",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist cancelled workflow status: RuntimeError@src/kailash/runtime/local.py:3103:_execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:127:update_run_status <- WorkflowCancelledError@src/kailash/runtime/local.py:2970:_execute_async>src/kailash/runtime/local.py:3283:_execute_workflow_async",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist deferred tracking data: OperationalError@src/kailash/runtime/local.py:4319:_flush_deferred_storage_sqlite>tests/regression/test_runtime_cancelled_run_tracking.py:177:real_failed_flush>src/kailash/tracking/storage/deferred.py:140:flush_to_sqlite>src/kailash/tracking/storage/database.py:59:__init__ <- CancelledError@src/kailash/runtime/local.py:2970:_execute_async>src/kailash/runtime/local.py:3450:_execute_workflow_async>src/kailash/nodes/base_async.py:255:execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:31:async_run",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist deferred tracking data: OperationalError@src/kailash/runtime/local.py:4319:_flush_deferred_storage_sqlite>tests/regression/test_runtime_cancelled_run_tracking.py:177:real_failed_flush>src/kailash/tracking/storage/deferred.py:140:flush_to_sqlite>src/kailash/tracking/storage/database.py:59:__init__ <- WorkflowCancelledError@src/kailash/runtime/local.py:2970:_execute_async>src/kailash/runtime/local.py:3283:_execute_workflow_async",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist deferred tracking data: OperationalError@src/kailash/runtime/local.py:4319:_flush_deferred_storage_sqlite>tests/regression/test_runtime_cancelled_run_tracking.py:177:real_failed_flush>src/kailash/tracking/storage/deferred.py:140:flush_to_sqlite>src/kailash/tracking/storage/database.py:59:__init__ <- WorkflowValidationError@src/kailash/runtime/local.py:2970:_execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:195:_execute_workflow_async",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist deferred tracking data: OperationalError@src/kailash/runtime/local.py:4319:_flush_deferred_storage_sqlite>tests/regression/test_runtime_cancelled_run_tracking.py:177:real_failed_flush>src/kailash/tracking/storage/deferred.py:140:flush_to_sqlite>src/kailash/tracking/storage/database.py:59:__init__ <- PermissionError@src/kailash/runtime/local.py:2970:_execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:195:_execute_workflow_async",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.base",
+            "message": "Failed to persist deferred tracking data: OperationalError@src/kailash/runtime/local.py:4319:_flush_deferred_storage_sqlite>tests/regression/test_runtime_cancelled_run_tracking.py:177:real_failed_flush>src/kailash/tracking/storage/deferred.py:140:flush_to_sqlite>src/kailash/tracking/storage/database.py:59:__init__ <- RuntimeError@src/kailash/runtime/local.py:2970:_execute_async>tests/regression/test_runtime_cancelled_run_tracking.py:195:_execute_workflow_async",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.durable",
+            "message": "durable.resume.shape_drift_forced",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.durable",
+            "message": "durable.resume.shape_drift_forced",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.durable",
+            "message": "durable.resume.shape_drift_forced",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.parallel",
+            "message": "Node instance 'missing' not found in workflow",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.parallel",
+            "message": "Node missing failed",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.parallel",
+            "message": "Unexpected error in node missing: Node 'missing' failed",
+            "level": "ERROR"
+          },
+          {
+            "logger": "kailash.runtime.durable",
+            "message": "durable.resume.shape_drift_forced",
+            "level": "WARNING"
+          },
+          {
+            "logger": "kailash.runtime.durable",
+            "message": "durable.resume.shape_drift_forced",
+            "level": "WARNING"
+          }
+        ]
+      }
+    ],
+    "additional_independent_rounds": [
+      {
+        "ran": true,
+        "exit": 0,
+        "counts": {
+          "passed": 5
+        },
+        "warnings": [],
+        "skips": [],
+        "events": []
+      },
+      {
+        "ran": true,
+        "exit": 0,
+        "counts": {
+          "passed": 5
+        },
+        "warnings": [],
+        "skips": [],
+        "events": []
+      }
+    ],
+    "controls": {
+      "registry": {
+        "mode": "registry",
+        "hits": 2,
+        "exit": 1
+      },
+      "scope": {
+        "mode": "scope",
+        "hits": 1,
+        "exit": 1
+      },
+      "wait": {
+        "mode": "wait",
+        "hits": 2,
+        "exit": 1
+      },
+      "admission": {
+        "mode": "admission",
+        "hits": 2,
+        "exit": 1
+      },
+      "guard": {
+        "mode": "guard",
+        "hits": 4,
+        "exit": 1
+      }
+    },
+    "control_results": {
+      "registry": "2hits2failed",
+      "scope": "1hit1failed",
+      "wait": "2hits2failed",
+      "admission": "2hits1failed",
+      "guard": "4hits2failed"
+    },
+    "mechanical": "/tmp/csq16-correctness-native-mechanical.json; 43 absolute constructor/helper calls;228 lifecycle/execution navigation rows across constructor-bearing modules, including other resource receiver types.18existing Async methods unchanged,6changed,4private helpers added; all existing public signatures retained, signature-tamper opposite detected.",
+    "contract_review": [
+      "specs/core-runtime.md169 Async-first runtime extending LocalRuntime with concurrent execution, workflow optimization, and integrated resource management.",
+      "Ordinary sync execution uses caller thread persistent loop; live foreign loop rejected before user resource side effects; concurrent sync admission rejected before creating coroutine.",
+      "Final reference closes real registry sockets on owner loop; async context exit awaits through repeated cancellation and keeps caller loop alive.",
+      "Pool cleanup passes actual execution loop ID; old cross-loop pool-isolation cohort executed.",
+      "Resource-free previously closed caller loop allows rebind to NEW loop with fresh semaphore. Two independent actual contended semaphore reuse cases plus3invalid-limit order cases executed twice.",
+      "Validation remains before native ownership claim; closed runtime refuses rebinding; bookkeeping source dependencies match primary canonical hashes."
+    ],
+    "diagnostics": "37 records each inspected:32 known deliberate fail-path/platform disclosures plus5 actual SQLite flush failures introduced by Local dependency tests. No cleanup timeout/unawaited-coroutine/Python warnings.",
+    "exclusions": [
+      "One live PostgreSQL integration case intentionally deselected by -m not integration; no live PostgreSQL proof.",
+      "Native correctness is separate from adversarial security review and broad final Linux/Mac gates.",
+      "Constructor/caller inventory is not a claim every DataFlow/Nexus/Kaizen external backend was executed.",
+      "Local cancellation tracking and flush changes authored by me require independent review from parent/security; included tests establish integration only."
+    ],
+    "findings": "No open native behavior findings. Two doc wording inaccuracies reported and corrected by parent, exact final continuity independently verified."
+  },
+  "root_combined_final": {
+    "ran": true,
+    "rounds": [
+      "219 passed,1 live PostgreSQL case deselected in6.55s",
+      "219 passed,1 live PostgreSQL case deselected in7.53s"
+    ],
+    "controls": {
+      "cleanup_wait": "2 reached,2 failed",
+      "persistence_warning": "5 reached,5 failed",
+      "run_state": "6 reached,6 failed"
+    },
+    "diagnostics": "37 records each: real intentionally failing resource and SQLite callbacks, deliberate audit levels, negative workflow/timeouts, forced durable drift and one platform memory-enforcement disclosure; no cleanup-timeout or unawaited-coroutine warning. Zero Python warnings/skips.",
+    "format_continuity": "Local6f82\u21928c31 Black-only wholeASTidentical; native d272\u21925a5234e0 docstring-only executableASTidentical; testimport-order refinement preserves importset and functionbodies.",
+    "scope": "Local run bookkeeping/error visibility and native lifecycle. No live PostgreSQL service or complete remote-CI claim."
+  },
+  "independent_security_final": {
+    "ran": true,
+    "verdict": "CLEAN within specified runtime lifecycle, audit, cancellation persistence and deferred-flush scope",
+    "open_findings": [],
+    "workspace": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq16-promotion-verification",
+    "manifest": "/tmp/csq16-security-runtime-final-manifest.json",
+    "final_source_hashes": {
+      "src/kailash/runtime/local.py": "8c31a931391e4c6197aa34c5de4f6615b2f3aef2424ef20f067bf1596df3248c",
+      "src/kailash/runtime/async_local.py": "5a5234e0b74b8246816fa0bfbec2229ed018c8cbd6d6ace76b071c93ae54ace2",
+      "specs/core-runtime.md": "66ac9bb66e8bfc07b5f57e692323d1a0465f3509bea35999509ab60674de7cf0"
+    },
+    "rounds": [
+      {
+        "json": "/tmp/csq16-security-runtime-canonical-r1.json",
+        "log": "/tmp/csq16-security-runtime-canonical-r1.log",
+        "passed": 248,
+        "deselected": 1,
+        "python_warnings": [],
+        "skips": [],
+        "warn_plus_records": 43
+      },
+      {
+        "json": "/tmp/csq16-security-runtime-canonical-r2.json",
+        "log": "/tmp/csq16-security-runtime-canonical-r2.log",
+        "passed": 248,
+        "deselected": 1,
+        "python_warnings": [],
+        "skips": [],
+        "warn_plus_records": 43
+      }
+    ],
+    "command": "primary .venv/bin/python -P /tmp/csq16-security-runtime-run.py canonical-rN [files from final-files.json]; pytest -q -Werror --tb=short --timeout=45 -m not integration",
+    "cohort_manifest": "/tmp/csq16-security-runtime-final-files.json",
+    "mechanical": "/tmp/csq16-security-runtime-final-mechanical.json",
+    "controls": [
+      {
+        "mode": "registry",
+        "hits": 2,
+        "exit": 1,
+        "failures": 2,
+        "log": "/tmp/csq16-security-runtime-final-control-registry.log"
+      },
+      {
+        "mode": "scope",
+        "hits": 1,
+        "exit": 1,
+        "failures": 1,
+        "log": "/tmp/csq16-security-runtime-final-control-scope.log"
+      },
+      {
+        "mode": "wait",
+        "hits": 2,
+        "exit": 1,
+        "failures": 2,
+        "log": "/tmp/csq16-security-runtime-final-control-wait.log"
+      },
+      {
+        "mode": "admission",
+        "hits": 2,
+        "exit": 1,
+        "failures": 1,
+        "log": "/tmp/csq16-security-runtime-final-control-admission.log"
+      },
+      {
+        "mode": "guard",
+        "hits": 4,
+        "exit": 1,
+        "failures": 2,
+        "log": "/tmp/csq16-security-runtime-final-control-guard.log"
+      },
+      {
+        "mode": "state",
+        "hits": 8,
+        "exit": 1,
+        "failures": 6,
+        "log": "/tmp/csq16-security-runtime-canonical-control-state.log"
+      },
+      {
+        "mode": "privacy",
+        "hits": 2,
+        "exit": 1,
+        "failures": 2,
+        "log": "/tmp/csq16-security-runtime-canonical-control-privacy.log"
+      },
+      {
+        "mode": "silence",
+        "hits": 2,
+        "exit": 1,
+        "failures": 2,
+        "log": "/tmp/csq16-security-runtime-canonical-control-silence.log"
+      },
+      {
+        "hits": 5,
+        "exit": 1,
+        "mode": "flush",
+        "failures": 5,
+        "log": "/tmp/csq16-security-runtime-canonical-control-flush.log"
+      }
+    ],
+    "doc_mapping": {
+      "tested_async": "d272d6594f02334ca4e5c0730ec89930d20156374a463d1481870fe4165a05fe",
+      "final_async": "5a5234e0b74b8246816fa0bfbec2229ed018c8cbd6d6ace76b071c93ae54ace2",
+      "proof": "Read exact one-line execute docstring diff; full AST excluding docstrings equal. No executable source delta. Spec paragraph explicitly says new running loop after previous caller loop closes. Same source citations retained.",
+      "backup": "/tmp/csq16-security-runtime-doc-final-backup"
+    },
+    "format_mapping": {
+      "local": "6f82 to 8c31 full AST equal; both final rounds used 8c31",
+      "lifecycle_test": "821d to dbff import set and all non-import AST equal; both final rounds used dbff"
+    },
+    "independent_probes": {
+      "real_tcp_lifecycle": 6,
+      "actual_race_regressions": 3,
+      "additional_ownership": 4,
+      "other_audit_cancel_progress_real_sqlite": 16,
+      "total_additional_to_219": 29
+    },
+    "closed_findings": [
+      {
+        "finding": "Native synchronous repeated execution and close lacked actual resource completion",
+        "before": "Six baseline probes failed; resource close count remained 0 at refcount 0 and sequential execution loop IDs differed.",
+        "evidence": "/tmp/csq16-security-runtime-lifecycle-six-baseline.json",
+        "after": "Six real TCP probes pass in both final rounds; same loop, no Thread.start, actual socket closure, caller-owned loop remains usable."
+      },
+      {
+        "finding": "Cancelled async context exit could outlive host loop and leave socket open",
+        "before": "CANCELLED_EXIT completed=False socket_open=True ref_count=0",
+        "after": "completed=True socket_open=False ref_count=0; repeated cancellation regression and reached wait omission fail."
+      },
+      {
+        "finding": "Overlapping native sync execution created orphan coroutine",
+        "before": "coroutine 'AsyncLocalRuntime.execute_workflow_async' was never awaited",
+        "after": "orphaned=[]; atomic admission mutation reaches and fails."
+      },
+      {
+        "finding": "Close from active foreign caller loop blocked dependent loops",
+        "before": "watchdog_rescue=True",
+        "after": "FOREIGN_ACTIVE_CALLER watchdog_rescue=False closed=True"
+      },
+      {
+        "finding": "Local asyncio cancellation lacked terminal audit/progress restoration",
+        "before": "start-only event on actual cancellation",
+        "after": "original CancelledError retained; exactly start+cancelled terminal and progress ContextVar restored."
+      },
+      {
+        "finding": "Cancellation used unsupported run state",
+        "before": "Run terminal cancelled rejected by tracking contract",
+        "after": "run failed terminal while audit remains cancelled; reached state omission 8 hits, 6 failing tests."
+      },
+      {
+        "finding": "Error-path deferred SQLite flush failures were silent",
+        "before": "Actual SQLite directory-path OperationalError with persistence_diagnostics=[]",
+        "after": "Safe WARNING recorded on all five outcomes; original public exceptions preserved; reached omission 5 hits/5 failures."
+      }
+    ],
+    "diagnostics": {
+      "reviewed_all_records": true,
+      "rounds_normalized_equal": true,
+      "python_warnings": 0,
+      "warn_plus_per_round": 43,
+      "classification": {
+        "deliberate_registry_callback_failure": 2,
+        "explicit_audit_warning_error_level_tests": 4,
+        "platform_memory_limit_disclosure": 1,
+        "deliberate_python_node_errors": 10,
+        "dependent_node_errors": 4,
+        "deliberate_timeout": 2,
+        "forced_tracking_failure": 2,
+        "real_sqlite_forced_flush_failure": 6,
+        "forced_shape_drift": 5,
+        "missing_parallel_node_negative_case": 3,
+        "progress_probe_execution_failure": 4
+      },
+      "platform_disclosure": "Memory limit is NOT enforced for in-process code execution on this platform (address-space usage is not readable). No claim of memory-limit enforcement; existing explicit platform boundary."
+    },
+    "scope_limits": [
+      "One live PostgreSQL integration case deselected; SQL cleanup verified using actual delegated clear_shared_pools owner-loop argument plus scoped #1248 cohort, not a live PostgreSQL service.",
+      "Actual macOS/Python asyncio TCP resource lifecycle and SQLite persistence failure evidence; no Windows runtime claim.",
+      "No overall promotion, unrelated HTTP/trust/key or arbitrary application resource safety claim.",
+      "Synchronous close on an active caller loop retains observed asynchronous cleanup; awaited completion guaranteed by async context exit. Resource callbacks themselves may fail and are safely logged."
+    ],
+    "initial_instrument_error": "System python3 invocation exited 139 before verification; zero evidence banked. Repeated STEP0 and every verification with project .venv/bin/python -P exited 0."
+  }
+}
