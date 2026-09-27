@@ -143,30 +143,17 @@ class _FakeSyncRuntime:
 
 
 class _FakeAsyncRuntime(AsyncLocalRuntime):
-    """Stand-in for AsyncLocalRuntime.
+    """Unit recorder at the inherited engine boundary, with real lifecycle.
 
-    Subclasses ``AsyncLocalRuntime`` so ``ModelRegistry._is_async``
-    (post-S5 refactor — derived from ``isinstance(runtime,
-    AsyncLocalRuntime)`` per ``model_registry.py:182-189``) resolves
-    True for instances of this fake. Pre-S5 the test set
-    ``registry._is_async = True`` directly; the S5 setter is now a
-    no-op so the parent-class isinstance check IS the dispatch.
-
-    Bypasses the parent ``__init__`` (thread pool, profiler) — the
-    fake never executes a real workflow, so the parent setup is dead
-    weight. Methods below override every entry point the helper might
-    reach so the inherited parent paths cannot run.
-
-    * ``execute()`` mimics the real refusal: raises RuntimeError if a
-      loop is running. The helper must NEVER hit this path because the
-      dispatch uses ``execute_workflow_async`` in async mode.
-    * ``execute_workflow_async()`` is an async coroutine that records
-      its call and returns the configured tuple shape.
+    The registry uses Core's public LocalRuntime entry on this captured async
+    runtime. Its native execute override must remain unused; only the inherited
+    async implementation is replaced with a deterministic result recorder here.
+    Real SQL/loop ownership is covered by the registry bridge integration tests.
     """
 
     def __init__(self) -> None:
-        # Intentionally skip AsyncLocalRuntime.__init__ — no thread pool
-        # or profiler needed; the fake's methods override every entry.
+        super().__init__(enable_monitoring=False)
+        self.mark_externally_managed()
         self.sync_execute_calls = 0
         self.async_calls: list[Any] = []
         self.return_value: Tuple[Dict[str, Any], str] = (
@@ -183,10 +170,10 @@ class _FakeAsyncRuntime(AsyncLocalRuntime):
             "Docker/FastAPI deadlocks."
         )
 
-    async def execute_workflow_async(
-        self, workflow_built: Any, inputs: Dict[str, Any]
+    async def _execute_async(
+        self, workflow: Any, **kwargs: Any
     ) -> Tuple[Dict[str, Any], str]:
-        self.async_calls.append((workflow_built, inputs))
+        self.async_calls.append((workflow, kwargs))
         return self.return_value
 
 

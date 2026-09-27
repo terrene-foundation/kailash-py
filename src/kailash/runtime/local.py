@@ -2190,10 +2190,10 @@ class LocalRuntime(
             subsystem = Subsystem(runtime=shared_runtime.acquire())
 
         Raises:
-            RuntimeError: If the runtime has already been fully closed (ref_count <= 0).
+            RuntimeError: If the runtime has been fully closed or its resources cleaned up.
         """
         with self._loop_lock:
-            if self._ref_count <= 0:
+            if self._ref_count <= 0 or getattr(self, "_cleaned_up", False):
                 raise RuntimeError(
                     "Cannot acquire a closed runtime. "
                     "Create a new runtime instance instead."

@@ -120,19 +120,22 @@ class TestModelRegistryRuntimeInjection:
         runtime = LocalRuntime()
         registry = ModelRegistry(mock_df, runtime=runtime)
 
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            registry.__del__()
+        try:
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                registry.__del__()
 
-            resource_warnings = [
-                x for x in w if issubclass(x.category, ResourceWarning)
-            ]
-            assert len(resource_warnings) == 1
-            assert "Unclosed" in str(resource_warnings[0].message)
-            assert "ModelRegistry" in str(resource_warnings[0].message)
+                resource_warnings = [
+                    x for x in w if issubclass(x.category, ResourceWarning)
+                ]
+                assert len(resource_warnings) == 1
+                assert "Unclosed" in str(resource_warnings[0].message)
+                assert "ModelRegistry" in str(resource_warnings[0].message)
 
-        # Clean up: close was called by __del__, but runtime ref still held by creator
-        runtime.close()
+        finally:
+            # Finalizers diagnose leaks; explicit owners release both references.
+            registry.close()
+            runtime.close()
 
     def test_no_resource_warning_after_close(self):
         """__del__ must NOT emit ResourceWarning if close() was already called."""

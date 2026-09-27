@@ -1142,7 +1142,9 @@ class DataFlow(DataFlowEventMixin):
             cached = self._loop_runtime_cache.get(loop_id)
             if cached is not None:
                 return cached
-            runtime = AsyncLocalRuntime()
+            # DataFlow closes every cached runtime at shutdown, just as it
+            # owns the sync singleton below. Declare that ownership to Core.
+            runtime = AsyncLocalRuntime().mark_externally_managed()
             self._loop_runtime_cache[loop_id] = runtime
             logger.debug(
                 "engine.lazy_async_runtime_allocated",
