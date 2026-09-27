@@ -144,8 +144,12 @@ class BehaviorAnalysisNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         super().__init__(name=name, **kwargs)
 
         # Initialize security event and audit logging
-        self.security_event_node = SecurityEventNode(name=f"{name}_security_events")
-        self.audit_log_node = AuditLogNode(name=f"{name}_audit_log")
+        self.security_event_node = SecurityEventNode(
+            name=f"{name}_security_events", log_name_parts=(name, "_security_events")
+        )
+        self.audit_log_node = AuditLogNode(
+            name=f"{name}_audit_log", log_name_parts=(name, "_audit_log")
+        )
 
         # User behavior profiles storage
         self.user_profiles: Dict[str, UserBehaviorProfile] = {}

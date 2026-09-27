@@ -29,6 +29,7 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.data import JSONReaderNode
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security import AuditLogNode, SecurityEventNode
+from kailash.nodes.security._log_identity import log_name_parts as _log_name_parts
 from kailash.utils.secure_logging import redact_mapping
 
 
@@ -71,6 +72,8 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         filter_config: Dict[str, Any] | None = None,
         cache_ttl: int = 300,
         max_concurrent_operations: int = 10,
+        *,
+        log_name_parts: tuple[object, ...] | None = None,
     ):
         # Set attributes before calling super().__init__()
         self.name = name
@@ -103,6 +106,7 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         self.sync_status = {}
         self.operation_queue = asyncio.Queue(maxsize=max_concurrent_operations)
 
+        self._log_name_parts = _log_name_parts(name, log_name_parts)
         super().__init__(name=name)
 
         # Initialize supporting nodes
@@ -119,9 +123,14 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
 
         self.json_reader = JSONReaderNode(name=f"{self.name}_json")
 
-        self.security_logger = SecurityEventNode(name=f"{self.name}_security")
+        self.security_logger = SecurityEventNode(
+            name=f"{self.name}_security",
+            log_name_parts=(*self._log_name_parts, "_security"),
+        )
 
-        self.audit_logger = AuditLogNode(name=f"{self.name}_audit")
+        self.audit_logger = AuditLogNode(
+            name=f"{self.name}_audit", log_name_parts=(*self._log_name_parts, "_audit")
+        )
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {

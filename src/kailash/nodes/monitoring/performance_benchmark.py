@@ -178,8 +178,12 @@ class PerformanceBenchmarkNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         super().__init__(name=name, **kwargs)
 
         # Initialize audit logging and security events
-        self.audit_log_node = AuditLogNode(name=f"{name}_audit_log")
-        self.security_event_node = SecurityEventNode(name=f"{name}_security_events")
+        self.audit_log_node = AuditLogNode(
+            name=f"{name}_audit_log", log_name_parts=(name, "_audit_log")
+        )
+        self.security_event_node = SecurityEventNode(
+            name=f"{name}_security_events", log_name_parts=(name, "_security_events")
+        )
 
         # Performance data storage
         self.benchmark_results: List[BenchmarkResult] = []

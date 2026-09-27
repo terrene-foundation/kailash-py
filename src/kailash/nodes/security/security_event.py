@@ -10,6 +10,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from kailash.nodes.base import Node, NodeParameter, register_node
+from kailash.nodes.security._log_identity import log_namespace
 from kailash.utils.secure_logging import (
     redact_mapping,
     safe_log_field,
@@ -49,12 +50,16 @@ class SecurityEventNode(Node):
         name: str,
         alert_threshold: str = "HIGH",
         enable_real_time: bool = True,
+        *,
+        log_name_parts: tuple[object, ...] | None = None,
         **kwargs,
     ):
         super().__init__(name=name, **kwargs)
         self.alert_threshold = SeverityLevel(alert_threshold)
         self.enable_real_time = enable_real_time
-        self.logger = logging.getLogger(f"security.{safe_log_field(name)}")
+        self.logger = logging.getLogger(
+            log_namespace("security.", name, log_name_parts)
+        )
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Define parameters for security event processing."""

@@ -30,13 +30,16 @@ from kailash.nodes.auth._actor import (
 from kailash.nodes.auth._log_hygiene import log_safe
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
+from kailash.nodes.security._log_identity import (
+    log_name_parts as _log_name_parts,
+    log_namespace,
+)
 from kailash.nodes.security.audit_log import AuditLogNode
 from kailash.nodes.security.security_event import SecurityEventNode
 from kailash.sdk_exceptions import NodeExecutionError
 from kailash.utils.secure_logging import (
     redact_mapping,
     safe_exception_frames,
-    safe_log_field,
     safe_type_name,
 )
 
@@ -59,7 +62,9 @@ _MAX_WARN_KEYS = 512
 _ACTOR_WARN_LOCK = threading.Lock()
 
 
-def _warn_actor_enforcement_disabled(node_name: str) -> None:
+def _warn_actor_enforcement_disabled(
+    node_name: str, log_name_parts: tuple[object, ...] | None = None
+) -> None:
     """Say ONCE PER NODE, at WARN, that (actor, action, subject) auth is OFF.
 
     Keyed on the node's name rather than once per PROCESS. A single global
@@ -92,7 +97,7 @@ def _warn_actor_enforcement_disabled(node_name: str) -> None:
         "dispatch. To enable enforcement, pass "
         "MultiFactorAuthNode(actor_resolver=..., require_actor=True) and send "
         "actor_session_id on every call. Emitted once per node name.",
-        safe_log_field(node_name),
+        log_namespace("", node_name, log_name_parts),
     )
 
 
@@ -327,6 +332,8 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         rate_limit_window: int = 300,  # 5 minutes
         actor_resolver: Optional[ActorResolver] = None,
         require_actor: bool = True,
+        *,
+        log_name_parts: tuple[object, ...] | None = None,
         **kwargs,
     ):
         """Initialize multi-factor authentication node.
@@ -386,6 +393,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         self.require_actor = bool(require_actor)
 
         # Initialize parent classes
+        self._log_name_parts = _log_name_parts(name, log_name_parts)
         super().__init__(name=name, **kwargs)
 
         if not self.require_actor:
@@ -395,7 +403,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             # (`rules/security.md` § Secure-Default For A New Security
             # Feature). Once per process, not per call: a per-operation
             # message reads as transient and gets filtered.
-            _warn_actor_enforcement_disabled(name)
+            _warn_actor_enforcement_disabled(name, self._log_name_parts)
 
         # Audit logging IS wired (issue #2060).
         #
@@ -417,17 +425,14 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         # The real MFA deadlock -- `_revoke_mfa` re-acquiring the non-reentrant
         # `_data_lock` -- was a different defect, fixed under #2026, and had no
         # audit-node involvement.
-        self.audit_log_node = AuditLogNode(name=f"{name}_audit_log")
-        self.security_event_node = SecurityEventNode(name=f"{name}_security_events")
-        # Derive logger namespaces from the original metadata field before a
-        # suffix obscures JSON credentials. Child node identities stay raw.
-        self.audit_log_node.logger = logging.getLogger(
-            f"audit.{safe_log_field(name)}_audit_log"
+        self.audit_log_node = AuditLogNode(
+            name=f"{name}_audit_log",
+            log_name_parts=(*self._log_name_parts, "_audit_log"),
         )
-        self.security_event_node.logger = logging.getLogger(
-            f"security.{safe_log_field(name)}_security_events"
+        self.security_event_node = SecurityEventNode(
+            name=f"{name}_security_events",
+            log_name_parts=(*self._log_name_parts, "_security_events"),
         )
-
         # User MFA data storage (in production, this would be a database)
         self.user_mfa_data: Dict[str, Dict[str, Any]] = {}
         self.user_sessions: Dict[str, Dict[str, Any]] = {}

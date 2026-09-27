@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional, Set
 from kailash.nodes.auth._log_hygiene import log_safe
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
+from kailash.nodes.security._log_identity import log_name_parts as _log_name_parts
 from kailash.nodes.security.audit_log import AuditLogNode
 from kailash.nodes.security.security_event import SecurityEventNode
 
@@ -136,6 +137,8 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         enable_geo_tracking: bool = False,
         anomaly_detection: bool = True,
         cleanup_interval: int = 300,  # 5 minutes
+        *,
+        log_name_parts: tuple[object, ...] | None = None,
         **kwargs,
     ):
         """Initialize session management node.
@@ -161,11 +164,18 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         self.cleanup_interval = cleanup_interval
 
         # Initialize parent classes
+        self._log_name_parts = _log_name_parts(name, log_name_parts)
         super().__init__(name=name, **kwargs)
 
         # Initialize audit logging and security events
-        self.audit_log_node = AuditLogNode(name=f"{name}_audit_log")
-        self.security_event_node = SecurityEventNode(name=f"{name}_security_events")
+        self.audit_log_node = AuditLogNode(
+            name=f"{name}_audit_log",
+            log_name_parts=(*self._log_name_parts, "_audit_log"),
+        )
+        self.security_event_node = SecurityEventNode(
+            name=f"{name}_security_events",
+            log_name_parts=(*self._log_name_parts, "_security_events"),
+        )
 
         # Session storage
         self.sessions: Dict[str, SessionData] = {}

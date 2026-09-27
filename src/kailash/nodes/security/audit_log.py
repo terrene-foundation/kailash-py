@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 
 from kailash.nodes.base import Node, NodeParameter, register_node
+from kailash.nodes.security._log_identity import log_namespace
 from kailash.utils.secure_logging import (
     redact_mapping,
     safe_log_field,
@@ -42,13 +43,15 @@ class AuditLogNode(Node):
         log_level: str = "INFO",
         include_timestamp: bool = True,
         output_format: str = "json",
+        *,
+        log_name_parts: tuple[object, ...] | None = None,
         **kwargs,
     ):
         super().__init__(name=name, **kwargs)
         self.log_level = log_level
         self.include_timestamp = include_timestamp
         self.output_format = output_format
-        self.logger = logging.getLogger(f"audit.{safe_log_field(name)}")
+        self.logger = logging.getLogger(log_namespace("audit.", name, log_name_parts))
 
         # Set logger level
         level = getattr(logging, log_level.upper(), logging.INFO)
