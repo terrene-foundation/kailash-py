@@ -1,0 +1,64 @@
+{
+  "ran": true,
+  "alerts": [
+    184,
+    180
+  ],
+  "verdict": "Scoped unsafe-cyclic-import false-positive candidates; no dismissal authorized or performed",
+  "observations": [
+    {
+      "success": true,
+      "manager_type": "CheckpointManager",
+      "checkpoint_roundtrip": true,
+      "mode": "normal",
+      "order": "durable_request,checkpoint_manager",
+      "type_only_lines": {
+        "kailash.middleware.gateway.durable_request": [
+          37
+        ],
+        "kailash.middleware.gateway.checkpoint_manager": []
+      },
+      "executed_type_only_imports": []
+    },
+    {
+      "success": true,
+      "manager_type": "CheckpointManager",
+      "checkpoint_roundtrip": true,
+      "mode": "normal",
+      "order": "checkpoint_manager,durable_request",
+      "type_only_lines": {
+        "kailash.middleware.gateway.durable_request": [
+          37
+        ],
+        "kailash.middleware.gateway.checkpoint_manager": []
+      },
+      "executed_type_only_imports": []
+    },
+    {
+      "success": false,
+      "error_type": "ImportError",
+      "error": "cannot import name 'CheckpointManager' from partially initialized module 'kailash.middleware.gateway.checkpoint_manager' (most likely due to a circular import)",
+      "mode": "force",
+      "order": "checkpoint_manager,durable_request",
+      "type_only_lines": {
+        "kailash.middleware.gateway.durable_request": [
+          37
+        ],
+        "kailash.middleware.gateway.checkpoint_manager": []
+      },
+      "executed_type_only_imports": [
+        [
+          "kailash.middleware.gateway.durable_request",
+          37
+        ]
+      ]
+    }
+  ],
+  "source_sha256": {
+    "src/kailash/middleware/gateway/durable_request.py": "f30c39f8ce13069268d297858502d02d3ef9433dd88529c44f14bbb6850d44a9",
+    "src/kailash/middleware/gateway/checkpoint_manager.py": "3718984beb52cf35a1171aedb5d739bd6c79ca3a5efe8226485622db9865c27f"
+  },
+  "spec": "specs/core-servers.md:75-79: Request durability and checkpointing (via CheckpointManager); Recovery from latest checkpoint (via DurableRequest)",
+  "source_contract": "durable_request.py:36-37 wraps CheckpointManager import in TYPE_CHECKING; checkpoint_manager.py:22 imports Checkpoint at runtime; normal package initializer enters checkpoint_manager first",
+  "instrument_scope": "Cold public imports requested in both orders, actual CheckpointManager+DiskStorage constructed in temporary directory and Checkpoint serialized/restored. Trace shows no type-only import. Forced guard reaches line37 then ImportError for partially initialized CheckpointManager. No backend or production durability test claim."
+}

@@ -1,0 +1,423 @@
+{
+  "correctness": {
+    "ran": true,
+    "verdict": "CLEAN independent central namespace correctness/security scope; separate runtime audit+cleanup remains OPEN elsewhere",
+    "manifest": {
+      "src/kailash/nodes/security/behavior_analysis.py": "b62049ff50a0a7fc98f96dad0194042a1aa9c33cb9b28b4069c59dbec239fdf5",
+      "src/kailash/nodes/security/threat_detection.py": "18092deb8dea02b20c6d0ff4a3a47503203457b13a7ffa341a2f2bbcd028c488",
+      "src/kailash/nodes/security/abac_evaluator.py": "3ac543b9dd7aa90b9f6459992bac92cabcdeb9d117f0e4b46a2095fa884b5b7d",
+      "src/kailash/nodes/auth/mfa.py": "5a68fe65bc77f7a6d8ebce508f5648d03e1750bd59a47d1e470bf48faba977b5",
+      "src/kailash/nodes/auth/directory_integration.py": "d35501c7dbb26d43495a1d56d0d813e260b1c888aef47ca7533de201fed908d2",
+      "src/kailash/nodes/auth/sso.py": "68fb513149f0dd44774e4511e541e7651dbb9e27e8d1fdb1b8312cbc32fcec74",
+      "src/kailash/nodes/auth/enterprise_auth_provider.py": "7a56814d526b6b3aaf12fabfc540fb99be8b5f8bf2f2b65535e86fb03b8d7ab3",
+      "src/kailash/nodes/auth/session_management.py": "c7f16896d215eaa580414740abcb4f221ca2daba27c8b72c7a25d6f4d53c3b2b",
+      "src/kailash/nodes/compliance/gdpr.py": "e57fda8ede36e7693d235fa141a8e6fbf99009bb62c38dd7ef26a510d17ddf41",
+      "src/kailash/nodes/compliance/data_retention.py": "92113d361f57b8e9bf38e9b05aca0bfc2c023918bb4567b205828c6046ff2758",
+      "src/kailash/nodes/monitoring/performance_benchmark.py": "123ce2c6be624489fc7681b68792f5cf28a50478082ba7ed5fb45f78c5eefde1",
+      "packages/kailash-kaizen/src/kaizen/nodes/compliance/gdpr.py": "cc0bbee2d46a7f5c682af3e4ffadb747a0b0f3afcd89b8fce931af2ad9076fab",
+      "src/kailash/nodes/security/audit_log.py": "f5fff7dc589c42d7763e36e23ecaed2c4e6984bd43196cd2820be1a3ebf93e22",
+      "src/kailash/nodes/security/security_event.py": "c7c0845fd648e53b283b40188ed2e6c1d55912be8035cf3159dc8e9c8110e22f",
+      "src/kailash/nodes/security/_log_identity.py": "4b2de5961abca7ed3d88ac66e86ec3041147422c64865013ecd8c42b6e6aa30a",
+      "tests/regression/test_audit_logger_identity_parts.py": "83be760738fbfa5d03ba8070f66700a917032b64710736e9e09034c80c740e3b",
+      "src/kailash/trust/enforce/selective_disclosure.py": "18cd2c96e73ffafff03c6117389a01a6f1298723d0b4d4a5cbd725561bd0dffe",
+      "tests/regression/test_audit_metadata_log_privacy.py": "b3aa7e5f6ba1ac58fae97c5dfe9a63b831ecb1b515c1c9b598eca6f94d1245d2",
+      "tests/regression/test_issue_2088_sink_side_log_sanitizing.py": "e500cb33f97131ab71cc6372186ff05ccf39142819a7176b1c2abe8b7e086767",
+      "src/kailash/utils/secure_logging.py": "a7480350b249222dce9952eda0d288084eb2a13b910da12894aa4828fdda5d97"
+    },
+    "rounds": [
+      {
+        "ran": true,
+        "mode": "r1",
+        "exit": 0,
+        "counts": {
+          "passed": 321
+        },
+        "warnings": [],
+        "skips": [],
+        "diagnostic_categories": {
+          "explicit auth/transport configuration fixture": 22,
+          "deliberate audit/security severity": 53,
+          "deliberate invalid/denied security paths": 17,
+          "injected MFA errors with classification/frames": 21
+        }
+      },
+      {
+        "ran": true,
+        "mode": "r2",
+        "exit": 0,
+        "counts": {
+          "passed": 321
+        },
+        "warnings": [],
+        "skips": [],
+        "diagnostic_categories": {
+          "explicit auth/transport configuration fixture": 22,
+          "deliberate audit/security severity": 53,
+          "deliberate invalid/denied security paths": 17,
+          "injected MFA errors with classification/frames": 21
+        }
+      }
+    ],
+    "controls": {
+      "partsdrop": {
+        "ran": true,
+        "mode": "partsdrop",
+        "hits": 116,
+        "hit_values": [
+          "partsdrop"
+        ],
+        "exit": 1
+      },
+      "collision": {
+        "ran": true,
+        "mode": "collision",
+        "hits": 9,
+        "hit_values": [
+          "collision"
+        ],
+        "exit": 1
+      },
+      "shape": {
+        "ran": true,
+        "mode": "shape",
+        "hits": 6,
+        "hit_values": [
+          "shape"
+        ],
+        "exit": 1
+      },
+      "enterprise": {
+        "ran": true,
+        "mode": "enterprise",
+        "hits": 12,
+        "hit_values": [
+          "DirectoryIntegrationNode",
+          "MultiFactorAuthNode",
+          "SSOAuthenticationNode",
+          "SessionManagementNode"
+        ],
+        "exit": 1
+      }
+    },
+    "independent_probe": {
+      "artifact": "/tmp/csq16-audit-independent-probe.json",
+      "cases": 36,
+      "records": 134,
+      "coverage": "12 actual producer classes x3 alternate JSON/URL names, raw parent/child identities preserved; actual WARNING/HIGH->ERROR levels; scalar versus literal surrogate pair namespaces remain distinct."
+    },
+    "mechanical": "/tmp/csq16-audit-independent-mechanical.json",
+    "inventory": "25 direct core-security constructor sites (21 dynamic parts,2 authmanagerconstant,2 runtime separatelyrepaired),3 separateenterprisefamily;4 builderstringroutes;4intermediateproducers;14sourcebusinessASTequal with alteredpublicname opposite rejected",
+    "spec_quotes": [
+      {
+        "path": "specs/security-threats.md:31",
+        "quote": "Token creation with user_id (no token content)."
+      },
+      {
+        "path": "specs/security-threats.md:35",
+        "quote": "Security events (rate limit, injection attempt) via SecurityEventNode."
+      }
+    ],
+    "reviewed": "Original components masked before concatenation; final namespace structural bounds; process-keyed type/length-framed original identity retains distinct logger levels; literal reserved id suffix cannot alias masked namespace; raw node identities/kwargs preserved. Shape rejection before tuple-subclass iteration.",
+    "limitations": [
+      "Known URL/query/JSON credential syntax only; no arbitrary secret classification.",
+      "No external IdP/SMTP/DB calls; optional AI disabled with documented flags.",
+      "Opaque unsupported node-name identity limited to simultaneous object identity as documented by author; public string names covered.",
+      "Mechanical business AST normalization excludes diagnostics and added log-parts plumbing; imports manually inspected; counts not whole-body behavioral coverage."
+    ],
+    "outputs_prefix": "/tmp/csq16-audit-independent-"
+  },
+  "security": {
+    "ran": true,
+    "role": "Independent adversarial SECURITY; not namespace author",
+    "verdict": "CLEAN: two final namespace-union rounds; discovered sibling logger leak closed in scoped producers",
+    "manifest": {
+      "src/kailash/nodes/security/behavior_analysis.py": "b62049ff50a0a7fc98f96dad0194042a1aa9c33cb9b28b4069c59dbec239fdf5",
+      "src/kailash/nodes/security/threat_detection.py": "18092deb8dea02b20c6d0ff4a3a47503203457b13a7ffa341a2f2bbcd028c488",
+      "src/kailash/nodes/security/abac_evaluator.py": "3ac543b9dd7aa90b9f6459992bac92cabcdeb9d117f0e4b46a2095fa884b5b7d",
+      "src/kailash/nodes/auth/mfa.py": "5a68fe65bc77f7a6d8ebce508f5648d03e1750bd59a47d1e470bf48faba977b5",
+      "src/kailash/nodes/auth/directory_integration.py": "d35501c7dbb26d43495a1d56d0d813e260b1c888aef47ca7533de201fed908d2",
+      "src/kailash/nodes/auth/sso.py": "68fb513149f0dd44774e4511e541e7651dbb9e27e8d1fdb1b8312cbc32fcec74",
+      "src/kailash/nodes/auth/enterprise_auth_provider.py": "7a56814d526b6b3aaf12fabfc540fb99be8b5f8bf2f2b65535e86fb03b8d7ab3",
+      "src/kailash/nodes/auth/session_management.py": "c7f16896d215eaa580414740abcb4f221ca2daba27c8b72c7a25d6f4d53c3b2b",
+      "src/kailash/nodes/compliance/gdpr.py": "e57fda8ede36e7693d235fa141a8e6fbf99009bb62c38dd7ef26a510d17ddf41",
+      "src/kailash/nodes/compliance/data_retention.py": "92113d361f57b8e9bf38e9b05aca0bfc2c023918bb4567b205828c6046ff2758",
+      "src/kailash/nodes/monitoring/performance_benchmark.py": "123ce2c6be624489fc7681b68792f5cf28a50478082ba7ed5fb45f78c5eefde1",
+      "packages/kailash-kaizen/src/kaizen/nodes/compliance/gdpr.py": "cc0bbee2d46a7f5c682af3e4ffadb747a0b0f3afcd89b8fce931af2ad9076fab",
+      "src/kailash/nodes/security/audit_log.py": "f5fff7dc589c42d7763e36e23ecaed2c4e6984bd43196cd2820be1a3ebf93e22",
+      "src/kailash/nodes/security/security_event.py": "c7c0845fd648e53b283b40188ed2e6c1d55912be8035cf3159dc8e9c8110e22f",
+      "src/kailash/nodes/security/_log_identity.py": "543fc9635b5f91014ae0fcb07a0ae12039e7e528f4a3a66a955c8842b00f23db",
+      "tests/regression/test_audit_logger_identity_parts.py": "83be760738fbfa5d03ba8070f66700a917032b64710736e9e09034c80c740e3b",
+      "src/kailash/trust/enforce/selective_disclosure.py": "18cd2c96e73ffafff03c6117389a01a6f1298723d0b4d4a5cbd725561bd0dffe",
+      "tests/regression/test_audit_metadata_log_privacy.py": "b3aa7e5f6ba1ac58fae97c5dfe9a63b831ecb1b515c1c9b598eca6f94d1245d2",
+      "tests/regression/test_issue_2088_sink_side_log_sanitizing.py": "e500cb33f97131ab71cc6372186ff05ccf39142819a7176b1c2abe8b7e086767",
+      "src/kailash/utils/secure_logging.py": "a7480350b249222dce9952eda0d288084eb2a13b910da12894aa4828fdda5d97"
+    },
+    "tree": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq16-storage-ci",
+    "spec_contracts": [
+      "specs/security-threats.md:29-35 auth user_id without token content",
+      "specs/security-data.md:267 AuditLogNode records security events for audit trails",
+      "specs/trust-crypto.md:323 clearance must meet trace classification; decision unchanged here"
+    ],
+    "runs": {
+      "final-r1": {
+        "ran": true,
+        "mode": "final-r1",
+        "exit": 0,
+        "counts": {
+          "passed": 321
+        },
+        "warnings": [],
+        "skips": [],
+        "log_levels": {
+          "WARNING": 59,
+          "ERROR": 54
+        }
+      },
+      "final-r2": {
+        "ran": true,
+        "mode": "final-r2",
+        "exit": 0,
+        "counts": {
+          "passed": 321
+        },
+        "warnings": [],
+        "skips": [],
+        "log_levels": {
+          "WARNING": 59,
+          "ERROR": 54
+        }
+      }
+    },
+    "opposites": {
+      "join": {
+        "ran": true,
+        "mode": "join",
+        "hits": 197,
+        "hit_values": [
+          "join"
+        ],
+        "exit": 1
+      },
+      "enterprise": {
+        "ran": true,
+        "mode": "enterprise",
+        "hits": 12,
+        "hit_values": [
+          "DirectoryIntegrationNode",
+          "MultiFactorAuthNode",
+          "SSOAuthenticationNode",
+          "SessionManagementNode"
+        ],
+        "exit": 1
+      },
+      "collision": {
+        "ran": true,
+        "mode": "collision",
+        "hits": 9,
+        "hit_values": [
+          "collision"
+        ],
+        "exit": 1
+      },
+      "shape": {
+        "ran": true,
+        "mode": "shape",
+        "hits": 6,
+        "hit_values": [
+          "shape"
+        ],
+        "exit": 1
+      }
+    },
+    "independent_probes": {
+      "r1": {
+        "cases": 13,
+        "hits": 0,
+        "artifact": "/tmp/csq16-security-namespace-adversarial-r1.json"
+      },
+      "r2": {
+        "cases": 13,
+        "hits": 0,
+        "artifact": "/tmp/csq16-security-namespace-adversarial-r2.json"
+      },
+      "reserved-opposite": {
+        "cases": 0,
+        "hits": 1,
+        "artifact": "/tmp/csq16-security-namespace-adversarial-reserved-opposite.json"
+      }
+    },
+    "control_outcomes": "join197hits13fails38pass; enterprise12hits1fail2pass; digestcollision9hits3fail; invalidparts6hits6fail; independently omitted reserved-pattern test1hit actual literal spoof reuses original logger and assertion fails.",
+    "absolute_mechanical": "/tmp/csq16-security-namespace-mechanical.json:28directconstructors=25security-family+3distinctenterprise-family;21dynamic original-component paths;4Enterprise intermediaries;4constant builder producers;2runtime producers now explicitly named runtime_audit, separate runtime behavior OPEN",
+    "compatibility": "14 original production source normalized business ASTs preserved; public-identity mutation detected independently in each. Existing positional arguments retained, new parts keyword only except internal warninghelper. Original raw node names, public audit/security entries and MFA warnonce rawkeys unchanged.321 cohort includes all59 prior privacy cases and69originalfixtureassertions.",
+    "identity_review": "Each raw component is credential-masked before suffix concatenation. Rendered names that differ from raw identity receive keyed HMAC-SHA256 over type/length-framed original codepoints; surrogatepass preserves distinct Unicode scalar/surrogate sequences. Digest is logger-identity index, not a password verifier. Ordinary unchanged names preserve historical namespace except reserved .id-64hex suffix; re-keying those prevents literal aliases. Same original named logger intentionally reuses logger/configuration; distinct masked names separate levels.",
+    "closed_reproduction": "Independent13case probes eachround include actual SessionManagementNode JSONname and both INFO audit/ERROR security events: original canary absent from both loggernames andmessages, raw public name retained. Also URI/JSON identicalmaskednames,recordbreaks,longnames,Unicode scalar/surrogatepair,literalspoof andsame-identityreuse.",
+    "diagnostic_inventory": "113expected WARN+ perround (59WARNING,54ERROR): explicit disabledactor/JWT config, negative actor/transport/audit callbacks, invalidseverity escalation, declared test audit/security levels, strict/shadow denials. Read actual records and31underlying source sink calls; zero Pythonwarnings/skips.",
+    "helper_format": "4b2de596\u2192543fc963 noqa-only change; entireASTequal and final two321 rounds ran exact543fc963.",
+    "exclusions": [
+      "Runtime missing native emission/opaque error provenance repair remains separate OPEN; namespace result does not certify it",
+      "No external IdP/SMTP/provider/database delivery; actual constructors use explicit supported offline flags for optionalAI",
+      "Only recognized URL/query/validJSON secret shapes, not arbitrarysecret inference",
+      "Documented names are strings; unsupported opaque names are not granted a broader identity/stability contract",
+      "Namespace HMAC key random perprocess; no cross-process loggername stability claim",
+      "No remote scanner rescans,dismissals,commits orpushes"
+    ],
+    "commands": [
+      "primary .venv python -P /tmp/csq16-security-namespace-run.py final-r1/final-r2",
+      "primary .venv python -P /tmp/csq16-security-namespace-control.py join/enterprise/collision/shape",
+      "primary .venv python -P /tmp/csq16-security-namespace-adversarial.py r1/r2/reserved-opposite",
+      "/usr/bin/python3 -I /tmp/csq16-security-namespace-mechanical.py"
+    ]
+  },
+  "author": {
+    "ran": true,
+    "status": "AUTHOR scoped clean after two consecutive final rounds; independent reviews pending",
+    "tree": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq16-promotion-verification",
+    "base_head": "68d4dbd4185435a03cd43604c12966558c9c934e",
+    "manifest": {
+      "src/kailash/nodes/security/behavior_analysis.py": "b62049ff50a0a7fc98f96dad0194042a1aa9c33cb9b28b4069c59dbec239fdf5",
+      "src/kailash/nodes/security/threat_detection.py": "18092deb8dea02b20c6d0ff4a3a47503203457b13a7ffa341a2f2bbcd028c488",
+      "src/kailash/nodes/security/abac_evaluator.py": "3ac543b9dd7aa90b9f6459992bac92cabcdeb9d117f0e4b46a2095fa884b5b7d",
+      "src/kailash/nodes/auth/mfa.py": "5a68fe65bc77f7a6d8ebce508f5648d03e1750bd59a47d1e470bf48faba977b5",
+      "src/kailash/nodes/auth/directory_integration.py": "d35501c7dbb26d43495a1d56d0d813e260b1c888aef47ca7533de201fed908d2",
+      "src/kailash/nodes/auth/sso.py": "68fb513149f0dd44774e4511e541e7651dbb9e27e8d1fdb1b8312cbc32fcec74",
+      "src/kailash/nodes/auth/enterprise_auth_provider.py": "7a56814d526b6b3aaf12fabfc540fb99be8b5f8bf2f2b65535e86fb03b8d7ab3",
+      "src/kailash/nodes/auth/session_management.py": "c7f16896d215eaa580414740abcb4f221ca2daba27c8b72c7a25d6f4d53c3b2b",
+      "src/kailash/nodes/compliance/gdpr.py": "e57fda8ede36e7693d235fa141a8e6fbf99009bb62c38dd7ef26a510d17ddf41",
+      "src/kailash/nodes/compliance/data_retention.py": "92113d361f57b8e9bf38e9b05aca0bfc2c023918bb4567b205828c6046ff2758",
+      "src/kailash/nodes/monitoring/performance_benchmark.py": "123ce2c6be624489fc7681b68792f5cf28a50478082ba7ed5fb45f78c5eefde1",
+      "packages/kailash-kaizen/src/kaizen/nodes/compliance/gdpr.py": "cc0bbee2d46a7f5c682af3e4ffadb747a0b0f3afcd89b8fce931af2ad9076fab",
+      "src/kailash/nodes/security/audit_log.py": "f5fff7dc589c42d7763e36e23ecaed2c4e6984bd43196cd2820be1a3ebf93e22",
+      "src/kailash/nodes/security/security_event.py": "c7c0845fd648e53b283b40188ed2e6c1d55912be8035cf3159dc8e9c8110e22f",
+      "src/kailash/nodes/security/_log_identity.py": "4b2de5961abca7ed3d88ac66e86ec3041147422c64865013ecd8c42b6e6aa30a",
+      "tests/regression/test_audit_logger_identity_parts.py": "83be760738fbfa5d03ba8070f66700a917032b64710736e9e09034c80c740e3b"
+    },
+    "union_manifest": "/tmp/csq16-audit-namespace-union-manifest.json",
+    "union_archive": "/tmp/csq16-audit-namespace-union-files.tar.gz",
+    "patch": "/tmp/csq16-audit-namespace.patch",
+    "base_manifest": "/tmp/csq16-audit-namespace-base-manifest.json",
+    "rounds": [
+      {
+        "ran": true,
+        "mode": "final-r1",
+        "exit": 0,
+        "counts": {
+          "passed": 321
+        },
+        "warnings": [],
+        "skips": []
+      },
+      {
+        "ran": true,
+        "mode": "final-r2",
+        "exit": 0,
+        "counts": {
+          "passed": 321
+        },
+        "warnings": [],
+        "skips": []
+      }
+    ],
+    "controls": [
+      {
+        "ran": true,
+        "mode": "join",
+        "hits": 197,
+        "hit_values": [
+          "join"
+        ],
+        "exit": 1
+      },
+      {
+        "ran": true,
+        "mode": "partsdrop",
+        "hits": 116,
+        "hit_values": [
+          "partsdrop"
+        ],
+        "exit": 1
+      },
+      {
+        "ran": true,
+        "mode": "enterprise",
+        "hits": 12,
+        "hit_values": [
+          "DirectoryIntegrationNode",
+          "MultiFactorAuthNode",
+          "SSOAuthenticationNode",
+          "SessionManagementNode"
+        ],
+        "exit": 1
+      },
+      {
+        "ran": true,
+        "mode": "shape",
+        "hits": 6,
+        "hit_values": [
+          "shape"
+        ],
+        "exit": 1
+      },
+      {
+        "ran": true,
+        "mode": "collision",
+        "hits": 9,
+        "hit_values": [
+          "collision"
+        ],
+        "exit": 1
+      }
+    ],
+    "mechanical": "/tmp/csq16-audit-namespace-mechanical.json",
+    "profiles": [
+      ".claude/agents/frameworks/nexus-specialist.md (Read,Write,Edit,Bash)",
+      ".claude/agents/frameworks/pact-specialist.md (Read,Write,Edit,Bash)"
+    ],
+    "spec_quotes": [
+      {
+        "path": "specs/security-threats.md:29-35",
+        "quote": "Token creation with user_id (no token content). Token verification failures with error classification. Security events (rate limit, injection attempt) via SecurityEventNode."
+      },
+      {
+        "path": "specs/security-data.md:267",
+        "quote": "AuditLogNode | Records security events for audit trails"
+      }
+    ],
+    "closed_findings": [
+      {
+        "trigger": "{\"password\":\"audit-sibling-canary-582419\"}",
+        "utf8_hex": "7b2270617373776f7264223a2261756469742d7369626c696e672d63616e6172792d353832343139227d",
+        "before": "SessionManagement child namespace appended suffix before masking and retained canary.",
+        "after": "Mask each original component, including Enterprise intermediate hops; actual constructor tests retain all raw identities."
+      },
+      {
+        "trigger": [
+          "https://user:synthetic-alpha@host.invalid/",
+          "https://user:synthetic-beta@host.invalid/"
+        ],
+        "before": "Both masked to audit.https://***@host.invalid/; second ERROR constructor disabled INFO on first.",
+        "after": "Process-keyed HMAC of type/length-framed original identity preserves separate logger levels, repeat identity reuse, and rejects literal namespace aliasing."
+      }
+    ],
+    "public_contracts": "14 source business ASTs equal after narrowly removing logging additions/imports; all original positional parameters and kwargs forwarding preserved. Each public-identity opposing AST mutation rejected. Public audit entries unchanged and covered by v1 cohort. MFA warning raw key still actor_disabled:<raw name>.",
+    "inventory": "28 direct calls:21 dynamic now explicit components,2 constant authmanager,2 runtime default producers owned separately by http_repair,3 distinct enterprise-family classes.4 constant builder string producers.4 Enterprise intermediary constructors explicitly thread parts.",
+    "warn_audit": {
+      "each_round_records": 113,
+      "disposition": "Read all records: explicit actor/JWT configuration warnings, deliberately emitted audit/security severities, invalid-severity escalation, intentionally injected MFA transport/actor/audit failures using safe frames, deliberate strict/shadow trust denials. No lifetime/unexpected warning."
+    },
+    "limits": [
+      "Only recognized URL/query/JSON credential syntax; no arbitrary secret inference.",
+      "Optional AI disabled through normal flags for constructor-only Kaizen GDPR/ABAC tests; no external IdP/SMTP/database calls.",
+      "Documented node names are strings: keyed identity stable within process, intentionally changes across process restart. Unsupported opaque original-name objects use simultaneous object identity without user str/repr; no stronger unsupported-type identity claim.",
+      "Logger names ending reserved .id-64hex are re-keyed to prevent literal aliases; ordinary names otherwise retain historical namespace.",
+      "No shared secure_logging changes; exact dependency a7480350b249222dce9952eda0d288084eb2a13b910da12894aa4828fdda5d97.",
+      "Runtime missing-name repair is separate owner/scope; local.py not included."
+    ],
+    "unresolved_findings_in_owned_scope": []
+  },
+  "final_lint_refinement": {
+    "ran": true,
+    "from_sha256": "4b2de5961abca7ed3d88ac66e86ec3041147422c64865013ecd8c42b6e6aa30a",
+    "to_sha256": "543fc9635b5f91014ae0fcb07a0ae12039e7e528f4a3a66a955c8842b00f23db",
+    "change": "Three line-scoped E721 comments explain deliberate exact-type checks; AST identical. Root two rounds and independent security final rounds use final helper. Correctness reviewer behavioral source is unchanged."
+  }
+}

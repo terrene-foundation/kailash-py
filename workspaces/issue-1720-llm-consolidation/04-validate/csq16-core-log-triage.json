@@ -1,0 +1,101 @@
+{
+  "verdict": "CONFIRMED log-record injection in all three files; read-only triage, fix not yet implemented",
+  "source_head": "68d4dbd4185435a03cd43604c12966558c9c934e",
+  "source_sha256": {
+    "src/kailash/resources/registry.py": "a0dd930ecb11d6e3ad0e49ad30818c9221cd82988b2e12a1a45de7295b54ba4b",
+    "src/kailash/workflow/builder.py": "9e4e32f9115627f7205b950bbca2daf3bed35b58da8a811b9e6c4ff0694b292f",
+    "src/kailash/workflow/graph.py": "f65063dee45bf04bc011165d3b996277006147a30c70e02471fcbe2e905ba083"
+  },
+  "alert_ids": [
+    11289,
+    11288,
+    11287,
+    11286,
+    11285,
+    11284,
+    11283,
+    11282,
+    11278,
+    11276,
+    11275,
+    11274,
+    11265,
+    11264,
+    11263,
+    150,
+    149,
+    148,
+    147,
+    146,
+    145,
+    144,
+    143
+  ],
+  "absolute_logger_calls": {
+    "src/kailash/workflow/builder.py": 21,
+    "src/kailash/workflow/graph.py": 19,
+    "src/kailash/resources/registry.py": 12
+  },
+  "actual_reached_lines": {
+    "kailash.workflow.builder": [
+      464,
+      654,
+      674,
+      682,
+      1105,
+      1221
+    ],
+    "kailash.workflow.graph": [
+      160,
+      314,
+      610,
+      978
+    ],
+    "kailash.resources.registry": [
+      128,
+      167,
+      180,
+      203,
+      210,
+      239,
+      291,
+      294,
+      380
+    ]
+  },
+  "probe": "/tmp/csq16-core-log-triage.py",
+  "observations": "/tmp/csq16-core-log-triage.json",
+  "physical_stream_output": "/tmp/csq16-core-log-physical.log",
+  "known_answer_control": "Identical public APIs with ordinary name: no newline in any captured record; newline payload:30 of53 total records contain actual forged newline across nine cases. Actual logging.StreamHandler writes multiline bytes.",
+  "payload_hex": "74656e616e740a464f524745445f4556454e54206163636570746564",
+  "decoded_payload": "tenant\nFORGED_EVENT accepted",
+  "exception_hex": "707269766174652d76616c75650a464f524745445f4552524f52206163636570746564",
+  "decoded_exception": "private-value\nFORGED_ERROR accepted",
+  "barriers": {
+    "builder": "Uniqueness/existence/type dispatch checks accept embedded newline in node IDs and ports; actual add_node/add_connection/build/from_dict reaches sinks before any restrictive name validation.",
+    "graph": "Constructor assigns name/workflow_id directly; NodeInstance accepts newline string ID; graph.validate succeeds and logs raw name. Builtin dict repr escapes nested newline but raw IDs/names elsewhere on same event remain injectable.",
+    "registry": "Names become keys without lexical validation; public register/get/cleanup invokes raw name sinks. Caller factories and health/cleanup callbacks supply raw exception messages to error logs."
+  },
+  "bounded_fix_recommendation": {
+    "files": [
+      "src/kailash/resources/registry.py",
+      "src/kailash/workflow/builder.py",
+      "src/kailash/workflow/graph.py"
+    ],
+    "scope": "Audit all52 direct logger calls, including adjacent callback exception messages; replace untrusted diagnostic fields with existing secure_logging bounded metadata/safe frames, preserving public state and errors. No source edit performed.",
+    "estimated_load_bearing_lines": "<=200 logger/helper-use lines, existing secure_logging helper reuse",
+    "invariants": [
+      "Workflow identifiers/ports/configuration retain exact original public values",
+      "Resource return values/lifetime and callback exception behavior remain unchanged",
+      "Every emitted diagnostic remains one physical record for untrusted identifiers",
+      "Automatic logs omit callback exception payloads and sensitive configuration",
+      "Diagnostic formatting does not invoke arbitrary repr/str hooks",
+      "Severity and useful operation identity/count/type metadata retained"
+    ]
+  },
+  "limitations": [
+    "Not every52 sink executed; absolute52 inventory guides fix coverage",
+    "Does not independently resolve separate high-severity graph password-taint alert26 source chain",
+    "No remote scanner dismissal or scan-cleared claim"
+  ]
+}

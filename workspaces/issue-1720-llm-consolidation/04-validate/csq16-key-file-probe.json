@@ -1,0 +1,36 @@
+{
+  "ran": true,
+  "rows": [
+    {
+      "case": "holds fresh",
+      "private_mode": "0o600",
+      "public_mode": "0o644",
+      "public_only": true,
+      "derived_public_and_signature_verified": true
+    },
+    {
+      "case": "manager fresh",
+      "private_mode": "0o600",
+      "public_mode": "0o644",
+      "public_only": true,
+      "derived_public_and_signature_verified": true
+    },
+    {
+      "case": "holds existing0644 private + missingpublic",
+      "private_mode_after_generation": "0o644",
+      "fresh_private_bytes_written": true,
+      "reader_can_sign_under_returned_public_key": true
+    },
+    {
+      "case": "holds private symlink",
+      "denied": "OSError",
+      "target_unchanged": true
+    },
+    {
+      "case": "manager private symlink",
+      "denied": "OSError",
+      "target_unchanged": true
+    }
+  ],
+  "scope": "Fresh POSIX payload/mode and actual holds partial-file overwrite, final-component symlinks only; no parent-directory replacement or Windows ACL proof"
+}

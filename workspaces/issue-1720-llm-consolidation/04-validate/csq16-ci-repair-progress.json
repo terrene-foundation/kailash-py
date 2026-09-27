@@ -1,0 +1,326 @@
+{
+  "runtime_author_manifest": {
+    "base": "68d4dbd4185435a03cd43604c12966558c9c934e",
+    "files": {
+      "tests/tier2_integration/runtime/test_connection_validation.py": "43bade3a03d19a65e1b52a271410fa7ab0d5fb5d0fe7747d75b17e4c1cc16b4d",
+      "tests/tier2_integration/runtime/test_contract_enforcement.py": "0fea25184b2004d756241686ad09a449c95ad75a4b3431a9cf9e9bfdef3460b2"
+    }
+  },
+  "runtime_correctness": {
+    "ran": true,
+    "verdict": "CLEAN two independent final-v2 rounds; return-forwarding parity finding repaired and independently re-controlled",
+    "manifest": {
+      "base": "68d4dbd4185435a03cd43604c12966558c9c934e",
+      "files": {
+        "tests/tier2_integration/runtime/test_connection_validation.py": "43bade3a03d19a65e1b52a271410fa7ab0d5fb5d0fe7747d75b17e4c1cc16b4d",
+        "tests/tier2_integration/runtime/test_contract_enforcement.py": "0fea25184b2004d756241686ad09a449c95ad75a4b3431a9cf9e9bfdef3460b2"
+      }
+    },
+    "rounds": [
+      {
+        "log": "/tmp/csq16-correctness-runtime-v2-r1.log",
+        "passed": 24,
+        "seconds": 6.25
+      },
+      {
+        "log": "/tmp/csq16-correctness-runtime-v2-r2.log",
+        "passed": 24,
+        "seconds": 7.54
+      }
+    ],
+    "python_warnings": 0,
+    "skips": 0,
+    "mechanical_sweeps": [
+      "/tmp/csq16-correctness-runtime-absolute-callers.txt",
+      "/tmp/csq16-correctness-runtime-absolute-assertions.txt",
+      "/tmp/csq16-correctness-runtime-assertions.json"
+    ],
+    "assertion_reconciliation": {
+      "original_asserts": 47,
+      "final_asserts": 66,
+      "literal_retained": 42,
+      "semantic_replacements": 5,
+      "details": [
+        "Distinct validator return preserved by actual numeric-string to integer conversion; discard-return mutation47hits now1failed23passed.",
+        "Two membership assertions now reference real observed validation_calls instead of Mock call_args.",
+        "Two mocked warning-format assertions replaced by rendered safe warning count/type plus exclusion of payload and contract strings.",
+        "All original typed raises contexts retained; off bypass, warn continuing, strict raise, connected inputs and configuration precedence independently inspected."
+      ]
+    },
+    "controls": [
+      {
+        "name": "discard validated return",
+        "hits": 47,
+        "failed": 1,
+        "passed": 23,
+        "log": "/tmp/csq16-correctness-runtime-v2-return-control.log"
+      },
+      {
+        "name": "skip node validation",
+        "hits": 2,
+        "failed": 2,
+        "log": "/tmp/csq16-correctness-runtime-control-validation.log"
+      },
+      {
+        "name": "demote warning to debug",
+        "hits": 2,
+        "failed": 2,
+        "log": "/tmp/csq16-correctness-runtime-control-warning.log"
+      },
+      {
+        "name": "raw exception text logging",
+        "hits": 2,
+        "failed": 2,
+        "log": "/tmp/csq16-correctness-runtime-control-privacy.log"
+      }
+    ],
+    "scope": "Two runtime fixture files; actual production validation/contract/warning callers mechanically reviewed. Does not imply whole-promotion or unrelated CodeQL closure. No production source edits in this review."
+  },
+  "storage_manifest": {
+    "base_commit": "68d4dbd4185435a03cd43604c12966558c9c934e",
+    "files": [
+      {
+        "path": "tests/tier2_integration/tracking/storage/test_database.py",
+        "before_sha256": "094d547899f04148337868f57ec23e3db53cd7634d39fcb7c248c17620b8ca39",
+        "after_sha256": "cfe7c17d95b330775bb1d9dacb34e0df4f665c2cd87c870ea8b13d7054b69c0c"
+      },
+      {
+        "path": "tests/regression/test_sqlite_address_core_consumers.py",
+        "before_sha256": "51200adefc0082eb61d057f20dcf172c12fa42304f15d3aec150e55e259ce7a0",
+        "after_sha256": "fb1e2e6e7bf1c034629f86f2b037cb23a4f13859493ff8f323c4d776cc0ce702"
+      },
+      {
+        "path": "specs/task-tracking.md",
+        "before_sha256": "c483bba0e80b899c7849a593d94e4b95b8860414124c57235777966be5ffc282",
+        "after_sha256": "f001158b9a4014c45f832a4716c41d731fd9b79d969e49f1d644e499fed09c36"
+      }
+    ],
+    "patch": "/tmp/csq16-storage-fixture.patch",
+    "production_changes": false,
+    "assertion_parity": "/tmp/csq16-storage-assertion-parity.json",
+    "first_final_round": "/tmp/csq16-storage-final-r1.log",
+    "control_artifacts": [
+      "/tmp/csq16-storage-url-control-final.log",
+      "/tmp/csq16-thread-admission-control.log"
+    ],
+    "second_final_round": "/tmp/csq16-storage-final-r2.log",
+    "final_results": [
+      "87 passed in13.07s",
+      "87 passed (see final-r2 log)"
+    ]
+  },
+  "parent_retry_cleanup": {
+    "paths": [
+      "src/kailash/runtime/resource_manager.py"
+    ],
+    "change": "remove two overwritten pre-loop timing initializers",
+    "specialist_consulted": "Core pattern expert verified every read dominated by attempt-local assignment",
+    "cohort": "161 passed in12.39s; -Werror; /tmp/csq16-parent-retry.log",
+    "preflight_probe": "zeroattempt,expireddeadline,success: expected0/0/1operationcalls; /tmp/csq16-retry-preflight-probe.log",
+    "scope": "behavior of retry cohort and three preflight cases; not CodeQL success"
+  },
+  "runtime_author": {
+    "verdict": "CLEAN bounded fixture repair; independent reviews owned by parent",
+    "manifest": {
+      "base": "68d4dbd4185435a03cd43604c12966558c9c934e",
+      "files": {
+        "tests/tier2_integration/runtime/test_connection_validation.py": "43bade3a03d19a65e1b52a271410fa7ab0d5fb5d0fe7747d75b17e4c1cc16b4d",
+        "tests/tier2_integration/runtime/test_contract_enforcement.py": "0fea25184b2004d756241686ad09a449c95ad75a4b3431a9cf9e9bfdef3460b2"
+      }
+    },
+    "production_delta": false,
+    "tests": {
+      "round1": "24 passed in 9.95s",
+      "round2": "24 passed in 7.34s",
+      "logs": [
+        "/tmp/csq16-runtime-fixtures-v2-r1.log",
+        "/tmp/csq16-runtime-fixtures-v2-r2.log"
+      ],
+      "flags": "-q --tb=short -W error",
+      "python_warnings": 0,
+      "skips": 0
+    },
+    "controls": [
+      {
+        "control": "config",
+        "returncode": 1,
+        "hits": 1,
+        "log": "/tmp/csq16-runtime-control-config.log"
+      },
+      {
+        "control": "validation",
+        "returncode": 1,
+        "hits": 2,
+        "log": "/tmp/csq16-runtime-control-validation.log"
+      },
+      {
+        "control": "warning",
+        "returncode": 1,
+        "hits": 2,
+        "log": "/tmp/csq16-runtime-control-warning.log"
+      },
+      {
+        "control": "privacy",
+        "returncode": 1,
+        "hits": 2,
+        "log": "/tmp/csq16-runtime-control-privacy.log"
+      }
+    ],
+    "privacy_specific_control": {
+      "log": "/tmp/csq16-runtime-control-privacy-append.log",
+      "reached_hits": 2,
+      "expected_failures": 2,
+      "assertions": [
+        "private-input-marker absent from rendered log",
+        "string_data contract name absent"
+      ]
+    },
+    "assertion_inventory": "/tmp/csq16-runtime-v2-assertion-inventory.json",
+    "absolute_callers": "/tmp/csq16-runtime-absolute-callers.txt",
+    "retained_test_names": 24,
+    "unchanged_assertion_rows": 18,
+    "reconciled_rows": {
+      "test_prepare_node_inputs_calls_validate_inputs": "Actual validation observes config count7 then runtime count string9; returned runtime input must be integer9. Preserves old distinct validator-return requirement plus config/override behavior.",
+      "test_validation_modes_behavior": "Preserves off no-validation, warn continuation+warning, strict typed exception. Real invalid integer schema replaces arbitrary ValueError mock; rendered warning type and payload omission enforced.",
+      "test_connection_parameters_are_validated": "Original raise retained, real connection and integer validation replaces mock side effect; observed inputs prove intended failure reached.",
+      "test_mixed_parameter_sources": "Original both parameter presence and returned dict retained; actual schema validation records exact merged dict, runtime42 beats configured7.",
+      "test_validation_performance_caching": "Original had zero invocation/assertion. New actual public cache hits and per-value validation; no performance latency claim.",
+      "test_contract_validation_warn_mode": "Original warn call and loose contract substring replaced by actual rendered validation event with WorkflowExecutionError frame; execution succeeds with target result123; contract name/input excluded."
+    },
+    "warning_classification": "Runtime logs include deliberate negative validation/missing output/missing file diagnostics, backward compatibility undeclared input warning with successful unchanged outputs, and explicit Mac in-process memory-limit disclosure. Python warnings treated as errors; no Python warnings/skips. Log warnings are not claimed absent.",
+    "scope": "Two Tier2 runtime fixture files; runtime/node/contract semantics exercised, no blanket all-runtime coverage claim.",
+    "unresolved": [],
+    "supersedes": "/tmp/csq16-runtime-fixture-receipt.json v1: independent reviewer found missing validator-return-forwarding assertion; v1 is not final evidence",
+    "return_forwarding_control": {
+      "log": "/tmp/csq16-author-runtime-return-control.log",
+      "reached_hits": 47,
+      "expected_failures": 1,
+      "other_passed": 23,
+      "assertion": "{'count': '9'} != {'count': 9}"
+    },
+    "diagnostics": {
+      "/tmp/csq16-runtime-fixtures-v2-r1-diagnostics.log": {
+        "WARNING": 5,
+        "ERROR": 9
+      },
+      "/tmp/csq16-runtime-fixtures-v2-r2-diagnostics.log": {
+        "WARNING": 5,
+        "ERROR": 9
+      }
+    }
+  },
+  "storage_correctness": {
+    "verdict": "CLEAN bounded independent correctness review",
+    "manifest": {
+      "base_commit": "68d4dbd4185435a03cd43604c12966558c9c934e",
+      "files": [
+        {
+          "path": "tests/tier2_integration/tracking/storage/test_database.py",
+          "before_sha256": "094d547899f04148337868f57ec23e3db53cd7634d39fcb7c248c17620b8ca39",
+          "after_sha256": "cfe7c17d95b330775bb1d9dacb34e0df4f665c2cd87c870ea8b13d7054b69c0c"
+        },
+        {
+          "path": "tests/regression/test_sqlite_address_core_consumers.py",
+          "before_sha256": "51200adefc0082eb61d057f20dcf172c12fa42304f15d3aec150e55e259ce7a0",
+          "after_sha256": "fb1e2e6e7bf1c034629f86f2b037cb23a4f13859493ff8f323c4d776cc0ce702"
+        },
+        {
+          "path": "specs/task-tracking.md",
+          "before_sha256": "c483bba0e80b899c7849a593d94e4b95b8860414124c57235777966be5ffc282",
+          "after_sha256": "f001158b9a4014c45f832a4716c41d731fd9b79d969e49f1d644e499fed09c36"
+        }
+      ],
+      "patch": "/tmp/csq16-storage-fixture.patch",
+      "production_changes": false,
+      "assertion_parity": "/tmp/csq16-storage-assertion-parity.json",
+      "first_final_round": "/tmp/csq16-storage-final-r1.log",
+      "control_artifacts": [
+        "/tmp/csq16-storage-url-control-final.log",
+        "/tmp/csq16-thread-admission-control.log"
+      ],
+      "second_final_round": "/tmp/csq16-storage-final-r2.log",
+      "final_results": [
+        "87 passed in13.07s",
+        "87 passed (see final-r2 log)"
+      ]
+    },
+    "source_delta": false,
+    "scope": "Three storage fixture/spec files; no claim all SQLite behavior covered",
+    "tests": {
+      "round1": "87 passed in 8.49s",
+      "round2": "87 passed in 8.68s",
+      "logs": [
+        "/tmp/csq16-storage-independent-r1.log",
+        "/tmp/csq16-storage-independent-r2.log"
+      ],
+      "python_warnings": 0,
+      "skips": 0,
+      "flags": "-q --tb=short -W error"
+    },
+    "assertion_parity": "/tmp/csq16-storage-independent-parity.json",
+    "original_assertions_retained": 111,
+    "final_assertions": 121,
+    "controls": {
+      "old_prefix": "/tmp/csq16-independent-storage-url-control.log: two reached hits, expected absolute-path assertion failure",
+      "delayed_owner": "/tmp/csq16-independent-thread-admission-control.log: actual six-second delayed owner old fixture fails timeout; final fixture reads retained row from two distinct simultaneously live threads"
+    },
+    "watchdog_review": "Owner readiness and completion waits remain finite30s; joins35s; original no-thread-alive/no-error/distinct-live-thread/data/row-count assertions retained. Slow setup no longer consumes borrower admission budget; errors/timeouts not swallowed.",
+    "warning_classification": "Seven ERROR log events per cohort originate from explicit canceled cleanup/close-failure negative controls in consumer tests; no uncontrolled warning, Python warning, or skip.",
+    "source_citations": [
+      "src/kailash/utils/sqlite_url.py:47-65",
+      "src/kailash/tracking/storage/database.py:28-60",
+      "src/kailash/tracking/storage/database.py:900-913"
+    ],
+    "unresolved": []
+  },
+  "parameter_key_guard": {
+    "base_commit": "68d4dbd4185435a03cd43604c12966558c9c934e",
+    "files": [
+      {
+        "path": "src/kailash/security.py",
+        "before_sha256": "327f5dd3bbdb9c00146aba7691c79549cbc9f09f451fa8ca9094e74c99fc4be3",
+        "after_sha256": "acc986522a882289efd59e5904dc50a9a3aaabde1404800176a0e4f6cd3ded75"
+      },
+      {
+        "path": "tests/regression/test_security_parameter_key_types.py",
+        "before_sha256": null,
+        "after_sha256": "fe88a2fb5d11e73a77eed4aa25aea23bcb3fd8f423e73d046f7365e29efb234e"
+      }
+    ],
+    "patch": "/tmp/csq16-parameter-key.patch",
+    "invariants": [
+      "Top-level parameter keys must be strings; unsupported keys raise SecurityError before sanitizer or lower().",
+      "String-key context sanitization remains unchanged.",
+      "Nested dictionary/list VALUES retain existing semantics; real workflow and callable execution preserve them."
+    ],
+    "source_change": "Two-line isinstance(key,str) guard in validate_node_parameters; no generic sanitizer model/type refactor or scanner suppression.",
+    "tests": "tests/regression/test_security_parameter_key_types.py (26cases) + existing2173 and PythonCode dollar-sign cohorts",
+    "control": "/tmp/csq16-parameter-key-control.log",
+    "rounds": [
+      "/tmp/csq16-parameter-key-final-r1.log",
+      "/tmp/csq16-parameter-key-final-r2.log"
+    ],
+    "source_caller_inventory": "/tmp/csq16-parameter-key-caller-sweep.txt",
+    "finding_evidence": "/tmp/csq16-codeql-key-feasibility.json",
+    "scanner_limitation": "Guard fixes observed unsupported-key exception taxonomy. No claim current CodeQL alert11649 is cleared until exact-head rescan.",
+    "ran": true,
+    "author_verdict": "Frozen candidate passed two full targeted54-test rounds; independent review pending",
+    "results": [
+      {
+        "passed": 54,
+        "seconds": 9.73
+      },
+      {
+        "passed": 54,
+        "seconds": 6.93
+      }
+    ],
+    "negative_control": {
+      "hits": 18,
+      "failures": 18,
+      "omission": "explicit top-level key type guard"
+    },
+    "python_warnings": 0,
+    "skips": 0
+  }
+}

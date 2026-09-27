@@ -1,0 +1,215 @@
+{
+  "ran": true,
+  "verdict": "Production/fixture diagnostics correctness-security CLEAN in installed-driver environment; DataFlowdev dependency gap OPEN and parent-owned",
+  "manifest": {
+    "packages/kailash-dataflow/src/dataflow/core/pool_utils.py": {
+      "base_sha256": "9f8b3405337334bdff2fc741c9bc1af17565c734d6273e6e4c76a2c8db158d2c",
+      "sha256": "984d537efa827e02a81523a38e234772145401412c6fe438424f9ddb65e5b412"
+    },
+    "packages/kailash-dataflow/src/dataflow/core/config.py": {
+      "base_sha256": "92b10bf67729ff7ad5f0ac66f85a492247e8cadfe7c3be0a29ff151819961692",
+      "sha256": "81615ff65f9fd5893a8d76ffd48df4fce3aa4361ca90e11cceb6dbdbf49aff96"
+    },
+    "packages/kailash-dataflow/tests/unit/core/test_pool_diagnostic_hygiene.py": {
+      "base_sha256": null,
+      "sha256": "7d4ecbaf23a1d168fcc72df76dcdaf34e6ed5041505edd16f925beddc6581a8b"
+    }
+  },
+  "runs": {
+    "r1": {
+      "exit": 0,
+      "counts": {
+        "passed": 85
+      },
+      "warnings": [],
+      "skips": [],
+      "hits": 0,
+      "levels": {
+        "WARNING": 27,
+        "ERROR": 4
+      }
+    },
+    "r2": {
+      "exit": 0,
+      "counts": {
+        "passed": 85
+      },
+      "warnings": [],
+      "skips": [],
+      "hits": 0,
+      "levels": {
+        "WARNING": 27,
+        "ERROR": 4
+      }
+    },
+    "mask-control": {
+      "exit": 1,
+      "counts": {
+        "failed": 7,
+        "passed": 7
+      },
+      "warnings": [],
+      "skips": [],
+      "hits": 18,
+      "levels": {
+        "WARNING": 12
+      }
+    },
+    "frames-control": {
+      "exit": 1,
+      "counts": {
+        "passed": 8,
+        "failed": 6
+      },
+      "warnings": [],
+      "skips": [],
+      "hits": 6,
+      "levels": {
+        "WARNING": 12
+      }
+    },
+    "config-mask-control": {
+      "exit": 1,
+      "counts": {
+        "failed": 1
+      },
+      "warnings": [],
+      "skips": [],
+      "hits": 1,
+      "levels": {
+        "WARNING": 1
+      }
+    }
+  },
+  "source_business_AST_equal": true,
+  "absolute_sinks": [
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/pool_utils.py",
+      "line": 153,
+      "call": "logger.debug(\"probe_max_connections: unrecognized database URL scheme '%s', returning None\", safe_log_field(scheme))"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/pool_utils.py",
+      "line": 72,
+      "call": "logger.warning('Worker count in %s=%d is less than 1, clamping to 1', safe_log_field(var_name), value)"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/pool_utils.py",
+      "line": 165,
+      "call": "logger.warning('Cannot probe PostgreSQL max_connections: psycopg2 not installed (optional sync driver). DataFlow is async-first; install the sync extra with: pip install \"kailash-dataflow[postgres-sync]\"')"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/pool_utils.py",
+      "line": 188,
+      "call": "logger.warning('probe_max_connections: SHOW max_connections returned no rows')"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/pool_utils.py",
+      "line": 194,
+      "call": "logger.warning('Failed to probe PostgreSQL max_connections: %s', safe_log_field(type(exc).__name__))"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/pool_utils.py",
+      "line": 198,
+      "call": "logger.debug('PostgreSQL probe error details: %s', safe_exception_frames(exc))"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/pool_utils.py",
+      "line": 207,
+      "call": "logger.warning('Cannot probe MySQL max_connections: pymysql not installed. Install with: pip install pymysql')"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/pool_utils.py",
+      "line": 238,
+      "call": "logger.warning('Failed to parse MySQL URL for probe: %s', safe_log_field(type(exc).__name__))"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/pool_utils.py",
+      "line": 242,
+      "call": "logger.debug('MySQL URL parse error details: %s', safe_exception_frames(exc))"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/pool_utils.py",
+      "line": 252,
+      "call": "logger.warning('probe_max_connections: SHOW VARIABLES returned no rows for max_connections')"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/pool_utils.py",
+      "line": 257,
+      "call": "logger.warning('Failed to probe MySQL max_connections: %s', safe_log_field(type(exc).__name__))"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/pool_utils.py",
+      "line": 261,
+      "call": "logger.debug('MySQL probe error details: %s', safe_exception_frames(exc))"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/pool_utils.py",
+      "line": 65,
+      "call": "logger.warning('Invalid worker count in %s=%r (expected integer), skipping', safe_log_field(var_name), safe_log_field(raw))"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/config.py",
+      "line": 509,
+      "call": "logger.info('Pool fallback: pool_size=%d (could not probe database max_connections, using min(5, cpu_count))', fallback)"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/config.py",
+      "line": 498,
+      "call": "logger.info('Pool auto-scaled: pool_size=%d (db_max=%d, workers=%d, reserved=30%%)', pool_size, db_max, workers)"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/config.py",
+      "line": 472,
+      "call": "logger.warning('DATAFLOW_POOL_SIZE=%d is less than 1, ignoring', parsed)"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/config.py",
+      "line": 474,
+      "call": "logger.warning('DATAFLOW_POOL_SIZE=%r is not a valid integer, ignoring', safe_log_field(env_val))"
+    }
+  ],
+  "callers": [
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/pool_validator.py",
+      "line": 66,
+      "call": "detect_worker_count()"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/pool_validator.py",
+      "line": 70,
+      "call": "probe_max_connections(database_url)"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/config.py",
+      "line": 487,
+      "call": "probe_max_connections(db_url)"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/config.py",
+      "line": 488,
+      "call": "detect_worker_count()"
+    }
+  ],
+  "spec_quotes": [
+    "specs/security-data.md76-96: Every code path that extracts credentials from a DATABASE_URL-style connection string MUST route through this module; Null bytes in either field -> ValueError.",
+    "pool_utils.py124-137: Returns server max_connections as an int, or None for unsupported URLs, absent drivers, connection failures or query failures.",
+    "config.py445-449: Resolution order: explicit pool_size, DATAFLOW_POOL_SIZE environment variable, auto-detect, conservative fallback."
+  ],
+  "dependencies": {
+    "local_helper": "0d674cf\u2026 AST-identical to primarya748035\u2026; only noqa comments differ",
+    "CI_gap": "unified-ci.yml478\u2013479 installs rootminimal+DataFlowdev; newtest importspsycopg2/pymysql unconditionally; dev133\u2013181 lacksboth while psycopg2 exists onlypostgres-syncextra andPyMySQL viaaiomysqlmysqlextra. Parent accepted and ownsdevfix.",
+    "minimal_recommendation": [
+      "psycopg2-binary>=2.9",
+      "PyMySQL>=1.0"
+    ],
+    "floor_evidence": "DataFlowpostgres-sync55\u201356 haspsycopg2-binary>=2.9; installedaiomysql0.3.2 Requires-Dist PyMySQL>=1.0. Directdevdeps matches existingexplicit aiosqlite/pytest-timeout testrequirement convention."
+  },
+  "warning_disposition": "Each positive85run27WARNING4ERROR expected negativeworker/parser/driver/config/poolbudget/test-mode fixtures; no Pythonwarnings/skips. Real driver/parser failuretests execute before network; existing successquery coverage Tier1 doubles.",
+  "controls_scope": "Mask18hits7fails; frames6hits6fails; configmask1hit1fail. No arbitrary secret prose detectorclaim; supported URL/validJSON metadata and opaqueexceptionframes tested.",
+  "limits": [
+    "No live PostgreSQL/MySQL server query",
+    "Cannot bank cleanminimaldev CIparity until parent integratesdriver dependencies",
+    "No source edits except authorized cp overlay from primary"
+  ]
+}

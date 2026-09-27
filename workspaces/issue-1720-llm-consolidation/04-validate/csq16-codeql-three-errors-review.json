@@ -1,0 +1,272 @@
+{
+  "ran": true,
+  "verdict": "Three scoped runtime false-positive candidates; no dismissal action authorized or performed",
+  "alerts": [
+    {
+      "number": 10967,
+      "state": "open",
+      "rule": "py/missing-call-to-init",
+      "severity": "error",
+      "commit_sha": "1e4d91f55a4baa94fd5989e0d51884acd155a9cb",
+      "path": "packages/kailash-dataflow/src/dataflow/core/nodes.py",
+      "start_line": 372,
+      "end_line": 372,
+      "message": "This class does not call Node.__init__ during initialization. (_make_append_only_forbidden_node.AppendOnlyForbiddenNode.__init__ may be missing a call to a base class __init__)",
+      "present_in_exact_main_sarif": true,
+      "absent_main_open": false,
+      "dismissed_reason": null
+    },
+    {
+      "number": 10936,
+      "state": "open",
+      "rule": "py/unsafe-cyclic-import",
+      "severity": "error",
+      "commit_sha": "1e4d91f55a4baa94fd5989e0d51884acd155a9cb",
+      "path": "packages/kailash-kaizen/src/kaizen/core/agents.py",
+      "start_line": 74,
+      "end_line": 74,
+      "message": "'Kaizen' may not be defined if module kaizen.core.framework is imported before module kaizen.core.agents, as the definition of Kaizen occurs after the cyclic import of kaizen.core.agents.",
+      "present_in_exact_main_sarif": true,
+      "absent_main_open": false,
+      "dismissed_reason": null
+    },
+    {
+      "number": 185,
+      "state": "open",
+      "rule": "py/unsafe-cyclic-import",
+      "severity": "error",
+      "commit_sha": "1e4d91f55a4baa94fd5989e0d51884acd155a9cb",
+      "path": "packages/kailash-kaizen/src/kaizen/core/framework.py",
+      "start_line": 15,
+      "end_line": 15,
+      "message": "'Agent' may not be defined if module kaizen.core.agents is imported before module kaizen.core.framework, as the definition of Agent occurs after the cyclic import of kaizen.core.framework.",
+      "present_in_exact_main_sarif": true,
+      "absent_main_open": false,
+      "dismissed_reason": null
+    }
+  ],
+  "source_sha256": {
+    "packages/kailash-dataflow/src/dataflow/core/nodes.py": "0001b318d758ab5072228c5ca3e9df8e3357f795c7709a39c66cadb6dedb0bf0",
+    "packages/kailash-kaizen/src/kaizen/core/agents.py": "f991c4940b9cb8a41732ff6111ce65a26ecd4117395f4c604ae7a7bda95edf1f",
+    "packages/kailash-kaizen/src/kaizen/core/framework.py": "3a29418461faeff2c4f11f286759ff9ddfe114c657c4ddfeea3d64009fbaed0b"
+  },
+  "mechanical_ast": [
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/nodes.py",
+      "factory_lines": [
+        351,
+        426
+      ],
+      "constructor_lines": [
+        389,
+        397
+      ],
+      "constructor_body": "def __init__(self, **kwargs):\n    raise AppendOnlyViolationError(f\"{op_human} rejected on append-only model '{model_name}'. Models declared with @db.model(append_only=True) only accept Create / BulkCreate / Read / List / Count. Remove `append_only=True` from the @db.model() decorator to permit mutations. See issue #839.\")",
+      "constructor_has_no_returning_path": true,
+      "factory_callers": [
+        551,
+        592
+      ]
+    },
+    {
+      "path": "packages/kailash-kaizen/src/kaizen/core/agents.py",
+      "guard_lines": [
+        73,
+        74
+      ],
+      "guard_source": "if TYPE_CHECKING:\n    from .framework import Kaizen",
+      "runtime_guard_rebinding": []
+    },
+    {
+      "path": "packages/kailash-kaizen/src/kaizen/core/framework.py",
+      "guard_lines": [
+        12,
+        15
+      ],
+      "guard_source": "if TYPE_CHECKING:\n    from kaizen.signatures import Signature\n    from .agents import Agent",
+      "runtime_guard_rebinding": []
+    }
+  ],
+  "spec_quotes": {
+    "dataflow-models.md:33": "Generates 11 CRUD workflow nodes (Create, Read, Update, Delete, List, Count, BulkCreate, BulkUpdate, BulkDelete, Upsert, BulkUpsert)",
+    "dataflow_note": "Indexed current dataflow-models contains no append_only clause. Parent inline contract is authoritative for this bounded review: append_only means Update/Delete/Upsert/Bulk counterparts rejected, no mutation. Source factory351ff explicitly implements it.",
+    "kaizen-core.md:106-111": "from kaizen import CoreAgent # Always kaizen.core.agents.Agent; from kaizen import Kaizen # Framework class",
+    "kaizen-core.md:399": "kaizen.core.framework.Kaizen is the main framework entry point.",
+    "kaizen-core.md:608-613": "Performance is achieved via lazy loading: agents.py (2599 lines,95ms import) lazy-loaded in framework.py."
+  },
+  "observations": {
+    "append_normal": {
+      "mode": "normal",
+      "base_constructor_calls": 0,
+      "rows": [
+        {
+          "operation": "update",
+          "constructor_rejected": true,
+          "bypass_run_rejected": true,
+          "error_type": "AppendOnlyViolationError",
+          "message": "Update rejected on append-only model 'ImmutableEvent'. Models declared with @db.model(append_only=True) only accept Create / BulkCreate / Read / List / Count. Remove `append_only=True` from the @db.model() decorator to permit mutations. See issue #839."
+        },
+        {
+          "operation": "delete",
+          "constructor_rejected": true,
+          "bypass_run_rejected": true,
+          "error_type": "AppendOnlyViolationError",
+          "message": "Delete rejected on append-only model 'ImmutableEvent'. Models declared with @db.model(append_only=True) only accept Create / BulkCreate / Read / List / Count. Remove `append_only=True` from the @db.model() decorator to permit mutations. See issue #839."
+        },
+        {
+          "operation": "upsert",
+          "constructor_rejected": true,
+          "bypass_run_rejected": true,
+          "error_type": "AppendOnlyViolationError",
+          "message": "Upsert rejected on append-only model 'ImmutableEvent'. Models declared with @db.model(append_only=True) only accept Create / BulkCreate / Read / List / Count. Remove `append_only=True` from the @db.model() decorator to permit mutations. See issue #839."
+        },
+        {
+          "operation": "bulk_update",
+          "constructor_rejected": true,
+          "bypass_run_rejected": true,
+          "error_type": "AppendOnlyViolationError",
+          "message": "Bulk update rejected on append-only model 'ImmutableEvent'. Models declared with @db.model(append_only=True) only accept Create / BulkCreate / Read / List / Count. Remove `append_only=True` from the @db.model() decorator to permit mutations. See issue #839."
+        },
+        {
+          "operation": "bulk_delete",
+          "constructor_rejected": true,
+          "bypass_run_rejected": true,
+          "error_type": "AppendOnlyViolationError",
+          "message": "Bulk delete rejected on append-only model 'ImmutableEvent'. Models declared with @db.model(append_only=True) only accept Create / BulkCreate / Read / List / Count. Remove `append_only=True` from the @db.model() decorator to permit mutations. See issue #839."
+        },
+        {
+          "operation": "bulk_upsert",
+          "constructor_rejected": true,
+          "bypass_run_rejected": true,
+          "error_type": "AppendOnlyViolationError",
+          "message": "Bulk upsert rejected on append-only model 'ImmutableEvent'. Models declared with @db.model(append_only=True) only accept Create / BulkCreate / Read / List / Count. Remove `append_only=True` from the @db.model() decorator to permit mutations. See issue #839."
+        }
+      ]
+    },
+    "append_control": {
+      "mode": "control",
+      "base_constructor_calls": 0,
+      "rows": [
+        {
+          "operation": "update",
+          "constructor_rejected": false,
+          "bypass_run_rejected": true
+        },
+        {
+          "operation": "delete",
+          "constructor_rejected": false,
+          "bypass_run_rejected": true
+        },
+        {
+          "operation": "upsert",
+          "constructor_rejected": false,
+          "bypass_run_rejected": true
+        },
+        {
+          "operation": "bulk_update",
+          "constructor_rejected": false,
+          "bypass_run_rejected": true
+        },
+        {
+          "operation": "bulk_delete",
+          "constructor_rejected": false,
+          "bypass_run_rejected": true
+        },
+        {
+          "operation": "bulk_upsert",
+          "constructor_rejected": false,
+          "bypass_run_rejected": true
+        }
+      ]
+    },
+    "normal_import_orders": [
+      {
+        "success": true,
+        "agent_type": "Agent",
+        "baseagent_imported": "BaseAgent",
+        "mode": "normal",
+        "order": "agents,framework",
+        "type_only_lines": {
+          "kaizen.core.agents": [
+            74
+          ],
+          "kaizen.core.framework": [
+            13,
+            15
+          ]
+        },
+        "executed_type_only_imports": []
+      },
+      {
+        "success": true,
+        "agent_type": "Agent",
+        "baseagent_imported": "BaseAgent",
+        "mode": "normal",
+        "order": "framework,agents",
+        "type_only_lines": {
+          "kaizen.core.agents": [
+            74
+          ],
+          "kaizen.core.framework": [
+            13,
+            15
+          ]
+        },
+        "executed_type_only_imports": []
+      }
+    ],
+    "force_type_guard_control": {
+      "success": false,
+      "error_type": "ImportError",
+      "error": "cannot import name 'Agent' from partially initialized module 'kaizen.core.agents' (most likely due to a circular import)",
+      "mode": "force",
+      "order": "agents,framework",
+      "type_only_lines": {
+        "kaizen.core.agents": [
+          74
+        ],
+        "kaizen.core.framework": [
+          13,
+          15
+        ]
+      },
+      "executed_type_only_imports": [
+        [
+          "kaizen.core.agents",
+          74
+        ],
+        [
+          "kaizen.core.framework",
+          13
+        ],
+        [
+          "kaizen.core.framework",
+          15
+        ],
+        [
+          "kaizen.core.agents",
+          74
+        ],
+        [
+          "kaizen.core.framework",
+          13
+        ],
+        [
+          "kaizen.core.framework",
+          15
+        ]
+      ]
+    }
+  },
+  "per_alert_conclusion": {
+    "10967": "Constructor contains exactly unconditional AppendOnlyViolationError raise. Six actual generated forbidden classes raise before Node.__init__, zero base-init calls; six __new__ bypass run calls also reject. No successfully initialized object exists that could require super initialization. Removing only constructorraise in in-memory control creates6 returned instances; detector changes to false for all6.",
+    "10936": "agents.py74 imports framework only in module-level TYPE_CHECKING guard. Cold agents-first and framework-first real framework initialization/create_agent/cleanup pass; line tracing shows0 type-only imports.",
+    "185": "framework.py15 imports Agent only under TYPE_CHECKING. Same actual opposite orders pass with BaseAgent import and real framework/Agent initialization. Forcing both guarded bodies on in-memory causes ImportError for partially initialized Agent with both alerted import lines reached."
+  },
+  "limits": [
+    "Read-only3alert triage only, not whole CodeQL clean or scan rerun",
+    "Direct forbidden-node constructor+run probes; no database mutation/SQL execution claims",
+    "No live LLM provider call; actual framework and CoreAgent initialized without execution",
+    "No source edit, commit, remote comment, or dismissal performed"
+  ]
+}

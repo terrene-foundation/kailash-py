@@ -1,0 +1,144 @@
+{
+  "ran": true,
+  "verdict": "CLEAN within scoped parameter injection and caller logging union",
+  "root": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq16-promotion-verification",
+  "head": "68d4dbd4185435a03cd43604c12966558c9c934e",
+  "manifest": {
+    "src/kailash/runtime/parameter_injector.py": "f1d266faafdec500f815e19fd336491e1eba92c6102f9c633687ea1be56ccd00",
+    "src/kailash/runtime/parameter_injection.py": "4633d643a5aa95b1e3b71ca0beae5eab6abe759be773dc07ee7613afea12c211",
+    "tests/unit/runtime/test_parameter_injector.py": "394df12b6b0aa83c0e6a748dc9de99b84de5846705bfe6b2d96a2e70ffb7188f",
+    "specs/core-runtime.md": "f87df904923c88df7f5e398cd931c0ad8b933282b053b08f7e5a48d901370d7c",
+    "tests/regression/test_parameter_injection_log_safety.py": "60ee9f6b26a68f2ddacedd1bd69bb8a92833e67637d62662bcc893833e5dcfe9",
+    "src/kailash/runtime/local.py": "28be9083f47f045d8b650e7daf4ca3fdc41333a04ced70e7670aa9d0259c0053",
+    "src/kailash/nodes/base.py": "928e62aaffa2efe2bccb9a3bd006f6a0bb97f88f91a9c59941c28f60250d48c6",
+    "tests/regression/test_parameter_caller_log_safety.py": "8657e40955d283fe7d0b9fd5cde3fc807b6c8520434530979c7dfd909be703c1",
+    "src/kailash/utils/secure_logging.py": "0d674cf53105a1d49e5a0bbb27d43851d28741087922facbb2f757968af45f3f"
+  },
+  "rounds": {
+    "r1": {
+      "mode": "r1",
+      "exit": 0,
+      "counts": {
+        "passed": 184
+      },
+      "warnings": [],
+      "skips": [],
+      "hits": 0,
+      "warn_records": 32
+    },
+    "r2": {
+      "mode": "r2",
+      "exit": 0,
+      "counts": {
+        "passed": 184
+      },
+      "warnings": [],
+      "skips": [],
+      "hits": 0,
+      "warn_records": 32
+    }
+  },
+  "controls": [
+    {
+      "group": "caller",
+      "mode": "runtime",
+      "exit": 1,
+      "tail": [
+        "FAILED tests/regression/test_parameter_caller_log_safety.py::test_shared_runtime_parameter_helpers_keep_raw_keys_and_values[unused-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-AsyncLocalRuntime]",
+        "6 failed, 15 passed in 9.76s",
+        "CONTROL {'exit': 1, 'hits': 44, 'counts': {'failed': 6, 'passed': 15}}"
+      ]
+    },
+    {
+      "group": "caller",
+      "mode": "producer",
+      "exit": 1,
+      "tail": [
+        "FAILED tests/regression/test_parameter_caller_log_safety.py::test_declared_and_suggested_json_keys_are_sanitized_before_formatting",
+        "4 failed, 17 passed in 4.76s",
+        "CONTROL {'exit': 1, 'hits': 9, 'counts': {'passed': 17, 'failed': 4}}"
+      ]
+    },
+    {
+      "group": "caller",
+      "mode": "mask",
+      "exit": 1,
+      "tail": [
+        "FAILED tests/regression/test_parameter_caller_log_safety.py::test_declared_and_suggested_json_keys_are_sanitized_before_formatting",
+        "7 failed, 14 passed in 2.80s",
+        "CONTROL {'exit': 1, 'hits': 112, 'counts': {'passed': 14, 'failed': 7}}"
+      ]
+    },
+    {
+      "group": "injector",
+      "mode": "injector",
+      "exit": 0,
+      "tail": [
+        "FAILED tests/regression/test_parameter_injection_log_safety.py::test_deferred_setter_bounds_dynamic_class_names[config]",
+        "17 failed, 5 passed in 2.53s",
+        "CONTROL {\"mode\": \"injector\", \"hits\": 237, \"exit\": 1}"
+      ]
+    },
+    {
+      "group": "injector",
+      "mode": "mixin",
+      "exit": 0,
+      "tail": [
+        "FAILED tests/regression/test_parameter_injection_log_safety.py::test_deferred_setter_bounds_dynamic_class_names[mixin]",
+        "1 failed, 21 passed in 2.37s",
+        "CONTROL {\"mode\": \"mixin\", \"hits\": 19, \"exit\": 1}"
+      ]
+    },
+    {
+      "group": "injector",
+      "mode": "frames",
+      "exit": 0,
+      "tail": [
+        "FAILED tests/regression/test_parameter_injection_log_safety.py::test_deferred_constructor_failure_logs_frames_without_payload",
+        "1 failed, 21 passed in 1.69s",
+        "CONTROL {\"mode\": \"frames\", \"hits\": 1, \"exit\": 1}"
+      ]
+    },
+    {
+      "group": "injector",
+      "mode": "injection",
+      "exit": 0,
+      "tail": [
+        "FAILED tests/regression/test_parameter_injection_log_safety.py::test_injection_applies_aliases_and_precedence_without_initialization[{\"api_key\":\"parameter-secret-canary-584791\"}-mixin]",
+        "18 failed, 4 passed in 1.01s",
+        "CONTROL {\"mode\": \"injection\", \"hits\": 19, \"exit\": 1}"
+      ]
+    },
+    {
+      "group": "injector",
+      "mode": "mask",
+      "exit": 0,
+      "tail": [
+        "FAILED tests/regression/test_parameter_injection_log_safety.py::test_injection_applies_aliases_and_precedence_without_initialization[{\"api_key\":\"parameter-secret-canary-584791\"}-mixin]",
+        "4 failed, 18 passed in 1.45s",
+        "CONTROL {\"mode\": \"mask\", \"hits\": 332, \"exit\": 1}"
+      ]
+    }
+  ],
+  "spec_quote": "The separate `WorkflowParameterInjector.inject_parameters()` helper applies the existing workflow-input mappings to deferred nodes through `set_runtime_config()` or `set_runtime_parameters()`. Repeated calls replace prior runtime values while preserving constructor configuration; ordinary nodes remain unchanged, and injection does not initialize connections or other deferred resources. Source: `src/kailash/runtime/parameter_injector.py:378-395`, `src/kailash/runtime/parameter_injector.py:43-54`, `src/kailash/runtime/parameter_injection.py:30-51`.",
+  "mechanical": [
+    "/tmp/csq16-security-injection-sweep.json",
+    "/tmp/csq16-security-injection-caller-ast.json"
+  ],
+  "scope": "All24 log sinks in complete parameter_injector/parameter_injection modules plus all3 scoped LocalRuntime processing/separation and Node.validate_inputs sinks. AsyncLocalRuntime inherits both helpers with no override. Absolute26-match caller inventory read: includes actual callees, definitions and one unrelated migration validator match, not26 semantic callers. Complete non-log AST business parity for4 producer files except explicitly implemented inject_parameters; changed-return opposite detected. Deferred setter selection, metadata mappings, raw configuration/strict errors, runtime/node value conversion and real local/native async execution tested. Separate configure_deferred_node intentionally retains its explicitly documented force initialization behavior.",
+  "warn_disposition": "Both rounds32 intended WARN+ records:13 injector validation/constructor negative cases,10 Node unknown-key warnings,8 count-only runtime validation warnings,1 expected NodeWithError error. Exact messages inspected; no Python warnings/skips/cleanup timeouts.",
+  "falsification": "Raw runtime warning forwarding control44hits6fails; Node masking only final composed prose9hits4fails; caller shared mask112hits7fails; injector bypass237hits17fails; mixin19hits1fail; raw exception1hit1fail; disabled actual injection19hits18fails; injector shared mask332hits4fails. Injector harness exits0 only after asserting inner pytest exit1 and hits>0; caller harness exits1 itself.",
+  "canaries": [
+    "https://user:parameter-caller-canary-418275@example.invalid/?token=parameter-caller-canary-418275",
+    "{\"password\":\"parameter-caller-canary-418275\"}",
+    "parameter-secret-canary-584791"
+  ],
+  "exclusions": [
+    "Unrelated runtime/Node/registry lifecycle or connection-mapping logs outside the bounded parameter pipeline are not certified by this review.",
+    "Recognized URL/query/JSON credential masking; arbitrary secret prose detection is not promised.",
+    "No external database/OAuth services, Windows execution, remote jobs or full promotion gates."
+  ],
+  "source_edits": false,
+  "open_findings": [],
+  "initial_instrument_error": "Initial system python3 STEP0 exited139; no evidence banked. Pinned venv interpreter -P rerun succeeded before overlay."
+}

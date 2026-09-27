@@ -1,0 +1,316 @@
+{
+  "ran": true,
+  "verdict": "DataFlow dev driver fix verified; eight scoped FP candidates independently supported, no remote dismissal",
+  "dependency_review": {
+    "ran": true,
+    "manifest_sha256": "def2da94fa9a6ce8cf77be3abf11341fb14b999bf4ccb4ab734e6bf6ac1d4679",
+    "lock_sha256": "df0c1ede6d7b7f7954973d25ee6b3ce509cdd2cd561a9d8e0b33a7025282bd52",
+    "CI": ".github/workflows/unified-ci.yml:478-479 uv pip install -e . then packages/kailash-dataflow[dev]",
+    "direct_extra_added": [
+      "PyMySQL>=1.0",
+      "psycopg2-binary>=2.9"
+    ],
+    "old_missing": [
+      "PyMySQL>=1.0",
+      "psycopg2-binary>=2.9"
+    ],
+    "opposite_removal_detected": true,
+    "lock_only_added_rows": [
+      {
+        "name": "psycopg2-binary",
+        "marker": "extra == 'dev'",
+        "specifier": ">=2.9"
+      },
+      {
+        "name": "pymysql",
+        "marker": "extra == 'dev'",
+        "specifier": ">=1.0"
+      }
+    ],
+    "all_resolved_package_versions_and_other_records_unchanged": true,
+    "base_lock": "/tmp/csq16-uv-before-test-drivers.lock",
+    "note": "Whole git diff includes parent HTML nh3 shard; driver delta is exactly2 metadata rows relative itsactualsavedbeforelock."
+  },
+  "minimal_test": {
+    "log": "/tmp/csq16-security-dataflow-dev-tests.log",
+    "result": "14 passed in0.22s",
+    "python": "3.11.10 clean root-minimal plus dataflow[dev] parent-created venv",
+    "installed_drivers": {
+      "psycopg2-binary": "2.9.13",
+      "PyMySQL": "1.2.3"
+    },
+    "actual_opposite": "/tmp/csq16-dataflow-minimal-before-tests.log:6failed8passed with ModuleNotFoundError psycopg2/pymysql; missing-driver warning also changes expectedpair tosinglewarn. This is baseline environment evidence, not a forcedskip."
+  },
+  "dependency_rules": [
+    "specs/testing-tiers.md118-149:Each package dev must be self-contained; clean package dev install reproducesCI.",
+    "Direct imports in DataFlow test_pool_diagnostic_hygiene.py80-81 and driver-boundary importlib100 require these drivers in dev; productiondriver imports remainlazy/optional.",
+    ".claude/rules/dependencies.md own imports declared; uncappedminimumranges>=2.9/>=1.0 introduce no speculativeuppercaps."
+  ],
+  "source_sha256": {
+    "packages/kailash-dataflow/src/dataflow/core/nodes.py": "0001b318d758ab5072228c5ca3e9df8e3357f795c7709a39c66cadb6dedb0bf0",
+    "packages/kailash-kaizen/src/kaizen/core/agents.py": "f991c4940b9cb8a41732ff6111ce65a26ecd4117395f4c604ae7a7bda95edf1f",
+    "packages/kailash-kaizen/src/kaizen/core/framework.py": "3a29418461faeff2c4f11f286759ff9ddfe114c657c4ddfeea3d64009fbaed0b",
+    "src/kailash/middleware/gateway/durable_request.py": "f30c39f8ce13069268d297858502d02d3ef9433dd88529c44f14bbb6850d44a9",
+    "src/kailash/middleware/gateway/checkpoint_manager.py": "3718984beb52cf35a1171aedb5d739bd6c79ca3a5efe8226485622db9865c27f",
+    "src/kailash/trust/plane/holds.py": "a6e82a133d83dd939f075dd36835b102525fcdb11ea7dd4ec37fb079919a1375",
+    "src/kailash/trust/plane/key_managers/manager.py": "5868789152740dfbf1a49f86c4235ed4f4ef209d2132b997b44687d9d725326e",
+    "src/kailash/trust/plane/project.py": "67216e36abde87ba2126033546ec7a359f49adb42113cf9189babe81b735e7b9",
+    "src/kailash/trust/plane/_key_files.py": "df93664df8e169e6ec56ab11687c341680bf7ecf7389d6e49086638853bc595b",
+    "src/kailash/trust/plane/bundle.py": "abd39aeb186b0d60f7dabc42c2a7a4e309bb53bc77d8669ee046531f23d9f7fe",
+    "src/kailash/runtime/docker.py": "ba2da3c65fa86fe8906314abe8622a9b4e7bba159319d039c2e8c9457fbab699"
+  },
+  "FP_alert_dispositions": {
+    "10967": "Constructor unconditionally raises AppendOnlyViolationError beforebaseinitialization; actual6operations construction denies and __new__runbypassdenies. Removingraise returns6instances and detector flips. No valid object missesbaseinit.",
+    "10936,185": "Type-only agents/framework imports remainguarded, with no rebinding. Coldpublicimports in bothrequestedorders + actualKaizen/CoreAgent creation/cleanup succeeded; runtime traces0guardedimports. Forceguards reaches actualflaggedlines and ImportError partially initializedAgent. Notcertifying LLM execution.",
+    "184,180": "DurableRequest type-only CheckpointManager import breaks scanner-reportedcycle at runtime. Coldpublicorders bothsucceed; actualCheckpointManager+DiskStorage construct; Checkpoint to_dict/from_dictroundtrip. Forcedguard reachesline37 and ImportError partiallyinitializedCheckpointManager. Probe doesNOT save/load actualDiskStorage checkpoint bytes; no durabilitybackend claim.",
+    "153": "Flaggedchmod0755 is fixedliteral publicPythonentrypoint; unchangedsourcehash maps previousactual2configconstantbyteproof+secretappendopposite. Node.json and inputs separate. Does notcertify otherDockerfiles/runtime logging or directoryrace security.",
+    "11226,5152": "Flaggedpublicfile output contains public verifier only; currentrepairedconsumers generate actualEd25519 keys. FreshrealPOSIXfiles public0644/private0600; derivedpublic/signatureverify; substitutingprivateseed failsBadSignatureError andprivatePEM publicparser raisesValueError. Currentkeysource exactsame as earlier149x2 FIFO/lifecycle followup. Historicalseparateprivateoverwrite defect repaired; notwaived. NoWindowsACL/parentdirectoryrace proof."
+  },
+  "FP_observations": {
+    "csq16-security-fp-append-control.json": {
+      "mode": "control",
+      "base_constructor_calls": 0,
+      "rows": [
+        {
+          "operation": "update",
+          "constructor_rejected": false,
+          "bypass_run_rejected": true
+        },
+        {
+          "operation": "delete",
+          "constructor_rejected": false,
+          "bypass_run_rejected": true
+        },
+        {
+          "operation": "upsert",
+          "constructor_rejected": false,
+          "bypass_run_rejected": true
+        },
+        {
+          "operation": "bulk_update",
+          "constructor_rejected": false,
+          "bypass_run_rejected": true
+        },
+        {
+          "operation": "bulk_delete",
+          "constructor_rejected": false,
+          "bypass_run_rejected": true
+        },
+        {
+          "operation": "bulk_upsert",
+          "constructor_rejected": false,
+          "bypass_run_rejected": true
+        }
+      ]
+    },
+    "csq16-security-fp-gateway-normal-checkpoint_manager-durable_request.json": {
+      "success": true,
+      "manager_type": "CheckpointManager",
+      "checkpoint_roundtrip": true,
+      "mode": "normal",
+      "order": "checkpoint_manager,durable_request",
+      "type_only_lines": {
+        "kailash.middleware.gateway.durable_request": [
+          37
+        ],
+        "kailash.middleware.gateway.checkpoint_manager": []
+      },
+      "executed_type_only_imports": []
+    },
+    "csq16-security-fp-gateway-force-checkpoint_manager-durable_request.json": {
+      "success": false,
+      "error_type": "ImportError",
+      "error": "cannot import name 'CheckpointManager' from partially initialized module 'kailash.middleware.gateway.checkpoint_manager' (most likely due to a circular import)",
+      "mode": "force",
+      "order": "checkpoint_manager,durable_request",
+      "type_only_lines": {
+        "kailash.middleware.gateway.durable_request": [
+          37
+        ],
+        "kailash.middleware.gateway.checkpoint_manager": []
+      },
+      "executed_type_only_imports": [
+        [
+          "kailash.middleware.gateway.durable_request",
+          37
+        ]
+      ]
+    },
+    "csq16-security-fp-import-force-agents-framework.json": {
+      "success": false,
+      "error_type": "ImportError",
+      "error": "cannot import name 'Agent' from partially initialized module 'kaizen.core.agents' (most likely due to a circular import)",
+      "mode": "force",
+      "order": "agents,framework",
+      "type_only_lines": {
+        "kaizen.core.agents": [
+          74
+        ],
+        "kaizen.core.framework": [
+          13,
+          15
+        ]
+      },
+      "executed_type_only_imports": [
+        [
+          "kaizen.core.agents",
+          74
+        ],
+        [
+          "kaizen.core.framework",
+          13
+        ],
+        [
+          "kaizen.core.framework",
+          15
+        ],
+        [
+          "kaizen.core.agents",
+          74
+        ],
+        [
+          "kaizen.core.framework",
+          13
+        ],
+        [
+          "kaizen.core.framework",
+          15
+        ]
+      ]
+    },
+    "csq16-security-fp-key-final.json": {
+      "ran": true,
+      "rows": [
+        {
+          "case": "holds fresh",
+          "private_mode": "0o600",
+          "public_mode": "0o644",
+          "public_only": true,
+          "derived_public_and_signature_verified": true
+        },
+        {
+          "case": "manager fresh",
+          "private_mode": "0o600",
+          "public_mode": "0o644",
+          "public_only": true,
+          "derived_public_and_signature_verified": true
+        },
+        {
+          "case": "opposite private-payload controls",
+          "raw_seed_rejected": true,
+          "private_pem_rejected": true
+        }
+      ]
+    },
+    "csq16-security-fp-append-normal.json": {
+      "mode": "normal",
+      "base_constructor_calls": 0,
+      "rows": [
+        {
+          "operation": "update",
+          "constructor_rejected": true,
+          "bypass_run_rejected": true,
+          "error_type": "AppendOnlyViolationError",
+          "message": "Update rejected on append-only model 'ImmutableEvent'. Models declared with @db.model(append_only=True) only accept Create / BulkCreate / Read / List / Count. Remove `append_only=True` from the @db.model() decorator to permit mutations. See issue #839."
+        },
+        {
+          "operation": "delete",
+          "constructor_rejected": true,
+          "bypass_run_rejected": true,
+          "error_type": "AppendOnlyViolationError",
+          "message": "Delete rejected on append-only model 'ImmutableEvent'. Models declared with @db.model(append_only=True) only accept Create / BulkCreate / Read / List / Count. Remove `append_only=True` from the @db.model() decorator to permit mutations. See issue #839."
+        },
+        {
+          "operation": "upsert",
+          "constructor_rejected": true,
+          "bypass_run_rejected": true,
+          "error_type": "AppendOnlyViolationError",
+          "message": "Upsert rejected on append-only model 'ImmutableEvent'. Models declared with @db.model(append_only=True) only accept Create / BulkCreate / Read / List / Count. Remove `append_only=True` from the @db.model() decorator to permit mutations. See issue #839."
+        },
+        {
+          "operation": "bulk_update",
+          "constructor_rejected": true,
+          "bypass_run_rejected": true,
+          "error_type": "AppendOnlyViolationError",
+          "message": "Bulk update rejected on append-only model 'ImmutableEvent'. Models declared with @db.model(append_only=True) only accept Create / BulkCreate / Read / List / Count. Remove `append_only=True` from the @db.model() decorator to permit mutations. See issue #839."
+        },
+        {
+          "operation": "bulk_delete",
+          "constructor_rejected": true,
+          "bypass_run_rejected": true,
+          "error_type": "AppendOnlyViolationError",
+          "message": "Bulk delete rejected on append-only model 'ImmutableEvent'. Models declared with @db.model(append_only=True) only accept Create / BulkCreate / Read / List / Count. Remove `append_only=True` from the @db.model() decorator to permit mutations. See issue #839."
+        },
+        {
+          "operation": "bulk_upsert",
+          "constructor_rejected": true,
+          "bypass_run_rejected": true,
+          "error_type": "AppendOnlyViolationError",
+          "message": "Bulk upsert rejected on append-only model 'ImmutableEvent'. Models declared with @db.model(append_only=True) only accept Create / BulkCreate / Read / List / Count. Remove `append_only=True` from the @db.model() decorator to permit mutations. See issue #839."
+        }
+      ]
+    },
+    "csq16-security-fp-import-normal-agents-framework.json": {
+      "success": true,
+      "agent_type": "Agent",
+      "baseagent_imported": "BaseAgent",
+      "mode": "normal",
+      "order": "agents,framework",
+      "type_only_lines": {
+        "kaizen.core.agents": [
+          74
+        ],
+        "kaizen.core.framework": [
+          13,
+          15
+        ]
+      },
+      "executed_type_only_imports": []
+    },
+    "csq16-security-fp-import-normal-framework-agents.json": {
+      "success": true,
+      "agent_type": "Agent",
+      "baseagent_imported": "BaseAgent",
+      "mode": "normal",
+      "order": "framework,agents",
+      "type_only_lines": {
+        "kaizen.core.agents": [
+          74
+        ],
+        "kaizen.core.framework": [
+          13,
+          15
+        ]
+      },
+      "executed_type_only_imports": []
+    },
+    "csq16-security-fp-gateway-normal-durable_request-checkpoint_manager.json": {
+      "success": true,
+      "manager_type": "CheckpointManager",
+      "checkpoint_roundtrip": true,
+      "mode": "normal",
+      "order": "durable_request,checkpoint_manager",
+      "type_only_lines": {
+        "kailash.middleware.gateway.durable_request": [
+          37
+        ],
+        "kailash.middleware.gateway.checkpoint_manager": []
+      },
+      "executed_type_only_imports": []
+    }
+  },
+  "earlier_key_review": "/tmp/csq16-security-key-fifo-receipt.json",
+  "Docker_proof": "/tmp/csq16-remaining-high-probes.json docker_flagged_entrypoint",
+  "scanner_scope": "These exact8alertsourcepredicates only. No aggregate427 reconstruction, no 58branchonly/439changedfile equivalence, no currentnewhead scan status claim.",
+  "actions": {
+    "source_edits": false,
+    "dependency_install_by_reviewer": false,
+    "remote_jobs": false,
+    "dismissals": false
+  },
+  "open_findings": [],
+  "limits": [
+    "Read-only review; primaryparentenvironment used onlyfor14tests afterinstallationcompleted.",
+    "CodeQL snapshots refer68d4 PR/1e4d merge; sourcehash maps currentunchangedreviewedfiles. Otheralerts and wholepromotiongate still parent-owned."
+  ]
+}
