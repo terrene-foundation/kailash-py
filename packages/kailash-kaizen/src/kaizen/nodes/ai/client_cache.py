@@ -66,8 +66,10 @@ class BYOKClientCache:
         """Create a SHA-256 cache key from credentials."""
         # JSON preserves field boundaries and None versus an empty string.
         # Hash only the canonical encoding; never retain credentials as keys.
-        raw = json.dumps([api_key, base_url], ensure_ascii=True, separators=(",", ":"))
-        return hashlib.sha256(raw.encode("ascii")).hexdigest()
+        # Preserve every Python str code point, including a Unicode scalar
+        # versus a literal surrogate pair, without storing either in the index.
+        raw = json.dumps([api_key, base_url], ensure_ascii=False, separators=(",", ":"))
+        return hashlib.sha256(raw.encode("utf-8", errors="surrogatepass")).hexdigest()
 
     def get_or_create(
         self,

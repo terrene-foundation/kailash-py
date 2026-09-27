@@ -98,3 +98,39 @@ def test_cache_indexes_and_repr_do_not_retain_plaintext_credentials():
     assert cache.get_or_create(credential, endpoint, lambda: None) is client
     cache.clear()
     assert client.close_count == 1
+
+
+@pytest.mark.parametrize("field", ["api_key", "base_url"])
+def test_unicode_scalar_and_literal_surrogate_pair_own_distinct_clients(field):
+    scalar = "\U0001f600"
+    surrogate_pair = "\ud83d\ude00"
+    assert scalar != surrogate_pair
+    first = (
+        ("key" + scalar, "https://endpoint.invalid/")
+        if field == "api_key"
+        else ("key", "https://endpoint.invalid/" + scalar)
+    )
+    second = (
+        ("key" + surrogate_pair, "https://endpoint.invalid/")
+        if field == "api_key"
+        else ("key", "https://endpoint.invalid/" + surrogate_pair)
+    )
+    cache = BYOKClientCache()
+    calls = []
+
+    def create(identity):
+        calls.append(identity)
+        return Client(identity)
+
+    one = cache.get_or_create(*first, lambda: create(first))
+    two = cache.get_or_create(*second, lambda: create(second))
+    assert one is not two
+    assert calls == [first, second]
+    assert one.identity == first and two.identity == second
+    assert cache.get_or_create(*first, lambda: create(first)) is one
+    assert cache.get_or_create(*second, lambda: create(second)) is two
+    assert len(calls) == 2
+    assert len(cache) == 2
+    assert all(len(key) == 64 for key in cache._cache)
+    cache.clear()
+    assert one.close_count == two.close_count == 1
