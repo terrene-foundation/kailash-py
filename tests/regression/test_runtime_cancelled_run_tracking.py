@@ -154,3 +154,79 @@ async def test_tracking_failure_preserves_original_cancellation(caplog, kind):
     assert "RuntimeError@" in diagnostic[0].getMessage()
     assert diagnostic[0].exc_info is None
     assert all(secret not in r.getMessage() for r in caplog.records)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "outcome", ["asyncio", "sdk", "validation", "denial", "execution"]
+)
+async def test_error_paths_report_real_deferred_storage_failure(
+    tmp_path, monkeypatch, caplog, outcome
+):
+    from kailash.sdk_exceptions import RuntimeExecutionError, WorkflowValidationError
+
+    invalid_database = tmp_path / "private-database-path-8642"
+    invalid_database.mkdir()
+    original_flush = DeferredStorageBackend.flush_to_sqlite
+    attempts = []
+    failures = []
+
+    def real_failed_flush(self, db_path=None):
+        attempts.append(len(self._runs))
+        try:
+            return original_flush(self, str(invalid_database))
+        except Exception as failure:
+            failures.append(failure)
+            raise
+
+    monkeypatch.setattr(DeferredStorageBackend, "flush_to_sqlite", real_failed_flush)
+    workflow, cancellation, token = cancellation_workflow(outcome)
+    errors = {
+        "validation": WorkflowValidationError("private-validation-8642"),
+        "denial": PermissionError("private-denial-8642"),
+        "execution": RuntimeError("private-execution-8642"),
+    }
+    error = errors.get(outcome, cancellation)
+
+    class ErrorPathRuntime(LocalRuntime):
+        async def _execute_workflow_async(self, *args, **kwargs):
+            # Unit fault injection after tracking initialization; persistence
+            # below uses the actual SQLite driver and actual failing file path.
+            raise error
+
+    runtime_type = LocalRuntime if outcome in ("asyncio", "sdk") else ErrorPathRuntime
+    expected_type = (
+        WorkflowCancelledError
+        if outcome == "sdk"
+        else RuntimeExecutionError if outcome == "execution" else type(error)
+    )
+    with caplog.at_level(logging.WARNING):
+        with runtime_type(enable_monitoring=True, enable_audit=True) as runtime:
+            with pytest.raises(expected_type) as caught:
+                await runtime.execute_async(workflow, cancellation_token=token)
+    if outcome == "execution":
+        assert caught.value.__cause__ is error
+    elif outcome == "sdk":
+        assert "private-cancel-state-9732" in str(caught.value)
+    else:
+        assert caught.value is error
+    assert attempts == [1]
+    assert len(failures) == 1
+    assert type(failures[0]).__name__ == "OperationalError"
+    records = [
+        r
+        for r in caplog.records
+        if "Failed to persist deferred tracking data" in r.getMessage()
+    ]
+    assert len(records) == 1
+    assert records[0].levelno == logging.WARNING
+    assert "OperationalError@" in records[0].getMessage()
+    assert records[0].exc_info is None
+    for private in (
+        "private-database-path-8642",
+        "private-validation-8642",
+        "private-denial-8642",
+        "private-execution-8642",
+        "private-cancel-state-9732",
+    ):
+        assert all(private not in record.getMessage() for record in records)

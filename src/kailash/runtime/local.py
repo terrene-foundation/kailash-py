@@ -3052,9 +3052,7 @@ class LocalRuntime(
                     pass
             # P0E-003: Persist deferred tracking on error path (CARE audit trail)
             if _deferred_storage is not None:
-                self._flush_deferred_storage_sqlite(
-                    _deferred_storage, log_warning=False
-                )
+                self._flush_deferred_storage_sqlite(_deferred_storage, log_warning=True)
             if _signal_key:
                 self._workflow_signals.pop(_signal_key, None)
             raise
@@ -3077,9 +3075,7 @@ class LocalRuntime(
                     pass
             # P0E-003: Persist deferred tracking on error path (CARE audit trail)
             if _deferred_storage is not None:
-                self._flush_deferred_storage_sqlite(
-                    _deferred_storage, log_warning=False
-                )
+                self._flush_deferred_storage_sqlite(_deferred_storage, log_warning=True)
             if _signal_key:
                 self._workflow_signals.pop(_signal_key, None)
             raise
@@ -3111,9 +3107,7 @@ class LocalRuntime(
                         safe_exception_frames(tracking_error),
                     )
             if _deferred_storage is not None:
-                self._flush_deferred_storage_sqlite(
-                    _deferred_storage, log_warning=False
-                )
+                self._flush_deferred_storage_sqlite(_deferred_storage, log_warning=True)
             if _signal_key:
                 self._workflow_signals.pop(_signal_key, None)
             raise
@@ -3135,9 +3129,7 @@ class LocalRuntime(
                     pass
             # P0E-003: Persist deferred tracking on error path (CARE audit trail)
             if _deferred_storage is not None:
-                self._flush_deferred_storage_sqlite(
-                    _deferred_storage, log_warning=False
-                )
+                self._flush_deferred_storage_sqlite(_deferred_storage, log_warning=True)
             if _signal_key:
                 self._workflow_signals.pop(_signal_key, None)
 
