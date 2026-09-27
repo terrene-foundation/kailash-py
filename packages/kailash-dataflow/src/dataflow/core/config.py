@@ -14,6 +14,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from kailash.utils.secure_logging import safe_log_field
+
 from .models import Environment
 
 logger = logging.getLogger(__name__)
@@ -471,7 +473,7 @@ class DatabaseConfig:
             except ValueError:
                 logger.warning(
                     "DATAFLOW_POOL_SIZE=%r is not a valid integer, ignoring",
-                    env_val,
+                    safe_log_field(env_val),
                 )
 
         # 3. Auto-detect from database server
