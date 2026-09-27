@@ -1032,8 +1032,18 @@ class AsyncLocalRuntime(LocalRuntime):
             effective_trust_ctx = self._get_effective_trust_context()
             trust_token = None
             preparing_checkpoint = False
+            execution_succeeded = False
 
             try:
+                if self.enable_audit:
+                    await self._log_audit_event_async(
+                        "workflow_execution_start",
+                        {
+                            "workflow_id": workflow.workflow_id,
+                            "user_context": self._serialize_user_context(),
+                            "parameters": inputs,
+                        },
+                    )
                 # Set trust context in ContextVar if available
                 if effective_trust_ctx is not None:
                     from kailash.runtime.trust.context import (
@@ -1171,6 +1181,7 @@ class AsyncLocalRuntime(LocalRuntime):
 
                 # P0 Component 1: Return tuple (results, run_id) for consistency
                 # This matches LocalRuntime.execute() return structure
+                execution_succeeded = True
                 return (results, run_id)
 
             except asyncio.TimeoutError:
@@ -1221,15 +1232,33 @@ class AsyncLocalRuntime(LocalRuntime):
                 raise WorkflowExecutionError(f"Async execution failed: {e}") from e
 
             finally:
+                if self.enable_audit:
+                    audit_error = None if execution_succeeded else sys.exc_info()[1]
+                    if audit_error is None:
+                        await self._log_audit_event_async(
+                            "workflow_execution_completed",
+                            {
+                                "workflow_id": workflow.workflow_id,
+                                "run_id": run_id,
+                                "result_summary": {
+                                    key: type(value).__name__
+                                    for key, value in results.items()
+                                },
+                            },
+                        )
+                    else:
+                        await self._log_audit_event_async(
+                            "workflow_execution_failed",
+                            {
+                                "workflow_id": workflow.workflow_id,
+                                "error": safe_exception_frames(audit_error),
+                            },
+                        )
                 # Issue #1708 W1f: record the canonical workflow RED triple.
-                # `sys.exc_info()` inside a `finally` attached to the same
-                # `try` frame that is unwinding reports the in-flight exception
-                # (or `(None, None, None)` on a clean return) — this single
-                # check point observes BOTH the success path (`return (results,
-                # run_id)` above) and every exception path (timeout, cancelled,
-                # time-limit, or generic) without duplicating the recording
-                # call at every `except` clause.
-                _metrics_success = sys.exc_info()[0] is None
+                # An explicit completion flag avoids inheriting a caller's
+                # handled exception through sys.exc_info() on successful sync
+                # execution. All exception exits leave this flag false.
+                _metrics_success = execution_succeeded
                 _metrics_bridge.record_workflow_execution(
                     _metrics_workflow_name,
                     time.time() - start_time,

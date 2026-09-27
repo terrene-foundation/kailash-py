@@ -3068,7 +3068,7 @@ class LocalRuntime(
                     {
                         "workflow_id": workflow.workflow_id,
                         "user_context": self._serialize_user_context(),
-                        "error": str(e),
+                        "error": safe_exception_frames(e),
                     },
                 )
             # Re-raise permission errors as-is
@@ -3115,7 +3115,7 @@ class LocalRuntime(
                     "workflow_execution_failed",
                     {
                         "workflow_id": workflow.workflow_id,
-                        "error": str(e),
+                        "error": safe_exception_frames(e),
                     },
                 )
             # Mark run as failed
