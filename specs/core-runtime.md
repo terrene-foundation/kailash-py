@@ -187,7 +187,9 @@ def execute(
 
 The typed `soft_time_limit` and `time_limit` keyword-only parameters share the validation contract documented in §4.1.2. They are accepted on every concrete `BaseRuntime` subclass; deadline enforcement is handled by the runtime-internal time-limit wrapper that consumes the validated values.
 
-**Docker-safe override**: Prevents the parent's threading-based execution that causes Docker file descriptor issues. Uses `asyncio.run()` for pure async execution.
+**Docker-safe override**: Drives the runtime-owned persistent event loop on the calling thread, without the parent's threaded bridge. Sequential synchronous executions retain the same loop and registry resources. Overlapping synchronous calls fail with a typed `RuntimeError` before creating a coroutine. Source: `src/kailash/runtime/async_local.py:756-871`.
+
+**Resource ownership**: A native runtime binds to one event loop; a different owner loop is rejected before user execution. Synchronous `close()` waits when no caller loop is active; on an active caller loop it retains observed cleanup work. Async context exit awaits cleanup through caller cancellation, preserves the original cancellation, and leaves caller-owned loops running. Final cleanup obeys reference counts and disposes async SQL pools only for the cleanup owner loop. Close runtimes with surviving registry resources or pools before closing their loop. A resource-free runtime may reuse a subsequently closed caller loop after resetting its idle semaphore; a closed runtime itself cannot be rebound. Sources: `src/kailash/runtime/async_local.py:2158-2459`.
 
 **Raises**: `RuntimeError` if called from an async context (directs user to `execute_workflow_async` instead)
 

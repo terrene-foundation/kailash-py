@@ -602,6 +602,8 @@ class AsyncLocalRuntime(LocalRuntime):
         # This prevents race conditions where __init__ runs outside async context
         self._semaphore = None
         self._max_concurrent = max_concurrent_nodes
+        self._native_loop = None
+        self._close_task = None
 
         logger.info(
             f"AsyncLocalRuntime initialized with max_concurrent_nodes={max_concurrent_nodes}, "
@@ -767,7 +769,7 @@ class AsyncLocalRuntime(LocalRuntime):
         Execute workflow without creating threads (Docker-safe).
 
         This override prevents the parent's threading-based execution that causes
-        Docker file descriptor issues. Uses pure async execution via asyncio.run
+        Docker file descriptor issues. Drives pure async execution on the owned loop
         or returns the async task if already in an event loop.
 
         Args:
@@ -821,7 +823,7 @@ class AsyncLocalRuntime(LocalRuntime):
         # Check if we're already in an event loop
         try:
             loop = asyncio.get_running_loop()
-            # If we get here, we're in an event loop - can't use asyncio.run()
+            # A synchronous driver cannot run inside an active caller loop.
             # User should call execute_workflow_async() instead
             raise RuntimeError(
                 "AsyncLocalRuntime.execute() called from async context. "
@@ -833,17 +835,27 @@ class AsyncLocalRuntime(LocalRuntime):
             if "async context" in str(e):
                 # Our error - re-raise it
                 raise
-            # Otherwise it's the "no running loop" error - proceed with asyncio.run()
+            # Otherwise no caller loop is running; drive the owned loop directly.
             inputs = parameters if parameters else {}
-            result = asyncio.run(
-                self.execute_workflow_async(
+            if not self._persistent_execution_lock.acquire(blocking=False):
+                raise RuntimeError(
+                    "AsyncLocalRuntime synchronous execution is already active"
+                )
+            try:
+                loop = self._ensure_event_loop()
+                operation = self.execute_workflow_async(
                     workflow,
                     inputs=inputs,
                     soft_time_limit=soft_time_limit,
                     time_limit=time_limit,
                     **kwargs,
                 )
-            )
+                try:
+                    result = loop.run_until_complete(operation)
+                finally:
+                    operation.close()
+            finally:
+                self._persistent_execution_lock.release()
 
             # extract_workflow_async returns Tuple[Dict, str]
             if isinstance(result, tuple):
@@ -983,6 +995,7 @@ class AsyncLocalRuntime(LocalRuntime):
         # #912 Shard 1: validate typed time-limit kwargs at the entry point.
         _validate_force_resume_with_drift(force_resume_with_drift)
         _validate_limits(soft_time_limit, time_limit)
+        self._claim_native_loop()
         cyclic_executor = self._cycle_executor_for_attempt()
 
         # #912 Shard 6: arm asyncio-task-based deadlines around the
@@ -2255,60 +2268,123 @@ class AsyncLocalRuntime(LocalRuntime):
         self._cleaned_up = True
         logger.info("AsyncLocalRuntime cleanup complete")
 
-    def close(self) -> None:
-        """Synchronous close that properly cleans up ALL async resources.
+    def _closed_loop_can_rebind(self) -> bool:
+        """Allow closed-loop reuse only when no owned async resources survive."""
+        if self._native_loop is None or not self._native_loop.is_closed():
+            return False
+        if self.resource_registry is not None:
+            return False
+        if self._semaphore is not None and (
+            self._semaphore._value != self._max_concurrent
+            or any(not waiter.done() for waiter in (self._semaphore._waiters or ()))
+        ):
+            return False
+        from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
-        Overrides LocalRuntime.close() to also handle thread pool,
-        resource registry, semaphore, and SQL connection pools.
+        prefix = f"{id(self._native_loop)}|"
+        return not any(
+            key.startswith(prefix) for key in AsyncSQLDatabaseNode._shared_pools
+        )
 
-        Reference-count aware: decrements _ref_count. Actual cleanup
-        only happens when _ref_count reaches 0.
-        """
-        if self.debug:
-            logger.debug(
-                f"AsyncLocalRuntime.close() called for runtime {self._runtime_id}"
+    def _claim_native_loop(self) -> asyncio.AbstractEventLoop:
+        """Bind loop-affine runtime resources before executing user work."""
+        loop = asyncio.get_running_loop()
+        with self._loop_lock:
+            if self._ref_count <= 0 or getattr(self, "_cleaned_up", False):
+                raise RuntimeError("AsyncLocalRuntime is closed; create a new runtime")
+            if self._native_loop is not None and self._native_loop is not loop:
+                if not self._closed_loop_can_rebind():
+                    raise RuntimeError(
+                        "AsyncLocalRuntime belongs to another event loop; "
+                        "use a separate runtime and close each on its owning loop"
+                    )
+                self._semaphore = None
+            self._native_loop = loop
+        return loop
+
+    async def _finish_async_close(self) -> None:
+        """Finish owned resources without stopping the caller's event loop."""
+        try:
+            await self.cleanup()
+        finally:
+            self._workflow_signals.clear()
+            # An owned loop driven by sync close is retired after its driver
+            # returns. Caller-owned loops are never passed to loop teardown.
+            if self._persistent_loop is not asyncio.get_running_loop():
+                self._cleanup_event_loop()
+
+    def _observe_async_close(self, future) -> None:
+        """Observe retained asynchronous close failures even without an awaiter."""
+        try:
+            future.result()
+        except BaseException as error:
+            logger.error(
+                "AsyncLocalRuntime cleanup failed: %s", safe_exception_frames(error)
             )
 
+    def close(self) -> None:
+        """Release one reference and finish resources on their owning loop.
+
+        Outside an active caller loop, close waits for completion. On the owning
+        loop it retains a cleanup task; async context exit awaits that task.
+        """
         with self._loop_lock:
             if self._ref_count <= 0:
-                return  # Already fully closed
+                return
+            if (
+                self._ref_count == 1
+                and self._native_loop is not None
+                and self._native_loop.is_closed()
+                and not getattr(self, "_cleaned_up", False)
+            ):
+                if not self._closed_loop_can_rebind():
+                    raise RuntimeError(
+                        "AsyncLocalRuntime owner loop closed before cleanup; "
+                        "close the runtime before closing its event loop"
+                    )
+                self._native_loop = None
+                self._semaphore = None
             self._ref_count -= 1
             if self._ref_count > 0:
-                return  # Other consumers still active
+                return
 
-        # --- Async resource cleanup (not handled by parent close) ---
-        if not getattr(self, "_cleaned_up", False):
-            try:
-                loop = self._persistent_loop
-                if loop and not loop.is_closed():
-                    # Schedule async cleanup on the runtime's own event loop
-                    future = asyncio.run_coroutine_threadsafe(self.cleanup(), loop)
-                    try:
-                        future.result(timeout=5.0)
-                    except (TimeoutError, asyncio.TimeoutError):
-                        logger.warning("AsyncLocalRuntime cleanup timed out after 5s")
-                else:
-                    # No running loop — do sync-safe subset
-                    if hasattr(self, "thread_pool") and self.thread_pool:
-                        self.thread_pool.shutdown(wait=True)
-                        self.thread_pool = None
-                    if hasattr(self, "_semaphore"):
-                        self._semaphore = None
-                    self._cleaned_up = True
-            except Exception as e:
-                logger.warning(
-                    f"Error during AsyncLocalRuntime.close(): {safe_exception_frames(e)}"
+        if getattr(self, "_cleaned_up", False):
+            self._workflow_signals.clear()
+            self._cleanup_event_loop()
+            return
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            current_loop = None
+        owner = self._native_loop or self._persistent_loop
+        if owner is None:
+            owner = current_loop or self._ensure_event_loop()
+            self._native_loop = owner
+
+        if owner is current_loop:
+            self._close_task = owner.create_task(self._finish_async_close())
+            self._close_task.add_done_callback(self._observe_async_close)
+        elif owner.is_running():
+            self._close_task = asyncio.run_coroutine_threadsafe(
+                self._finish_async_close(), owner
+            )
+            self._close_task.add_done_callback(self._observe_async_close)
+            if current_loop is None:
+                self._close_task.result()
+        elif current_loop is None:
+            owner.run_until_complete(self._finish_async_close())
+            self._cleanup_event_loop()
+        else:
+            # A dormant owner cannot run on this already-running thread.
+            # Drive its existing loop off-thread; never migrate its resources.
+            async def finish_dormant_owner():
+                await asyncio.to_thread(
+                    owner.run_until_complete, self._finish_async_close()
                 )
-                # Fallback: at least kill thread pool
-                if hasattr(self, "thread_pool") and self.thread_pool:
-                    self.thread_pool.shutdown(wait=False)
-                    self.thread_pool = None
+                self._cleanup_event_loop()
 
-        # --- Parent cleanup (event loop + signals) ---
-        # Call the parent's cleanup logic directly, NOT super().close()
-        # because super().close() would try to decrement _ref_count again.
-        self._workflow_signals.clear()
-        self._cleanup_event_loop()
+            self._close_task = current_loop.create_task(finish_dormant_owner())
+            self._close_task.add_done_callback(self._observe_async_close)
 
     def __del__(self, _warn=warn_unclosed) -> None:
         """Emit ResourceWarning if the runtime was not properly closed.
@@ -2350,6 +2426,7 @@ class AsyncLocalRuntime(LocalRuntime):
             async with AsyncLocalRuntime() as runtime:
                 results = await runtime.execute_workflow_async(workflow, inputs)
         """
+        self._claim_native_loop()
         self._is_context_managed = True
         return self
 
@@ -2362,3 +2439,21 @@ class AsyncLocalRuntime(LocalRuntime):
         """
         self._is_context_managed = False
         self.close()
+        if self._close_task is not None:
+            pending = (
+                self._close_task
+                if isinstance(self._close_task, asyncio.Future)
+                else asyncio.wrap_future(self._close_task)
+            )
+            cancellation = None
+            while True:
+                try:
+                    await asyncio.shield(pending)
+                    break
+                except asyncio.CancelledError as error:
+                    if pending.cancelled():
+                        raise
+                    if cancellation is None:
+                        cancellation = error
+            if cancellation is not None:
+                raise cancellation
