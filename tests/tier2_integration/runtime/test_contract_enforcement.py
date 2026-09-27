@@ -8,13 +8,14 @@ Tests Task 2.3: Runtime Contract Enforcement
 - Audit trail updates
 """
 
-from unittest.mock import MagicMock, Mock, patch
+import logging
 
 import pytest
 
 from kailash.nodes.base import Node
 from kailash.runtime.local import LocalRuntime
 from kailash.sdk_exceptions import WorkflowExecutionError, WorkflowValidationError
+from kailash.workflow import Workflow
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.contracts import ConnectionContract, SecurityPolicy
 
@@ -133,7 +134,7 @@ class TestRuntimeContractEnforcement:
         assert results is not None
         assert "target" in results
 
-    def test_contract_validation_warn_mode(self):
+    def test_contract_validation_warn_mode(self, caplog):
         """Test contract validation in warn mode."""
         # Create workflow with contract violation
         builder = WorkflowBuilder()
@@ -147,23 +148,21 @@ class TestRuntimeContractEnforcement:
 
         workflow = builder.build()
 
-        # Execute with warn mode - should log warning but continue
+        # Observe rendered diagnostics from the real logger, not its format string.
         with LocalRuntime(connection_validation="warn") as runtime:
-            with patch.object(runtime.logger, "warning") as mock_warning:
-                results, run_id = runtime.execute(workflow)
-
-            # Should complete execution but log contract warnings
-            assert results is not None
-            # Should log warning about contract violation — check all warning calls
-            # (runtime may log multiple warnings; the contract one may not be last)
-            mock_warning.assert_called()
-            all_warnings = " ".join(
-                str(call[0][0]) for call in mock_warning.call_args_list
-            ).lower()
-            assert any(
-                term in all_warnings
-                for term in ["contract validation failed", "contract", "violation"]
-            )
+            results, run_id = runtime.execute(workflow)
+        assert results is not None
+        assert results["target"]["result"] == 123
+        warnings = [
+            record.getMessage()
+            for record in caplog.records
+            if record.levelno == logging.WARNING
+            and record.getMessage().startswith("Node input validation failed:")
+        ]
+        assert len(warnings) == 1
+        assert "WorkflowExecutionError" in warnings[0]
+        assert "string_data" not in warnings[0]
+        assert "123" not in warnings[0]
 
     def test_contract_validation_off_mode(self):
         """Test that contract validation is skipped when turned off."""
@@ -339,14 +338,12 @@ class TestRuntimeContractEnforcement:
 class TestContractValidationMethod:
     """Test the _validate_connection_contracts method directly."""
 
-    def test_validate_connection_contracts_no_contracts(self):
+    def test_validate_connection_contracts_no_contracts(self, request):
         """Test validation when no contracts are defined."""
         runtime = LocalRuntime()
+        request.addfinalizer(runtime.close)
 
-        # Mock workflow without contracts
-        workflow = Mock()
-        workflow.metadata = {}
-        workflow.connections = []
+        workflow = Workflow(workflow_id="no_contracts", name="No contracts")
 
         violations = runtime._validate_connection_contracts(
             workflow, "target_node", {}, {}
@@ -354,34 +351,20 @@ class TestContractValidationMethod:
 
         assert violations == []
 
-    def test_validate_connection_contracts_with_violations(self):
+    def test_validate_connection_contracts_with_violations(self, request):
         """Test validation with contract violations."""
         runtime = LocalRuntime()
+        request.addfinalizer(runtime.close)
 
-        # Mock workflow with contracts
-        workflow = Mock()
-        workflow.metadata = {
-            "connection_contracts": {
-                "source.output → target.input": {
-                    "name": "string_data",
-                    "source_schema": {"type": "string"},
-                    "target_schema": {"type": "string"},
-                    "security_policies": [],
-                    "audit_level": "normal",
-                    "metadata": {},
-                }
-            }
-        }
+        builder = WorkflowBuilder()
+        builder.add_node("PythonCodeNode", "source", {"code": "output = 123"})
+        builder.add_node("PythonCodeNode", "target", {"code": "result = input"})
+        builder.add_typed_connection(
+            "source", "output", "target", "input", contract="string_data"
+        )
+        workflow = builder.build()
 
-        # Mock connection
-        connection = Mock()
-        connection.source_node = "source"
-        connection.source_output = "output"
-        connection.target_node = "target"
-        connection.target_input = "input"
-        workflow.connections = [connection]
-
-        # Mock invalid data (number instead of string)
+        # Invalid data (number instead of string)
         node_outputs = {"source": {"output": 123}}
         target_inputs = {"input": 123}
 
@@ -395,34 +378,20 @@ class TestContractValidationMethod:
         assert violation["contract"] == "string_data"
         assert "validation failed" in violation["error"].lower()
 
-    def test_validate_connection_contracts_with_valid_data(self):
+    def test_validate_connection_contracts_with_valid_data(self, request):
         """Test validation with valid data."""
         runtime = LocalRuntime()
+        request.addfinalizer(runtime.close)
 
-        # Mock workflow with contracts
-        workflow = Mock()
-        workflow.metadata = {
-            "connection_contracts": {
-                "source.output → target.input": {
-                    "name": "string_data",
-                    "source_schema": {"type": "string"},
-                    "target_schema": {"type": "string"},
-                    "security_policies": [],
-                    "audit_level": "normal",
-                    "metadata": {},
-                }
-            }
-        }
+        builder = WorkflowBuilder()
+        builder.add_node("PythonCodeNode", "source", {"code": "output = 123"})
+        builder.add_node("PythonCodeNode", "target", {"code": "result = input"})
+        builder.add_typed_connection(
+            "source", "output", "target", "input", contract="string_data"
+        )
+        workflow = builder.build()
 
-        # Mock connection
-        connection = Mock()
-        connection.source_node = "source"
-        connection.source_output = "output"
-        connection.target_node = "target"
-        connection.target_input = "input"
-        workflow.connections = [connection]
-
-        # Mock valid string data
+        # Valid string data
         node_outputs = {"source": {"output": "valid_string"}}
         target_inputs = {"input": "valid_string"}
 

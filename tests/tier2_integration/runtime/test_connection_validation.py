@@ -1,22 +1,68 @@
 """
-Unit tests for connection parameter validation in LocalRuntime.
+Integration tests for connection parameter validation in LocalRuntime.
 
 Tests the implementation of connection validation modes and parameter validation
 at the runtime level.
 """
 
-from unittest.mock import MagicMock, Mock, patch
+import logging
 
 import pytest
 
 from kailash.nodes.base import Node, NodeParameter
 from kailash.runtime.local import LocalRuntime
+from kailash.sdk_exceptions import WorkflowExecutionError
 from kailash.workflow import Workflow
 from kailash.workflow.builder import WorkflowBuilder
 
 
+class RecordingNode(Node):
+    """Real integer validation with observation of the inputs it receives."""
+
+    def __init__(self, **kwargs):
+        self.validation_calls = []
+        super().__init__(**kwargs)
+
+    def get_parameters(self):
+        return {"count": NodeParameter(name="count", type=int, required=True)}
+
+    def validate_inputs(self, **kwargs):
+        self.validation_calls.append(dict(kwargs))
+        return super().validate_inputs(**kwargs)
+
+    def run(self, **kwargs):
+        return kwargs
+
+
+class MixedNode(RecordingNode):
+    def get_parameters(self):
+        return {
+            "param1": NodeParameter(name="param1", type=str, required=True),
+            "param2": NodeParameter(name="param2", type=int, required=True),
+        }
+
+
+def _workflow(node, connected=False, target="count"):
+    workflow = Workflow(workflow_id="validation", name="Validation")
+    workflow.add_node("test_node", node)
+    if connected:
+        workflow.add_node("source", "PythonCodeNode", code="result = 1")
+        workflow.connect("source", "test_node", {"result": target})
+    node.validation_calls.clear()
+    return workflow
+
+
+def _validation_warnings(caplog):
+    return [
+        record
+        for record in caplog.records
+        if record.levelno == logging.WARNING
+        and record.getMessage().startswith("Node input validation failed:")
+    ]
+
+
 class TestLocalRuntimeConnectionValidation:
-    """Unit tests for LocalRuntime connection validation."""
+    """Integration tests for LocalRuntime connection validation."""
 
     def test_runtime_accepts_connection_validation_parameter(self, request):
         """LocalRuntime should accept connection_validation parameter."""
@@ -39,186 +85,111 @@ class TestLocalRuntimeConnectionValidation:
         with pytest.raises(ValueError):
             LocalRuntime(connection_validation="invalid")
 
-    def test_prepare_node_inputs_calls_validate_inputs(self, request):
-        """_prepare_node_inputs should call node.validate_inputs() when enabled."""
-        runtime = LocalRuntime(connection_validation="strict")
-        request.addfinalizer(runtime.close)
-
-        # Mock node with validate_inputs method
-        mock_node = Mock(spec=Node)
-        mock_node.config = {}  # Add config attribute
-        mock_node.validate_inputs = Mock(return_value={"validated": True})
-        mock_node.get_parameters = Mock(return_value={})
-
-        # Mock workflow
-        workflow = Mock(spec=Workflow)
-        workflow.nodes = {"test_node": {"node": mock_node}}
-        workflow.graph = Mock()
-        workflow.graph.in_edges = Mock(return_value=[])
-        workflow.graph.nodes = Mock(return_value=["test_node"])  # For parameter scoping
-        workflow.metadata = {}  # Required by _validate_connection_contracts
-        workflow.connections = []  # Required by connection validation logic
-
-        # Test _prepare_node_inputs with correct signature
-        inputs = runtime._prepare_node_inputs(
-            workflow, "test_node", mock_node, {}, {"test_node": {"param": "value"}}
-        )
-
-        # Should call validate_inputs
-        mock_node.validate_inputs.assert_called_once()
-        assert inputs == {"validated": True}
-
-    def test_validation_modes_behavior(self, request):
-        """Test different validation modes handle errors correctly."""
-        # Mock node that raises validation error
-        mock_node = Mock(spec=Node)
-        mock_node.config = {}  # Add config attribute
-        mock_node.validate_inputs = Mock(side_effect=ValueError("Invalid type"))
-        mock_node.get_parameters = Mock(return_value={})
-
-        workflow = Mock(spec=Workflow)
-        workflow.nodes = {"test_node": {"node": mock_node}}
-        workflow.graph = Mock()
-        workflow.graph.in_edges = Mock(return_value=[])
-        workflow.graph.nodes = Mock(return_value=["test_node"])  # For parameter scoping
-        workflow.metadata = {}  # Required by _validate_connection_contracts
-        workflow.connections = []  # Required by connection validation logic
-
-        # Test "off" mode - should not validate
-        runtime_off = LocalRuntime(connection_validation="off")
-        request.addfinalizer(runtime_off.close)
-        mock_node.validate_inputs.reset_mock()
-        inputs = runtime_off._prepare_node_inputs(
-            workflow, "test_node", mock_node, {}, {"test_node": {"param": "value"}}
-        )
-        mock_node.validate_inputs.assert_not_called()
-
-        # Test "warn" mode - should log warning and continue
-        runtime_warn = LocalRuntime(connection_validation="warn")
-        request.addfinalizer(runtime_warn.close)
-        with patch.object(runtime_warn.logger, "warning") as mock_warning:
-            inputs = runtime_warn._prepare_node_inputs(
-                workflow, "test_node", mock_node, {}, {"test_node": {"param": "value"}}
+    def test_prepare_node_inputs_calls_validate_inputs(self):
+        """Validate real node inputs against configuration and runtime overrides."""
+        node = RecordingNode(count=7)
+        workflow = _workflow(node)
+        with LocalRuntime(connection_validation="strict") as runtime:
+            config_only = runtime._prepare_node_inputs(
+                workflow, "test_node", node, {}, {}
             )
-            mock_warning.assert_called_once()
-            assert "connection validation error" in mock_warning.call_args[0][0].lower()
-
-        # Test "strict" mode - should raise error
-        runtime_strict = LocalRuntime(connection_validation="strict")
-        request.addfinalizer(runtime_strict.close)
-        from kailash.sdk_exceptions import WorkflowExecutionError
-
-        with pytest.raises(WorkflowExecutionError, match="Connection Validation Error"):
-            runtime_strict._prepare_node_inputs(
-                workflow, "test_node", mock_node, {}, {"test_node": {"param": "value"}}
+            inputs = runtime._prepare_node_inputs(
+                workflow, "test_node", node, {}, {"test_node": {"count": "9"}}
             )
+        assert config_only == {}
+        assert node.validation_calls == [{"count": 7}, {"count": "9"}]
+        assert inputs == {"count": 9}
 
-    def test_connection_parameters_are_validated(self, request):
-        """Parameters from connections should be validated."""
-        runtime = LocalRuntime(connection_validation="strict")
-        request.addfinalizer(runtime.close)
-
-        # Mock source node output
-        node_outputs = {"source_node": {"data": {"count": "not_a_number"}}}
-
-        # Mock target node expecting int
-        mock_node = Mock(spec=Node)
-        mock_node.config = {}  # Add config attribute
-        mock_node.get_parameters = Mock(
-            return_value={"count": NodeParameter(name="count", type=int, required=True)}
-        )
-        mock_node.validate_inputs = Mock(side_effect=ValueError("Expected int"))
-
-        # Mock workflow with connection
-        workflow = Mock(spec=Workflow)
-        workflow.nodes = {"target_node": {"node": mock_node}}
-        workflow.graph = Mock()
-        workflow.graph.nodes = Mock(
-            return_value=["source_node", "target_node"]
-        )  # For parameter scoping
-        workflow.metadata = {}  # Required by _validate_connection_contracts
-        workflow.connections = []  # Required by connection validation logic
-
-        # Mock edge data (connection)
-        edge_data = ("source_node", "target_node", {"mapping": {"data": ""}})
-        workflow.graph.in_edges = Mock(return_value=[edge_data])
-
-        # Should raise validation error
-        from kailash.sdk_exceptions import WorkflowExecutionError
-
-        with pytest.raises(WorkflowExecutionError, match="Connection Validation Error"):
-            runtime._prepare_node_inputs(
-                workflow, "target_node", mock_node, node_outputs, {}
+    def test_validation_modes_behavior(self, caplog):
+        """Off bypasses validation; warn reports safely; strict raises."""
+        node = RecordingNode()
+        workflow = _workflow(node)
+        parameters = {"test_node": {"count": "private-input-marker"}}
+        with LocalRuntime(connection_validation="off") as runtime:
+            inputs = runtime._prepare_node_inputs(
+                workflow, "test_node", node, {}, parameters
             )
+        assert node.validation_calls == []
+        assert inputs == parameters["test_node"]
+        assert not _validation_warnings(caplog)
 
-    def test_mixed_parameter_sources(self, request):
-        """Test validation with mixed direct and connection parameters."""
-        runtime = LocalRuntime(connection_validation="strict")
-        request.addfinalizer(runtime.close)
+        with LocalRuntime(connection_validation="warn") as runtime:
+            inputs = runtime._prepare_node_inputs(
+                workflow, "test_node", node, {}, parameters
+            )
+        assert len(node.validation_calls) == 1
+        assert inputs == parameters["test_node"]
+        warnings = _validation_warnings(caplog)
+        assert len(warnings) == 1
+        assert "NodeValidationError" in warnings[0].getMessage()
+        assert "private-input-marker" not in caplog.text
 
-        # Mock node with multiple parameters
-        mock_node = Mock(spec=Node)
-        mock_node.config = {}  # Add config attribute
-        mock_node.get_parameters = Mock(
-            return_value={
-                "param1": NodeParameter(name="param1", type=str, required=True),
-                "param2": NodeParameter(name="param2", type=int, required=True),
-            }
-        )
+        with LocalRuntime(connection_validation="strict") as runtime:
+            with pytest.raises(
+                WorkflowExecutionError, match="Connection Validation Error"
+            ):
+                runtime._prepare_node_inputs(
+                    workflow, "test_node", node, {}, parameters
+                )
+        assert len(node.validation_calls) == 2
 
-        # Mock successful validation
+    def test_connection_parameters_are_validated(self):
+        """A real connection supplies the value rejected by node validation."""
+        node = RecordingNode()
+        workflow = _workflow(node, connected=True)
+        with LocalRuntime(connection_validation="strict") as runtime:
+            with pytest.raises(
+                WorkflowExecutionError, match="Connection Validation Error"
+            ):
+                runtime._prepare_node_inputs(
+                    workflow,
+                    "test_node",
+                    node,
+                    {"source": {"result": "not_a_number"}},
+                    {},
+                )
+        assert node.validation_calls == [{"count": "not_a_number"}]
+
+    def test_mixed_parameter_sources(self):
+        """Validate connection, configuration, and direct parameters together."""
+        node = MixedNode(param2=7)
+        workflow = _workflow(node, connected=True, target="param1")
+        with LocalRuntime(connection_validation="strict") as runtime:
+            inputs = runtime._prepare_node_inputs(
+                workflow,
+                "test_node",
+                node,
+                {"source": {"result": "from_connection"}},
+                {"param2": 42},
+            )
         validated_result = {"param1": "from_connection", "param2": 42}
-        mock_node.validate_inputs = Mock(return_value=validated_result)
-
-        # Mock workflow
-        workflow = Mock(spec=Workflow)
-        workflow.nodes = {"test_node": {"node": mock_node}}
-        workflow.graph = Mock()
-        workflow.graph.nodes = Mock(
-            return_value=["source", "test_node"]
-        )  # For parameter scoping
-        workflow.metadata = {}  # Required by _validate_connection_contracts
-        workflow.connections = []  # Required by connection validation logic
-
-        # Mock connection providing param1
-        edge_data = ("source", "test_node", {"mapping": {"output": "param1"}})
-        workflow.graph.in_edges = Mock(return_value=[edge_data])
-
-        node_outputs = {"source": {"output": "from_connection"}}
-        parameters = {"param2": 42}  # Parameters are direct, not nested
-
-        # Should combine and validate both sources
-        inputs = runtime._prepare_node_inputs(
-            workflow, "test_node", mock_node, node_outputs, parameters
-        )
-
-        # Verify validate_inputs was called with combined parameters
-        mock_node.validate_inputs.assert_called_once()
-        call_args = mock_node.validate_inputs.call_args[1]
-        assert "param1" in call_args  # From connection
-        assert "param2" in call_args  # From direct parameters
+        assert node.validation_calls == [validated_result]
+        assert "param1" in node.validation_calls[0]
+        assert "param2" in node.validation_calls[0]
         assert inputs == validated_result
 
-    def test_validation_performance_caching(self, request):
-        """Validation results should be cached for performance."""
-        runtime = LocalRuntime(connection_validation="strict")
-        request.addfinalizer(runtime.close)
-
-        # Mock node with expensive validation
-        call_count = 0
-
-        def mock_validate(**kwargs):
-            nonlocal call_count
-            call_count += 1
-            return kwargs
-
-        mock_node = Mock(spec=Node)
-        mock_node.config = {}  # Add config attribute
-        mock_node.validate_inputs = Mock(side_effect=mock_validate)
-        mock_node.get_parameters = Mock(return_value={})
-
-        # Note: Actual caching implementation may vary
-        # This test verifies the concept
+    def test_validation_performance_caching(self):
+        """Cached parameter mappings must validate each new value."""
+        node = RecordingNode()
+        workflow = _workflow(node)
+        node.clear_cache()
+        with LocalRuntime(connection_validation="strict") as runtime:
+            for count in (1, 2):
+                assert runtime._prepare_node_inputs(
+                    workflow, "test_node", node, {}, {"count": count}
+                ) == {"count": count}
+            assert node.get_cache_stats()["hits"] >= 1
+            with pytest.raises(
+                WorkflowExecutionError, match="Connection Validation Error"
+            ):
+                runtime._prepare_node_inputs(
+                    workflow, "test_node", node, {}, {"count": "invalid"}
+                )
+        assert node.validation_calls == [
+            {"count": 1},
+            {"count": 2},
+            {"count": "invalid"},
+        ]
 
     def test_backward_compatibility(self):
         """Existing workflows should work without modification."""
