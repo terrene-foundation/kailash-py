@@ -3102,9 +3102,14 @@ class LocalRuntime(
                 )
             if task_manager and run_id:
                 try:
-                    task_manager.update_run_status(run_id, "cancelled", error=str(e))
-                except Exception:
-                    pass
+                    # Workflow runs have only completed/failed terminal states;
+                    # cancellation remains distinct in the audit event above.
+                    task_manager.update_run_status(run_id, "failed", error=str(e))
+                except Exception as tracking_error:
+                    self.logger.warning(
+                        "Failed to persist cancelled workflow status: %s",
+                        safe_exception_frames(tracking_error),
+                    )
             if _deferred_storage is not None:
                 self._flush_deferred_storage_sqlite(
                     _deferred_storage, log_warning=False
