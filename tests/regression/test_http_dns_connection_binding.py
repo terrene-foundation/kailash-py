@@ -14,7 +14,7 @@ import math
 import socket
 import ssl
 import threading
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from types import MethodType
 
 import anyio
@@ -308,6 +308,22 @@ async def test_dns_admission_is_cancellable_and_within_connect_budget(
 ):
     entered, release, done = threading.Event(), threading.Event(), threading.Event()
     original = socket.getaddrinfo
+    deadlines = []
+    from kailash.utils import http_transport
+
+    class AdmissionClock:
+        """Arm the real cancel scope only once its real DNS worker starts."""
+
+        def __getattr__(self, name):
+            return getattr(anyio, name)
+
+        @contextmanager
+        def fail_after(self, timeout):
+            with anyio.fail_after(None) as scope:
+                deadlines.append((timeout, scope))
+                yield scope
+
+    monkeypatch.setattr(http_transport, "anyio", AdmissionClock())
 
     def delayed(host, port, *args, **kwargs):
         assert host == HOST
@@ -326,9 +342,16 @@ async def test_dns_admission_is_cancellable_and_within_connect_budget(
                     client.get(f"http://{HOST}:{net['port']}/ok")
                 )
                 try:
-                    assert await asyncio.to_thread(entered.wait, 1)
+                    assert await asyncio.to_thread(entered.wait, 2)
+                    assert len(deadlines) == 1
+                    timeout, scope = deadlines[0]
+                    assert timeout == (2 if cancel else 0.05)
                     if cancel:
                         task.cancel()
+                    else:
+                        # Exercise real deadline cancellation after establishing
+                        # worker entry; thread scheduling is not the invariant.
+                        scope.deadline = anyio.current_time() + timeout
                     with pytest.raises(
                         asyncio.CancelledError if cancel else httpx.ConnectTimeout
                     ):

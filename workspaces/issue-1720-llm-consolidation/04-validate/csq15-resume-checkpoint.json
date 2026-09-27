@@ -1,7 +1,7 @@
 {
   "resumed_session": "01a0db1d-b7b7-7441-a2fe-81bfeef99161",
   "starting_head": "e19a9ab73bdf94066d7c2e820619ddcd11e303e7",
-  "status": "HTTP repairs committed and scoped reviews clean; whole-promotion gates remain open",
+  "status": "Production repairs committed; whole-promotion review found test lifecycle and timing defects being repaired before final rerun and push",
   "authorizations": {
     "D1_promotion": true,
     "package_publication": false,
@@ -230,5 +230,42 @@
     "src/kailash/utils/network_guard.py": "87d700e283fc96399790334a4151bb92b98c4a9e2ec5d6a208dad5c164aacda5",
     "specs/nexus-channels.md": "0edd79fb1e6cb98acb499a9e87072fb39e7055f25bbed8376b524f988b53900d"
   },
-  "doc_citation_refinement": "Only helper range endpoints moved from355 to357 after comment-only lint annotations."
+  "doc_citation_refinement": "Only helper range endpoints moved from355 to357 after comment-only lint annotations.",
+  "final_gate_attempt_1": {
+    "linux_head": "9ed7255935fd5ff026964c6960247a4869f2c22c",
+    "dataflow_unit": {
+      "passed": 3504,
+      "skipped": 31,
+      "exit": 0
+    },
+    "dataflow_regression": {
+      "passed": 1038,
+      "skipped": 6,
+      "deselected": 187,
+      "exit": 0
+    },
+    "root_regression": {
+      "passed": 3853,
+      "skipped": 3,
+      "deselected": 24,
+      "warnings": 1,
+      "exit": 0,
+      "gate": "OPEN: unclosed test-owned AsyncLocalRuntime warning attributed and repair in progress"
+    },
+    "mac_head": "c42022d04ce0a38cfb4bb91373e9ff154361c3f3",
+    "mac_all_files_hooks": {
+      "SKIP": "unset",
+      "exit": 0,
+      "tier1_passed": 5153,
+      "skipped": 15,
+      "deselected": 3
+    },
+    "source_continuity": "9ed725\u2192c420 changes only STUB-MARKER-INVENTORY.md; all production/test/config blobs identical."
+  },
+  "final_test_repairs": [
+    "DNS resolver worker startup synchronized before controlled real cancellation deadline",
+    "SQLite audit test owners close real stores including implicit engine stores",
+    "AsyncLocalRuntime test owners close channel runtimes and durable engines",
+    "Legacy Agent compatibility tests explicitly assert intended import deprecation"
+  ]
 }

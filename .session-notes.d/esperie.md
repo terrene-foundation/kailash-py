@@ -10,12 +10,16 @@ mutation fails that assertion. Final formatting/lint annotations preserve the
 runtime AST. The exact receipt and fixed eight-item completion list are in
 `04-validate/csq15-resume-checkpoint.json`.
 
-Promotion is NOT ready. Next: pin the complete committed candidate, run Linux
-root/DataFlow and Mac all-files hooks with SKIP unset, and obtain three delivered
-whole-promotion reviews with fresh assertion/caller inventory. Then consolidate
-one push, read every required and formerly failed check on the exact PR head,
-and separately merge PR #2229 under the recovered D1 approval. Post-main review,
-owned worktree drain and the authorized external handoff pair remain owed.
+Promotion remains gated. First full Linux run passed 3853 root and 4542 DataFlow
+tests; root emitted one unclosed-runtime warning. Mac all-files hooks passed,
+including 5153 unit tests. Independent union review traced test-owned runtime and
+SQLite leaks, a DNS worker-start timing race, and a legacy import warning contract.
+These test-only repairs are being closed with explicit owners and reached controls.
+Next rerun affected Linux root regression and Mac all-files hooks with SKIP unset;
+finish three delivered union reviews and the complete original-assertion inventory.
+Then consolidate one push, read every required and formerly failed check on the
+exact PR head, and separately merge #2229 under D1. Post-main review, owned worktree
+drain, and final handoff restamp remain owed.
 
 The nine specified CodeQL dismissals and separate DataFlow pools / inherited
 Kaizen base-execution design exceptions remain approved. The advisory type-check

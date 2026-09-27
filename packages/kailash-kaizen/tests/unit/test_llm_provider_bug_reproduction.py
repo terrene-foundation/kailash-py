@@ -15,9 +15,29 @@ File References:
 - /packages/kailash-kaizen/src/kaizen/agent_config.py:253-257 (__post_init__ auto-detection)
 """
 
+import importlib
 import inspect
+import re
+import sys
 
 import pytest
+
+
+@pytest.fixture(scope="module", autouse=True)
+def legacy_agent_import():
+    """Assert the migration warning once while keeping the legacy API tested."""
+    if "kaizen.agent" in sys.modules:
+        return
+    message = (
+        "kaizen.agent.Agent is deprecated. Use 'from kaizen_agents import Agent' "
+        "(async-first) or 'from kaizen import Agent' (auto-resolves). "
+        "This module will be removed in kailash-kaizen 3.0.0."
+    )
+    with pytest.warns(DeprecationWarning, match=re.escape(message)) as recorded:
+        importlib.import_module("kaizen.agent")
+    assert [(warning.category, str(warning.message)) for warning in recorded] == [
+        (DeprecationWarning, message)
+    ]
 
 
 class TestAgentLLMProviderParameter:
