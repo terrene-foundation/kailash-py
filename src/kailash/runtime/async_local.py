@@ -604,6 +604,7 @@ class AsyncLocalRuntime(LocalRuntime):
         self._max_concurrent = max_concurrent_nodes
         self._native_loop = None
         self._close_task = None
+        self._close_error = None
 
         logger.info(
             f"AsyncLocalRuntime initialized with max_concurrent_nodes={max_concurrent_nodes}, "
@@ -2306,7 +2307,21 @@ class AsyncLocalRuntime(LocalRuntime):
         """Finish owned resources without stopping the caller's event loop."""
         try:
             await self.cleanup()
+        except BaseException as error:
+            self._close_error = error
+            raise
         finally:
+            # An overridden or interrupted cleanup must not strand the executor.
+            if self.thread_pool is not None:
+                try:
+                    self.thread_pool.shutdown(wait=True)
+                except Exception as error:
+                    logger.warning(
+                        "Error shutting down thread pool: %s",
+                        safe_exception_frames(error),
+                    )
+                finally:
+                    self.thread_pool = None
             self._workflow_signals.clear()
             # An owned loop driven by sync close is retired after its driver
             # returns. Caller-owned loops are never passed to loop teardown.
@@ -2430,21 +2445,28 @@ class AsyncLocalRuntime(LocalRuntime):
         self._is_context_managed = True
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        """Async context manager exit — calls close() which respects ref counting.
+    async def aclose(self) -> None:
+        """Release one reference and await final cleanup on the resource owner.
 
-        Uses close() instead of directly calling cleanup() to ensure the
-        ref counting contract is honored. If this runtime is shared via
-        acquire(), close() will only decrement — not destroy resources.
+        Cleanup completes through caller cancellation before that cancellation
+        is propagated. References retained with acquire() remain usable.
         """
-        self._is_context_managed = False
         self.close()
         if self._close_task is not None:
-            pending = (
-                self._close_task
-                if isinstance(self._close_task, asyncio.Future)
-                else asyncio.wrap_future(self._close_task)
-            )
+            pending = self._close_task
+            if isinstance(pending, asyncio.Future):
+                owner = pending.get_loop()
+                if owner is not asyncio.get_running_loop() and not pending.done():
+                    owner_task = pending
+
+                    async def wait_on_owner():
+                        await asyncio.shield(owner_task)
+
+                    pending = asyncio.wrap_future(
+                        asyncio.run_coroutine_threadsafe(wait_on_owner(), owner)
+                    )
+            else:
+                pending = asyncio.wrap_future(pending)
             cancellation = None
             while True:
                 try:
@@ -2452,8 +2474,16 @@ class AsyncLocalRuntime(LocalRuntime):
                     break
                 except asyncio.CancelledError as error:
                     if pending.cancelled():
+                        # shield() can discard an inner cancellation's message.
+                        if isinstance(self._close_error, asyncio.CancelledError):
+                            raise self._close_error
                         raise
                     if cancellation is None:
                         cancellation = error
             if cancellation is not None:
                 raise cancellation
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Release the context's reference and await owned cleanup."""
+        self._is_context_managed = False
+        await self.aclose()

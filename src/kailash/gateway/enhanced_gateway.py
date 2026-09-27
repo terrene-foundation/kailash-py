@@ -342,14 +342,9 @@ class EnhancedDurableAPIGateway(DurableAPIGateway):
             self._cleanup_tasks.clear()
             self._active_requests.clear()
             try:
-                await self._runtime.cleanup()
+                await self._runtime.aclose()
             finally:
-                try:
-                    # cleanup() drains async resources; close() releases the
-                    # runtime reference and parent loop/signal resources.
-                    self._runtime.close()
-                finally:
-                    await super().close(shutdown_timeout=shutdown_timeout)
+                await super().close(shutdown_timeout=shutdown_timeout)
 
     async def health_check(self) -> Dict[str, Any]:
         """Perform health check on gateway and resources."""
