@@ -130,6 +130,10 @@ all = [
     "kailash-dataflow[postgres-sync,mysql,sqlite,mongo,redis,api,security,monitoring,templates,fabric-all]",
 ]
 dev = [
+    # Tier-1 pool diagnostics exercise real driver parsing before any network I/O.
+    # Keep the clean root-minimal + dataflow[dev] CI lane self-contained.
+    "psycopg2-binary>=2.9",
+    "PyMySQL>=1.0",
     "pytest>=7.0.0",
     # Starlette 1.7+ TestClient prefers httpx2; its httpx fallback is deprecated.
     "httpx2>=2.13.1",
