@@ -42,17 +42,104 @@ Version:
 from __future__ import annotations
 
 import logging
+import math
 import threading
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from kailash.runtime.trust.context import RuntimeTrustContext, TrustVerificationMode
+from kailash.utils.secure_logging import safe_exception_frames, safe_log_field
 
 if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_trust_log_field(value: object) -> str:
+    """Compatibility wrapper for shared total metadata redaction and bounds."""
+    return safe_log_field(value)
+
+
+class _UncacheableContext(Exception):
+    """Context has no safe immutable builtin representation."""
+
+
+def _prepare_cache_context(
+    trust_context: Optional[RuntimeTrustContext],
+) -> Tuple[Any, Optional[Tuple[Any, ...]], Optional[Exception]]:
+    """Snapshot supported context values once; never stringify opaque objects.
+
+    Unsupported, cyclic, or excessively large/deep structures still reach the
+    backend unchanged, but cannot reuse/store a cached decision. Typed tokens
+    preserve every supported value and mapping order, including trace identity.
+    """
+    if trust_context is None:
+        return None, ("none",), None
+    try:
+        raw = trust_context.to_dict()
+    except Exception as error:
+        return None, None, error
+    active = set()
+    remaining = 10000
+
+    def freeze(value: Any, depth: int = 0) -> Tuple[Any, Tuple[Any, ...]]:
+        nonlocal remaining
+        remaining -= 1
+        if remaining < 0 or depth > 32:
+            raise _UncacheableContext
+        kind = type(value)
+        if value is None:
+            return value, ("none",)
+        if any(kind is builtin for builtin in (str, bool, int, bytes)):
+            return value, (kind.__name__, value)
+        if kind is float:
+            if not math.isfinite(value):
+                raise _UncacheableContext
+            return value, ("float", value.hex())
+        if (
+            not any(kind is builtin for builtin in (dict, list, tuple))
+            or id(value) in active
+        ):
+            raise _UncacheableContext
+        active.add(id(value))
+        try:
+            if kind is dict:
+                items = []
+                tokens = []
+                for key, item in value.items():
+                    if type(key) is not str:  # noqa: E721 - exact builtin keys only
+                        raise _UncacheableContext
+                    copied, token = freeze(item, depth + 1)
+                    items.append((key, copied))
+                    tokens.append((key, token))
+                return dict(items), ("dict", tuple(tokens))
+            pairs = [freeze(item, depth + 1) for item in value]
+            copied = [pair[0] for pair in pairs]
+            return (copied if kind is list else tuple(copied)), (
+                kind.__name__,
+                tuple(pair[1] for pair in pairs),
+            )
+        finally:
+            active.remove(id(value))
+
+    try:
+        copied, identity = freeze(raw)
+    except (_UncacheableContext, RuntimeError):
+        return raw, None, None
+    return copied, identity, None
+
+
+def _contextual_cache_key(
+    identity: Tuple[str, ...], context_identity: Optional[Tuple[Any, ...]]
+) -> Optional[Tuple[Any, ...]]:
+    if context_identity is None:
+        return None
+    if context_identity == ("none",):
+        return identity
+    # Agent remains last and node type remains at index 2 for exact invalidation.
+    return (*identity[:-1], ("context", context_identity), identity[-1])
 
 
 @dataclass
@@ -81,6 +168,10 @@ class VerificationResult:
     constraints: Dict[str, Any] = field(default_factory=dict)
     capability_used: Optional[str] = None
     trace_id: Optional[str] = None
+    # Backend exceptions retain their public reason, but logs use frame-only metadata.
+    _log_reason: Optional[str] = field(
+        default=None, init=False, repr=False, compare=False
+    )
 
     def __bool__(self) -> bool:
         """Allow using result directly in boolean context.
@@ -103,6 +194,14 @@ class VerificationResult:
             "capability_used": self.capability_used,
             "trace_id": self.trace_id,
         }
+
+
+def _safe_trust_log_reason(result: VerificationResult) -> str:
+    """Use diagnostic provenance without rewriting a caller-visible decision."""
+    reason = result.reason
+    if isinstance(result, VerificationResult) and result._log_reason is not None:
+        reason = result._log_reason
+    return _safe_trust_log_field(reason)
 
 
 @dataclass
@@ -183,9 +282,10 @@ class TrustVerifier:
         """
         self._backend = kaizen_backend
         self._config = config or TrustVerifierConfig()
-        self._cache: Dict[str, Tuple[VerificationResult, float]] = {}
+        self._cache: Dict[Tuple[Any, ...], Tuple[VerificationResult, float]] = {}
         # ROUND6-001: Thread-safe access to _cache dict
         self._cache_lock = threading.Lock()
+        self._cache_generation = 0
         self._mode = TrustVerificationMode(self._config.mode)
 
         # CARE-042: Mode-aware fallback default
@@ -219,6 +319,7 @@ class TrustVerifier:
         """Clear all cached verification results."""
         # ROUND6-001: Thread-safe cache clear
         with self._cache_lock:
+            self._cache_generation += 1
             self._cache.clear()
 
     def invalidate_agent(self, agent_id: str) -> int:
@@ -235,17 +336,16 @@ class TrustVerifier:
         """
         # ROUND6-001: Thread-safe cache invalidation
         with self._cache_lock:
-            # CARE-058: Use null byte separator pattern matching
-            keys_to_remove = [
-                key for key in self._cache if key.endswith(f"\x00{agent_id}")
-            ]
+            self._cache_generation += 1
+            # Compare the complete raw identity field, not a delimited substring.
+            keys_to_remove = [key for key in self._cache if key[-1] == agent_id]
             for key in keys_to_remove:
                 del self._cache[key]
         if keys_to_remove:
             logger.info(
                 "Invalidated %d cache entries for revoked agent %s",
                 len(keys_to_remove),
-                agent_id,
+                _safe_trust_log_field(agent_id),
             )
         return len(keys_to_remove)
 
@@ -260,17 +360,23 @@ class TrustVerifier:
         """
         # ROUND6-001: Thread-safe cache invalidation
         with self._cache_lock:
-            # CARE-058: Use null byte separator pattern matching
+            self._cache_generation += 1
+            # Compare the complete raw identity field, not a delimited substring.
             keys_to_remove = [
-                key
-                for key in self._cache
-                if key.startswith("node\x00") and f"\x00{node_type}\x00" in key
+                key for key in self._cache if key[0] == "node" and key[2] == node_type
             ]
             for key in keys_to_remove:
                 del self._cache[key]
         return len(keys_to_remove)
 
-    def _get_cached(self, cache_key: str) -> Optional[VerificationResult]:
+    def _get_cache_generation(self) -> int:
+        """Capture the invalidation generation before starting verification."""
+        with self._cache_lock:
+            return self._cache_generation
+
+    def _get_cached(
+        self, cache_key: Optional[Tuple[Any, ...]]
+    ) -> Optional[VerificationResult]:
         """Get a cached verification result.
 
         Args:
@@ -279,7 +385,7 @@ class TrustVerifier:
         Returns:
             Cached VerificationResult if found and not expired, None otherwise
         """
-        if not self._config.cache_enabled:
+        if cache_key is None or not self._config.cache_enabled:
             return None
 
         # ROUND6-001: Thread-safe cache read and expiry cleanup
@@ -295,17 +401,25 @@ class TrustVerifier:
 
         return result
 
-    def _set_cache(self, cache_key: str, result: VerificationResult) -> None:
+    def _set_cache(
+        self,
+        cache_key: Optional[Tuple[Any, ...]],
+        result: VerificationResult,
+        *,
+        generation: Optional[int] = None,
+    ) -> None:
         """Cache a verification result.
 
         Args:
             cache_key: The cache key to store under
             result: The VerificationResult to cache
         """
-        if self._config.cache_enabled:
+        if cache_key is not None and self._config.cache_enabled:
             expiry = time.time() + self._config.cache_ttl_seconds
             # ROUND6-001: Thread-safe cache write
             with self._cache_lock:
+                if generation is not None and generation != self._cache_generation:
+                    return
                 self._cache[cache_key] = (result, expiry)
 
     def _handle_denial(
@@ -328,22 +442,24 @@ class TrustVerifier:
         if self._config.audit_denials:
             logger.warning(
                 "Trust verification DENIED: %s reason=%s",
-                context,
-                result.reason,
+                _safe_trust_log_field(context),
+                _safe_trust_log_reason(result),
             )
 
         if self._mode == TrustVerificationMode.PERMISSIVE:
             logger.warning(
                 "PERMISSIVE mode: allowing denied operation %s",
-                context,
+                _safe_trust_log_field(context),
             )
-            return VerificationResult(
+            allowed_result = VerificationResult(
                 allowed=True,
                 reason=f"PERMISSIVE: {result.reason}",
                 constraints=result.constraints,
                 capability_used=result.capability_used,
                 trace_id=result.trace_id,
             )
+            allowed_result._log_reason = result._log_reason
+            return allowed_result
 
         return result
 
@@ -366,17 +482,29 @@ class TrustVerifier:
         if not self.is_enabled:
             return VerificationResult(allowed=True, reason="Verification disabled")
 
-        # CARE-058: Use null byte separator to prevent cache key collision attacks.
-        # Colon separator is vulnerable when IDs contain colons (e.g., "a:b" + "c" vs "a" + "b:c").
-        # Null byte cannot appear in legitimate string IDs, making it collision-resistant.
-        cache_key = f"wf\x00{workflow_id}\x00{agent_id}"
+        # Preserve identity boundaries even when caller fields contain delimiters.
+        context_data, context_identity, context_error = _prepare_cache_context(
+            trust_context
+        )
+        trace_id = trust_context.trace_id if trust_context else None
+        cache_key = _contextual_cache_key(
+            ("wf", workflow_id, agent_id), context_identity
+        )
+        generation = self._get_cache_generation()
         cached = self._get_cached(cache_key)
         if cached is not None:
+            if not cached.allowed:
+                return self._handle_denial(
+                    cached,
+                    f"workflow={_safe_trust_log_field(workflow_id)} agent={_safe_trust_log_field(agent_id)}",
+                )
             return cached
 
         # Call Kaizen backend if available
         if self._backend is not None:
             try:
+                if context_error is not None:
+                    raise context_error
                 # Try to import VerificationLevel from Kaizen
                 try:
                     from kailash.trust.chain import VerificationLevel
@@ -389,7 +517,7 @@ class TrustVerifier:
                     agent_id=agent_id,
                     action=f"execute_workflow:{workflow_id}",
                     level=level,
-                    context=trust_context.to_dict() if trust_context else None,
+                    context=context_data,
                 )
                 result = VerificationResult(
                     allowed=kaizen_result.valid,
@@ -400,41 +528,44 @@ class TrustVerifier:
                         else {}
                     ),
                     capability_used=kaizen_result.capability_used,
-                    trace_id=trust_context.trace_id if trust_context else None,
+                    trace_id=trace_id,
                 )
             except Exception as e:
                 if self.is_enforcing:
                     logger.critical(
                         "SECURITY: Verification backend unavailable for workflow %s "
                         "in ENFORCING mode (fallback_allow=%s): %s",
-                        workflow_id,
-                        self._effective_fallback_allow,
-                        e,
+                        _safe_trust_log_field(workflow_id),
+                        _safe_trust_log_field(self._effective_fallback_allow),
+                        safe_exception_frames(e),
                     )
                 else:
                     logger.error(
-                        "Verification failed for workflow %s: %s", workflow_id, e
+                        "Verification failed for workflow %s: %s",
+                        _safe_trust_log_field(workflow_id),
+                        safe_exception_frames(e),
                     )
                 result = VerificationResult(
                     allowed=self._effective_fallback_allow,
                     reason=f"Verification unavailable: {e}",
-                    trace_id=trust_context.trace_id if trust_context else None,
+                    trace_id=trace_id,
                 )
+                result._log_reason = safe_exception_frames(e)
         else:
             # No backend - use fallback
             result = VerificationResult(
                 allowed=self._effective_fallback_allow,
                 reason="No verification backend configured",
-                trace_id=trust_context.trace_id if trust_context else None,
+                trace_id=trace_id,
             )
 
-        self._set_cache(cache_key, result)
+        self._set_cache(cache_key, result, generation=generation)
 
         # Handle denial if not allowed
         if not result.allowed:
             result = self._handle_denial(
                 result,
-                f"workflow={workflow_id} agent={agent_id}",
+                f"workflow={_safe_trust_log_field(workflow_id)} agent={_safe_trust_log_field(agent_id)}",
             )
 
         return result
@@ -463,18 +594,30 @@ class TrustVerifier:
         if not self.is_enabled:
             return VerificationResult(allowed=True, reason="Verification disabled")
 
-        # CARE-058: Use null byte separator to prevent cache key collision attacks.
-        # Colon separator is vulnerable when IDs contain colons.
-        # Null byte cannot appear in legitimate string IDs, making it collision-resistant.
-        cache_key = f"node\x00{node_id}\x00{node_type}\x00{agent_id}"
+        # Preserve identity boundaries even when caller fields contain delimiters.
+        context_data, context_identity, context_error = _prepare_cache_context(
+            trust_context
+        )
+        trace_id = trust_context.trace_id if trust_context else None
+        cache_key = _contextual_cache_key(
+            ("node", node_id, node_type, agent_id), context_identity
+        )
+        generation = self._get_cache_generation()
         cached = self._get_cached(cache_key)
         if cached is not None:
+            if not cached.allowed:
+                return self._handle_denial(
+                    cached,
+                    f"node={_safe_trust_log_field(node_id)} type={_safe_trust_log_field(node_type)} agent={_safe_trust_log_field(agent_id)}",
+                )
             return cached
 
         is_high_risk = node_type in self._config.high_risk_nodes
 
         if self._backend is not None:
             try:
+                if context_error is not None:
+                    raise context_error
                 # Try to import VerificationLevel from Kaizen
                 try:
                     from kailash.trust.chain import VerificationLevel
@@ -491,7 +634,7 @@ class TrustVerifier:
                     agent_id=agent_id,
                     action=f"execute_node:{node_type}:{node_id}",
                     level=level,
-                    context=trust_context.to_dict() if trust_context else None,
+                    context=context_data,
                 )
                 result = VerificationResult(
                     allowed=kaizen_result.valid,
@@ -502,38 +645,43 @@ class TrustVerifier:
                         else {}
                     ),
                     capability_used=kaizen_result.capability_used,
-                    trace_id=trust_context.trace_id if trust_context else None,
+                    trace_id=trace_id,
                 )
             except Exception as e:
                 if self.is_enforcing:
                     logger.critical(
                         "SECURITY: Verification backend unavailable for node %s "
                         "in ENFORCING mode (fallback_allow=%s): %s",
-                        node_id,
-                        self._effective_fallback_allow,
-                        e,
+                        _safe_trust_log_field(node_id),
+                        _safe_trust_log_field(self._effective_fallback_allow),
+                        safe_exception_frames(e),
                     )
                 else:
-                    logger.error("Verification failed for node %s: %s", node_id, e)
+                    logger.error(
+                        "Verification failed for node %s: %s",
+                        _safe_trust_log_field(node_id),
+                        safe_exception_frames(e),
+                    )
                 result = VerificationResult(
                     allowed=self._effective_fallback_allow,
                     reason=f"Verification unavailable: {e}",
-                    trace_id=trust_context.trace_id if trust_context else None,
+                    trace_id=trace_id,
                 )
+                result._log_reason = safe_exception_frames(e)
         else:
             result = VerificationResult(
                 allowed=self._effective_fallback_allow,
                 reason="No verification backend configured",
-                trace_id=trust_context.trace_id if trust_context else None,
+                trace_id=trace_id,
             )
 
-        self._set_cache(cache_key, result)
+        self._set_cache(cache_key, result, generation=generation)
 
         # Handle denial if not allowed
         if not result.allowed:
             result = self._handle_denial(
                 result,
-                f"node={node_id} type={node_type} agent={agent_id}",
+                f"node={_safe_trust_log_field(node_id)} type={_safe_trust_log_field(node_type)} agent={_safe_trust_log_field(agent_id)}",
             )
 
         return result
@@ -559,21 +707,33 @@ class TrustVerifier:
         if not self.is_enabled:
             return VerificationResult(allowed=True, reason="Verification disabled")
 
-        # CARE-058: Use null byte separator to prevent cache key collision attacks.
-        # Colon separator is vulnerable when IDs contain colons.
-        # Null byte cannot appear in legitimate string IDs, making it collision-resistant.
-        cache_key = f"res\x00{resource}\x00{action}\x00{agent_id}"
+        # Preserve identity boundaries even when caller fields contain delimiters.
+        context_data, context_identity, context_error = _prepare_cache_context(
+            trust_context
+        )
+        trace_id = trust_context.trace_id if trust_context else None
+        cache_key = _contextual_cache_key(
+            ("res", resource, action, agent_id), context_identity
+        )
+        generation = self._get_cache_generation()
         cached = self._get_cached(cache_key)
         if cached is not None:
+            if not cached.allowed:
+                return self._handle_denial(
+                    cached,
+                    f"resource={_safe_trust_log_field(resource)} action={_safe_trust_log_field(action)} agent={_safe_trust_log_field(agent_id)}",
+                )
             return cached
 
         if self._backend is not None:
             try:
+                if context_error is not None:
+                    raise context_error
                 kaizen_result = await self._backend.verify(
                     agent_id=agent_id,
                     action=action,
                     resource=resource,
-                    context=trust_context.to_dict() if trust_context else None,
+                    context=context_data,
                 )
                 result = VerificationResult(
                     allowed=kaizen_result.valid,
@@ -584,38 +744,43 @@ class TrustVerifier:
                         else {}
                     ),
                     capability_used=kaizen_result.capability_used,
-                    trace_id=trust_context.trace_id if trust_context else None,
+                    trace_id=trace_id,
                 )
             except Exception as e:
                 if self.is_enforcing:
                     logger.critical(
                         "SECURITY: Verification backend unavailable for resource %s "
                         "in ENFORCING mode (fallback_allow=%s): %s",
-                        resource,
-                        self._effective_fallback_allow,
-                        e,
+                        _safe_trust_log_field(resource),
+                        _safe_trust_log_field(self._effective_fallback_allow),
+                        safe_exception_frames(e),
                     )
                 else:
-                    logger.error("Verification failed for resource %s: %s", resource, e)
+                    logger.error(
+                        "Verification failed for resource %s: %s",
+                        _safe_trust_log_field(resource),
+                        safe_exception_frames(e),
+                    )
                 result = VerificationResult(
                     allowed=self._effective_fallback_allow,
                     reason=f"Verification unavailable: {e}",
-                    trace_id=trust_context.trace_id if trust_context else None,
+                    trace_id=trace_id,
                 )
+                result._log_reason = safe_exception_frames(e)
         else:
             result = VerificationResult(
                 allowed=self._effective_fallback_allow,
                 reason="No verification backend configured",
-                trace_id=trust_context.trace_id if trust_context else None,
+                trace_id=trace_id,
             )
 
-        self._set_cache(cache_key, result)
+        self._set_cache(cache_key, result, generation=generation)
 
         # Handle denial if not allowed
         if not result.allowed:
             result = self._handle_denial(
                 result,
-                f"resource={resource} action={action} agent={agent_id}",
+                f"resource={_safe_trust_log_field(resource)} action={_safe_trust_log_field(action)} agent={_safe_trust_log_field(agent_id)}",
             )
 
         return result
@@ -683,13 +848,23 @@ class MockTrustVerifier(TrustVerifier):
         if not self.is_enabled:
             return VerificationResult(allowed=True, reason="Verification disabled")
 
-        # CARE-058: Use null byte separator to prevent cache key collision attacks.
-        cache_key = f"wf\x00{workflow_id}\x00{agent_id}"
+        # Preserve complete raw identity fields without delimiter ambiguity.
+        context_data, context_identity, context_error = _prepare_cache_context(
+            trust_context
+        )
+        trace_id = trust_context.trace_id if trust_context else None
+        cache_key = _contextual_cache_key(
+            ("wf", workflow_id, agent_id), context_identity
+        )
+        generation = self._get_cache_generation()
         cached = self._get_cached(cache_key)
         if cached is not None:
+            if not cached.allowed:
+                return self._handle_denial(
+                    cached,
+                    f"workflow={_safe_trust_log_field(workflow_id)} agent={_safe_trust_log_field(agent_id)}",
+                )
             return cached
-
-        trace_id = trust_context.trace_id if trust_context else None
 
         if agent_id in self._denied_agents:
             allowed = False
@@ -700,13 +875,12 @@ class MockTrustVerifier(TrustVerifier):
 
         result = VerificationResult(allowed=allowed, reason=reason, trace_id=trace_id)
 
-        self._set_cache(cache_key, result)
+        self._set_cache(cache_key, result, generation=generation)
 
-        if not result.allowed and self._mode == TrustVerificationMode.PERMISSIVE:
-            result = VerificationResult(
-                allowed=True,
-                reason=f"PERMISSIVE: {result.reason}",
-                trace_id=trace_id,
+        if not result.allowed:
+            result = self._handle_denial(
+                result,
+                f"workflow={_safe_trust_log_field(workflow_id)} agent={_safe_trust_log_field(agent_id)}",
             )
 
         return result
@@ -732,13 +906,23 @@ class MockTrustVerifier(TrustVerifier):
         if not self.is_enabled:
             return VerificationResult(allowed=True, reason="Verification disabled")
 
-        # CARE-058: Use null byte separator to prevent cache key collision attacks.
-        cache_key = f"node\x00{node_id}\x00{node_type}\x00{agent_id}"
+        # Preserve complete raw identity fields without delimiter ambiguity.
+        context_data, context_identity, context_error = _prepare_cache_context(
+            trust_context
+        )
+        trace_id = trust_context.trace_id if trust_context else None
+        cache_key = _contextual_cache_key(
+            ("node", node_id, node_type, agent_id), context_identity
+        )
+        generation = self._get_cache_generation()
         cached = self._get_cached(cache_key)
         if cached is not None:
+            if not cached.allowed:
+                return self._handle_denial(
+                    cached,
+                    f"node={_safe_trust_log_field(node_id)} type={_safe_trust_log_field(node_type)} agent={_safe_trust_log_field(agent_id)}",
+                )
             return cached
-
-        trace_id = trust_context.trace_id if trust_context else None
 
         if agent_id in self._denied_agents:
             allowed = False
@@ -752,13 +936,12 @@ class MockTrustVerifier(TrustVerifier):
 
         result = VerificationResult(allowed=allowed, reason=reason, trace_id=trace_id)
 
-        self._set_cache(cache_key, result)
+        self._set_cache(cache_key, result, generation=generation)
 
-        if not result.allowed and self._mode == TrustVerificationMode.PERMISSIVE:
-            result = VerificationResult(
-                allowed=True,
-                reason=f"PERMISSIVE: {result.reason}",
-                trace_id=trace_id,
+        if not result.allowed:
+            result = self._handle_denial(
+                result,
+                f"node={_safe_trust_log_field(node_id)} type={_safe_trust_log_field(node_type)} agent={_safe_trust_log_field(agent_id)}",
             )
 
         return result
@@ -784,13 +967,23 @@ class MockTrustVerifier(TrustVerifier):
         if not self.is_enabled:
             return VerificationResult(allowed=True, reason="Verification disabled")
 
-        # CARE-058: Use null byte separator to prevent cache key collision attacks.
-        cache_key = f"res\x00{resource}\x00{action}\x00{agent_id}"
+        # Preserve complete raw identity fields without delimiter ambiguity.
+        context_data, context_identity, context_error = _prepare_cache_context(
+            trust_context
+        )
+        trace_id = trust_context.trace_id if trust_context else None
+        cache_key = _contextual_cache_key(
+            ("res", resource, action, agent_id), context_identity
+        )
+        generation = self._get_cache_generation()
         cached = self._get_cached(cache_key)
         if cached is not None:
+            if not cached.allowed:
+                return self._handle_denial(
+                    cached,
+                    f"resource={_safe_trust_log_field(resource)} action={_safe_trust_log_field(action)} agent={_safe_trust_log_field(agent_id)}",
+                )
             return cached
-
-        trace_id = trust_context.trace_id if trust_context else None
 
         if agent_id in self._denied_agents:
             allowed = False
@@ -801,13 +994,12 @@ class MockTrustVerifier(TrustVerifier):
 
         result = VerificationResult(allowed=allowed, reason=reason, trace_id=trace_id)
 
-        self._set_cache(cache_key, result)
+        self._set_cache(cache_key, result, generation=generation)
 
-        if not result.allowed and self._mode == TrustVerificationMode.PERMISSIVE:
-            result = VerificationResult(
-                allowed=True,
-                reason=f"PERMISSIVE: {result.reason}",
-                trace_id=trace_id,
+        if not result.allowed:
+            result = self._handle_denial(
+                result,
+                f"resource={_safe_trust_log_field(resource)} action={_safe_trust_log_field(action)} agent={_safe_trust_log_field(agent_id)}",
             )
 
         return result

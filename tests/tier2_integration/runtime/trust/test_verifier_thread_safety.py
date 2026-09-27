@@ -87,7 +87,7 @@ class TestConcurrentCacheWrites:
             """Write multiple entries from a single thread."""
             try:
                 for i in range(entries_per_thread):
-                    key = f"thread_{thread_id}_key_{i}"
+                    key = (f"thread_{thread_id}_key_{i}",)
                     result = VerificationResult(
                         allowed=True,
                         reason=f"Thread {thread_id} entry {i}",
@@ -124,12 +124,12 @@ class TestConcurrentCacheWrites:
 
         num_threads = 5
         entries_per_thread = 50
-        expected_keys: Set[str] = set()
+        expected_keys: Set[tuple[str, ...]] = set()
 
         def write_entries(thread_id: int) -> None:
             """Write entries and track expected keys."""
             for i in range(entries_per_thread):
-                key = f"t{thread_id}_e{i}"
+                key = (f"t{thread_id}_e{i}",)
                 expected_keys.add(key)
                 result = VerificationResult(allowed=True)
                 verifier._set_cache(key, result)
@@ -137,7 +137,7 @@ class TestConcurrentCacheWrites:
         # Pre-calculate expected keys to avoid race in set operations
         for thread_id in range(num_threads):
             for i in range(entries_per_thread):
-                expected_keys.add(f"t{thread_id}_e{i}")
+                expected_keys.add((f"t{thread_id}_e{i}",))
 
         # Run concurrent writes
         with ThreadPoolExecutor(max_workers=num_threads) as executor:
@@ -166,7 +166,7 @@ class TestConcurrentReadsAndWrites:
 
         # Pre-populate some cache entries
         for i in range(50):
-            key = f"initial_key_{i}"
+            key = (f"initial_key_{i}",)
             result = VerificationResult(allowed=True, reason=f"Initial {i}")
             verifier._set_cache(key, result)
 
@@ -178,10 +178,10 @@ class TestConcurrentReadsAndWrites:
             try:
                 while not stop_flag.is_set():
                     for i in range(50):
-                        key = f"initial_key_{i}"
+                        key = (f"initial_key_{i}",)
                         verifier._get_cached(key)
                         # Also try to read keys being written
-                        verifier._get_cached(f"new_key_{i}")
+                        verifier._get_cached((f"new_key_{i}",))
             except Exception as e:
                 errors.append(e)
 
@@ -190,7 +190,7 @@ class TestConcurrentReadsAndWrites:
             try:
                 count = 0
                 while not stop_flag.is_set() and count < 200:
-                    key = f"new_key_{count % 100}"
+                    key = (f"new_key_{count % 100}",)
                     result = VerificationResult(allowed=True, reason=f"New {count}")
                     verifier._set_cache(key, result)
                     count += 1
@@ -221,7 +221,7 @@ class TestConcurrentReadsAndWrites:
         config = TrustVerifierConfig(mode="enforcing", cache_enabled=True)
         verifier = TrustVerifier(config=config)
 
-        key = "shared_key"
+        key = ("shared_key",)
         results_seen: List[VerificationResult] = []
         errors: List[Exception] = []
         stop_flag = threading.Event()
@@ -294,8 +294,8 @@ class TestConcurrentInvalidateAgent:
             try:
                 count = 0
                 while not stop_flag.is_set() and count < 500:
-                    # Use null byte separator as in the real implementation
-                    key = f"wf\x00workflow_{count}\x00{agent_id}"
+                    # Use the complete field tuple as in the real implementation
+                    key = ("wf", f"workflow_{count}", agent_id)
                     result = VerificationResult(allowed=True, reason=f"Entry {count}")
                     verifier._set_cache(key, result)
                     count += 1
@@ -337,7 +337,7 @@ class TestConcurrentInvalidateAgent:
 
         # Verify other agent's entries still exist
         other_agent_entries = [
-            k for k in verifier._cache.keys() if k.endswith(f"\x00{other_agent}")
+            k for k in verifier._cache.keys() if k[-1] == other_agent
         ]
         assert (
             len(other_agent_entries) > 0
@@ -353,13 +353,13 @@ class TestConcurrentInvalidateAgent:
 
         # Add entries for the agent
         for i in range(num_entries):
-            key = f"wf\x00workflow_{i}\x00{agent_id}"
+            key = ("wf", f"workflow_{i}", agent_id)
             result = VerificationResult(allowed=True)
             verifier._set_cache(key, result)
 
         # Add entries for other agent
         for i in range(30):
-            key = f"wf\x00workflow_{i}\x00other-agent"
+            key = ("wf", f"workflow_{i}", "other-agent")
             result = VerificationResult(allowed=True)
             verifier._set_cache(key, result)
 
@@ -371,9 +371,7 @@ class TestConcurrentInvalidateAgent:
         ), f"Expected {num_entries} entries removed, got {removed}"
 
         # Verify entries are gone
-        agent_entries = [
-            k for k in verifier._cache.keys() if k.endswith(f"\x00{agent_id}")
-        ]
+        agent_entries = [k for k in verifier._cache.keys() if k[-1] == agent_id]
         assert len(agent_entries) == 0, "Agent entries should be removed"
 
 
@@ -393,7 +391,7 @@ class TestConcurrentClearCache:
             try:
                 count = 0
                 while not stop_flag.is_set() and count < 1000:
-                    key = f"key_{count}"
+                    key = (f"key_{count}",)
                     result = VerificationResult(allowed=True, reason=f"Entry {count}")
                     verifier._set_cache(key, result)
                     count += 1
@@ -418,7 +416,7 @@ class TestConcurrentClearCache:
                     if stop_flag.is_set():
                         break
                     for i in range(20):
-                        verifier._get_cached(f"key_{i}")
+                        verifier._get_cached((f"key_{i}",))
             except Exception as e:
                 errors.append(e)
 
@@ -450,7 +448,7 @@ class TestConcurrentClearCache:
 
         # Add many entries
         for i in range(100):
-            key = f"key_{i}"
+            key = (f"key_{i}",)
             result = VerificationResult(allowed=True)
             verifier._set_cache(key, result)
 
@@ -480,8 +478,8 @@ class TestConcurrentInvalidateNode:
             try:
                 count = 0
                 while not stop_flag.is_set() and count < 300:
-                    # node cache key format: node\x00{node_id}\x00{node_type}\x00{agent_id}
-                    key = f"node\x00node_{count}\x00{node_type}\x00agent-1"
+                    # Node cache identity is (domain, node_id, node_type, agent_id).
+                    key = ("node", f"node_{count}", node_type, "agent-1")
                     result = VerificationResult(allowed=True)
                     verifier._set_cache(key, result)
                     count += 1
@@ -520,7 +518,7 @@ class TestConcurrentInvalidateNode:
 
         # Other node entries should still exist
         other_node_entries = [
-            k for k in verifier._cache.keys() if f"\x00{other_node}\x00" in k
+            k for k in verifier._cache.keys() if k[0] == "node" and k[2] == other_node
         ]
         assert (
             len(other_node_entries) > 0
@@ -536,13 +534,13 @@ class TestConcurrentInvalidateNode:
 
         # Add entries for the node type
         for i in range(num_entries):
-            key = f"node\x00node_{i}\x00{node_type}\x00agent-1"
+            key = ("node", f"node_{i}", node_type, "agent-1")
             result = VerificationResult(allowed=True)
             verifier._set_cache(key, result)
 
         # Add entries for other node type
         for i in range(15):
-            key = f"node\x00node_{i}\x00OtherNode\x00agent-1"
+            key = ("node", f"node_{i}", "OtherNode", "agent-1")
             result = VerificationResult(allowed=True)
             verifier._set_cache(key, result)
 
@@ -573,17 +571,17 @@ class TestHighConcurrencyStress:
                     op = i % 5
                     if op == 0:
                         # Write
-                        key = f"t{thread_id}_k{i}"
+                        key = (f"t{thread_id}_k{i}",)
                         result = VerificationResult(allowed=True)
                         verifier._set_cache(key, result)
                     elif op == 1:
                         # Read own key
-                        key = f"t{thread_id}_k{max(0, i - 5)}"
+                        key = (f"t{thread_id}_k{max(0, i - 5)}",)
                         verifier._get_cached(key)
                     elif op == 2:
                         # Read other thread's key
                         other_thread = (thread_id + 1) % num_threads
-                        key = f"t{other_thread}_k{i}"
+                        key = (f"t{other_thread}_k{i}",)
                         verifier._get_cached(key)
                     elif op == 3:
                         # Invalidate agent (low frequency)
