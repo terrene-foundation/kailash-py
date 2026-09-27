@@ -557,6 +557,8 @@ db = DataFlow(
 | `"permissive"` | Trust checks run but failures are logged, not blocked |
 | `"enforcing"`  | Trust checks run and failures block the operation     |
 
+Automatic trust diagnostics sanitize model, operation, agent, and denial metadata; backend exception text remains available through public errors but automatic records use safe frame metadata, including when Core verification results are cached. Table-access helpers honor the same mode contract as Express: disabled bypasses verification, permissive allows a denied decision after logging, and enforcing raises `PermissionError`. Source: `packages/kailash-dataflow/src/dataflow/trust/query_wrapper.py:559-701`, `1103-1296`, `1363-1406`.
+
 ### 21.2 Trust Components
 
 - `TrustAwareQueryExecutor` (`db._trust_executor`): Checks read/write access, records audit events
