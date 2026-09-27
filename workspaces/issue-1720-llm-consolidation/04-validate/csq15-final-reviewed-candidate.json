@@ -1,0 +1,2022 @@
+{
+  "head": "a35604592eac70584f35acffd23d9ddc4ff615b3",
+  "status": "Source and fixture scoped reviews complete; DataFlow gate rerun pending after import-only fixture repair; specification-check advisory scope decision pending",
+  "receipts": {
+    "author": {
+      "ran": true,
+      "frozen_patch": "/tmp/csq15-sqlite-nested-owner-v3.patch",
+      "manifest": {
+        "head": "6af82971d84687dc670e233a35b2a5c6d8a13b40",
+        "files": [
+          {
+            "path": "src/kailash/nodes/data/async_sql.py",
+            "sha256": "3a9a724aa558bca87924bcd3faa82c15c946f5c6460837bfe42f9d285705a87b"
+          },
+          {
+            "path": "specs/dataflow-cache.md",
+            "sha256": "80ddee519098fa7d8cda3ce0ac36c68fabe69714585714413ecb2654a747c2aa"
+          },
+          {
+            "path": "tests/regression/test_sqlite_nested_transaction_ownership.py",
+            "sha256": "8241938e4af8e2fe2f17d7aeae5eaf63b056754c607b5d13e4eaa642d0ba0aa1"
+          },
+          {
+            "path": "packages/kailash-dataflow/tests/regression/test_sqlite_transaction_task_handoff.py",
+            "sha256": "c3b6e9b6b8de06ee271dbf5856e29b302fed30294a0f1a7b860013134dab5522"
+          }
+        ]
+      },
+      "invariants": [
+        "Same connection through all nested SAVEPOINT levels;file releasedonlyouterterminal, memoryretained",
+        "Nestedrollback preservesouterwrites;outerrollback discardsalllevels",
+        "Issuedhandle identity andLIFO validation atomically admits completion underlifecyclelock before consuming scope; cancelled/rejectedwaiters remainusable; actualdriverattempts stay single-shot",
+        "Implicitbegin separate-taskreject;explicit issuedhandle capability may execute AND complete across tasks",
+        "Actualcancellation anddrivercommitfailure unwindcounters/ownership;cleanup finishesdespite repeatedcancel",
+        "Disconnectclaims pinnedconnection andsharedmemory underlifecyclelock;unscopedmemoryoperations cannotautocommit activeouter"
+      ],
+      "results": [
+        {
+          "command": "pytest -q -Werror --timeout=30 tests/regression/test_sqlite_nested_transaction_ownership.py tests/regression/test_sqlite_address_core_consumers.py",
+          "round1": "86passed3.02s",
+          "round2": "86passed3.50s",
+          "logs": [
+            "/tmp/csq15-sqlite-owner-v3-r1.log",
+            "/tmp/csq15-sqlite-owner-v3-r2.log"
+          ]
+        },
+        {
+          "command": "DataFlow1070/1580+publichandoff selected,threePGtests deselected",
+          "result": "30passed11.83s,3PGdeselected",
+          "log": "/tmp/csq15-sqlite-owner-v3-existing.log"
+        },
+        {
+          "command": "ruff check source+two newtests",
+          "result": "All checks passed"
+        }
+      ],
+      "controls": [
+        {
+          "mutation": "fresh nestedfileconnection",
+          "hits": 1,
+          "result": "1failed",
+          "log": "/tmp/csq15-sqlite-owner-v2-pin.log"
+        },
+        {
+          "mutation": "omit nestedROLLBACKTO executingSELECT1instead",
+          "hits": 2,
+          "result": "2failed expectedouterrows differ",
+          "log": "/tmp/csq15-sqlite-owner-v2-rollback.log"
+        },
+        {
+          "mutation": "v1foreignterminalguard",
+          "hits": "realpublicCommitNode+RollbackNode",
+          "result": "2failed ownerguard;v2same2tests pass",
+          "log": "/tmp/csq15-sqlite-task-handoff-v1-control.log"
+        },
+        {
+          "mutation": "V2marks scope before waiting lifecyclelock",
+          "hits": 8,
+          "result": "8realSQLitecancel/rejectfailures",
+          "log": "/tmp/csq15-sqlite-admission-control.log"
+        }
+      ],
+      "absolute_callers": "/tmp/csq15-sqlite-caller-inventory.json",
+      "absolute_call_count": 68,
+      "removed_methods": [],
+      "old_assertions": "No existing test file changed;newtests supplement1070/1580/address assertions",
+      "adversarial_review_focus": [
+        "Tupleequal stale memoryhandle afternewtransaction:identitymustreject",
+        "InterruptednestedSAVEPOINT andoutercleanup while SQLiteworker executes",
+        "Differenttask implicitBEGIN versusexplicitcapabilityhandoff including AsyncSQLNode.cleanup wait_for",
+        "Concurrentdisconnect versusbegin andretainedmemoryoperations",
+        "Legacy bareconnection intentionally privileged;sourceowneridentity nottenant/authboundary",
+        "Rawdriverconnection escape hatch remains caller-owned;doesnotclaimto prevent directdrivercommit"
+      ],
+      "exclusions": [
+        "NoPostgreSQLorMySQLruntimebehaviorclaim;3PGintegrationtests deselected",
+        "No fullroot/DataFlow/Mac gateclaim;parentowns",
+        "V1terminalcreator-only contract superseded andnotfinal evidence",
+        "No edits outsideisolatedtree;no commit/push",
+        "V2correctness clean doesnotclose securityadmissionfinding;V3independentreviews required"
+      ],
+      "resolved_findings": [
+        "V1terminaltaskguard broke publicDataFlowcapabilityhandoff; removedguard,implicitbeginonlytaskowned",
+        "V2scopeconsumedbeforelockedadmission;fixed atomicvalidation+flags underlock;8real-driverregressions"
+      ]
+    },
+    "correctness": {
+      "ran": true,
+      "verdict": "CLEAN independent correctness on frozenv3; v2 superseded following security admission-race finding",
+      "base_head": "6af82971d84687dc670e233a35b2a5c6d8a13b40",
+      "manifest": {
+        "head": "6af82971d84687dc670e233a35b2a5c6d8a13b40",
+        "files": [
+          {
+            "path": "src/kailash/nodes/data/async_sql.py",
+            "sha256": "3a9a724aa558bca87924bcd3faa82c15c946f5c6460837bfe42f9d285705a87b"
+          },
+          {
+            "path": "specs/dataflow-cache.md",
+            "sha256": "80ddee519098fa7d8cda3ce0ac36c68fabe69714585714413ecb2654a747c2aa"
+          },
+          {
+            "path": "tests/regression/test_sqlite_nested_transaction_ownership.py",
+            "sha256": "8241938e4af8e2fe2f17d7aeae5eaf63b056754c607b5d13e4eaa642d0ba0aa1"
+          },
+          {
+            "path": "packages/kailash-dataflow/tests/regression/test_sqlite_transaction_task_handoff.py",
+            "sha256": "c3b6e9b6b8de06ee271dbf5856e29b302fed30294a0f1a7b860013134dab5522"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "selection": "newCore ownership/admission + SQLite address/producer",
+          "passed_each_round": 86,
+          "rounds": 2
+        },
+        {
+          "selection": "public DataFlow taskhandoff + original1070/1580",
+          "passed_each_round": 33,
+          "rounds": 2
+        }
+      ],
+      "warnings": 0,
+      "skips": 0,
+      "expected_diagnostics": "7root injected repeatedcancel/closefail;6DataFlow testmode+cleanup disclosures/original-exception/close-error assertions per round, exactnodeids in r2 JSON",
+      "independent_probe": "v2 identityprobe remained relevant source-match _check_transaction; v3 freshbasehook/admission tests above. Source/tests unchanged duringtwofinalrounds.",
+      "opposite": "weaken identity check to equality:1reached equalcloneaccept produces CLONE_REJECTED False False then AssertionError",
+      "evidence": [
+        "/tmp/csq15-sqlite-owner-review-v3-root-r1.log",
+        "/tmp/csq15-sqlite-owner-review-v3-root-r2.log",
+        "/tmp/csq15-sqlite-owner-review-v3-dataflow-r1.log",
+        "/tmp/csq15-sqlite-owner-review-v3-dataflow-r2.log",
+        "/tmp/csq15-v3-base.log",
+        "/tmp/csq15-v3-base-control.log",
+        "/tmp/csq15-v3-admission-control.log",
+        "/tmp/csq15-sqlite-owner-v3-absolute.json"
+      ],
+      "caller_review": "Core auto/manual wrappers,scope context and DataFlow public transaction-node handoff; v1 creator-onlyfinish rejected legitimate issuedcapability, fixedv2. Nodecleanup wait_for source reviewed; realnode cleanup diagnostic probes did not retain leak due subsequent ownedadapterdisconnect; no unsupported leakclaim banked. ProductionSQLite inherited methods inspected. Memory stream has no explicittransactionargument; unscopedrejection does not remove promised participation API.",
+      "excluded_runs": "Mixed root/DataFlow conftest import collisions failed beforeexecution; split perpackage processes finalruns. v1diagnostics not counted clean.; initialcustomprobe abstractstream omission/missingPGconfig failed beforefullmatrix, corrected final12case run.",
+      "open_findings": [],
+      "basehook_probe": {
+        "cases": 12,
+        "scope": "customCore DatabaseAdapter subclass inherits basehook withoutoverride; PostgreSQL/MySQL exact inheritedhook single-shot dispatch beforeattempt and driverfailure with instrumentedterminals; not livebackend coverage",
+        "control": "delayedflag mutation reaches1 and AssertionError beforeterminal attempt can complete"
+      },
+      "admission_control": "Premature scope flag underrealSQLite SAVEPOINTbarrier reaches8 and causes8expectedassertionfailures,file/memory,commit/rollback,rejection/cancelwaiter"
+    },
+    "security": {
+      "ran": true,
+      "verdict": "CLEAN two consecutive independent scoped rounds on frozenv3",
+      "source_manifest": {
+        "head": "6af82971d84687dc670e233a35b2a5c6d8a13b40",
+        "files": [
+          {
+            "path": "src/kailash/nodes/data/async_sql.py",
+            "sha256": "3a9a724aa558bca87924bcd3faa82c15c946f5c6460837bfe42f9d285705a87b"
+          },
+          {
+            "path": "specs/dataflow-cache.md",
+            "sha256": "80ddee519098fa7d8cda3ce0ac36c68fabe69714585714413ecb2654a747c2aa"
+          },
+          {
+            "path": "tests/regression/test_sqlite_nested_transaction_ownership.py",
+            "sha256": "8241938e4af8e2fe2f17d7aeae5eaf63b056754c607b5d13e4eaa642d0ba0aa1"
+          },
+          {
+            "path": "packages/kailash-dataflow/tests/regression/test_sqlite_transaction_task_handoff.py",
+            "sha256": "c3b6e9b6b8de06ee271dbf5856e29b302fed30294a0f1a7b860013134dab5522"
+          }
+        ]
+      },
+      "review_worktree": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-final3-security",
+      "worktree_head": "9ed7255935fd5ff026964c6960247a4869f2c22c",
+      "overlay_identity": "four frozenv3 files over isolated9ed source, remaining promotion source unchanged; primary commit pending parent integration",
+      "rounds": [
+        {
+          "round": 1,
+          "pytest": [
+            {
+              "log": "/tmp/csq15-security-sqlite-owner-review-root-v3-r1.log",
+              "sha256": "f7354a9986c1a8997ef4d6f22a8f894d43f34630e33b9266e5377f52147944a8",
+              "passed": 86,
+              "warnings": [],
+              "skips": [],
+              "expected_warn_plus": {
+                "Error cleaning up cancelled resource: RuntimeError": 6,
+                "async_sql.sqlite.close_failed: RuntimeError": 1
+              }
+            },
+            {
+              "log": "/tmp/csq15-security-sqlite-owner-review-dataflow-v3-r1.log",
+              "sha256": "511e186ec14df1b6d95c54db17f62e1c4c54e82f6bcaef52feba9833491c93ed",
+              "passed": 33,
+              "warnings": [],
+              "skips": [],
+              "expected_warn_plus": {
+                "DataFlow: Test mode enabled (auto-detected pytest environment)": 2,
+                "DataFlow: Aggressive pool cleanup enabled for test mode": 2,
+                "async_sql.transaction_context.cleanup_failed": 1,
+                "async_sql.sqlite.close_failed: RuntimeError": 1
+              }
+            }
+          ],
+          "independent_real_driver_probes": [
+            {
+              "log": "/tmp/csq15-security-sqlite-admission-cancel-v3-r1.log",
+              "sha256": "8012dc8dad34a6956e55a361e48cfc79192bac8843e0f72a406d79b7cd3dc19b"
+            },
+            {
+              "log": "/tmp/csq15-security-sqlite-admission-race-v3-r1.log",
+              "sha256": "3e32c6cec911f51f45d2754406533e25f15f8bc87013cf2862a2f6707a1fafb8"
+            },
+            {
+              "log": "/tmp/csq15-security-sqlite-probe-v3-r1.log",
+              "sha256": "896a2bd80f822f9fb9f923d6c38e823ae11d88e13b7297a6f128e45be8338536"
+            },
+            {
+              "log": "/tmp/csq15-security-sqlite-queue-v3-r1.log",
+              "sha256": "dd0221d3b7dfca47cdfed506c0aa0ca117c70ef957a2b74de2f35156665e0505"
+            }
+          ]
+        },
+        {
+          "round": 2,
+          "pytest": [
+            {
+              "log": "/tmp/csq15-security-sqlite-owner-review-root-v3-r2.log",
+              "sha256": "e5941e59afb287aa8ac9caff9ae2359a701e055043970926cf4f40ca1912ed11",
+              "passed": 86,
+              "warnings": [],
+              "skips": [],
+              "expected_warn_plus": {
+                "Error cleaning up cancelled resource: RuntimeError": 6,
+                "async_sql.sqlite.close_failed: RuntimeError": 1
+              }
+            },
+            {
+              "log": "/tmp/csq15-security-sqlite-owner-review-dataflow-v3-r2.log",
+              "sha256": "9848f3a46eb39bc2efaf39a68b9770d5177096bd3ed1d56651e4515a1da47f3b",
+              "passed": 33,
+              "warnings": [],
+              "skips": [],
+              "expected_warn_plus": {
+                "DataFlow: Test mode enabled (auto-detected pytest environment)": 2,
+                "DataFlow: Aggressive pool cleanup enabled for test mode": 2,
+                "async_sql.transaction_context.cleanup_failed": 1,
+                "async_sql.sqlite.close_failed: RuntimeError": 1
+              }
+            }
+          ],
+          "independent_real_driver_probes": [
+            {
+              "log": "/tmp/csq15-security-sqlite-admission-cancel-v3-r2.log",
+              "sha256": "8012dc8dad34a6956e55a361e48cfc79192bac8843e0f72a406d79b7cd3dc19b"
+            },
+            {
+              "log": "/tmp/csq15-security-sqlite-admission-race-v3-r2.log",
+              "sha256": "3e32c6cec911f51f45d2754406533e25f15f8bc87013cf2862a2f6707a1fafb8"
+            },
+            {
+              "log": "/tmp/csq15-security-sqlite-probe-v3-r2.log",
+              "sha256": "896a2bd80f822f9fb9f923d6c38e823ae11d88e13b7297a6f128e45be8338536"
+            },
+            {
+              "log": "/tmp/csq15-security-sqlite-queue-v3-r2.log",
+              "sha256": "dd0221d3b7dfca47cdfed506c0aa0ca117c70ef957a2b74de2f35156665e0505"
+            }
+          ]
+        }
+      ],
+      "passing_pytest_executions": 238,
+      "real_driver_cases_per_round": {
+        "capability_and_nested_matrix": 2,
+        "admission_cancel": 4,
+        "admission_rejection": 2,
+        "driver_queue_order": 4
+      },
+      "opposing_control": {
+        "log": "/tmp/csq15-security-sqlite-early-control.log",
+        "sha256": "58bf6c54b6ed242904250839a96ec8def063c0575804614e9a3a5567d276c6f6",
+        "reached": 8,
+        "failed": 8,
+        "mutation": "SQLite scope flags consumed before awaited locked completion; in-memory only"
+      },
+      "resolved_findings": [
+        {
+          "version": "v2",
+          "repro": "/tmp/csq15-security-sqlite-admission-cancel-v2.log",
+          "observation": "memory/file \u00d7commit/rollback lockwaiting cancellation consumed scope; subsequent scope rollback left depth1 and actual connection in_transaction True",
+          "fixed_v3_observation": "scope unconsumed before successful admission; scope cleanup depth0, file connection closed, memory retained with no active transaction"
+        },
+        {
+          "version": "v2",
+          "repro": "/tmp/csq15-security-sqlite-admission-race-v2.log",
+          "observation": "real SAVEPOINT paused; outercompletion queued; nestedadmission changes stack, terminal rejected yet scope flagTrue",
+          "fixed_v3_observation": "LIFO rejection leaves unconsumed scope, legitimate later completion works"
+        }
+      ],
+      "corrected_oracle": "Explicit original handle capability may execute and complete across tasks per real DataFlow transaction node producers and AsyncSQL cleanup; only implicit foreign-task begin is rejected. Prior creator-only terminal hypothesis was rejected before anycleanclaim.",
+      "driver_queue_answer": "Stock aiosqlite queues execute/executemany before first await. Actual worker trace barriers for4memory/file\u00d7single/many cases show INSERT(s) then ROLLBACK, zero rows afterward and fresh scope empty. No late-write finding reproduced; this covers real current driver FIFO, not arbitrary injected drivers.",
+      "absolute_sweep": "/tmp/csq15-security-sqlite-absolute.json",
+      "coverage": "Nested sameconnection and isolatedrollback, validtaskhandoff(publicScope/Commit/Rollbacknodes), stale tuple identity, LIFO, legacyrawconnection completion, attempteddriverfailure remains single-shot, cancellationbeforeadmission and afterrealSAVEPOINT, repeatedrollbackcancellation, fileclosure/memoryretention, disconnect abandonedowner, productionadapterinheritance, unscopedmemoryexecute/many/stream guard, streamreentry and lifetimes.",
+      "warnings": "0Python warnings/skips in final suites; expected injected close/rollback error logs listed per round; own real-driver probes have no unexpectedwarnings",
+      "open_findings": [],
+      "limitations": "Bounded source delta in Core async_sql transaction lifecycle +DataFlowcaller compatibility. Original fullpromotion receipt remains source evidence for unchangedfiles. Parent owns exactcommittedhead mapping/fullLinux/Mac gates. No production edits/commits/remote operations by this reviewer.",
+      "committed_head": "a35604592eac70584f35acffd23d9ddc4ff615b3",
+      "committed_source_and_tests_exact": true
+    },
+    "whole_union_security": {
+      "ran": true,
+      "verdict": "CLEAN scoped whole-promotion independent security review composed on exactcommittedhead",
+      "head": "a35604592eac70584f35acffd23d9ddc4ff615b3",
+      "base": "50f98afe403a468bb478462182b73ebc4e0287d1",
+      "manifest": "/tmp/csq15-security-final-manifest-a356.json",
+      "scope": "origin/main...a35604592eac70584f35acffd23d9ddc4ff615b3, original261changedproductionPython files;260 unchanged from reviewed9ed, async_sql.py newsource independentlyreviewed twice",
+      "original_union_receipt": "/tmp/csq15-security-final-receipt.json",
+      "sqlite_delta_receipt": "/tmp/csq15-security-sqlite-final-receipt.json",
+      "fixture_supplements": [
+        "/tmp/csq15-security-contract-receipt.json",
+        "/tmp/csq15-security-startup-receipt.json",
+        "/tmp/csq15-security-benchmark-receipt.json"
+      ],
+      "assertion_parity": "/tmp/csq15-security-assertion-14-receipt.json",
+      "sqlite_resolution": "Both actual memory/file admission failures repaired: cancellationwaitinglock and lockedLIFOrejection no longerconsume scope; depth0 and actualfileclosed/memorynontransactional after normal scopecleanup. Two86+33 suites and24realdrivercase executions; reachedearly-consumptioncontrol8hits8fail.",
+      "driver_queue_resolution": "Actual aiosqlite trace FIFOINSERT(s)\u2192ROLLBACK; no escapedwrite or freshscope contamination in4cases twice; no speculative sinkracefinding.",
+      "open_findings": [],
+      "limits": [
+        "Scoped source/caller/boundary review with ASTinventory plus realexecutions, not a proof of all possible codepaths",
+        "Explicit transaction handle is a transferable capability; foreign implicit nesting blocked, explicit cross-task completion retained",
+        "User-approved DataFlowpools contract/inheritedbaseKaizenexecution/advisorytypebacklog exclusions carried",
+        "Parent owns pending fullLinux/Mac checks; thisreceipt does not assert those passed"
+      ],
+      "no_remote_operations": true
+    },
+    "preservation": {
+      "historical_refs": 52,
+      "ordered_stashes": 5,
+      "matches_recovered_baseline": true,
+      "controls": "extra ref and reversed stash list rejected",
+      "scope": "Exact ref names/SHA and ordered stash SHA; no reachability/content landing claim."
+    },
+    "whole_union_coverage": {
+      "ran": true,
+      "verdict": "CLEAN whole-promotion assertion/coverage review within stated executed scopes; parent full Linux/Mac gates remain separate",
+      "head": "a35604592eac70584f35acffd23d9ddc4ff615b3",
+      "main": "50f98afe403a468bb478462182b73ebc4e0287d1",
+      "repair_baseline": "ce4c9de676f1ab1e0a159cb8c273dcf2e47a2cb4",
+      "static_scope": {
+        "production_modules": 261,
+        "production_source_matching_reviewed9ed": 260,
+        "production_source_repaired_and_reviewed_v3": 1,
+        "testfiles": 486,
+        "original_named_tests": 6161,
+        "original_tests_with_all_original_check_expressions_retained": 6046,
+        "semantic_reconciliations": 115,
+        "new_named_tests": 1183,
+        "all_original_tests_present_or_explicit_semantic_successor_reviewed": true,
+        "counts_are_navigation_not_behavior_coverage": true
+      },
+      "assertion_evidence": [
+        "/tmp/csq15-refreeze-final-head-test-parity.json",
+        "/tmp/csq15-final-head-assertion-reconciliation.json",
+        "/tmp/csq15-provider-parent-review.json",
+        "/tmp/csq15-security-assertion-14-receipt.json",
+        "/tmp/csq15-df-benchmark-assertion-delta.json"
+      ],
+      "fresh_owned_execution": [
+        {
+          "tests": 53,
+          "scope": "Kaizen auth/provider diagnostic regressions",
+          "receipt": "/tmp/csq15-coverage-kaizen-coverage-receipt.json",
+          "python_warnings": 0,
+          "expected_diagnostics": 29
+        },
+        {
+          "tests": 132,
+          "scope": "4Kaizen provider files after legacy warning fixture repair",
+          "receipt": "/tmp/csq15-provider-repair-results.json",
+          "python_warnings": 0,
+          "expected_diagnostics": 47
+        },
+        {
+          "tests": 8,
+          "scope": "DNS resolver worker cancellation/budget fourcurrent+fourminimum",
+          "logs": [
+            "/tmp/csq15-worker-current.log",
+            "/tmp/csq15-worker-min.log"
+          ]
+        },
+        {
+          "tests_each_round": 119,
+          "rounds": 2,
+          "scope": "86Core SQLite nestedownership/admission/addressproducer +33DataFlow taskhandoff/original1070/1580",
+          "receipt": "/tmp/csq15-sqlite-owner-v3-correctness-receipt.json",
+          "python_warnings": 0,
+          "skips": 0,
+          "expected_diagnostics_each_round": 13
+        },
+        {
+          "tests": 23,
+          "scope": "DataFlow realbenchmark+canonicaldialectwholefile finalauthorbytes",
+          "log": "/tmp/csq15-df-benchmark-final-v4.log",
+          "canonical_map": "/tmp/csq15-df-benchmark-canonical-map.json",
+          "python_warnings": 0,
+          "skips": 0,
+          "expected_diagnostics": 36
+        }
+      ],
+      "independent_review": [
+        "/tmp/csq15-whole-promotion-correctness-final-receipt.json",
+        "/tmp/csq15-security-final-receipt.json",
+        "/tmp/csq15-security-benchmark-receipt.json",
+        "/tmp/csq15-sqlite-owner-v3-correctness-receipt.json"
+      ],
+      "controls": [
+        "AST known-assertion deletion identified missing observed==7; unittest assertEqual recognized; helper excluded",
+        "legacy omittedwarning reached1\u2192DIDNOTWARN; cached preimport25pass",
+        "DNS abandon_on_cancelFalse reached2\u21922expectedfail; sharedbudget reset2hits\u2192deadlinefailure",
+        "root provider cache/compiler11hits\u21926fail",
+        "security audit failclosed controls in14rowreceipt",
+        "SQLite realSAVEPOINTprematureconsumption8hits\u21928failures;custom/PG/MySQL terminalflagdelay1hit\u2192failure;normal12basehookcases",
+        "Benchmark rollback1hit\u21921fail/write1hit\u21921fail/stats3hits\u21922fail/globalowner2hits\u21921fail;callertracerpreserved"
+      ],
+      "limitations": [
+        "Original assertionexpression retention is not proof of reachability, adequacy orruntimebehavior.115semantic rows have explicit source/behavior dispositions.",
+        "Historical scoped reviews carried only with exactsourcehash or explicitAST/importcontinuity; not relabeled fresh execution.",
+        "Root full Linux/Mac gates pending/separate; excluded skipped/deselected tests do not contribute coverage.",
+        "No liveLLM/providerexecution claim. Basehook PG/MySQL12probe is driver-free dispatch, separate from databaseintegration tests.",
+        "Explicitapproved exceptions remain DataFlow poolsdesign, baseKaizenexecution, advisorytypebacklog.",
+        "The10benchmark+1obsolete dialect skips found in oldDataFlow gate now repaired and actually executed; no longer silentlyexcluded.",
+        "V1/V2adapter rounds superseded by finalV3; preexecution harnessimport/configfailures excluded; final119x2source/testbytes exactcommitteda356."
+      ],
+      "pending_fixture_overlays": [],
+      "mechanical_inventory": "/tmp/csq15-final-production-interfaces.json",
+      "open_findings": [],
+      "final_clean_worktree": true,
+      "source_mapping": {
+        "from9ed": "260of261production blobs identical;Coreasync_sql solechangedblob validated manifestv3 matchescommitteda356",
+        "v3_manifest": "/tmp/csq15-sqlite-nested-owner-v3-manifest.json",
+        "fixtures": "committedbenchmark canonicalmap nonimportAST+importmultiset equality;otherfixtureoriginalassertiondiff preserved in final115rowmap",
+        "review_scope": "main50f98 merge-base union plus repairbaselinece4 attribution; no two-dot behindbase confusion"
+      }
+    },
+    "coverage_artifact_sha256": {
+      "/tmp/csq15-whole-promotion-final-coverage-receipt.json": "3bc9590812f738f54c09125d86678442e8cd7376befa18a7613f2bfbf0143c1b",
+      "/tmp/csq15-refreeze-final-head-test-parity.json": "e966f0ac51d98e4d31fb2cd5ba36d3c5fad2c773a0b33f263736a8452fe29f17",
+      "/tmp/csq15-final-head-assertion-reconciliation.json": "f4e5aa9ecc37f1c3e4049d14d9e3736954b440206cdf1696bd429f298164c704",
+      "/tmp/csq15-final-production-interfaces.json": "19f9212b5bbabaf1c3261cb9f73a02e6146e42041ab338d725f535ac6c2942c9",
+      "/tmp/csq15-sqlite-owner-v3-correctness-receipt.json": "c39552ccbd75a945a9285661d65359348de8bbe5e7a5e539c0e4c4b7a7a63378"
+    },
+    "worktree_inventory": {
+      "generated_utc": "2026-09-27T02:31:34.596503+00:00",
+      "ran": true,
+      "read_only_repo_operations": true,
+      "dev": "a35604592eac70584f35acffd23d9ddc4ff615b3",
+      "protected_historical_refs": [
+        "refs/archive/2026-08-21/audit/w5-a-core-spec-audit 68cb2cc3d69a98a633534fca559eb5a9d86c359c",
+        "refs/archive/2026-08-21/audit/w5-b-dataflow-spec-audit a96169277196846b42b1d28efc804fe1f901b9bc",
+        "refs/archive/2026-08-21/audit/w5-c-nexus-spec-audit 16187704f5608944819e18470ab94b31443a72e8",
+        "refs/archive/2026-08-21/audit/w5-d-kaizen-spec-audit ef83d5df5251cc2d66190248b3a6ea5ee89f0fef",
+        "refs/archive/2026-08-21/audit/w5-e1-ml-core-spec-audit 4494c2bc1d0d8cedfccbe2e29029f9251aa7ba90",
+        "refs/archive/2026-08-21/audit/w5-e2-ml-extras-align-spec-audit e20392a7d255b6511a111880a6ff4ba9da8a9a43",
+        "refs/archive/2026-08-21/audit/w5-f-trust-pact-sec-spec-audit dc24a1cad5c7d92bd882dcff3d7b54507e9a329c",
+        "refs/archive/2026-08-21/debug/issue-1010-phase-a-diagnostics 2aa62651ba2a9b59d2d1e86687f23f84fd483bda",
+        "refs/archive/2026-08-21/debug/issue-1010-phase-a-prime-linux cface915007d3a8d631671cbfa561cb8708cf47c",
+        "refs/archive/2026-08-21/dev c6596582bb7c81330bc17be14e6bb5906b0de5a6",
+        "refs/archive/2026-08-21/docs/mcp-gateway-integration f7ac1505b4913b8ee66118df45ecbfe510dfd08a",
+        "refs/archive/2026-08-21/docs/notes-cont18-execution d1e4d8d63061fa24edaf1e15d9dc68f6f94772e2",
+        "refs/archive/2026-08-21/docs/update-iterative-llm-agent-v0.9.9 a3b6f8cc81a67809b9fb8e3bc5494a2cd095b219",
+        "refs/archive/2026-08-21/docs/update-v0.8.6-documentation 91187aeb112cba2bf3176594d011dd01f3bf99b7",
+        "refs/archive/2026-08-21/feat/dataflow-dynamic-model-registration bc4f229523c8496f532524a5a286a4517948a93f",
+        "refs/archive/2026-08-21/feat/fabric-consumer-adapters a9977f9da462fde7e727e8241ccecea98db4a637",
+        "refs/archive/2026-08-21/feat/outstanding-issues-consolidation bc2f685dbcdcffd184fb1f2ad691c781427ade36",
+        "refs/archive/2026-08-21/feat/studio-app-session 4c3eb694c6dbeef8b09428db67f706466818437c",
+        "refs/archive/2026-08-21/feat/w6-010-nexus-package-name-canonical 9212cbe9378d8823be43fc6fc739c5d25e5bd3d3",
+        "refs/archive/2026-08-21/feat/w6-023-strip-w31-31b-import-error 82ac634f822a6805b8597804ffc18f93c4f15d98",
+        "refs/archive/2026-08-21/feature/kaizen-agent-development d0c1daa5a38fa31cccd4188c2ef806ffe9b35c4e",
+        "refs/archive/2026-08-21/feature/kaizen-developer-experience-improvements 0292389bdd6d7ed6caad60f2e4e86a5039f4bbd0",
+        "refs/archive/2026-08-21/fix/2070-logging-hook-redaction-defeat cbb64f8fca867b60de412c1454a8a471c0d9bf14",
+        "refs/archive/2026-08-21/fix/async-runtime-tier1-tests f890f14c49f20864a2d90122e3f6d25ab7e71b55",
+        "refs/archive/2026-08-21/fix/bug-report-issues f723e0ab05427d765c8aaba07dfb3ac9746f4b98",
+        "refs/archive/2026-08-21/fix/ci-green-v5 dcf64b6bc7ed0795d1e888a83e739fa25bc6773f",
+        "refs/archive/2026-08-21/fix/dataflow-connection-parsing-bug b31fe462154869bfcf90a146f169ab902abe3530",
+        "refs/archive/2026-08-21/fix/docs-deploy-gtar-missing afde98c0481c9a9cedd2e8678253ef7f62cabce8",
+        "refs/archive/2026-08-21/fix/github-actions-branch-patterns 3ebf7eb14c5a9a4bdb78b60574ecbed11acebc59",
+        "refs/archive/2026-08-21/fix/iterative-llm-agent-fallback-bug b20cdcc1e246c14a787d9f79cd9353cbab37c739",
+        "refs/archive/2026-08-21/fix/mcp-openai-pydantic-v2 a0106d1e719e8e26824f63871f8fa8e5f07f711b",
+        "refs/archive/2026-08-21/fix/remove-iterative-llm-mock-mode b12346453ee933b69ce8398e9d83f30ec33c2483",
+        "refs/archive/2026-08-21/fix/runtime-leak-lifecycle-71 246631f030552afda1f6d2c6184902ce7e2e86c2",
+        "refs/archive/2026-08-21/kaizen 230e29ee236ee13330a621c627a2e362cad9f78d",
+        "refs/archive/2026-08-21/release/license-update-v0.9.10 ac914c9959e2ffe3e1406d4f041fd00afda6a11c",
+        "refs/archive/2026-08-21/release/v0.12.5 fc054c73eeea5daa9dbd2329a348ccf4ed7eebf4",
+        "refs/archive/2026-08-21/release/v0.4.1 de158198fdca7d4a9c4d79047993911b0cc11ec0",
+        "refs/archive/2026-08-21/release/v0.8.5 e935f137fa9f5228b7ce8b8925eccca1b0910954",
+        "refs/archive/2026-08-21/release/v0.9.11-final f56816d720d377d37d0eedb7a09a592fc02ecc05",
+        "refs/archive/2026-08-21/release/v0.9.16-version-bump d8db843e6e42f42eb51d72aa1e1ee89cb44537e3",
+        "refs/archive/2026-08-21/release/v0.9.17-final 666d0c3d1d195c7d5a5e8a46db9f6b9b3cae4c5a",
+        "refs/archive/2026-08-21/release/v0.9.17-update c4b3ba40c009b9855fcf8aa18aad1089b9304780",
+        "refs/archive/2026-08-21/release/v0.9.17-version-update 32e35ba67d9b4c979a08cc2d61b1b00493f1ebdd",
+        "refs/archive/2026-08-21/release/v0.9.4 459722e450b1d695a21e9d92f2ad902bdd39a8c9",
+        "refs/archive/2026-08-21/release/v0.9.7 25f9e3d70e4e3ae7be740f53bbf7b04a62606ea9",
+        "refs/archive/2026-08-21/release/v0.9.9 0b58129039ada2f93089b09d383883aa8d21792e",
+        "refs/archive/2026-08-21/scrap/pre-triage-snapshot-2026-04-08 4cd5ef5124e8360c47784c786bf554130e830942",
+        "refs/archive/2026-08-21/sync/main-with-dataflow-v0.4.3-release 6cdf0ada0d54915423fb7d6c54c9de8780e22f75",
+        "refs/archive/2026-08-21/test/ci-verification 3e332b5ad088cb6f1570bab7f4e85b1767f6285d",
+        "refs/archive/2026-08-21/test/ci-verification-v2 6b16ed192f44488f6d88d42a33592589fdb8ac5c",
+        "refs/archive/2026-08-21/todo-096-parameter-injection-testing 82055a2525d56772ce709f5d3f4a083eb7706bd6",
+        "refs/original/refs/heads/feat/1125-from-brief-analyze 62eb198e362498f4beb7dba404b3505742279f84"
+      ],
+      "protected_ordered_stashes": [
+        "stash@{0} ca0138b48e54ba7197133e33a6b0bc0207b50b34 On main: release-prep: stash pre-existing local modifications before release/v2.27.0",
+        "stash@{1} de08a30d84a93b6b70cdd75b7277c6bdc8d996fe On fix/w6-checkpoint-dispatcher-redaction-discipline: w6-pre-rebase-noise",
+        "stash@{2} 201a0cab11df924d91b3e46ba0aa3540ab6bd6b2 On main: T5-pull-blockers-2: pre-existing cruft on T2/T3/T4 packages",
+        "stash@{3} 924c8f6a0a624fcc4a4508fc677c8045c9dad0a7 On main: T5-pull-blockers: pre-existing cruft on patterns/registry+state_manager",
+        "stash@{4} d5f9a37d0c2e3f4864e6cf0c56205eb5d3e54cdf WIP on fix/768-parameterized-generics: 4b050d03 fix(dataflow): @db.model accepts parameterized generics on Python 3.11+ (#768, 2.7.3)"
+      ],
+      "protected_before_after_equal": true,
+      "scope": "Seven existing owned sibling worktrees only; comparison against pinned dev bytes, plus branch ancestry. Ignored caches enumerated separately. No deletion or cleanup authorization.",
+      "worktrees": [
+        {
+          "path": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-cycle-final-adversarial",
+          "head": "ea4f09514b2aa6b6287fddaad3a961578b2a793c",
+          "branch": null,
+          "detached": true,
+          "head_is_ancestor_of_dev": true,
+          "left_head_unique_right_dev_unique": "0\t11",
+          "head_unique_commit_log": [],
+          "changes": [
+            {
+              "status": " M",
+              "path": "packages/kailash-kaizen/pyproject.toml",
+              "rename_from": null,
+              "kind": "other",
+              "size": 14657,
+              "sha256": "9ab78629830755be89bbcf1ffd341c70be331ffb1d5ecf96abbfbf82bc7b4bfa",
+              "head_sha256": "4bfa360cb02608fbebab31883e39fdc1f8685a9a405b999a45d61d2abc226091",
+              "dev_sha256": "9ab78629830755be89bbcf1ffd341c70be331ffb1d5ecf96abbfbf82bc7b4bfa",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "packages/kailash-kaizen/src/kaizen/llm/http_client.py",
+              "rename_from": null,
+              "kind": "source",
+              "size": 22898,
+              "sha256": "1a465f7abb7f7ee30d5ff06c2eb5c03c335921255b6d66d9f36a4270bc360ccd",
+              "head_sha256": "238fc4d354461824f865b71b7abf667baeedc2f99ae9aa3a23b40470df822306",
+              "dev_sha256": "1a465f7abb7f7ee30d5ff06c2eb5c03c335921255b6d66d9f36a4270bc360ccd",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "packages/kailash-kaizen/src/kaizen/llm/url_safety.py",
+              "rename_from": null,
+              "kind": "source",
+              "size": 13350,
+              "sha256": "37e0b892070f2494cab7fb3aeabd99a47949343683c5419c3663d30b5942ec99",
+              "head_sha256": "9d8a8fde7bcb331880b455abe7a0fb9f29c0f563a606089bb9cf6821531de718",
+              "dev_sha256": "37e0b892070f2494cab7fb3aeabd99a47949343683c5419c3663d30b5942ec99",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "packages/kailash-kaizen/tests/integration/llm/test_llmhttpclient_wiring.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 3519,
+              "sha256": "b8729472ac8ef2fbcf4f1834df3fbadaf12fcd48b191648dff0f9cfab51185c3",
+              "head_sha256": "f958f95f79c2f8f9f548c26db982afca313e65f3570a6f6b5ce4918d2201c4ce",
+              "dev_sha256": "b8729472ac8ef2fbcf4f1834df3fbadaf12fcd48b191648dff0f9cfab51185c3",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "packages/kailash-kaizen/tests/unit/llm/test_wire_timeout_reaches_transport.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 8039,
+              "sha256": "c3f46620b7eddae998016b1d88ee7eb10210ce668f2c971afec9825b9a2fcda9",
+              "head_sha256": "1a65c638dcab51101853f13a7ec7455f789322ec338a0f190db6b1b5e3d491f0",
+              "dev_sha256": "c3f46620b7eddae998016b1d88ee7eb10210ce668f2c971afec9825b9a2fcda9",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "packages/kailash-kaizen/uv.lock",
+              "rename_from": null,
+              "kind": "other",
+              "size": 995866,
+              "sha256": "041c569f859799f0edd69605ba7688deb4c4a8006c71dc9f46fb803833fd707c",
+              "head_sha256": "d793a5b4d1ab1849b33475032f3c42c57f398dc42ef0041476aeb86c1d848501",
+              "dev_sha256": "041c569f859799f0edd69605ba7688deb4c4a8006c71dc9f46fb803833fd707c",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "packages/kailash-nexus/pyproject.toml",
+              "rename_from": null,
+              "kind": "other",
+              "size": 5830,
+              "sha256": "c0779556c84e9da582270f412bac662bd9e6206e429ece2c1e31ff30b6b345ff",
+              "head_sha256": "b1b4335a791a7a31baf7618a5b04a1bdf4b3dfa988af1e011b7a0bf177717957",
+              "dev_sha256": "c0779556c84e9da582270f412bac662bd9e6206e429ece2c1e31ff30b6b345ff",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "packages/kailash-nexus/src/nexus/http_client.py",
+              "rename_from": null,
+              "kind": "source",
+              "size": 22447,
+              "sha256": "c1e6bed85b9f95ee158d385883e3de8dc26ebdf37aeedeaaf266e3fdee4b4ac9",
+              "head_sha256": "5891e000ca46cc850ee91f470247b489e21dd8309a817ccd81a5ddb4f27ab40d",
+              "dev_sha256": "c1e6bed85b9f95ee158d385883e3de8dc26ebdf37aeedeaaf266e3fdee4b4ac9",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "packages/kailash-nexus/src/nexus/transports/webhook.py",
+              "rename_from": null,
+              "kind": "source",
+              "size": 35699,
+              "sha256": "495663043b8b8ceb20f2c6172245fe1509faa800c663adf12b39c5e8bebe64aa",
+              "head_sha256": "a67637ec9682ce9d2501b4a7355114ff00d0c421884740499d902a72d01f4077",
+              "dev_sha256": "495663043b8b8ceb20f2c6172245fe1509faa800c663adf12b39c5e8bebe64aa",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "packages/kailash-nexus/tests/unit/transports/test_webhook.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 32866,
+              "sha256": "f038d9073083916fff3783d5ee3f1c34cf238c93579864d99d1d715d0c79c897",
+              "head_sha256": "d89dda6be0934993f64117e7bbf3fd881b782c446ba6a591552418acb02ecee5",
+              "dev_sha256": "f038d9073083916fff3783d5ee3f1c34cf238c93579864d99d1d715d0c79c897",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "pyproject.toml",
+              "rename_from": null,
+              "kind": "other",
+              "size": 19727,
+              "sha256": "1b2515db758705ddb871d788ea96a7e7558e21d222d8f07b31cdb56130cace43",
+              "head_sha256": "7b6220b4402aeeb9fcd21103a356f98acc2a9954324f3d4e76eebd7466a07a31",
+              "dev_sha256": "1b2515db758705ddb871d788ea96a7e7558e21d222d8f07b31cdb56130cace43",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "specs/kaizen-providers-provider-system.md",
+              "rename_from": null,
+              "kind": "document",
+              "size": 13587,
+              "sha256": "7ff13ea9860f2ea8e86588e0c02bb3d29b2898a48e085ab65758b98b1c3a69bf",
+              "head_sha256": "92d909002395bbcffe57675b3e1adeb51eeac651955258f0a8d32ed6cedb32b7",
+              "dev_sha256": "e89b92bbd5d48131534f00a2147c01e377c6e1f63749cc319ebd857532c27b91",
+              "classification": "superseded_source_line_citation",
+              "diff_artifact": "/tmp/csq15-owned-worktree-drain-diffs/csq14-cycle-final-adversarial--specs__kaizen-providers-provider-system.md.diff",
+              "disposition": "Only prior logging source line end355 instead of final357; current dev includes final source citation."
+            },
+            {
+              "status": " M",
+              "path": "specs/nexus-channels.md",
+              "rename_from": null,
+              "kind": "document",
+              "size": 23717,
+              "sha256": "0edd79fb1e6cb98acb499a9e87072fb39e7055f25bbed8376b524f988b53900d",
+              "head_sha256": "1871ba5b6bf47715cf818f87c556ece14fc896a3f1d1a920e3ad2959f92fc7e0",
+              "dev_sha256": "0edd79fb1e6cb98acb499a9e87072fb39e7055f25bbed8376b524f988b53900d",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "specs/nexus-services.md",
+              "rename_from": null,
+              "kind": "document",
+              "size": 28065,
+              "sha256": "3efa6fd321621cbaecd841deb226ad6c3cde21f67b5263428e44fbd20949778b",
+              "head_sha256": "6170ed307328131170036da42084b09ed486f496e2719142156be5b02fda3a77",
+              "dev_sha256": "4265cbd457054861e7ee667426518fcccf40baeb901998520e6078c427163105",
+              "classification": "superseded_source_line_citation",
+              "diff_artifact": "/tmp/csq15-owned-worktree-drain-diffs/csq14-cycle-final-adversarial--specs__nexus-services.md.diff",
+              "disposition": "Only prior logging source line end355 instead of final357; current dev includes final source citation."
+            },
+            {
+              "status": " M",
+              "path": "src/kailash/utils/network_guard.py",
+              "rename_from": null,
+              "kind": "source",
+              "size": 27041,
+              "sha256": "87d700e283fc96399790334a4151bb92b98c4a9e2ec5d6a208dad5c164aacda5",
+              "head_sha256": "380b780d095312b2a75a1bc21ad925393b987db6b12a35c6f83a7c0a4a98a3d6",
+              "dev_sha256": "87d700e283fc96399790334a4151bb92b98c4a9e2ec5d6a208dad5c164aacda5",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "uv.lock",
+              "rename_from": null,
+              "kind": "other",
+              "size": 1090427,
+              "sha256": "8f44979174cf84dcfd754979249c1140a5c0b8da15e9340532f8848a01523bb7",
+              "head_sha256": "74dcc11fb47b21756baa62223b38a358641038ffc0c3fe57cb7e4bb0d4196551",
+              "dev_sha256": "8f44979174cf84dcfd754979249c1140a5c0b8da15e9340532f8848a01523bb7",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": "??",
+              "path": "packages/kailash-nexus/tests/unit/transports/test_webhook_safe_delivery.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 12942,
+              "sha256": "be65780372d9a7fa5130e525a1274cc28fb2843bf71aa2a78fc0057ddf37d9d9",
+              "head_sha256": null,
+              "dev_sha256": "be65780372d9a7fa5130e525a1274cc28fb2843bf71aa2a78fc0057ddf37d9d9",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": "??",
+              "path": "src/kailash/utils/http_logging.py",
+              "rename_from": null,
+              "kind": "source",
+              "size": 11796,
+              "sha256": "29fcdca49a5d7e3f812a2c38e8e64e7c447a109ce3fca228af81fd3e4c713991",
+              "head_sha256": null,
+              "dev_sha256": "29fcdca49a5d7e3f812a2c38e8e64e7c447a109ce3fca228af81fd3e4c713991",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": "??",
+              "path": "src/kailash/utils/http_transport.py",
+              "rename_from": null,
+              "kind": "source",
+              "size": 5435,
+              "sha256": "a21f90acc2740b167a38d272fe68b51607cb1b2e6fddc5af6862e24b1cb6a0bd",
+              "head_sha256": null,
+              "dev_sha256": "a21f90acc2740b167a38d272fe68b51607cb1b2e6fddc5af6862e24b1cb6a0bd",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": "??",
+              "path": "tests/regression/test_http_dns_connection_binding.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 16564,
+              "sha256": "69961dffa296621682c4b4fe9e6226736342621586bc3b783783b23779ea0796",
+              "head_sha256": null,
+              "dev_sha256": "16547d27ef3dc1911d7695722fabb5b215ba42799258ef30eb806bcd21a1ea0e",
+              "classification": "superseded_dns_fixture",
+              "diff_artifact": "/tmp/csq15-owned-worktree-drain-diffs/csq14-cycle-final-adversarial--tests__regression__test_http_dns_connection_binding.py.diff",
+              "disposition": "Prior real-worker timeout fixture; dev adds reviewed AdmissionClock gating and effective timeout assertions. No additional test body in worktree diff."
+            },
+            {
+              "status": "??",
+              "path": "tests/regression/test_owned_http_diagnostic_privacy.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 23942,
+              "sha256": "6a8f9d1ad73bbf48b60f2bed31c79f90ddc781cb97c2d275ec646aa59de2f7cb",
+              "head_sha256": null,
+              "dev_sha256": "6a8f9d1ad73bbf48b60f2bed31c79f90ddc781cb97c2d275ec646aa59de2f7cb",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            }
+          ],
+          "classification_counts": {
+            "exactly_integrated_in_dev": 18,
+            "superseded_source_line_citation": 2,
+            "superseded_dns_fixture": 1
+          },
+          "ignored_counts": {
+            ".pytest_cache": 5,
+            "python_bytecode": 695
+          },
+          "other_ignored_paths": [],
+          "reviewer_active_hold": false,
+          "backup_recommendation": "Before drain capture HEAD/index/worktree patches plus every untracked/ignored non-cache artifact; exact integration is not authorization to discard. Active reviewer trees must quiesce first.",
+          "content_stable_during_inventory": true,
+          "additional_ignored_classification": "All other_ignored_paths are nested Ruff/Pytest caches; no unknown ignored artifacts found.",
+          "head_still_matches_snapshot": true,
+          "backup_required_paths": [
+            "packages/kailash-kaizen/pyproject.toml",
+            "packages/kailash-kaizen/src/kaizen/llm/http_client.py",
+            "packages/kailash-kaizen/src/kaizen/llm/url_safety.py",
+            "packages/kailash-kaizen/tests/integration/llm/test_llmhttpclient_wiring.py",
+            "packages/kailash-kaizen/tests/unit/llm/test_wire_timeout_reaches_transport.py",
+            "packages/kailash-kaizen/uv.lock",
+            "packages/kailash-nexus/pyproject.toml",
+            "packages/kailash-nexus/src/nexus/http_client.py",
+            "packages/kailash-nexus/src/nexus/transports/webhook.py",
+            "packages/kailash-nexus/tests/unit/transports/test_webhook.py",
+            "pyproject.toml",
+            "specs/kaizen-providers-provider-system.md",
+            "specs/nexus-channels.md",
+            "specs/nexus-services.md",
+            "src/kailash/utils/network_guard.py",
+            "uv.lock",
+            "packages/kailash-nexus/tests/unit/transports/test_webhook_safe_delivery.py",
+            "src/kailash/utils/http_logging.py",
+            "src/kailash/utils/http_transport.py",
+            "tests/regression/test_http_dns_connection_binding.py",
+            "tests/regression/test_owned_http_diagnostic_privacy.py"
+          ],
+          "backup_reason": "Fresh archive of all dirty/untracked files plus staged/unstaged binary patches and metadata after reviewers quiesce; prior /tmp backups predate current overlays and do not replace this snapshot.",
+          "unknown_files": [],
+          "diagnostic_only_overlays": []
+        },
+        {
+          "path": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-final3-correctness",
+          "head": "9ed7255935fd5ff026964c6960247a4869f2c22c",
+          "branch": null,
+          "detached": true,
+          "head_is_ancestor_of_dev": true,
+          "left_head_unique_right_dev_unique": "0\t4",
+          "head_unique_commit_log": [],
+          "changes": [
+            {
+              "status": " M",
+              "path": "packages/kailash-kaizen/tests/unit/test_llm_provider_bug_reproduction.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 15637,
+              "sha256": "0d78616a0c59a009ec4cfac83c15a185cc9ed941a01e92561855e359d036186b",
+              "head_sha256": "69bf7a60ed0b7a757ab45829a4c7d4e015cc2c2e6126e1a335a6cff9e5c41d5a",
+              "dev_sha256": "0d78616a0c59a009ec4cfac83c15a185cc9ed941a01e92561855e359d036186b",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "packages/kailash-pact/tests/unit/governance/test_audit_integrity.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 8715,
+              "sha256": "c7f9c9dd43373a2b066a5fc147b97957b55409a7ee9b92dbcff74882497ea1d8",
+              "head_sha256": "85ea695f8cf6d4f597ffc00e93d1cd284f9c3cdbf0b149bbf4059d50209d9713",
+              "dev_sha256": "c7f9c9dd43373a2b066a5fc147b97957b55409a7ee9b92dbcff74882497ea1d8",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "tests/regression/test_channel_parameters_envelope_behaviour.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 11602,
+              "sha256": "795aaa16b0736be42d12daa031786e4fee487974533601b37e26df8ebcd1db88",
+              "head_sha256": "d7f0aae39c06a53d8e4bfd8e2c4270e338065ef34376d3d4eb35fc6a0fc598db",
+              "dev_sha256": "795aaa16b0736be42d12daa031786e4fee487974533601b37e26df8ebcd1db88",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "tests/regression/test_http_dns_connection_binding.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 17506,
+              "sha256": "16547d27ef3dc1911d7695722fabb5b215ba42799258ef30eb806bcd21a1ea0e",
+              "head_sha256": "69961dffa296621682c4b4fe9e6226736342621586bc3b783783b23779ea0796",
+              "dev_sha256": "16547d27ef3dc1911d7695722fabb5b215ba42799258ef30eb806bcd21a1ea0e",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "tests/regression/test_issue_1185_async_resume_short_circuit.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 13951,
+              "sha256": "40b72f3072a0ec90ef92be98daab1b734d50d35c8b0792088781b95fca9b64b6",
+              "head_sha256": "7de13bce305938a06bab75d24d692c70dd6d1d02997ad9aa3d11b3d91a02b078",
+              "dev_sha256": "40b72f3072a0ec90ef92be98daab1b734d50d35c8b0792088781b95fca9b64b6",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "tests/regression/test_issue_2221_residual_empty_verifiers.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 8769,
+              "sha256": "71c64387d59e6fe9d479791fc952eca6b7f1f8a056f565020f1e324b46704ffc",
+              "head_sha256": "3c2e9d3def03ccdd04bdad594ad422aab5b02a20f8c89600db122861fec53495",
+              "dev_sha256": "71c64387d59e6fe9d479791fc952eca6b7f1f8a056f565020f1e324b46704ffc",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "tests/trust/pact/unit/test_audit_integrity.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 9760,
+              "sha256": "622571da7a199b955b31c7032f34d6851de7ad9602468330fbace0b66cfbd7ae",
+              "head_sha256": "6166c96d11d30171caa807450633178b1fbd006172c5b61e2dc15adf6d93048c",
+              "dev_sha256": "622571da7a199b955b31c7032f34d6851de7ad9602468330fbace0b66cfbd7ae",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "tests/unit/runtime/helpers_runtime.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 8113,
+              "sha256": "06ba50b0c62632521d676c095a29671f7048d396a0e19b354325d44d7cb90aed",
+              "head_sha256": "5c3f8ff3dee36fdb60076f078fda5638a062a400be0988f73ea8d22a48066467",
+              "dev_sha256": "06ba50b0c62632521d676c095a29671f7048d396a0e19b354325d44d7cb90aed",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "tests/unit/runtime/mixins/test_validation_mixin.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 19243,
+              "sha256": "80534d61ed67b4c2bca7abbbf9c779a558f67f3230e6edfbc597d43b9f5b9ead",
+              "head_sha256": "8473b0b24c65de1a28deac6939e745334bc36246d046e48683252761a1eb347c",
+              "dev_sha256": "80534d61ed67b4c2bca7abbbf9c779a558f67f3230e6edfbc597d43b9f5b9ead",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            }
+          ],
+          "classification_counts": {
+            "exactly_integrated_in_dev": 9
+          },
+          "ignored_counts": {
+            ".pytest_cache": 5,
+            "python_bytecode": 1081
+          },
+          "other_ignored_paths": [],
+          "reviewer_active_hold": false,
+          "backup_recommendation": "Before drain capture HEAD/index/worktree patches plus every untracked/ignored non-cache artifact; exact integration is not authorization to discard. Active reviewer trees must quiesce first.",
+          "content_stable_during_inventory": true,
+          "additional_ignored_classification": "All other_ignored_paths are nested Ruff/Pytest caches; no unknown ignored artifacts found.",
+          "head_still_matches_snapshot": true,
+          "backup_required_paths": [
+            "packages/kailash-kaizen/tests/unit/test_llm_provider_bug_reproduction.py",
+            "packages/kailash-pact/tests/unit/governance/test_audit_integrity.py",
+            "tests/regression/test_channel_parameters_envelope_behaviour.py",
+            "tests/regression/test_http_dns_connection_binding.py",
+            "tests/regression/test_issue_1185_async_resume_short_circuit.py",
+            "tests/regression/test_issue_2221_residual_empty_verifiers.py",
+            "tests/trust/pact/unit/test_audit_integrity.py",
+            "tests/unit/runtime/helpers_runtime.py",
+            "tests/unit/runtime/mixins/test_validation_mixin.py"
+          ],
+          "backup_reason": "Fresh archive of all dirty/untracked files plus staged/unstaged binary patches and metadata after reviewers quiesce; prior /tmp backups predate current overlays and do not replace this snapshot.",
+          "unknown_files": [],
+          "diagnostic_only_overlays": []
+        },
+        {
+          "path": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-final3-coverage",
+          "head": "a35604592eac70584f35acffd23d9ddc4ff615b3",
+          "branch": null,
+          "detached": true,
+          "head_is_ancestor_of_dev": true,
+          "left_head_unique_right_dev_unique": "0\t0",
+          "head_unique_commit_log": [],
+          "changes": [],
+          "classification_counts": {},
+          "ignored_counts": {
+            ".ruff_cache": 4,
+            ".venv": 1,
+            "python_bytecode": 993,
+            "other_ignored": 3
+          },
+          "other_ignored_paths": [
+            "packages/kailash-kaizen/.ruff_cache/.gitignore",
+            "packages/kailash-kaizen/.ruff_cache/0.14.11/17013855883751907490",
+            "packages/kailash-kaizen/.ruff_cache/CACHEDIR.TAG"
+          ],
+          "reviewer_active_hold": true,
+          "backup_recommendation": "Before drain capture HEAD/index/worktree patches plus every untracked/ignored non-cache artifact; exact integration is not authorization to discard. Active reviewer trees must quiesce first.",
+          "content_stable_during_inventory": true,
+          "additional_ignored_classification": "All other_ignored_paths are nested Ruff/Pytest caches; no unknown ignored artifacts found.",
+          "head_still_matches_snapshot": true,
+          "backup_required_paths": [],
+          "backup_reason": "Fresh archive of all dirty/untracked files plus staged/unstaged binary patches and metadata after reviewers quiesce; prior /tmp backups predate current overlays and do not replace this snapshot.",
+          "unknown_files": [],
+          "diagnostic_only_overlays": []
+        },
+        {
+          "path": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-final3-security",
+          "head": "9ed7255935fd5ff026964c6960247a4869f2c22c",
+          "branch": null,
+          "detached": true,
+          "head_is_ancestor_of_dev": true,
+          "left_head_unique_right_dev_unique": "0\t4",
+          "head_unique_commit_log": [],
+          "changes": [
+            {
+              "status": " M",
+              "path": "packages/kailash-dataflow/tests/unit/performance/test_simple_coverage_boost.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 9692,
+              "sha256": "1f6141ab56d00085a19c159b374274999f37f89dc4d72f57238e1e0617eb33cb",
+              "head_sha256": "24c9555ef55b858bd7f0437e7500d77411bb12af725090d75b86253ac4f5111e",
+              "dev_sha256": "1f6141ab56d00085a19c159b374274999f37f89dc4d72f57238e1e0617eb33cb",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 11124,
+              "sha256": "98a2d158e5cae482a127c03909a993233f7ee4180a209172bb8997964d663f49",
+              "head_sha256": "317ad0068b159bde9ff3998fdb9ac25a6832390145734d43f743ec4f5077fb60",
+              "dev_sha256": "bf89e961b250438f29b554502ae8d7605d1020eb9c88a4f7d6718921a009cdbb",
+              "classification": "integrated_import_order_only",
+              "diff_artifact": "/tmp/csq15-owned-worktree-drain-diffs/csq14-final3-security--packages__kailash-dataflow__tests__unit__testing__test_tdd_performance_benchmark.py.diff",
+              "disposition": "Exact test/helper/module non-import AST and imported bindings; only isort grouping/member order differs."
+            },
+            {
+              "status": " M",
+              "path": "packages/kailash-pact/tests/unit/governance/test_audit_integrity.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 8715,
+              "sha256": "c7f9c9dd43373a2b066a5fc147b97957b55409a7ee9b92dbcff74882497ea1d8",
+              "head_sha256": "85ea695f8cf6d4f597ffc00e93d1cd284f9c3cdbf0b149bbf4059d50209d9713",
+              "dev_sha256": "c7f9c9dd43373a2b066a5fc147b97957b55409a7ee9b92dbcff74882497ea1d8",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "specs/dataflow-cache.md",
+              "rename_from": null,
+              "kind": "document",
+              "size": 22432,
+              "sha256": "80ddee519098fa7d8cda3ce0ac36c68fabe69714585714413ecb2654a747c2aa",
+              "head_sha256": "9121985160fe9f1c541d9c18d3df66efec03599a50ff1467aba5ac15461bbad4",
+              "dev_sha256": "80ddee519098fa7d8cda3ce0ac36c68fabe69714585714413ecb2654a747c2aa",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "src/kailash/nodes/data/async_sql.py",
+              "rename_from": null,
+              "kind": "source",
+              "size": 361301,
+              "sha256": "3a9a724aa558bca87924bcd3faa82c15c946f5c6460837bfe42f9d285705a87b",
+              "head_sha256": "101b968fee6a61f902c61b115b45b9aff46ea45b4b420538349422328293ea53",
+              "dev_sha256": "3a9a724aa558bca87924bcd3faa82c15c946f5c6460837bfe42f9d285705a87b",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "tests/regression/test_channel_parameters_envelope_behaviour.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 11602,
+              "sha256": "795aaa16b0736be42d12daa031786e4fee487974533601b37e26df8ebcd1db88",
+              "head_sha256": "d7f0aae39c06a53d8e4bfd8e2c4270e338065ef34376d3d4eb35fc6a0fc598db",
+              "dev_sha256": "795aaa16b0736be42d12daa031786e4fee487974533601b37e26df8ebcd1db88",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "tests/regression/test_http_dns_connection_binding.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 17506,
+              "sha256": "16547d27ef3dc1911d7695722fabb5b215ba42799258ef30eb806bcd21a1ea0e",
+              "head_sha256": "69961dffa296621682c4b4fe9e6226736342621586bc3b783783b23779ea0796",
+              "dev_sha256": "16547d27ef3dc1911d7695722fabb5b215ba42799258ef30eb806bcd21a1ea0e",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "tests/regression/test_issue_1185_async_resume_short_circuit.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 13951,
+              "sha256": "40b72f3072a0ec90ef92be98daab1b734d50d35c8b0792088781b95fca9b64b6",
+              "head_sha256": "7de13bce305938a06bab75d24d692c70dd6d1d02997ad9aa3d11b3d91a02b078",
+              "dev_sha256": "40b72f3072a0ec90ef92be98daab1b734d50d35c8b0792088781b95fca9b64b6",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "tests/regression/test_issue_2221_residual_empty_verifiers.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 8769,
+              "sha256": "71c64387d59e6fe9d479791fc952eca6b7f1f8a056f565020f1e324b46704ffc",
+              "head_sha256": "3c2e9d3def03ccdd04bdad594ad422aab5b02a20f8c89600db122861fec53495",
+              "dev_sha256": "71c64387d59e6fe9d479791fc952eca6b7f1f8a056f565020f1e324b46704ffc",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "tests/regression/test_issue_712_consumer_startup_patterns.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 14787,
+              "sha256": "a106a0f873cf28ef025c3431aee9d80e5bf49389d01c5a955c44907536ae5425",
+              "head_sha256": "660a69c9c8128b6bd4dbd0375ed1a575b9b24dfaa24fd387b3450b37dbe2bfbc",
+              "dev_sha256": "a106a0f873cf28ef025c3431aee9d80e5bf49389d01c5a955c44907536ae5425",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "tests/regression/test_issue_712_sibling_fastapi_sites.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 5843,
+              "sha256": "a45c1b1fb9d27fc0a23fdc1b3ca73d43d4b503141027e3422cfa1032ffd3699d",
+              "head_sha256": "f76c68b2aadddcde3012b11b3047f98504e2cac4852dea0f29cf1330bdc09044",
+              "dev_sha256": "a45c1b1fb9d27fc0a23fdc1b3ca73d43d4b503141027e3422cfa1032ffd3699d",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "tests/trust/pact/unit/test_audit_integrity.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 9760,
+              "sha256": "622571da7a199b955b31c7032f34d6851de7ad9602468330fbace0b66cfbd7ae",
+              "head_sha256": "6166c96d11d30171caa807450633178b1fbd006172c5b61e2dc15adf6d93048c",
+              "dev_sha256": "622571da7a199b955b31c7032f34d6851de7ad9602468330fbace0b66cfbd7ae",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "tests/unit/runtime/helpers_runtime.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 8113,
+              "sha256": "06ba50b0c62632521d676c095a29671f7048d396a0e19b354325d44d7cb90aed",
+              "head_sha256": "5c3f8ff3dee36fdb60076f078fda5638a062a400be0988f73ea8d22a48066467",
+              "dev_sha256": "06ba50b0c62632521d676c095a29671f7048d396a0e19b354325d44d7cb90aed",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "tests/unit/runtime/mixins/test_validation_mixin.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 19243,
+              "sha256": "80534d61ed67b4c2bca7abbbf9c779a558f67f3230e6edfbc597d43b9f5b9ead",
+              "head_sha256": "8473b0b24c65de1a28deac6939e745334bc36246d046e48683252761a1eb347c",
+              "dev_sha256": "80534d61ed67b4c2bca7abbbf9c779a558f67f3230e6edfbc597d43b9f5b9ead",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": "??",
+              "path": "packages/kailash-dataflow/tests/regression/test_sqlite_transaction_task_handoff.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 1804,
+              "sha256": "c3b6e9b6b8de06ee271dbf5856e29b302fed30294a0f1a7b860013134dab5522",
+              "head_sha256": null,
+              "dev_sha256": "c3b6e9b6b8de06ee271dbf5856e29b302fed30294a0f1a7b860013134dab5522",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": "??",
+              "path": "tests/regression/test_sqlite_nested_transaction_ownership.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 14423,
+              "sha256": "8241938e4af8e2fe2f17d7aeae5eaf63b056754c607b5d13e4eaa642d0ba0aa1",
+              "head_sha256": null,
+              "dev_sha256": "8241938e4af8e2fe2f17d7aeae5eaf63b056754c607b5d13e4eaa642d0ba0aa1",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            }
+          ],
+          "classification_counts": {
+            "exactly_integrated_in_dev": 15,
+            "integrated_import_order_only": 1
+          },
+          "ignored_counts": {
+            ".pytest_cache": 5,
+            ".ruff_cache": 3,
+            "python_bytecode": 1230,
+            "other_ignored": 3
+          },
+          "other_ignored_paths": [
+            "packages/kailash-pact/.ruff_cache/.gitignore",
+            "packages/kailash-pact/.ruff_cache/0.14.11/10429349549589173530",
+            "packages/kailash-pact/.ruff_cache/CACHEDIR.TAG"
+          ],
+          "reviewer_active_hold": true,
+          "backup_recommendation": "Before drain capture HEAD/index/worktree patches plus every untracked/ignored non-cache artifact; exact integration is not authorization to discard. Active reviewer trees must quiesce first.",
+          "content_stable_during_inventory": true,
+          "additional_ignored_classification": "All other_ignored_paths are nested Ruff/Pytest caches; no unknown ignored artifacts found.",
+          "head_still_matches_snapshot": true,
+          "backup_required_paths": [
+            "packages/kailash-dataflow/tests/unit/performance/test_simple_coverage_boost.py",
+            "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+            "packages/kailash-pact/tests/unit/governance/test_audit_integrity.py",
+            "specs/dataflow-cache.md",
+            "src/kailash/nodes/data/async_sql.py",
+            "tests/regression/test_channel_parameters_envelope_behaviour.py",
+            "tests/regression/test_http_dns_connection_binding.py",
+            "tests/regression/test_issue_1185_async_resume_short_circuit.py",
+            "tests/regression/test_issue_2221_residual_empty_verifiers.py",
+            "tests/regression/test_issue_712_consumer_startup_patterns.py",
+            "tests/regression/test_issue_712_sibling_fastapi_sites.py",
+            "tests/trust/pact/unit/test_audit_integrity.py",
+            "tests/unit/runtime/helpers_runtime.py",
+            "tests/unit/runtime/mixins/test_validation_mixin.py",
+            "packages/kailash-dataflow/tests/regression/test_sqlite_transaction_task_handoff.py",
+            "tests/regression/test_sqlite_nested_transaction_ownership.py"
+          ],
+          "backup_reason": "Fresh archive of all dirty/untracked files plus staged/unstaged binary patches and metadata after reviewers quiesce; prior /tmp backups predate current overlays and do not replace this snapshot.",
+          "unknown_files": [],
+          "diagnostic_only_overlays": []
+        },
+        {
+          "path": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-nexus-dns-binding",
+          "head": "4d2a1dbbc9d5871646fa6cb6370f25daf704b699",
+          "branch": "refs/heads/fix/csq14-nexus-dns-binding",
+          "detached": false,
+          "head_is_ancestor_of_dev": true,
+          "left_head_unique_right_dev_unique": "0\t14",
+          "head_unique_commit_log": [],
+          "changes": [
+            {
+              "status": " M",
+              "path": "packages/kailash-kaizen/pyproject.toml",
+              "rename_from": null,
+              "kind": "other",
+              "size": 14513,
+              "sha256": "b3b8bed75211e1bb21cee17c1d1703a9dabf24e88856e84f71fd11bc4b7f71f6",
+              "head_sha256": "4bfa360cb02608fbebab31883e39fdc1f8685a9a405b999a45d61d2abc226091",
+              "dev_sha256": "9ab78629830755be89bbcf1ffd341c70be331ffb1d5ecf96abbfbf82bc7b4bfa",
+              "classification": "superseded_build_metadata",
+              "diff_artifact": "/tmp/csq15-owned-worktree-drain-diffs/csq14-nexus-dns-binding--packages__kailash-kaizen__pyproject.toml.diff",
+              "disposition": "Worktree lacks final [tool.uv.sources] pairedCore editable source mapping; otherwise bytes match dev."
+            },
+            {
+              "status": " M",
+              "path": "packages/kailash-kaizen/src/kaizen/llm/http_client.py",
+              "rename_from": null,
+              "kind": "source",
+              "size": 22898,
+              "sha256": "1a465f7abb7f7ee30d5ff06c2eb5c03c335921255b6d66d9f36a4270bc360ccd",
+              "head_sha256": "238fc4d354461824f865b71b7abf667baeedc2f99ae9aa3a23b40470df822306",
+              "dev_sha256": "1a465f7abb7f7ee30d5ff06c2eb5c03c335921255b6d66d9f36a4270bc360ccd",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "packages/kailash-kaizen/src/kaizen/llm/url_safety.py",
+              "rename_from": null,
+              "kind": "source",
+              "size": 13350,
+              "sha256": "37e0b892070f2494cab7fb3aeabd99a47949343683c5419c3663d30b5942ec99",
+              "head_sha256": "9d8a8fde7bcb331880b455abe7a0fb9f29c0f563a606089bb9cf6821531de718",
+              "dev_sha256": "37e0b892070f2494cab7fb3aeabd99a47949343683c5419c3663d30b5942ec99",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "packages/kailash-kaizen/tests/integration/llm/test_llmhttpclient_wiring.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 3519,
+              "sha256": "b8729472ac8ef2fbcf4f1834df3fbadaf12fcd48b191648dff0f9cfab51185c3",
+              "head_sha256": "f958f95f79c2f8f9f548c26db982afca313e65f3570a6f6b5ce4918d2201c4ce",
+              "dev_sha256": "b8729472ac8ef2fbcf4f1834df3fbadaf12fcd48b191648dff0f9cfab51185c3",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "packages/kailash-kaizen/tests/unit/llm/test_wire_timeout_reaches_transport.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 8039,
+              "sha256": "c3f46620b7eddae998016b1d88ee7eb10210ce668f2c971afec9825b9a2fcda9",
+              "head_sha256": "1a65c638dcab51101853f13a7ec7455f789322ec338a0f190db6b1b5e3d491f0",
+              "dev_sha256": "c3f46620b7eddae998016b1d88ee7eb10210ce668f2c971afec9825b9a2fcda9",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "packages/kailash-nexus/pyproject.toml",
+              "rename_from": null,
+              "kind": "other",
+              "size": 5830,
+              "sha256": "c0779556c84e9da582270f412bac662bd9e6206e429ece2c1e31ff30b6b345ff",
+              "head_sha256": "b1b4335a791a7a31baf7618a5b04a1bdf4b3dfa988af1e011b7a0bf177717957",
+              "dev_sha256": "c0779556c84e9da582270f412bac662bd9e6206e429ece2c1e31ff30b6b345ff",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "packages/kailash-nexus/src/nexus/http_client.py",
+              "rename_from": null,
+              "kind": "source",
+              "size": 22447,
+              "sha256": "c1e6bed85b9f95ee158d385883e3de8dc26ebdf37aeedeaaf266e3fdee4b4ac9",
+              "head_sha256": "5891e000ca46cc850ee91f470247b489e21dd8309a817ccd81a5ddb4f27ab40d",
+              "dev_sha256": "c1e6bed85b9f95ee158d385883e3de8dc26ebdf37aeedeaaf266e3fdee4b4ac9",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "packages/kailash-nexus/src/nexus/transports/webhook.py",
+              "rename_from": null,
+              "kind": "source",
+              "size": 35699,
+              "sha256": "495663043b8b8ceb20f2c6172245fe1509faa800c663adf12b39c5e8bebe64aa",
+              "head_sha256": "a67637ec9682ce9d2501b4a7355114ff00d0c421884740499d902a72d01f4077",
+              "dev_sha256": "495663043b8b8ceb20f2c6172245fe1509faa800c663adf12b39c5e8bebe64aa",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "packages/kailash-nexus/tests/unit/transports/test_webhook.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 32866,
+              "sha256": "f038d9073083916fff3783d5ee3f1c34cf238c93579864d99d1d715d0c79c897",
+              "head_sha256": "d89dda6be0934993f64117e7bbf3fd881b782c446ba6a591552418acb02ecee5",
+              "dev_sha256": "f038d9073083916fff3783d5ee3f1c34cf238c93579864d99d1d715d0c79c897",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "pyproject.toml",
+              "rename_from": null,
+              "kind": "other",
+              "size": 19727,
+              "sha256": "1b2515db758705ddb871d788ea96a7e7558e21d222d8f07b31cdb56130cace43",
+              "head_sha256": "7b6220b4402aeeb9fcd21103a356f98acc2a9954324f3d4e76eebd7466a07a31",
+              "dev_sha256": "1b2515db758705ddb871d788ea96a7e7558e21d222d8f07b31cdb56130cace43",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "specs/kaizen-providers-provider-system.md",
+              "rename_from": null,
+              "kind": "document",
+              "size": 13587,
+              "sha256": "7ff13ea9860f2ea8e86588e0c02bb3d29b2898a48e085ab65758b98b1c3a69bf",
+              "head_sha256": "92d909002395bbcffe57675b3e1adeb51eeac651955258f0a8d32ed6cedb32b7",
+              "dev_sha256": "e89b92bbd5d48131534f00a2147c01e377c6e1f63749cc319ebd857532c27b91",
+              "classification": "superseded_source_line_citation",
+              "diff_artifact": "/tmp/csq15-owned-worktree-drain-diffs/csq14-nexus-dns-binding--specs__kaizen-providers-provider-system.md.diff",
+              "disposition": "Only prior logging source line end355 instead of final357; current dev includes final source citation."
+            },
+            {
+              "status": " M",
+              "path": "specs/nexus-channels.md",
+              "rename_from": null,
+              "kind": "document",
+              "size": 23717,
+              "sha256": "0edd79fb1e6cb98acb499a9e87072fb39e7055f25bbed8376b524f988b53900d",
+              "head_sha256": "1871ba5b6bf47715cf818f87c556ece14fc896a3f1d1a920e3ad2959f92fc7e0",
+              "dev_sha256": "0edd79fb1e6cb98acb499a9e87072fb39e7055f25bbed8376b524f988b53900d",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "specs/nexus-services.md",
+              "rename_from": null,
+              "kind": "document",
+              "size": 28065,
+              "sha256": "3efa6fd321621cbaecd841deb226ad6c3cde21f67b5263428e44fbd20949778b",
+              "head_sha256": "6170ed307328131170036da42084b09ed486f496e2719142156be5b02fda3a77",
+              "dev_sha256": "4265cbd457054861e7ee667426518fcccf40baeb901998520e6078c427163105",
+              "classification": "superseded_source_line_citation",
+              "diff_artifact": "/tmp/csq15-owned-worktree-drain-diffs/csq14-nexus-dns-binding--specs__nexus-services.md.diff",
+              "disposition": "Only prior logging source line end355 instead of final357; current dev includes final source citation."
+            },
+            {
+              "status": " M",
+              "path": "src/kailash/utils/network_guard.py",
+              "rename_from": null,
+              "kind": "source",
+              "size": 27041,
+              "sha256": "87d700e283fc96399790334a4151bb92b98c4a9e2ec5d6a208dad5c164aacda5",
+              "head_sha256": "380b780d095312b2a75a1bc21ad925393b987db6b12a35c6f83a7c0a4a98a3d6",
+              "dev_sha256": "87d700e283fc96399790334a4151bb92b98c4a9e2ec5d6a208dad5c164aacda5",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": "??",
+              "path": "packages/kailash-nexus/tests/unit/transports/test_webhook_safe_delivery.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 12942,
+              "sha256": "be65780372d9a7fa5130e525a1274cc28fb2843bf71aa2a78fc0057ddf37d9d9",
+              "head_sha256": null,
+              "dev_sha256": "be65780372d9a7fa5130e525a1274cc28fb2843bf71aa2a78fc0057ddf37d9d9",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": "??",
+              "path": "src/kailash/utils/http_logging.py",
+              "rename_from": null,
+              "kind": "source",
+              "size": 11576,
+              "sha256": "b24e02b39b3580c4d3e357c115e34d9d023b5a30cb4c073f80bf59617721e421",
+              "head_sha256": null,
+              "dev_sha256": "29fcdca49a5d7e3f812a2c38e8e64e7c447a109ce3fca228af81fd3e4c713991",
+              "classification": "integrated_semantics_format_or_comment_only",
+              "diff_artifact": "/tmp/csq15-owned-worktree-drain-diffs/csq14-nexus-dns-binding--src__kailash__utils__http_logging.py.diff",
+              "disposition": "Exact Python AST; dev adds explanatory builtin-only comments and Ruff suppressions."
+            },
+            {
+              "status": "??",
+              "path": "src/kailash/utils/http_transport.py",
+              "rename_from": null,
+              "kind": "source",
+              "size": 5435,
+              "sha256": "a21f90acc2740b167a38d272fe68b51607cb1b2e6fddc5af6862e24b1cb6a0bd",
+              "head_sha256": null,
+              "dev_sha256": "a21f90acc2740b167a38d272fe68b51607cb1b2e6fddc5af6862e24b1cb6a0bd",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": "??",
+              "path": "tests/regression/test_http_dns_connection_binding.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 17506,
+              "sha256": "16547d27ef3dc1911d7695722fabb5b215ba42799258ef30eb806bcd21a1ea0e",
+              "head_sha256": null,
+              "dev_sha256": "16547d27ef3dc1911d7695722fabb5b215ba42799258ef30eb806bcd21a1ea0e",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": "??",
+              "path": "tests/regression/test_owned_http_diagnostic_privacy.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 23942,
+              "sha256": "6a8f9d1ad73bbf48b60f2bed31c79f90ddc781cb97c2d275ec646aa59de2f7cb",
+              "head_sha256": null,
+              "dev_sha256": "6a8f9d1ad73bbf48b60f2bed31c79f90ddc781cb97c2d275ec646aa59de2f7cb",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            }
+          ],
+          "classification_counts": {
+            "superseded_build_metadata": 1,
+            "exactly_integrated_in_dev": 15,
+            "superseded_source_line_citation": 2,
+            "integrated_semantics_format_or_comment_only": 1
+          },
+          "ignored_counts": {
+            ".pytest_cache": 5,
+            ".ruff_cache": 4,
+            "python_bytecode": 730
+          },
+          "other_ignored_paths": [],
+          "reviewer_active_hold": false,
+          "backup_recommendation": "Before drain capture HEAD/index/worktree patches plus every untracked/ignored non-cache artifact; exact integration is not authorization to discard. Active reviewer trees must quiesce first.",
+          "content_stable_during_inventory": true,
+          "additional_ignored_classification": "All other_ignored_paths are nested Ruff/Pytest caches; no unknown ignored artifacts found.",
+          "head_still_matches_snapshot": true,
+          "backup_required_paths": [
+            "packages/kailash-kaizen/pyproject.toml",
+            "packages/kailash-kaizen/src/kaizen/llm/http_client.py",
+            "packages/kailash-kaizen/src/kaizen/llm/url_safety.py",
+            "packages/kailash-kaizen/tests/integration/llm/test_llmhttpclient_wiring.py",
+            "packages/kailash-kaizen/tests/unit/llm/test_wire_timeout_reaches_transport.py",
+            "packages/kailash-nexus/pyproject.toml",
+            "packages/kailash-nexus/src/nexus/http_client.py",
+            "packages/kailash-nexus/src/nexus/transports/webhook.py",
+            "packages/kailash-nexus/tests/unit/transports/test_webhook.py",
+            "pyproject.toml",
+            "specs/kaizen-providers-provider-system.md",
+            "specs/nexus-channels.md",
+            "specs/nexus-services.md",
+            "src/kailash/utils/network_guard.py",
+            "packages/kailash-nexus/tests/unit/transports/test_webhook_safe_delivery.py",
+            "src/kailash/utils/http_logging.py",
+            "src/kailash/utils/http_transport.py",
+            "tests/regression/test_http_dns_connection_binding.py",
+            "tests/regression/test_owned_http_diagnostic_privacy.py"
+          ],
+          "backup_reason": "Fresh archive of all dirty/untracked files plus staged/unstaged binary patches and metadata after reviewers quiesce; prior /tmp backups predate current overlays and do not replace this snapshot.",
+          "unknown_files": [],
+          "diagnostic_only_overlays": []
+        },
+        {
+          "path": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-webhook-safe-delivery",
+          "head": "84faae1b641346f880c30448a392df949a014c1a",
+          "branch": "refs/heads/fix/csq14-webhook-safe-delivery",
+          "detached": false,
+          "head_is_ancestor_of_dev": true,
+          "left_head_unique_right_dev_unique": "0\t10",
+          "head_unique_commit_log": [],
+          "changes": [
+            {
+              "status": " M",
+              "path": "packages/kailash-nexus/src/nexus/http_client.py",
+              "rename_from": null,
+              "kind": "source",
+              "size": 22382,
+              "sha256": "867cdc12f9d6182d6ef2a5e21c738f9b36b7ff49be128428ff1bec7ca77a9d16",
+              "head_sha256": "5891e000ca46cc850ee91f470247b489e21dd8309a817ccd81a5ddb4f27ab40d",
+              "dev_sha256": "c1e6bed85b9f95ee158d385883e3de8dc26ebdf37aeedeaaf266e3fdee4b4ac9",
+              "classification": "superseded_http_diagnostics_integration",
+              "diff_artifact": "/tmp/csq15-owned-worktree-drain-diffs/csq14-webhook-safe-delivery--packages__kailash-nexus__src__nexus__http_client.py.diff",
+              "disposition": "Old webhook candidate uses httpx.AsyncClient; dev replaces it with reviewed DiagnosticAsyncClient. Rest of file matches."
+            },
+            {
+              "status": " M",
+              "path": "packages/kailash-nexus/src/nexus/transports/webhook.py",
+              "rename_from": null,
+              "kind": "source",
+              "size": 35699,
+              "sha256": "495663043b8b8ceb20f2c6172245fe1509faa800c663adf12b39c5e8bebe64aa",
+              "head_sha256": "a67637ec9682ce9d2501b4a7355114ff00d0c421884740499d902a72d01f4077",
+              "dev_sha256": "495663043b8b8ceb20f2c6172245fe1509faa800c663adf12b39c5e8bebe64aa",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "packages/kailash-nexus/tests/unit/transports/test_webhook.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 32866,
+              "sha256": "f038d9073083916fff3783d5ee3f1c34cf238c93579864d99d1d715d0c79c897",
+              "head_sha256": "d89dda6be0934993f64117e7bbf3fd881b782c446ba6a591552418acb02ecee5",
+              "dev_sha256": "f038d9073083916fff3783d5ee3f1c34cf238c93579864d99d1d715d0c79c897",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "specs/nexus-channels.md",
+              "rename_from": null,
+              "kind": "document",
+              "size": 23717,
+              "sha256": "0edd79fb1e6cb98acb499a9e87072fb39e7055f25bbed8376b524f988b53900d",
+              "head_sha256": "1871ba5b6bf47715cf818f87c556ece14fc896a3f1d1a920e3ad2959f92fc7e0",
+              "dev_sha256": "0edd79fb1e6cb98acb499a9e87072fb39e7055f25bbed8376b524f988b53900d",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "src/kailash/utils/network_guard.py",
+              "rename_from": null,
+              "kind": "source",
+              "size": 27041,
+              "sha256": "87d700e283fc96399790334a4151bb92b98c4a9e2ec5d6a208dad5c164aacda5",
+              "head_sha256": "380b780d095312b2a75a1bc21ad925393b987db6b12a35c6f83a7c0a4a98a3d6",
+              "dev_sha256": "87d700e283fc96399790334a4151bb92b98c4a9e2ec5d6a208dad5c164aacda5",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": "??",
+              "path": "packages/kailash-nexus/tests/unit/transports/test_webhook_safe_delivery.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 12942,
+              "sha256": "be65780372d9a7fa5130e525a1274cc28fb2843bf71aa2a78fc0057ddf37d9d9",
+              "head_sha256": null,
+              "dev_sha256": "be65780372d9a7fa5130e525a1274cc28fb2843bf71aa2a78fc0057ddf37d9d9",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": "??",
+              "path": "src/kailash/utils/http_transport.py",
+              "rename_from": null,
+              "kind": "source",
+              "size": 5123,
+              "sha256": "90248812a0fd563f0140b2add2f2b14a6cadfa5c2114fc1f0386fa29f43fa1b9",
+              "head_sha256": null,
+              "dev_sha256": "a21f90acc2740b167a38d272fe68b51607cb1b2e6fddc5af6862e24b1cb6a0bd",
+              "classification": "superseded_http_diagnostics_integration",
+              "diff_artifact": "/tmp/csq15-owned-worktree-drain-diffs/csq14-webhook-safe-delivery--src__kailash__utils__http_transport.py.diff",
+              "disposition": "Old pinned transport lacks later owned/unowned diagnostics contexts; diff contains only final context wiring and indentation."
+            }
+          ],
+          "classification_counts": {
+            "superseded_http_diagnostics_integration": 2,
+            "exactly_integrated_in_dev": 5
+          },
+          "ignored_counts": {
+            ".ruff_cache": 4
+          },
+          "other_ignored_paths": [],
+          "reviewer_active_hold": false,
+          "backup_recommendation": "Before drain capture HEAD/index/worktree patches plus every untracked/ignored non-cache artifact; exact integration is not authorization to discard. Active reviewer trees must quiesce first.",
+          "content_stable_during_inventory": true,
+          "additional_ignored_classification": "All other_ignored_paths are nested Ruff/Pytest caches; no unknown ignored artifacts found.",
+          "head_still_matches_snapshot": true,
+          "backup_required_paths": [
+            "packages/kailash-nexus/src/nexus/http_client.py",
+            "packages/kailash-nexus/src/nexus/transports/webhook.py",
+            "packages/kailash-nexus/tests/unit/transports/test_webhook.py",
+            "specs/nexus-channels.md",
+            "src/kailash/utils/network_guard.py",
+            "packages/kailash-nexus/tests/unit/transports/test_webhook_safe_delivery.py",
+            "src/kailash/utils/http_transport.py"
+          ],
+          "backup_reason": "Fresh archive of all dirty/untracked files plus staged/unstaged binary patches and metadata after reviewers quiesce; prior /tmp backups predate current overlays and do not replace this snapshot.",
+          "unknown_files": [],
+          "diagnostic_only_overlays": []
+        },
+        {
+          "path": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq15-sqlite-nested-owner",
+          "head": "6af82971d84687dc670e233a35b2a5c6d8a13b40",
+          "branch": "refs/heads/fix/csq15-sqlite-nested-owner",
+          "detached": false,
+          "head_is_ancestor_of_dev": true,
+          "left_head_unique_right_dev_unique": "0\t2",
+          "head_unique_commit_log": [],
+          "changes": [
+            {
+              "status": " M",
+              "path": "specs/dataflow-cache.md",
+              "rename_from": null,
+              "kind": "document",
+              "size": 22432,
+              "sha256": "80ddee519098fa7d8cda3ce0ac36c68fabe69714585714413ecb2654a747c2aa",
+              "head_sha256": "9121985160fe9f1c541d9c18d3df66efec03599a50ff1467aba5ac15461bbad4",
+              "dev_sha256": "80ddee519098fa7d8cda3ce0ac36c68fabe69714585714413ecb2654a747c2aa",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": " M",
+              "path": "src/kailash/nodes/data/async_sql.py",
+              "rename_from": null,
+              "kind": "source",
+              "size": 361301,
+              "sha256": "3a9a724aa558bca87924bcd3faa82c15c946f5c6460837bfe42f9d285705a87b",
+              "head_sha256": "101b968fee6a61f902c61b115b45b9aff46ea45b4b420538349422328293ea53",
+              "dev_sha256": "3a9a724aa558bca87924bcd3faa82c15c946f5c6460837bfe42f9d285705a87b",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": "??",
+              "path": "packages/kailash-dataflow/tests/regression/test_sqlite_transaction_task_handoff.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 1804,
+              "sha256": "c3b6e9b6b8de06ee271dbf5856e29b302fed30294a0f1a7b860013134dab5522",
+              "head_sha256": null,
+              "dev_sha256": "c3b6e9b6b8de06ee271dbf5856e29b302fed30294a0f1a7b860013134dab5522",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            },
+            {
+              "status": "??",
+              "path": "tests/regression/test_sqlite_nested_transaction_ownership.py",
+              "rename_from": null,
+              "kind": "test",
+              "size": 14423,
+              "sha256": "8241938e4af8e2fe2f17d7aeae5eaf63b056754c607b5d13e4eaa642d0ba0aa1",
+              "head_sha256": null,
+              "dev_sha256": "8241938e4af8e2fe2f17d7aeae5eaf63b056754c607b5d13e4eaa642d0ba0aa1",
+              "classification": "exactly_integrated_in_dev",
+              "diff_artifact": null,
+              "disposition": "Integrated exact bytes; preserve snapshot until drain approval."
+            }
+          ],
+          "classification_counts": {
+            "exactly_integrated_in_dev": 4
+          },
+          "ignored_counts": {
+            ".pytest_cache": 4,
+            ".ruff_cache": 5,
+            "python_bytecode": 568,
+            "other_ignored": 5
+          },
+          "other_ignored_paths": [
+            "packages/kailash-dataflow/.pytest_cache/.gitignore",
+            "packages/kailash-dataflow/.pytest_cache/CACHEDIR.TAG",
+            "packages/kailash-dataflow/.pytest_cache/README.md",
+            "packages/kailash-dataflow/.pytest_cache/v/cache/lastfailed",
+            "packages/kailash-dataflow/.pytest_cache/v/cache/nodeids"
+          ],
+          "reviewer_active_hold": false,
+          "backup_recommendation": "Before drain capture HEAD/index/worktree patches plus every untracked/ignored non-cache artifact; exact integration is not authorization to discard. Active reviewer trees must quiesce first.",
+          "content_stable_during_inventory": true,
+          "additional_ignored_classification": "All other_ignored_paths are nested Ruff/Pytest caches; no unknown ignored artifacts found.",
+          "head_still_matches_snapshot": true,
+          "backup_required_paths": [
+            "specs/dataflow-cache.md",
+            "src/kailash/nodes/data/async_sql.py",
+            "packages/kailash-dataflow/tests/regression/test_sqlite_transaction_task_handoff.py",
+            "tests/regression/test_sqlite_nested_transaction_ownership.py"
+          ],
+          "backup_reason": "Fresh archive of all dirty/untracked files plus staged/unstaged binary patches and metadata after reviewers quiesce; prior /tmp backups predate current overlays and do not replace this snapshot.",
+          "unknown_files": [],
+          "diagnostic_only_overlays": []
+        }
+      ],
+      "content_review_complete": true,
+      "unknown_uncommitted_work_found": [],
+      "diagnostic_only_uncommitted_overlays_found": [],
+      "drain_blockers": [
+        "Promotion/post-main verification not complete; parent owns execution gate",
+        "Coverage/security reviewer trees must be confirmed quiescent",
+        "Fresh reversible backup before any dirty-tree removal; archive is not yet created by this read-only task"
+      ],
+      "backup_targets": {
+        "prospective_archive_root": "/tmp/csq15-owned-worktree-final-drain-backup",
+        "per_tree": [
+          "HEAD+branch metadata",
+          "git diff --binary HEAD (working tree state)",
+          "git diff --cached --binary (index state)",
+          "All backup_required_paths verbatim, including untracked files",
+          "ignored files only if subsequent rescan finds non-cache artifacts"
+        ],
+        "protected_git_state": [
+          "52 exact refs/archive+refs/original refname/OID pairs",
+          "5 ordered stash@{n} commitOIDs andsubjects"
+        ],
+        "existing_backup_limitation": "/tmp/csq15-review-repin-backups and earlier repair backups cover prior states, not guaranteed final current bytes"
+      }
+    }
+  },
+  "parent_test": {
+    "passed": 86,
+    "warnings": 0,
+    "skips": 0,
+    "log": "/tmp/csq15-sqlite-v3-parent.log"
+  },
+  "mac_gate": {
+    "head": "a35604592eac70584f35acffd23d9ddc4ff615b3",
+    "tree": "2444c7e2734d90af39bb9462bc457961b459ccfe",
+    "exit": 0,
+    "all_files_hooks": "passed, SKIP unset",
+    "unit_tests": 5156,
+    "skipped": 12,
+    "deselected": 3,
+    "python_warnings": 0,
+    "log": "/tmp/csq15-final-mac.log",
+    "skip_audit": "/tmp/csq15-mac-final-skip-audit.log",
+    "skip_scope": "10 macOS RLIMIT_AS unsupported; missing optional kaizen_agents; absent cross-SDK reference vectors"
+  },
+  "linux_gate": {
+    "head": "a35604592eac70584f35acffd23d9ddc4ff615b3",
+    "exit": 1,
+    "root": {
+      "passed": 3888,
+      "skipped": 1,
+      "deselected": 24,
+      "python_warnings": 0,
+      "exit": 0
+    },
+    "dataflow_unit": {
+      "passed": 3515,
+      "skipped": 20,
+      "exit": 0
+    },
+    "dataflow_regression": {
+      "passed": 1039,
+      "failed": 1,
+      "skipped": 6,
+      "deselected": 187,
+      "exit": 1
+    },
+    "failure": "test_issue_979_layer3_no_bare_runtime_import detects two benchmark imports; corrected fixture now reviewed, full DataFlow rerun owed",
+    "log": "/tmp/csq15-final-linux.log"
+  },
+  "lazy_import_fixture": {
+    "author": {
+      "ran": true,
+      "verdict": "CLEAN author boundedlazyimport fix, independentreview separate",
+      "head": "a35604592eac70584f35acffd23d9ddc4ff615b3",
+      "manifest": {
+        "path": "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+        "base_sha256": "bf89e961b250438f29b554502ae8d7605d1020eb9c88a4f7d6718921a009cdbb",
+        "final_sha256": "fd840ebdd1e4c7f8d98800f1f82b80c109ec2e3de9c08ad2865e40e4d428c605",
+        "test_functions_ast_identical": 10,
+        "non_import_ast_identical": true,
+        "removed_module_imports": [
+          "kailash.runtime.async_local.AsyncLocalRuntime",
+          "kailash.workflow.builder.WorkflowBuilder"
+        ],
+        "new_import_owners": [
+          "_database",
+          "_run"
+        ]
+      },
+      "rounds": [
+        {
+          "passed": 24,
+          "log": "/tmp/csq15-benchmark-lazy-import-r1.log",
+          "receipt": "/tmp/csq15-benchmark-lazy-import-r1.json"
+        },
+        {
+          "passed": 24,
+          "log": "/tmp/csq15-benchmark-lazy-import-r2.log",
+          "receipt": "/tmp/csq15-benchmark-lazy-import-r2.json"
+        }
+      ],
+      "opposite": "Original topimports produce guard1failure with exact2moduleimport violations; /tmp/csq15-benchmark-lazy-import-original-control.log",
+      "warnings": 0,
+      "skips": 0,
+      "expected_diagnostics": "36 each round:18testmode +18aggressivecleanup disclosures",
+      "checks": [
+        "Ruffcheck",
+        "Ruffformatcheck",
+        "gitdiffcheck",
+        "10testfunctionASTs identical",
+        "nonimportmoduleAST identical"
+      ],
+      "scope": "Onlybenchmarkruntime imports deferred into actualusers; structuralguard scansentireunit tree; wholebenchmark+canonicaldialectfile actuallyexecuted. No productionchanges, noassertionremoval/suppression/skips.",
+      "patch": "/tmp/csq15-benchmark-lazy-import.patch",
+      "open_findings": []
+    },
+    "security": {
+      "ran": true,
+      "verdict": "CLEAN",
+      "scope": "Test-only two import relocations; actual structural guard plus 23 DataFlow benchmark/coverage behaviors. No production changes.",
+      "manifest": {
+        "path": "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+        "base_sha256": "bf89e961b250438f29b554502ae8d7605d1020eb9c88a4f7d6718921a009cdbb",
+        "final_sha256": "fd840ebdd1e4c7f8d98800f1f82b80c109ec2e3de9c08ad2865e40e4d428c605",
+        "test_functions_ast_identical": 10,
+        "non_import_ast_identical": true,
+        "removed_module_imports": [
+          "kailash.runtime.async_local.AsyncLocalRuntime",
+          "kailash.workflow.builder.WorkflowBuilder"
+        ],
+        "new_import_owners": [
+          "_database",
+          "_run"
+        ]
+      },
+      "independent_ast": {
+        "all_10_test_functions_equal": true,
+        "entire_module_non_import_AST_equal": true,
+        "import_owners": [
+          "AsyncLocalRuntime inside _database",
+          "WorkflowBuilder inside _run"
+        ]
+      },
+      "rounds": [
+        {
+          "receipt": "/tmp/csq15-security-benchmark-lazy-r1.json",
+          "log": "/tmp/csq15-security-benchmark-lazy-r1.log",
+          "sha256": "9b01d352310ac82e5d097b372d85035dde8bcbcd5683a87bd0cf11834e6e14c4",
+          "passed": 24,
+          "python_warnings": [],
+          "skips": [],
+          "expected_disclosures": {
+            "DataFlow: Test mode enabled (auto-detected pytest environment)": 18,
+            "DataFlow: Aggressive pool cleanup enabled for test mode": 18
+          }
+        },
+        {
+          "receipt": "/tmp/csq15-security-benchmark-lazy-r2.json",
+          "log": "/tmp/csq15-security-benchmark-lazy-r2.log",
+          "sha256": "9c6e7b0d3b184936396f898da3b4221a8770817920fff61795efb8267018ded5",
+          "passed": 24,
+          "python_warnings": [],
+          "skips": [],
+          "expected_disclosures": {
+            "DataFlow: Test mode enabled (auto-detected pytest environment)": 18,
+            "DataFlow: Aggressive pool cleanup enabled for test mode": 18
+          }
+        }
+      ],
+      "opposite_control": {
+        "ran": true,
+        "old_hits": [
+          "/tmp/csq15-benchmark-lazy-import-before.py:22 \u2014 bare top-level `from kailash.runtime.async_local import AsyncLocalRuntime` (PR #976 layer-3: drags the real async runtime into collection / forked workers). Move it inside a function, a `try`/`with` guard, or use `pytest.importorskip`.",
+          "/tmp/csq15-benchmark-lazy-import-before.py:23 \u2014 bare top-level `from kailash.workflow.builder import WorkflowBuilder` (PR #976 layer-3: drags the real async runtime into collection / forked workers). Move it inside a function, a `try`/`with` guard, or use `pytest.importorskip`."
+        ],
+        "final_hits": [],
+        "actual_test_failure": "Bare top-level runtime/builder imports found in tests/unit/ (PR #976 failure-layer 3 \u2014 issue #979 Workstream-B B-5):\n  - /var/folders/pm/75clc_t14rl4q7sg7qrxf_1m0000gn/T/csq15-security-import-control-qcx4eh0v/test_control.py:22 \u2014 bare top-level `from kailash.runtime.async_local import AsyncLocalRuntime` (PR #976 layer-3: drags the real async runtime into collection / forked workers). Move it inside a function, a `try`/`with` guard, or use `pytest.importorskip`.\n  - /var/folders/pm/75clc_t14rl4q7sg7qrxf_1m0000gn/T/csq15-security-import-control-qcx4eh0v/test_control.py:23 \u2014 bare top-level `from kailash.workflow.builder import WorkflowBuilder` (PR #976 layer-3: drags the real async runtime into collection / forked workers). Move it inside a function, a `try`/`with` guard, or use `pytest.importorskip`."
+      },
+      "unresolved": []
+    },
+    "parent": {
+      "passed_each_round": 24,
+      "warnings": 0,
+      "skips": 0,
+      "logs": [
+        "/tmp/csq15-lazy-import-parent-r1.log",
+        "/tmp/csq15-lazy-import-parent-r2.log"
+      ]
+    }
+  }
+}

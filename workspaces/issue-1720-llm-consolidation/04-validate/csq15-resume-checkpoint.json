@@ -1,7 +1,7 @@
 {
   "resumed_session": "01a0db1d-b7b7-7441-a2fe-81bfeef99161",
   "starting_head": "e19a9ab73bdf94066d7c2e820619ddcd11e303e7",
-  "status": "Fixture repairs committed76452b524; Core SQLite v3 integrated, independent final review and full Linux/Mac gates pending; D1 promotion remains authorized and unmerged",
+  "status": "Source and fixture scoped reviews complete; DataFlow gate rerun pending after import-only fixture repair; specification-check advisory scope decision pending",
   "authorizations": {
     "D1_promotion": true,
     "package_publication": false,
@@ -321,7 +321,7 @@
         }
       ]
     },
-    "status": "v3 independent correctness and adversarial reviews pending",
+    "status": "Two independent correctness/security rounds clean on exact a356 implementation; durable supplemental evidence csq15-final-reviewed-candidate.json",
     "superseded_findings": [
       "Original nested file scopes opened different connections",
       "v1 rejected legitimate explicit transaction completion across workflow tasks",
@@ -341,5 +341,50 @@
     "matches_recovered_baseline": true,
     "controls": "extra ref and reversed stash list rejected",
     "scope": "Exact ref names/SHA and ordered stash SHA; no reachability/content landing claim."
+  },
+  "current_source_head": "a35604592eac70584f35acffd23d9ddc4ff615b3",
+  "full_gate_latest": {
+    "head": "a35604592eac70584f35acffd23d9ddc4ff615b3",
+    "exit": 1,
+    "root": {
+      "passed": 3888,
+      "skipped": 1,
+      "deselected": 24,
+      "python_warnings": 0,
+      "exit": 0
+    },
+    "dataflow_unit": {
+      "passed": 3515,
+      "skipped": 20,
+      "exit": 0
+    },
+    "dataflow_regression": {
+      "passed": 1039,
+      "failed": 1,
+      "skipped": 6,
+      "deselected": 187,
+      "exit": 1
+    },
+    "failure": "test_issue_979_layer3_no_bare_runtime_import detects two benchmark imports; corrected fixture now reviewed, full DataFlow rerun owed",
+    "log": "/tmp/csq15-final-linux.log"
+  },
+  "mac_gate_latest": {
+    "head": "a35604592eac70584f35acffd23d9ddc4ff615b3",
+    "tree": "2444c7e2734d90af39bb9462bc457961b459ccfe",
+    "exit": 0,
+    "all_files_hooks": "passed, SKIP unset",
+    "unit_tests": 5156,
+    "skipped": 12,
+    "deselected": 3,
+    "python_warnings": 0,
+    "log": "/tmp/csq15-final-mac.log",
+    "skip_audit": "/tmp/csq15-mac-final-skip-audit.log",
+    "skip_scope": "10 macOS RLIMIT_AS unsupported; missing optional kaizen_agents; absent cross-SDK reference vectors"
+  },
+  "spec_advisory_decision": {
+    "status": "pending user answer",
+    "proposal": "csq15-spec-advisory-scope-decision.md",
+    "warnings": 173,
+    "existing_type_exception_does_not_cover": true
   }
 }

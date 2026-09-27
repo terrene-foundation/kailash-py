@@ -19,8 +19,6 @@ from dataflow.nodes.transaction_nodes import (
     TransactionRollbackToSavepointNode,
     TransactionSavepointNode,
 )
-from kailash.runtime.async_local import AsyncLocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
 
 
 class PerformanceValidator:
@@ -72,6 +70,8 @@ def performance_validator():
 
 @asynccontextmanager
 async def _database(path):
+    from kailash.runtime.async_local import AsyncLocalRuntime
+
     db = DataFlow(f"sqlite:///{path}", auto_migrate=True)
     try:
 
@@ -97,6 +97,8 @@ async def tdd_transaction_dataflow(tmp_path):
 
 
 async def _run(state, operation, parameters, scope=None):
+    from kailash.workflow.builder import WorkflowBuilder
+
     db, runtime, model_name = state
     workflow = WorkflowBuilder()
     workflow.add_node(

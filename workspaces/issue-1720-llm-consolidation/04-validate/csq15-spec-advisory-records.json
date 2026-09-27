@@ -1,0 +1,710 @@
+[
+  {
+    "line": 2,
+    "text": "[trestle-remote-run] WARNING: 30 file(s) are TRACKED although .gitignore matches them, so they DO ship: packages/kailash-dataflow/uv.lock, packages/kailash-kaizen/uv.lock, pyrightconfig.json, tests/utils/test-env, workspaces/_archive/connection-pool-prevention/.test-results, workspaces/_archive/eatp-merge/.test-results, workspaces/_archive/eatp-merge/todos/completed/milestone-0-git-ops.md, workspaces/_archive/eatp-merge/todos/completed/milestone-1-directory-structure.md, +22 more"
+  },
+  {
+    "line": 6,
+    "text": "CSQ14_VERIFIED_CANDIDATE a35604592eac70584f35acffd23d9ddc4ff615b3 TREE 2444c7e2734d90af39bb9462bc457961b459ccfe"
+  },
+  {
+    "line": 264,
+    "text": "WARN specs/trust-eatp.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 266,
+    "text": "WARN specs/core-runtime.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 268,
+    "text": "WARN specs/pact-enforcement.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 270,
+    "text": "WARN specs/ml-integration.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 274,
+    "text": "WARN specs/kaizen-providers-provider-system.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 276,
+    "text": "WARN baseline expired: specs/trust-eatp.md:548 FR-8 workspaces/issues-604-607/01-analysis/issue-604-signed-record-sites.md (workspace_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 278,
+    "text": "WARN specs/trust-canonical-encoders.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 280,
+    "text": "WARN specs/kaizen-llm-deployments.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 282,
+    "text": "WARN specs/pact-absorb-capabilities.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 284,
+    "text": "WARN specs/nexus-services.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 286,
+    "text": "WARN specs/kaizen-providers-tool-integration.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 290,
+    "text": "WARN specs/trust-posture.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 292,
+    "text": "WARN baseline expired: specs/kaizen-llm-deployments.md:234 FR-8 workspaces/issue-498-llm-deployment/ (workspace_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 293,
+    "text": "WARN baseline expired: specs/kaizen-llm-deployments.md:235 FR-8 workspaces/issue-498-llm-deployment/02-plans/02-adr-0001-llm-deployment-abstraction.md (workspace_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 294,
+    "text": "WARN baseline expired: specs/ml-tracking.md:10 FR-8 workspaces/kailash-ml-audit/04-validate/round-1-SYNTHESIS.md (workspace_path) past ageout 2026-07-25 (origin F-E1-19); resolve or extend justification"
+  },
+  {
+    "line": 295,
+    "text": "WARN baseline expired: specs/ml-tracking.md:1254 FR-8 workspaces/kailash-ml-audit/04-validate/approved-decisions.md (workspace_path) past ageout 2026-07-25 (origin F-E1-19); resolve or extend justification"
+  },
+  {
+    "line": 296,
+    "text": "WARN baseline expired: specs/ml-tracking.md:1268 FR-8 workspaces/kailash-ml-audit/04-validate/approved-decisions.md (workspace_path) past ageout 2026-07-25 (origin F-E1-19); resolve or extend justification"
+  },
+  {
+    "line": 304,
+    "text": "WARN specs/infra-stores.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 306,
+    "text": "WARN specs/core-servers.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 312,
+    "text": "WARN baseline expired: specs/kailash-core-ml-integration.md:510 FR-7 tests/integration/test_diagnostic_report_serialization_roundtrip_wiring.py (test_path) past ageout 2026-07-25 (origin F-E2-60); resolve or extend justification"
+  },
+  {
+    "line": 313,
+    "text": "WARN baseline expired: specs/kailash-core-ml-integration.md:511 FR-7 tests/integration/test_rename_status_migration_wiring.py (test_path) past ageout 2026-07-25 (origin F-E2-60); resolve or extend justification"
+  },
+  {
+    "line": 314,
+    "text": "WARN baseline expired: specs/kailash-core-ml-integration.md:512 FR-7 tests/integration/test_merge_legacy_stores_wiring.py (test_path) past ageout 2026-07-25 (origin F-E2-60); resolve or extend justification"
+  },
+  {
+    "line": 315,
+    "text": "WARN baseline expired: specs/kailash-core-ml-integration.md:513 FR-7 tests/integration/test_ml_training_node_emits_to_tracker_wiring.py (test_path) past ageout 2026-07-25 (origin F-E2-60); resolve or extend justification"
+  },
+  {
+    "line": 316,
+    "text": "WARN baseline expired: specs/kailash-core-ml-integration.md:514 FR-7 tests/integration/test_ml_registry_promote_node_wiring.py (test_path) past ageout 2026-07-25 (origin F-E2-60); resolve or extend justification"
+  },
+  {
+    "line": 317,
+    "text": "WARN baseline expired: specs/kaizen-judges.md:187 FR-8 workspaces/issue-567-mlfp-diagnostics/02-plans/SYNTHESIS-proposal.md (workspace_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 318,
+    "text": "WARN baseline expired: specs/kaizen-ml-integration.md:538 FR-7 tests/integration/test_agent_diagnostics_tracker_wiring.py (test_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 319,
+    "text": "WARN baseline expired: specs/kaizen-ml-integration.md:539 FR-7 tests/integration/test_llm_diagnostics_tracker_wiring.py (test_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 320,
+    "text": "WARN baseline expired: specs/kaizen-ml-integration.md:540 FR-7 tests/integration/test_interpretability_diagnostics_tracker_wiring.py (test_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 321,
+    "text": "WARN baseline expired: specs/kaizen-ml-integration.md:541 FR-7 tests/integration/test_cost_tracker_cross_sdk_parity_wiring.py (test_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 322,
+    "text": "WARN baseline expired: specs/kaizen-ml-integration.md:542 FR-7 tests/integration/test_sqlitesink_shared_store_wiring.py (test_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 323,
+    "text": "WARN baseline expired: specs/kaizen-ml-integration.md:546 FR-7 tests/regression/test_issue_NNN_cost_microdollar_truncation.py (test_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 324,
+    "text": "WARN baseline expired: specs/kaizen-ml-integration.md:547 FR-7 tests/regression/test_issue_NNN_tracker_kwarg_type_is_experiment_run.py (test_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 325,
+    "text": "WARN baseline expired: specs/ml-autolog.md:676 FR-8 workspaces/kailash-ml-audit/04-validate/round-2b-open-tbd-triage.md (workspace_path) past ageout 2026-07-25 (origin F-E1-33); resolve or extend justification"
+  },
+  {
+    "line": 326,
+    "text": "WARN baseline expired: specs/spec-drift-gate.md:4 FR-8 workspaces/spec-drift-gate/ (workspace_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 327,
+    "text": "WARN baseline expired: specs/spec-drift-gate.md:84 FR-8 workspaces/spec-drift-gate/01-analysis/02-requirements-and-adrs.md (workspace_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 328,
+    "text": "WARN baseline expired: specs/spec-drift-gate.md:163 FR-8 workspaces/spec-drift-gate/01-analysis/02-requirements-and-adrs.md (workspace_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 329,
+    "text": "WARN baseline expired: specs/spec-drift-gate.md:244 FR-4 ManifestNotFoundError (class) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 330,
+    "text": "WARN baseline expired: specs/spec-drift-gate.md:245 FR-4 ManifestSchemaError (class) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 331,
+    "text": "WARN baseline expired: specs/spec-drift-gate.md:246 FR-4 BaselineParseError (class) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 332,
+    "text": "WARN baseline expired: specs/spec-drift-gate.md:247 FR-4 SweepRuntimeError (class) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 333,
+    "text": "WARN baseline expired: specs/spec-drift-gate.md:248 FR-4 MarkerSyntaxError (class) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 334,
+    "text": "WARN baseline expired: specs/spec-drift-gate.md:286 FR-7 tests/spec_drift_gate/integration/test_gate_wiring.py (test_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 336,
+    "text": "WARN specs/node-catalog.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 338,
+    "text": "WARN specs/dataflow-cache.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 345,
+    "text": "WARN specs/ml-automl.md:583 B1: kailash_ml.AutoMLEngine (getattr_resolution) \u2014 B1: kailash_ml.AutoMLEngine resolves via kailash_ml.__getattr__ to 'kailash_ml.automl.engine' but the spec asserts 'kailash_ml' (FR-6 PASS \u2014 AutoMLEngine is in __all__) \u2014 flip the __getattr__ map entry to 'kailash_ml' or update the spec to match the actual resolution"
+  },
+  {
+    "line": 348,
+    "text": "WARN specs/nexus-core.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 350,
+    "text": "WARN baseline expired: specs/ml-drift.md:79 FR-1 DriftMonitorConfig (class) past ageout 2026-07-25 (origin F-E2-11); resolve or extend justification"
+  },
+  {
+    "line": 351,
+    "text": "WARN baseline expired: specs/ml-drift.md:79 FR-1 DriftMonitorConfig (class) past ageout 2026-07-25 (origin F-E2-11); resolve or extend justification"
+  },
+  {
+    "line": 352,
+    "text": "WARN baseline expired: specs/ml-drift.md:624 FR-7 tests/integration/test_drift_monitor_wiring.py (test_path) past ageout 2026-07-25 (origin F-E2-11); resolve or extend justification"
+  },
+  {
+    "line": 353,
+    "text": "WARN baseline expired: specs/ml-drift.md:781 FR-7 tests/regression/test_issue_mlops_HIGH_drift_scheduler_restart.py (test_path) past ageout 2026-07-25 (origin F-E2-11); resolve or extend justification"
+  },
+  {
+    "line": 354,
+    "text": "WARN baseline expired: specs/ml-drift.md:879 FR-8 workspaces/kailash-ml-audit/04-validate/round-2b-open-tbd-triage.md (workspace_path) past ageout 2026-07-25 (origin F-E2-11); resolve or extend justification"
+  },
+  {
+    "line": 355,
+    "text": "WARN baseline expired: specs/ml-rl-core.md:151 FR-1 SyncVectorEnv (class) past ageout 2026-07-25 (origin F-E1-37); resolve or extend justification"
+  },
+  {
+    "line": 356,
+    "text": "WARN baseline expired: specs/ml-rl-core.md:614 FR-1 EvalCallback (class) past ageout 2026-07-25 (origin F-E1-37); resolve or extend justification"
+  },
+  {
+    "line": 357,
+    "text": "WARN baseline expired: specs/ml-rl-core.md:726 FR-1 Finding (class) past ageout 2026-07-25 (origin F-E1-37); resolve or extend justification"
+  },
+  {
+    "line": 359,
+    "text": "WARN specs/kaizen-rag.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 361,
+    "text": "WARN specs/kaizen-providers.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 363,
+    "text": "WARN specs/core-nodes.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 364,
+    "text": "WARN specs/ml-dashboard.md:6 B1: kailash_ml.MLDashboard (getattr_resolution) \u2014 B1: kailash_ml.MLDashboard resolves via kailash_ml.__getattr__ to 'kailash_ml.dashboard' but the spec asserts 'kailash_ml' (FR-6 PASS \u2014 MLDashboard is in __all__) \u2014 flip the __getattr__ map entry to 'kailash_ml' or update the spec to match the actual resolution"
+  },
+  {
+    "line": 367,
+    "text": "WARN specs/kaizen-agents-core.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 369,
+    "text": "WARN specs/edge-computing.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 371,
+    "text": "WARN specs/mcp-auth.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 373,
+    "text": "WARN baseline expired: specs/ml-dashboard.md:96 FR-1 KAILASH_ML_STORE_URL (class) past ageout 2026-07-25 (origin F-E2-25); resolve or extend justification"
+  },
+  {
+    "line": 374,
+    "text": "WARN baseline expired: specs/ml-dashboard.md:96 FR-1 KAILASH_ML_STORE_URL (class) past ageout 2026-07-25 (origin F-E2-25); resolve or extend justification"
+  },
+  {
+    "line": 375,
+    "text": "WARN baseline expired: specs/ml-dashboard.md:96 FR-1 KAILASH_ML_TRACKER_DB (class) past ageout 2026-07-25 (origin F-E2-25); resolve or extend justification"
+  },
+  {
+    "line": 376,
+    "text": "WARN baseline expired: specs/ml-dashboard.md:101 FR-1 KAILASH_ML_STORE_URL (class) past ageout 2026-07-25 (origin F-E2-25); resolve or extend justification"
+  },
+  {
+    "line": 377,
+    "text": "WARN baseline expired: specs/ml-dashboard.md:101 FR-1 KAILASH_ML_TRACKER_DB (class) past ageout 2026-07-25 (origin F-E2-25); resolve or extend justification"
+  },
+  {
+    "line": 378,
+    "text": "WARN baseline expired: specs/ml-dashboard.md:103 FR-1 KAILASH_ML_TRACKER_DB (class) past ageout 2026-07-25 (origin F-E2-25); resolve or extend justification"
+  },
+  {
+    "line": 379,
+    "text": "WARN baseline expired: specs/ml-dashboard.md:111 FR-1 KAILASH_ML_STORE_URL (class) past ageout 2026-07-25 (origin F-E2-25); resolve or extend justification"
+  },
+  {
+    "line": 380,
+    "text": "WARN baseline expired: specs/ml-dashboard.md:111 FR-1 KAILASH_ML_STORE_URL (class) past ageout 2026-07-25 (origin F-E2-25); resolve or extend justification"
+  },
+  {
+    "line": 381,
+    "text": "WARN baseline expired: specs/ml-dashboard.md:111 FR-1 KAILASH_ML_TRACKER_DB (class) past ageout 2026-07-25 (origin F-E2-25); resolve or extend justification"
+  },
+  {
+    "line": 382,
+    "text": "WARN baseline expired: specs/ml-dashboard.md:111 FR-1 KAILASH_ML_TRACKER_DB (class) past ageout 2026-07-25 (origin F-E2-25); resolve or extend justification"
+  },
+  {
+    "line": 383,
+    "text": "WARN baseline expired: specs/ml-dashboard.md:113 FR-1 STORE_URL (class) past ageout 2026-07-25 (origin F-E2-25); resolve or extend justification"
+  },
+  {
+    "line": 384,
+    "text": "WARN baseline expired: specs/ml-dashboard.md:393 FR-1 MLDASHBOARD_URL (class) past ageout 2026-07-25 (origin F-E2-25); resolve or extend justification"
+  },
+  {
+    "line": 385,
+    "text": "WARN baseline expired: specs/ml-dashboard.md:746 FR-7 packages/kailash-ml/tests/unit/test_dashboard_unit.py (test_path) past ageout 2026-07-25 (origin F-E2-25); resolve or extend justification"
+  },
+  {
+    "line": 386,
+    "text": "WARN baseline expired: specs/ml-dashboard.md:758 FR-7 packages/kailash-ml/tests/integration/test_dashboard_wiring.py (test_path) past ageout 2026-07-25 (origin F-E2-25); resolve or extend justification"
+  },
+  {
+    "line": 387,
+    "text": "WARN baseline expired: specs/ml-dashboard.md:772 FR-7 packages/kailash-ml/tests/e2e/test_dashboard_roundtrip.py (test_path) past ageout 2026-07-25 (origin F-E2-25); resolve or extend justification"
+  },
+  {
+    "line": 388,
+    "text": "WARN baseline expired: specs/ml-dashboard.md:774 FR-8 workspaces/kailash-ml-audit/03-user-flows/ (workspace_path) past ageout 2026-07-25 (origin F-E2-25); resolve or extend justification"
+  },
+  {
+    "line": 392,
+    "text": "WARN specs/kaizen-signatures.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 394,
+    "text": "WARN specs/kaizen-agents-patterns.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 396,
+    "text": "WARN specs/kaizen-core.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 398,
+    "text": "WARN specs/alignment-training.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 402,
+    "text": "WARN specs/_index.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 404,
+    "text": "WARN baseline expired: specs/ml-diagnostics.md:335 FR-1 Callback (class) past ageout 2026-07-25 (origin F-E1-15); resolve or extend justification"
+  },
+  {
+    "line": 405,
+    "text": "WARN baseline expired: specs/ml-diagnostics.md:354 FR-1 TrainerCallback (class) past ageout 2026-07-25 (origin F-E1-15); resolve or extend justification"
+  },
+  {
+    "line": 406,
+    "text": "WARN baseline expired: specs/ml-diagnostics.md:400 FR-2 DistributionEnv.detect (method) past ageout 2026-07-25 (origin F-E1-15); resolve or extend justification"
+  },
+  {
+    "line": 407,
+    "text": "WARN baseline expired: specs/ml-diagnostics.md:404 FR-1 ZeroStageEnum (class) past ageout 2026-07-25 (origin F-E1-15); resolve or extend justification"
+  },
+  {
+    "line": 408,
+    "text": "WARN baseline expired: specs/ml-diagnostics.md:421 FR-2 FullyShardedDataParallel.sharded_grad_norm (method) past ageout 2026-07-25 (origin F-E1-15); resolve or extend justification"
+  },
+  {
+    "line": 409,
+    "text": "WARN baseline expired: specs/ml-diagnostics.md:442 FR-5 DeviceReport.zero_stage (field) past ageout 2026-07-25 (origin F-E1-15); resolve or extend justification"
+  },
+  {
+    "line": 410,
+    "text": "WARN baseline expired: specs/ml-diagnostics.md:446 FR-1 PartialState (class) past ageout 2026-07-25 (origin F-E1-15); resolve or extend justification"
+  },
+  {
+    "line": 411,
+    "text": "WARN baseline expired: specs/ml-diagnostics.md:465 FR-1 RankSafetyCallback (class) past ageout 2026-07-25 (origin F-E1-15); resolve or extend justification"
+  },
+  {
+    "line": 412,
+    "text": "WARN baseline expired: specs/ml-diagnostics.md:496 FR-1 CheckpointIO (class) past ageout 2026-07-25 (origin F-E1-15); resolve or extend justification"
+  },
+  {
+    "line": 413,
+    "text": "WARN baseline expired: specs/ml-diagnostics.md:496 FR-1 CheckpointIO (class) past ageout 2026-07-25 (origin F-E1-15); resolve or extend justification"
+  },
+  {
+    "line": 414,
+    "text": "WARN baseline expired: specs/ml-diagnostics.md:496 FR-2 Trainer.save_checkpoint (method) past ageout 2026-07-25 (origin F-E1-15); resolve or extend justification"
+  },
+  {
+    "line": 415,
+    "text": "WARN baseline expired: specs/ml-diagnostics.md:506 FR-2 DLDiagnostics.from_checkpoint (method) past ageout 2026-07-25 (origin F-E1-15); resolve or extend justification"
+  },
+  {
+    "line": 416,
+    "text": "WARN baseline expired: specs/ml-diagnostics.md:508 FR-2 DLDiagnostics.skip_batch (method) past ageout 2026-07-25 (origin F-E1-15); resolve or extend justification"
+  },
+  {
+    "line": 417,
+    "text": "WARN baseline expired: specs/ml-diagnostics.md:513 FR-2 Trainer.save_checkpoint (method) past ageout 2026-07-25 (origin F-E1-15); resolve or extend justification"
+  },
+  {
+    "line": 418,
+    "text": "WARN baseline expired: specs/ml-diagnostics.md:533 FR-1 RemovableHandle (class) past ageout 2026-07-25 (origin F-E1-15); resolve or extend justification"
+  },
+  {
+    "line": 419,
+    "text": "WARN baseline expired: specs/ml-diagnostics.md:535 FR-1 Module (class) past ageout 2026-07-25 (origin F-E1-15); resolve or extend justification"
+  },
+  {
+    "line": 420,
+    "text": "WARN baseline expired: specs/ml-diagnostics.md:833 FR-7 packages/kailash-ml/tests/unit/test_classical_diagnose_unit.py (test_path) past ageout 2026-07-25 (origin F-E1-15); resolve or extend justification"
+  },
+  {
+    "line": 421,
+    "text": "WARN baseline expired: specs/ml-diagnostics.md:840 FR-7 packages/kailash-ml/tests/unit/test_km_diagnose_unit.py (test_path) past ageout 2026-07-25 (origin F-E1-15); resolve or extend justification"
+  },
+  {
+    "line": 422,
+    "text": "WARN baseline expired: specs/ml-diagnostics.md:858 FR-7 packages/kailash-ml/tests/integration/test_ddp_diagnostics_wiring.py (test_path) past ageout 2026-07-25 (origin F-E1-15); resolve or extend justification"
+  },
+  {
+    "line": 423,
+    "text": "WARN baseline expired: specs/ml-diagnostics.md:865 FR-7 packages/kailash-ml/tests/e2e/test_dl_diagnostics_roundtrip.py (test_path) past ageout 2026-07-25 (origin F-E1-15); resolve or extend justification"
+  },
+  {
+    "line": 424,
+    "text": "WARN baseline expired: specs/ml-diagnostics.md:1043 FR-8 workspaces/kailash-ml-audit/specs-draft/ml-engines-v2-draft.md (workspace_path) past ageout 2026-07-25 (origin F-E1-15); resolve or extend justification"
+  },
+  {
+    "line": 426,
+    "text": "WARN specs/security-threats.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 432,
+    "text": "WARN specs/kaizen-providers-execution-strategies.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 434,
+    "text": "WARN specs/dataflow-models.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 436,
+    "text": "WARN specs/security-auth.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 440,
+    "text": "WARN baseline expired: specs/align-ml-integration.md:277 FR-7 tests/integration/test_align_dpo_adapter_emits_to_tracker_wiring.py (test_path) past ageout 2026-07-25 (origin F-E2-53); resolve or extend justification"
+  },
+  {
+    "line": 441,
+    "text": "WARN baseline expired: specs/align-ml-integration.md:278 FR-7 tests/integration/test_align_ppo_adapter_save_load_roundtrip_wiring.py (test_path) past ageout 2026-07-25 (origin F-E2-53); resolve or extend justification"
+  },
+  {
+    "line": 442,
+    "text": "WARN baseline expired: specs/align-ml-integration.md:279 FR-7 tests/integration/test_align_dpo_kl_controller_wiring.py (test_path) past ageout 2026-07-25 (origin F-E2-53); resolve or extend justification"
+  },
+  {
+    "line": 443,
+    "text": "WARN baseline expired: specs/align-ml-integration.md:285 FR-7 tests/regression/test_issue_NNN_dpo_adapter_tracker_kwarg_type_is_experiment_run.py (test_path) past ageout 2026-07-25 (origin F-E2-53); resolve or extend justification"
+  },
+  {
+    "line": 444,
+    "text": "WARN baseline expired: specs/align-ml-integration.md:286 FR-7 tests/regression/test_issue_NNN_rloo_k_logged_as_param.py (test_path) past ageout 2026-07-25 (origin F-E2-53); resolve or extend justification"
+  },
+  {
+    "line": 445,
+    "text": "WARN baseline expired: specs/dataflow-ml-integration.md:261 FR-7 tests/integration/test_ml_feature_source_point_in_time_wiring.py (test_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 446,
+    "text": "WARN baseline expired: specs/dataflow-ml-integration.md:262 FR-7 tests/integration/test_transform_tenant_cache_isolation_wiring.py (test_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 447,
+    "text": "WARN baseline expired: specs/dataflow-ml-integration.md:263 FR-7 tests/integration/test_hash_roundtrip_to_model_registry_wiring.py (test_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 448,
+    "text": "WARN baseline expired: specs/dataflow-ml-integration.md:264 FR-7 tests/integration/test_classification_propagates_through_transform_wiring.py (test_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 449,
+    "text": "WARN baseline expired: specs/dataflow-ml-integration.md:268 FR-7 tests/regression/test_issue_NNN_feature_source_sql_injection_hardened.py (test_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 450,
+    "text": "WARN baseline expired: specs/dataflow-ml-integration.md:269 FR-7 tests/regression/test_issue_NNN_hash_column_order_stable.py (test_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 451,
+    "text": "WARN baseline expired: specs/dataflow-ml-integration.md:270 FR-7 tests/regression/test_issue_NNN_transform_classification_survives.py (test_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 452,
+    "text": "WARN baseline expired: specs/ml-serving.md:214 FR-1 InferenceSession (class) past ageout 2026-07-25 (origin F-E1-28); resolve or extend justification"
+  },
+  {
+    "line": 453,
+    "text": "WARN baseline expired: specs/ml-serving.md:1171 FR-7 tests/regression/test_issue_mlops_HIGH_shadow_consumer_exists.py (test_path) past ageout 2026-07-25 (origin F-E1-28); resolve or extend justification"
+  },
+  {
+    "line": 454,
+    "text": "WARN baseline expired: specs/ml-serving.md:1172 FR-7 tests/regression/test_issue_mlops_HIGH_prometheus_exists.py (test_path) past ageout 2026-07-25 (origin F-E1-28); resolve or extend justification"
+  },
+  {
+    "line": 455,
+    "text": "WARN baseline expired: specs/ml-serving.md:1173 FR-7 tests/regression/test_issue_mlops_HIGH_tenant_required.py (test_path) past ageout 2026-07-25 (origin F-E1-28); resolve or extend justification"
+  },
+  {
+    "line": 456,
+    "text": "WARN baseline expired: specs/ml-serving.md:1174 FR-7 tests/regression/test_issue_mlops_HIGH_rules_observability_mandatory_log_points.py (test_path) past ageout 2026-07-25 (origin F-E1-28); resolve or extend justification"
+  },
+  {
+    "line": 457,
+    "text": "WARN baseline expired: specs/ml-serving.md:1203 FR-8 workspaces/kailash-ml-audit/04-validate/round-2b-open-tbd-triage.md (workspace_path) past ageout 2026-07-25 (origin F-E1-28); resolve or extend justification"
+  },
+  {
+    "line": 459,
+    "text": "WARN specs/kaizen-providers-streaming.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 461,
+    "text": "WARN specs/middleware.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 463,
+    "text": "WARN specs/security-data.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 465,
+    "text": "WARN specs/alignment-serving.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 467,
+    "text": "WARN specs/pact-envelopes.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 468,
+    "text": "WARN specs/alignment-diagnostics.md:16 B1: kailash_align.AlignmentPipeline (getattr_resolution) \u2014 B1: kailash_align.AlignmentPipeline resolves via kailash_align.__getattr__ to '.pipeline' but the spec asserts 'kailash_align' (FR-6 PASS \u2014 AlignmentPipeline is in __all__) \u2014 flip the __getattr__ map entry to 'kailash_align' or update the spec to match the actual resolution"
+  },
+  {
+    "line": 471,
+    "text": "WARN specs/kaizen-agents-governance.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 473,
+    "text": "WARN baseline expired: specs/alignment-diagnostics.md:53 FR-1 N (class) past ageout 2026-07-25 (origin F-E2-51); resolve or extend justification"
+  },
+  {
+    "line": 474,
+    "text": "WARN baseline expired: specs/alignment-diagnostics.md:107 FR-1 Figure (class) past ageout 2026-07-25 (origin F-E2-51); resolve or extend justification"
+  },
+  {
+    "line": 475,
+    "text": "WARN baseline expired: specs/alignment-diagnostics.md:170 FR-8 workspaces/issue-567-mlfp-diagnostics/02-plans/SYNTHESIS-proposal.md (workspace_path) past ageout 2026-07-25 (origin F-E2-51); resolve or extend justification"
+  },
+  {
+    "line": 477,
+    "text": "WARN specs/diagnostics-catalog.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 479,
+    "text": "WARN specs/testing-tiers.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 481,
+    "text": "WARN specs/observability-metrics.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 483,
+    "text": "WARN specs/kaizen-providers-error-handling.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 485,
+    "text": "WARN specs/ml-rl-algorithms.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 489,
+    "text": "WARN specs/kaizen-advanced.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 491,
+    "text": "WARN baseline expired: specs/kaizen-evaluation.md:108 FR-8 workspaces/issue-567-mlfp-diagnostics/02-plans/SYNTHESIS-proposal.md (workspace_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 493,
+    "text": "WARN specs/visualization.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 495,
+    "text": "WARN specs/ml-backends.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 499,
+    "text": "WARN specs/mcp-server.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 503,
+    "text": "WARN specs/kaizen-providers-memory-system.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 507,
+    "text": "WARN baseline expired: specs/core-workflows.md:151 FR-1 Draft7Validator (class) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 508,
+    "text": "WARN baseline expired: specs/core-workflows.md:173 FR-1 WARNING (class) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 509,
+    "text": "WARN baseline expired: specs/ml-backends.md:14 FR-8 workspaces/kailash-ml-audit/analysis/00-synthesis-redesign-proposal.md (workspace_path) past ageout 2026-07-25 (origin F-E1-11); resolve or extend justification"
+  },
+  {
+    "line": 510,
+    "text": "WARN baseline expired: specs/ml-backends.md:428 FR-8 workspaces/kailash-ml-audit/infra/gpu-runner-acquisition.md (workspace_path) past ageout 2026-07-25 (origin F-E1-11); resolve or extend justification"
+  },
+  {
+    "line": 511,
+    "text": "WARN baseline expired: specs/ml-backends.md:646 FR-8 workspaces/kailash-ml-audit/04-validate/approved-decisions.md (workspace_path) past ageout 2026-07-25 (origin F-E1-11); resolve or extend justification"
+  },
+  {
+    "line": 512,
+    "text": "WARN baseline expired: specs/ml-backends.md:650 FR-8 workspaces/kailash-ml-audit/infra/gpu-runner-acquisition.md (workspace_path) past ageout 2026-07-25 (origin F-E1-11); resolve or extend justification"
+  },
+  {
+    "line": 513,
+    "text": "WARN baseline expired: specs/ml-engines-v2-addendum.md:637 FR-7 tests/integration/test_mlengine_lifecycle_e2e.py (test_path) past ageout 2026-07-25 (origin F-E1-08); resolve or extend justification"
+  },
+  {
+    "line": 514,
+    "text": "WARN baseline expired: specs/pact-ml-integration.md:264 FR-7 tests/integration/test_check_trial_admission_wiring.py (test_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 515,
+    "text": "WARN baseline expired: specs/pact-ml-integration.md:265 FR-7 tests/integration/test_check_engine_method_clearance_wiring.py (test_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 516,
+    "text": "WARN baseline expired: specs/pact-ml-integration.md:266 FR-7 tests/integration/test_check_cross_tenant_op_wiring.py (test_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 517,
+    "text": "WARN baseline expired: specs/pact-ml-integration.md:280 FR-7 tests/integration/test_pact_ml_cross_sdk_parity.py (test_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 519,
+    "text": "WARN specs/trust-crypto.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 525,
+    "text": "WARN specs/dataflow-express.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 526,
+    "text": "WARN specs/ml-engines-v2.md:1537 B1: kailash_ml.DataExplorer (getattr_resolution) \u2014 B1: kailash_ml.DataExplorer resolves via kailash_ml.__getattr__ to 'kailash_ml.engines.data_explorer' but the spec asserts 'kailash_ml' (FR-6 PASS \u2014 DataExplorer is in __all__) \u2014 flip the __getattr__ map entry to 'kailash_ml' or update the spec to match the actual resolution"
+  },
+  {
+    "line": 527,
+    "text": "WARN specs/ml-engines-v2.md:1538 B1: kailash_ml.ModelVisualizer (getattr_resolution) \u2014 B1: kailash_ml.ModelVisualizer resolves via kailash_ml.__getattr__ to 'kailash_ml.engines.model_visualizer' but the spec asserts 'kailash_ml' (FR-6 PASS \u2014 ModelVisualizer is in __all__) \u2014 flip the __getattr__ map entry to 'kailash_ml' or update the spec to match the actual resolution"
+  },
+  {
+    "line": 528,
+    "text": "WARN specs/ml-engines-v2.md:1539 B1: kailash_ml.ModelExplainer (getattr_resolution) \u2014 B1: kailash_ml.ModelExplainer resolves via kailash_ml.__getattr__ to 'kailash_ml.engines.model_explainer' but the spec asserts 'kailash_ml' (FR-6 PASS \u2014 ModelExplainer is in __all__) \u2014 flip the __getattr__ map entry to 'kailash_ml' or update the spec to match the actual resolution"
+  },
+  {
+    "line": 529,
+    "text": "WARN specs/ml-engines-v2.md:1540 B1: kailash_ml.FeatureEngineer (getattr_resolution) \u2014 B1: kailash_ml.FeatureEngineer resolves via kailash_ml.__getattr__ to 'kailash_ml.engines.feature_engineer' but the spec asserts 'kailash_ml' (FR-6 PASS \u2014 FeatureEngineer is in __all__) \u2014 flip the __getattr__ map entry to 'kailash_ml' or update the spec to match the actual resolution"
+  },
+  {
+    "line": 532,
+    "text": "WARN specs/infra-sql.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 534,
+    "text": "WARN specs/pact-addressing.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 536,
+    "text": "WARN baseline expired: specs/ml-engines-v2.md:1639 FR-8 workspaces/kailash-ml-audit/04-validate/approved-decisions.md (workspace_path) past ageout 2026-07-25 (origin F-E1-01); resolve or extend justification"
+  },
+  {
+    "line": 537,
+    "text": "WARN baseline expired: specs/ml-engines-v2.md:1728 FR-1 Embedding (class) past ageout 2026-07-25 (origin F-E1-01); resolve or extend justification"
+  },
+  {
+    "line": 538,
+    "text": "WARN baseline expired: specs/ml-registry.md:1137 FR-8 workspaces/kailash-ml-audit/04-validate/round-2b-open-tbd-triage.md (workspace_path) past ageout 2026-07-25 (origin F-E1-23); resolve or extend justification"
+  },
+  {
+    "line": 542,
+    "text": "WARN specs/nexus-channels.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 544,
+    "text": "WARN specs/mcp-client.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 550,
+    "text": "WARN specs/task-tracking.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 552,
+    "text": "WARN specs/nexus-auth.md: zero allowlisted sections found. Expected one of: ## Surface, ## Construction, ## Public API, ## Errors, ## Test Contract"
+  },
+  {
+    "line": 554,
+    "text": "WARN baseline expired: specs/kaizen-interpretability.md:332 FR-8 workspaces/issue-567-mlfp-diagnostics/02-plans/SYNTHESIS-proposal.md (workspace_path) past ageout 2026-07-25 (origin #640-discovery); resolve or extend justification"
+  },
+  {
+    "line": 772,
+    "text": "CSQ14_FINAL_ALL_HOOKS_PASS"
+  },
+  {
+    "line": 773,
+    "text": "[trestle-remote-run] exit=0 command wall=192.3s host=esperie-mac-mini"
+  }
+]
