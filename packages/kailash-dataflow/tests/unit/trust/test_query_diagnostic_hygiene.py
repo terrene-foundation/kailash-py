@@ -8,7 +8,6 @@ import pytest
 from dataflow import DataFlow
 from dataflow.core.agent_context import async_agent_context
 from dataflow.trust.query_wrapper import TrustAwareQueryExecutor
-from kailash.runtime.trust.verifier import TrustVerifier, TrustVerifierConfig
 
 OPAQUE = "opaque-dataflow-canary-628194"
 CREDENTIAL = "credential-dataflow-canary-197386"
@@ -54,6 +53,8 @@ def assert_safe_records(caplog):
 async def test_core_decision_forwarding_and_cache_diagnostics(
     caplog, mode, surface, fail
 ):
+    from kailash.runtime.trust.verifier import TrustVerifier, TrustVerifierConfig
+
     backend = Backend(fail)
     verifier = TrustVerifier(backend, TrustVerifierConfig(mode="enforcing"))
     executor = TrustAwareQueryExecutor(None, verifier, enforcement_mode=mode)
@@ -90,6 +91,8 @@ async def test_core_decision_forwarding_and_cache_diagnostics(
 @pytest.mark.parametrize("operation", ["read", "create"])
 @pytest.mark.asyncio
 async def test_real_file_express_handoff(tmp_path, caplog, mode, operation):
+    from kailash.runtime.trust.verifier import TrustVerifier, TrustVerifierConfig
+
     db = DataFlow(f"sqlite:///{tmp_path / 'handoff.db'}", trust_enforcement_mode=mode)
 
     @db.model
