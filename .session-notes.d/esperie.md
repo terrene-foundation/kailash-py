@@ -1,3 +1,7 @@
+# Latest D1 gate follow-up — 2026-09-27T16:56:53.242919+00:00
+
+Candidate c9dd passed Mac full hooks (5,156 tests), Linux root (4,500) and DataFlow unit (3,564). DataFlow regression passed 1,052 with one native-cache type invariant failure. Source `b3a8b3239beea71ab58eb4815dcca106aeb8ea68` fixes that assignment without changing runtime semantics or the zero-warning ceiling; independent scoped receipts are in `csq16-native-factory-type-review.json`. Complete final-candidate gates are being rerun before consolidated push and authorized PR #2229 promotion. No merge or publication has occurred. Approved 173-spec-warning boundary remains unchanged.
+
 # Current D1 checkpoint — 2026-09-27T16:42:19.504660+00:00
 
 The user-approved exception covers exactly 173 specification advisories; do not ask again. Final source candidate `e4a789e73337c4dd8dfd18238f2ad1e44db19881` records full-gate follow-ups: diagnostic test contracts, gateway awaited shutdown, DataFlow registry ownership/admission and deferred test imports. Scoped correctness/security receipts are in `04-validate/csq16-gate-repair-rollup.json` and the registry review receipts.

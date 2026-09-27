@@ -1,11 +1,11 @@
 {
   "base": "68d4dbd4185435a03cd43604c12966558c9c934e",
-  "source_commit": "e4a789e73337c4dd8dfd18238f2ad1e44db19881",
+  "source_commit": "b3a8b3239beea71ab58eb4815dcca106aeb8ea68",
   "scope": "Every changed source, test, specification and dependency file in CSQ16; validation/session notes excluded. Unchanged files are pinned by commit.",
   "files": {
     "packages/kailash-dataflow/pyproject.toml": "def2da94fa9a6ce8cf77be3abf11341fb14b999bf4ccb4ab734e6bf6ac1d4679",
     "packages/kailash-dataflow/src/dataflow/core/config.py": "81615ff65f9fd5893a8d76ffd48df4fce3aa4361ca90e11cceb6dbdbf49aff96",
-    "packages/kailash-dataflow/src/dataflow/core/engine.py": "d62f287c61a146bea09eeccc69d97601270ce29d45255f538fd96bb94b377dac",
+    "packages/kailash-dataflow/src/dataflow/core/engine.py": "a52d17eda0d86514fec8481635feca5aa99b0a0092ca7b238e1f3e37cf2fb6b3",
     "packages/kailash-dataflow/src/dataflow/core/model_registry.py": "926b5a66ab1dbc22e77eda97a2d4aab728760a52bd8546a8e9cacc28b2642a8b",
     "packages/kailash-dataflow/src/dataflow/core/pool_utils.py": "984d537efa827e02a81523a38e234772145401412c6fe438424f9ddb65e5b412",
     "packages/kailash-dataflow/src/dataflow/trust/query_wrapper.py": "bb190f1953d273361df124908816bac643cb4461c722a4c6f08e6d7fa3b2c1ba",

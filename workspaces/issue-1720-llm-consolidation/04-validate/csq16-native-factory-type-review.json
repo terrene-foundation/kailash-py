@@ -1,0 +1,248 @@
+{
+  "source_commit": "b3a8b3239beea71ab58eb4815dcca106aeb8ea68",
+  "status": "One-file native factory type repair; source/test/config continuity and scoped author/correctness/security evidence recorded. Fresh complete candidate gates remain pending.",
+  "prior_candidate_gate": {
+    "candidate": "c9dd195832b2876426a2b816f9dadd933749c518",
+    "tree": "d19c7afa0beae346eaf0b23cff07e59f0394100e",
+    "source_commit": "e4a789e73337c4dd8dfd18238f2ad1e44db19881",
+    "mac": {
+      "exit": 0,
+      "log": "/tmp/csq16-final-full-mac.log",
+      "log_sha256": "ba5c7279ca281b1f4103bfbd71a7db5d2e086e1755c8e3b9d0442626ffc205f4",
+      "passed": 5156,
+      "skipped": 12,
+      "deselected": 3,
+      "seconds": 35.09,
+      "SKIP": "unset",
+      "independent_log_review": "/tmp/csq16-final-mac-log-review.json"
+    },
+    "linux": "Completed exit1: single DataFlow type invariant failure; root and DataFlowunit passed",
+    "linux_tier2": "pending mirror availability",
+    "push": "not yet",
+    "promotion": "not yet",
+    "recorded_at_UTC": "2026-09-27T16:46:06.363460+00:00",
+    "linux_unit_completed": {
+      "passed": 3564,
+      "skipped": 17,
+      "seconds": 210.17,
+      "exit": 0
+    },
+    "linux_dataflow_regression": {
+      "exit": 1,
+      "passed": 1052,
+      "skipped": 4,
+      "deselected": 187,
+      "seconds": 100.34,
+      "failure": "test_engine_pyright_invariant.py::test_engine_pyright_warnings_under_ceiling",
+      "diagnostic": "engine.py:1148 inferred LocalRuntime cannot be assigned to native AsyncLocalRuntime cache from chained mark_externally_managed() annotation",
+      "repair": "Bounded factory construction/mark/cache type preservation in progress; no ceiling relaxation"
+    },
+    "linux_root": {
+      "passed": 4500,
+      "skipped": 1,
+      "deselected": 24,
+      "seconds": 413.12,
+      "exit": 0,
+      "skip": "optional rfc3161 extra absent"
+    },
+    "linux_log_sha256": "97e902e4c080344b9d8a863e2976c0c1518c3abe83e1ed0316a9b29e42f58a5e"
+  },
+  "manifest": {
+    "head": "c9dd195832b2876426a2b816f9dadd933749c518",
+    "files": {
+      "packages/kailash-dataflow/src/dataflow/core/engine.py": {
+        "base": "d62f287c61a146bea09eeccc69d97601270ce29d45255f538fd96bb94b377dac",
+        "final": "a52d17eda0d86514fec8481635feca5aa99b0a0092ca7b238e1f3e37cf2fb6b3"
+      }
+    },
+    "source_commit": "b3a8b3239beea71ab58eb4815dcca106aeb8ea68"
+  },
+  "reviews": {
+    "csq16-df-typing-author-receipt.json": {
+      "ran": true,
+      "status": "AUTHOR_SCOPED_CLEAN_TWO_ROUNDS",
+      "source_commit": "b3a8b3239beea71ab58eb4815dcca106aeb8ea68",
+      "manifest": "/tmp/csq16-df-typing-manifest.json",
+      "patch": "/tmp/csq16-df-typing.patch",
+      "source_change": "Construct native runtime first, invoke mark_externally_managed on same local, then cache same native. Public marker returns self but annotated LocalRuntime; chained assignment erased static AsyncLocalRuntime type. No cast, ignore, ceiling or global API change.",
+      "scope": "Exactly one runtime factory in engine.py; no tests/config/spec changed. Inverse textual collapse of two statements equals complete original file byteforbyte.",
+      "spec": "dataflow-core lazy per-loop cached AsyncLocalRuntime and DataFlow-owned shutdown; public LocalRuntime.mark_externally_managed:2088-2117 returns self and sets external ownership flag.",
+      "rounds": [
+        {
+          "receipt": "/tmp/csq16-correctness-native-df-typing-clean-r1.json",
+          "log": "/tmp/csq16-df-typing-clean-r1.log",
+          "passed": 47,
+          "Pythonwarnings": 0,
+          "skips": 0,
+          "intentional_diagnostics": 64
+        },
+        {
+          "receipt": "/tmp/csq16-correctness-native-df-typing-clean-r2.json",
+          "log": "/tmp/csq16-df-typing-clean-r2.log",
+          "passed": 47,
+          "Pythonwarnings": 0,
+          "skips": 0,
+          "intentional_diagnostics": 64
+        }
+      ],
+      "selection": [
+        "packages/kailash-dataflow/tests/regression/test_engine_pyright_invariant.py",
+        "packages/kailash-dataflow/tests/regression/test_issue_1498_model_registry_runtime.py",
+        "packages/kailash-dataflow/tests/regression/test_issue_352_fastapi_startup.py",
+        "packages/kailash-dataflow/tests/regression/test_model_registry_native_owner_bridge.py",
+        "packages/kailash-dataflow/tests/regression/test_issue_1002_close_releases_all_cached_runtimes.py",
+        "packages/kailash-dataflow/tests/unit/core/test_model_registry_runtime_injection.py",
+        "packages/kailash-dataflow/tests/regression/test_issue_1502_sqlite_memory_shared_cache.py"
+      ],
+      "command": "primary .venv/bin/python -P /tmp/csq16-correctness-native-run.py df-typing-clean-rN <selection> --basetemp /tmp/csq16-df-typing-clean-rN-tmp; harness -q -Werror --tb=short --timeout=45",
+      "pyright_version": "1.1.371 actual test verifies version; all four invariant tests executed (version,zeroerrors,zerowarnings,suppressiondocumentation)",
+      "opposite": {
+        "log": "/tmp/csq16-df-typing-original-control.log",
+        "result": "Original actual chained source1failed3passed; exact reportArgumentType LocalRuntime cannot be assigned AsyncLocalRuntime,0errors1warning. Same gate now4passed eachround.",
+        "pyright_compiler_warning_count": 1
+      },
+      "diagnostics": "Each64 intentional records:46DataFlowtestmode/aggressivecleanup,10SQLite memory testing,8intentional trustdeny. No Pythonwarning or sharedtemp cleanup warning finalrounds. Pinned wrapper emits newer-version informational advertisement when invoked directly; explicit project/request pin remains1.1.371.",
+      "environment": "Read-only ignored .venv symlink to primary interpreter env supplies existing pyrightconfig venv resolution; no package installs or primary mutations. Unique --basetemp avoids concurrent pytest shared temp garbage cleanup.",
+      "excluded_attempt": "Initial47passed then PytestWarning Directory not empty during shared pytest tempgarbage cleanup aftersummary; not counted as finalclean. Two unique-basetemp runs completed clean.",
+      "limits": [
+        "No broader type backlog change or waiver",
+        "Full newcandidate gates parent-owned",
+        "Independent reviewers own convergence approval; this is author evidence"
+      ]
+    },
+    "csq16-engine-type-independent-review.json": {
+      "ran": true,
+      "delivered": true,
+      "verdict": "CLEAN",
+      "base_head": "c9dd195832b2876426a2b816f9dadd933749c518",
+      "manifest": "/tmp/csq16-df-typing-manifest.json",
+      "final_engine_sha256": "a52d17eda0d86514fec8481635feca5aa99b0a0092ca7b238e1f3e37cf2fb6b3",
+      "rounds": [
+        {
+          "receipt": "/tmp/csq16-repair-runtime-engine-type-final-r1.json",
+          "log": "/tmp/csq16-engine-type-final-r1.log",
+          "passed": 47,
+          "warnings": [],
+          "skips": [],
+          "intentional_logs": 64
+        },
+        {
+          "receipt": "/tmp/csq16-repair-runtime-engine-type-final-r2.json",
+          "log": "/tmp/csq16-engine-type-final-r2.log",
+          "passed": 47,
+          "warnings": [],
+          "skips": [],
+          "intentional_logs": 64
+        }
+      ],
+      "selection": [
+        "packages/kailash-dataflow/tests/regression/test_issue_1498_model_registry_runtime.py",
+        "packages/kailash-dataflow/tests/regression/test_issue_352_fastapi_startup.py",
+        "packages/kailash-dataflow/tests/regression/test_model_registry_native_owner_bridge.py",
+        "packages/kailash-dataflow/tests/regression/test_issue_1002_close_releases_all_cached_runtimes.py",
+        "packages/kailash-dataflow/tests/unit/core/test_model_registry_runtime_injection.py",
+        "packages/kailash-dataflow/tests/regression/test_issue_1502_sqlite_memory_shared_cache.py",
+        "packages/kailash-dataflow/tests/regression/test_engine_pyright_invariant.py"
+      ],
+      "command": "primary .venv/bin/python -P /tmp/csq16-repair-runtime-run.py engine-type-final-rN <selection> --basetemp /tmp/csq16-engine-type-independent-rN-tmp; runner adds -q -Werror --tb=short --timeout=45",
+      "opposite_control": {
+        "actual_original_source": true,
+        "log": "/tmp/csq16-engine-type-baseline.log",
+        "observed": "1failed3passed; engine.py1148 reportArgumentType LocalRuntime incompatible AsyncLocalRuntime;0errors1warning",
+        "no_mutation_of_gate": true
+      },
+      "mechanical": "/tmp/csq16-engine-type-independent-mechanical.json",
+      "spec_quotes": {
+        "specs/dataflow-core.md:188": "Runtime resolution is now lazy \u2014 performed on every read of db.runtime, not at construction.",
+        "specs/dataflow-core.md:211": "DataFlow marks its cached async runtimes externally managed and closes all cached runtimes at shutdown."
+      },
+      "behavior": "Native construction, same-object ownership marking, caching, return and later registry reference lease preserved. Exact module AST equality after normalizing only proposed split; no typeignore/ceiling/publicAPI/test changes. Existing real SQLite tests verify owner identity, repeated execution, trust policy, closed rejection, lease race and final release.",
+      "diagnostics": "Each47case round has64 expected diagnostic records:46 test-mode disclosures,10 SQLite memory disclosures,8 intentional trust denials. No Pythonwarnings/skips or shared pytesttemp cleanup warning. Original Pyright output additionally carried pinned-version update notice and isolatedcheckout missingvenv notice; read-only .venv symlink resolves existing primary environment during final rounds, no install/modification.",
+      "limits": [
+        "Local macOS pinned Pyright1.1.371 and actualSQLite; live PostgreSQL/MySQL not exercised.",
+        "Final committed carry mapping pending parent commit SHA; full Linux/Mac gates parent-owned."
+      ]
+    },
+    "csq16-engine-factory-security-review.json": {
+      "ran": true,
+      "verdict": "CLEAN within one-file factory ownership/type refinement scope",
+      "base_head": "c9dd195832b2876426a2b816f9dadd933749c518",
+      "final_head": "b3a8b3239beea71ab58eb4815dcca106aeb8ea68",
+      "file": "packages/kailash-dataflow/src/dataflow/core/engine.py",
+      "sha256": "a52d17eda0d86514fec8481635feca5aa99b0a0092ca7b238e1f3e37cf2fb6b3",
+      "two_rounds": [
+        [
+          {
+            "receipt": "/tmp/csq16-security-runtime-factory-final-r1.json",
+            "log": "/tmp/csq16-security-factory-final-r1.log",
+            "passed": 46
+          },
+          {
+            "receipt": "/tmp/csq16-security-runtime-factory-pyright-r1.json",
+            "log": "/tmp/csq16-security-factory-pyright-r1.log",
+            "passed": 4
+          }
+        ],
+        [
+          {
+            "receipt": "/tmp/csq16-security-runtime-factory-final-r2.json",
+            "log": "/tmp/csq16-security-factory-final-r2.log",
+            "passed": 46
+          },
+          {
+            "receipt": "/tmp/csq16-security-runtime-factory-pyright-r2.json",
+            "log": "/tmp/csq16-security-factory-pyright-r2.log",
+            "passed": 4
+          }
+        ]
+      ],
+      "per_round_total": 50,
+      "python_warnings": [],
+      "skips": [],
+      "mechanical": "/tmp/csq16-security-factory-mechanical.json",
+      "source_review": "Exact native instance is marked before caching; marker returns self and mutates only externally-managed flag. Getter override/closed/cache branches unchanged. Registry captures and leases same runtime; trust configuration, denial modes, caller-loop lifetime and closed-owner rejection remain covered by real SQLite tests. No casts, ceiling changes or test edits.",
+      "spec_quote": {
+        "path": "specs/dataflow-core.md:211",
+        "quote": "DataFlow marks its cached async runtimes externally managed and closes all cached runtimes at shutdown."
+      },
+      "opposite_control": {
+        "script": "/tmp/csq16-security-factory-control.py",
+        "log": "/tmp/csq16-security-factory-control.log",
+        "hits": 7,
+        "expected_failures": 2,
+        "observed": "assert runtime._externally_managed; E assert False",
+        "scope": "ownership marking, not broad security detection"
+      },
+      "diagnostics": {
+        "per_round": 70,
+        "test_mode_and_cleanup_disclosures": 52,
+        "SQLite_memory_disclosures": 10,
+        "intentional_trust_denials": 8,
+        "unexpected": []
+      },
+      "source_carry": {
+        "map": "/tmp/csq16-union-security-final-source-map.json",
+        "production_rows": 291,
+        "all_reviewed_bytes_equal_committed": true,
+        "only_changed_since_prior_review": [
+          "packages/kailash-dataflow/src/dataflow/core/engine.py"
+        ]
+      },
+      "exclusions": [
+        "No new whole-suite or remote CI run; parent owns final gate reruns.",
+        "Existing production security coverage carried only by exact hashes; no publication or CodeQL disposition claimed."
+      ]
+    },
+    "csq16-engine-type-root-carry.json": {
+      "ran": true,
+      "head": "b3a8b3239beea71ab58eb4815dcca106aeb8ea68",
+      "base": "c9dd195832b2876426a2b816f9dadd933749c518",
+      "only_changed_path": "packages/kailash-dataflow/src/dataflow/core/engine.py",
+      "reviewed_final_hash": "a52d17eda0d86514fec8481635feca5aa99b0a0092ca7b238e1f3e37cf2fb6b3",
+      "all_other_tracked_bytes_unchanged": true,
+      "opposite": "Old engine hash and additional unreviewed source path rejected by exact equality checks",
+      "scope": "Byte-level carry of all unaffected source, tests, dependencies and specs; only engine factory is covered by new independent scoped behavioral/type reviews."
+    }
+  },
+  "scope": "Only engine.py changes after c9dd; construction and marking retain order, identity, runtime state and Core ownership behavior; no ceilings, annotations or test changes."
+}
