@@ -770,7 +770,7 @@ class AsyncLocalRuntime(LocalRuntime):
 
         This override prevents the parent's threading-based execution that causes
         Docker file descriptor issues. Drives pure async execution on the owned loop
-        or returns the async task if already in an event loop.
+        and rejects calls made from an already-running event loop.
 
         Args:
             workflow: Workflow to execute
