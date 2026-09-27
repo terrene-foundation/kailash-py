@@ -116,7 +116,10 @@ async def test_default_unknown_parameter_warning_is_retained(caplog):
     result = await node.execute_async(unknown_option=True)
     assert result["signal_data"] == "received"
     assert len(caplog.records) == 1
-    assert "Unknown parameter(s) for SignalWaitNode: ['unknown_option']" in (
+    assert "Unknown parameter(s) for SignalWaitNode: unknown_option." in (
+        caplog.records[0].getMessage()
+    )
+    assert "Valid parameters: input_data, signal_name, timeout." in (
         caplog.records[0].getMessage()
     )
 

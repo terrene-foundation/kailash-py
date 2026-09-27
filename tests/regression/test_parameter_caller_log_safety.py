@@ -111,6 +111,7 @@ def test_node_warning_transform_does_not_change_public_validation_error(
 async def test_real_native_async_execution_preserves_validated_parameters(caplog, key):
     workflow = graph()
     caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.WARNING, logger="kailash.nodes.base")
     async with AsyncLocalRuntime(debug=True) as runtime:
         results, _ = await runtime.execute_workflow_async(
             workflow, inputs={"node": {"value": "7", key: "unused"}}
@@ -123,6 +124,7 @@ async def test_real_native_async_execution_preserves_validated_parameters(caplog
 def test_real_local_execution_preserves_validated_parameters(caplog, key):
     workflow = graph()
     caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.WARNING, logger="kailash.nodes.base")
     with LocalRuntime(debug=True) as runtime:
         results, _ = runtime.execute(
             workflow, parameters={"node": {"value": "7", key: "unused"}}
