@@ -2810,8 +2810,6 @@ class RetryPolicyEngine:
             f"Starting retry session {session_id} with strategy: {current_strategy.name}"
         )
 
-        attempt_start = start_time
-        attempt_time = 0.0
         for attempt_num in range(1, current_strategy.max_attempts + 1):
             # Check timeout
             if timeout and (time.time() - start_time) >= timeout:
