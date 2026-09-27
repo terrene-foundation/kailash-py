@@ -52,9 +52,13 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Type, cast
 
-from kailash._from_brief import BriefInterpretationError
-from kailash._from_brief import BriefPlan as _BasePlan
-from kailash._from_brief import coerce_plan, scrub_brief, validate_plan
+from kailash._from_brief import (
+    BriefInterpretationError,
+    BriefPlan as _BasePlan,
+    coerce_plan,
+    scrub_brief,
+    validate_plan,
+)
 
 # kaizen-dependent imports (`BriefPlanSignature` from kailash._from_brief,
 # `OutputField` / `BaseAgent` from kaizen) are LAZY — deferred into function

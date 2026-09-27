@@ -484,6 +484,10 @@ class BaseRuntime(ABC):
             ...     raise WorkflowExecutionError("Trust verification denied")
         """
         from kailash.runtime.trust.context import TrustVerificationMode
+        from kailash.runtime.trust.verifier import (
+            _safe_trust_log_field,
+            _safe_trust_log_reason,
+        )
 
         if self._trust_verification_mode == TrustVerificationMode.DISABLED:
             return True
@@ -506,18 +510,18 @@ class BaseRuntime(ABC):
             if self._trust_verification_mode == TrustVerificationMode.PERMISSIVE:
                 logger.warning(
                     "PERMISSIVE: Trust verification denied workflow '%s' for agent '%s': %s",
-                    workflow_id,
-                    agent_id,
-                    result.reason,
+                    _safe_trust_log_field(workflow_id),
+                    _safe_trust_log_field(agent_id),
+                    _safe_trust_log_reason(result),
                 )
                 return True  # Allow in PERMISSIVE
             else:
                 # ENFORCING
                 logger.error(
                     "ENFORCING: Trust verification denied workflow '%s' for agent '%s': %s",
-                    workflow_id,
-                    agent_id,
-                    result.reason,
+                    _safe_trust_log_field(workflow_id),
+                    _safe_trust_log_field(agent_id),
+                    _safe_trust_log_reason(result),
                 )
                 return False
 
@@ -549,6 +553,10 @@ class BaseRuntime(ABC):
             ...     raise WorkflowExecutionError("Trust verification denied node")
         """
         from kailash.runtime.trust.context import TrustVerificationMode
+        from kailash.runtime.trust.verifier import (
+            _safe_trust_log_field,
+            _safe_trust_log_reason,
+        )
 
         if self._trust_verification_mode == TrustVerificationMode.DISABLED:
             return True
@@ -570,19 +578,19 @@ class BaseRuntime(ABC):
             if self._trust_verification_mode == TrustVerificationMode.PERMISSIVE:
                 logger.warning(
                     "PERMISSIVE: Trust verification denied node '%s' (type=%s) for agent '%s': %s",
-                    node_id,
-                    node_type,
-                    agent_id,
-                    result.reason,
+                    _safe_trust_log_field(node_id),
+                    _safe_trust_log_field(node_type),
+                    _safe_trust_log_field(agent_id),
+                    _safe_trust_log_reason(result),
                 )
                 return True
             else:
                 logger.error(
                     "ENFORCING: Trust verification denied node '%s' (type=%s) for agent '%s': %s",
-                    node_id,
-                    node_type,
-                    agent_id,
-                    result.reason,
+                    _safe_trust_log_field(node_id),
+                    _safe_trust_log_field(node_type),
+                    _safe_trust_log_field(agent_id),
+                    _safe_trust_log_reason(result),
                 )
                 return False
 

@@ -53,8 +53,9 @@ def test_diagnose_kind_classifier_alias_dispatches_to_classical_classifier() -> 
     """
     sklearn = pytest.importorskip("sklearn")  # noqa: F841
     import numpy as np
-    from kailash_ml import diagnose
     from sklearn.linear_model import LogisticRegression
+
+    from kailash_ml import diagnose
 
     # Tiny deterministic dataset — Tier-2 NO mocking, real sklearn.
     rng = np.random.default_rng(seed=0)
@@ -83,8 +84,9 @@ def test_diagnose_kind_regressor_alias_dispatches_to_classical_regressor() -> No
     """``kind="regressor"`` aliases ``classical_regressor`` end-to-end."""
     sklearn = pytest.importorskip("sklearn")  # noqa: F841
     import numpy as np
-    from kailash_ml import diagnose
     from sklearn.linear_model import LinearRegression
+
+    from kailash_ml import diagnose
 
     rng = np.random.default_rng(seed=0)
     X = rng.standard_normal((40, 4))
@@ -160,7 +162,6 @@ def test_diagnose_kind_llm_dispatches_to_kaizen_when_installed(monkeypatch) -> N
     # acceptable in test scope.
     monkeypatch.setenv("KAIZEN_JUDGE_MODEL", "gpt-4o-mini")
     from kailash_ml import diagnose
-
     from kaizen.judges.llm_diagnostics import LLMDiagnostics
 
     diag = diagnose("subject_irrelevant", kind="llm")

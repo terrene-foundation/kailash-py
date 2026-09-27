@@ -41,7 +41,16 @@ from kaizen.utils.credential_scrub import scrub_credentials
 
 
 def _fingerprint(raw: str | bytes, length: int = 8) -> str:
-    """Produce a deterministic non-reversible tag for a sensitive value.
+    """Produce a deterministic UNKEYED correlation tag for a sensitive value.
+
+    NOT non-reversible, which this docstring claimed until #2170. The
+    underlying digest is unkeyed, so reversibility is decided entirely by the
+    PRE-IMAGE's entropy and not by this function. A random API key is
+    unrecoverable because its space cannot be enumerated; a URL, a hostname
+    or a filesystem path passed here IS recoverable by hashing candidates,
+    and callers passing such values are relying on correlation only. See
+    ``kailash.utils.url_credentials.fingerprint_secret`` for the full caveat
+    -- it is not repeated here.
 
     8 hex chars (32 bits) matches the cross-SDK contract in
     ``rules/event-payload-classification.md`` § 2 and DataFlow's

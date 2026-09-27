@@ -1,0 +1,1328 @@
+{
+  "ran": true,
+  "verdict": "READ_ONLY_TRIAGE_COMPLETE; NOT A SPEC-CONFORMANCE CLEAN VERDICT",
+  "source_commit": "a35604592eac70584f35acffd23d9ddc4ff615b3",
+  "input_manifest": [
+    {
+      "path": "scripts/spec_drift_gate.py",
+      "sha256": "1080872409498275a965adbd228a5999a10daa76d3b440019e41ce75e23dcb95"
+    },
+    {
+      "path": "specs/spec-drift-gate.md",
+      "sha256": "e4a6252269003457c22f67772c795b9fb110c94fe43d81dd94647f47956104d7"
+    },
+    {
+      "path": ".spec-drift-baseline.jsonl",
+      "sha256": "1a5ca7881b864bb2db24cb762da57b90366d4d36f1058b3d15599e02b1a3fc6b"
+    },
+    {
+      "path": ".spec-drift-gate.toml",
+      "sha256": "379b0986d422fe3699cb4ba1fc39db221dfc901bcc430f6fcd7fdb220b92f86c"
+    }
+  ],
+  "counts": {
+    "baseline": 116,
+    "resolved": 5,
+    "active_expired": 111,
+    "expired2x": 0,
+    "new": 0,
+    "actual_findings": 118,
+    "unique_active_identities": 97
+  },
+  "parent_record_counts": {
+    "expired": 111,
+    "zero_sections": 55,
+    "B1": 7
+  },
+  "parent_scope_decision_review": "Factual counts, examples and scope boundaries match the fresh detector/classification evidence. Records JSON has177 total records,173 specification warnings plus4 other evidence records; document accurately calls the173 subset warnings. No exception or authorization inferred.",
+  "category_counts": {
+    "literal_test_path_absent_semantic_reconciliation_required": 43,
+    "non_class_token_misclassification": 14,
+    "external_class_reference_outside_configured_roots": 14,
+    "workspace_citation_format_reconciliation_required": 24,
+    "owned_api_claim_requires_domain_reconciliation": 6,
+    "external_method_reference_outside_configured_roots": 3,
+    "explicitly_future_surface_in_current_implementation_note": 2,
+    "existing_tool_error_omitted_from_configured_error_roots": 5
+  },
+  "active_rows": [
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/integration/test_align_dpo_adapter_emits_to_tracker_wiring.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 277,
+      "message": "FR-7: test path 'tests/integration/test_align_dpo_adapter_emits_to_tracker_wiring.py' cited at specs/align-ml-integration.md:277 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/align-ml-integration.md",
+      "symbol": "tests/integration/test_align_dpo_adapter_emits_to_tracker_wiring.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/integration/test_align_ppo_adapter_save_load_roundtrip_wiring.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 278,
+      "message": "FR-7: test path 'tests/integration/test_align_ppo_adapter_save_load_roundtrip_wiring.py' cited at specs/align-ml-integration.md:278 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/align-ml-integration.md",
+      "symbol": "tests/integration/test_align_ppo_adapter_save_load_roundtrip_wiring.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/integration/test_align_dpo_kl_controller_wiring.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 279,
+      "message": "FR-7: test path 'tests/integration/test_align_dpo_kl_controller_wiring.py' cited at specs/align-ml-integration.md:279 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/align-ml-integration.md",
+      "symbol": "tests/integration/test_align_dpo_kl_controller_wiring.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/regression/test_issue_NNN_dpo_adapter_tracker_kwarg_type_is_experiment_run.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 285,
+      "message": "FR-7: test path 'tests/regression/test_issue_NNN_dpo_adapter_tracker_kwarg_type_is_experiment_run.py' cited at specs/align-ml-integration.md:285 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/align-ml-integration.md",
+      "symbol": "tests/regression/test_issue_NNN_dpo_adapter_tracker_kwarg_type_is_experiment_run.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/regression/test_issue_NNN_rloo_k_logged_as_param.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 286,
+      "message": "FR-7: test path 'tests/regression/test_issue_NNN_rloo_k_logged_as_param.py' cited at specs/align-ml-integration.md:286 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/align-ml-integration.md",
+      "symbol": "tests/regression/test_issue_NNN_rloo_k_logged_as_param.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define N class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 53,
+      "message": "FR-1: class N cited at specs/alignment-diagnostics.md:53 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/alignment-diagnostics.md",
+      "symbol": "N",
+      "triage_category": "non_class_token_misclassification"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define Figure class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 107,
+      "message": "FR-1: class Figure cited at specs/alignment-diagnostics.md:107 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/alignment-diagnostics.md",
+      "symbol": "Figure",
+      "triage_category": "external_class_reference_outside_configured_roots"
+    },
+    {
+      "finding": "FR-8",
+      "fix_hint": "\u2192 fix: (a) drop the `workspaces/issue-567-mlfp-diagnostics/02-plans/SYNTHESIS-proposal.md` workspace reference (specs are pristine), OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / `Per`), OR (c) move under `## Cross-References`",
+      "kind": "workspace_path",
+      "line": 170,
+      "message": "FR-8: workspaces/ path 'workspaces/issue-567-mlfp-diagnostics/02-plans/SYNTHESIS-proposal.md' cited at specs/alignment-diagnostics.md:170 without an Origin: / Citation: / Per <path> prefix \u2014 promote to an explicit citation or move under ## Cross-References",
+      "severity": "FAIL",
+      "spec": "specs/alignment-diagnostics.md",
+      "symbol": "workspaces/issue-567-mlfp-diagnostics/02-plans/SYNTHESIS-proposal.md",
+      "triage_category": "workspace_citation_format_reconciliation_required"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define Draft7Validator class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 151,
+      "message": "FR-1: class Draft7Validator cited at specs/core-workflows.md:151 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/core-workflows.md",
+      "symbol": "Draft7Validator",
+      "triage_category": "external_class_reference_outside_configured_roots"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define WARNING class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 173,
+      "message": "FR-1: class WARNING cited at specs/core-workflows.md:173 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/core-workflows.md",
+      "symbol": "WARNING",
+      "triage_category": "non_class_token_misclassification"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/integration/test_ml_feature_source_point_in_time_wiring.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 423,
+      "message": "FR-7: test path 'tests/integration/test_ml_feature_source_point_in_time_wiring.py' cited at specs/dataflow-ml-integration.md:423 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/dataflow-ml-integration.md",
+      "symbol": "tests/integration/test_ml_feature_source_point_in_time_wiring.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/integration/test_transform_tenant_cache_isolation_wiring.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 424,
+      "message": "FR-7: test path 'tests/integration/test_transform_tenant_cache_isolation_wiring.py' cited at specs/dataflow-ml-integration.md:424 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/dataflow-ml-integration.md",
+      "symbol": "tests/integration/test_transform_tenant_cache_isolation_wiring.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/integration/test_hash_roundtrip_to_model_registry_wiring.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 425,
+      "message": "FR-7: test path 'tests/integration/test_hash_roundtrip_to_model_registry_wiring.py' cited at specs/dataflow-ml-integration.md:425 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/dataflow-ml-integration.md",
+      "symbol": "tests/integration/test_hash_roundtrip_to_model_registry_wiring.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/integration/test_classification_propagates_through_transform_wiring.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 426,
+      "message": "FR-7: test path 'tests/integration/test_classification_propagates_through_transform_wiring.py' cited at specs/dataflow-ml-integration.md:426 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/dataflow-ml-integration.md",
+      "symbol": "tests/integration/test_classification_propagates_through_transform_wiring.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/regression/test_issue_NNN_feature_source_sql_injection_hardened.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 430,
+      "message": "FR-7: test path 'tests/regression/test_issue_NNN_feature_source_sql_injection_hardened.py' cited at specs/dataflow-ml-integration.md:430 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/dataflow-ml-integration.md",
+      "symbol": "tests/regression/test_issue_NNN_feature_source_sql_injection_hardened.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/regression/test_issue_NNN_hash_column_order_stable.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 431,
+      "message": "FR-7: test path 'tests/regression/test_issue_NNN_hash_column_order_stable.py' cited at specs/dataflow-ml-integration.md:431 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/dataflow-ml-integration.md",
+      "symbol": "tests/regression/test_issue_NNN_hash_column_order_stable.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/regression/test_issue_NNN_transform_classification_survives.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 432,
+      "message": "FR-7: test path 'tests/regression/test_issue_NNN_transform_classification_survives.py' cited at specs/dataflow-ml-integration.md:432 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/dataflow-ml-integration.md",
+      "symbol": "tests/regression/test_issue_NNN_transform_classification_survives.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/integration/test_diagnostic_report_serialization_roundtrip_wiring.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 512,
+      "message": "FR-7: test path 'tests/integration/test_diagnostic_report_serialization_roundtrip_wiring.py' cited at specs/kailash-core-ml-integration.md:512 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/kailash-core-ml-integration.md",
+      "symbol": "tests/integration/test_diagnostic_report_serialization_roundtrip_wiring.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/integration/test_rename_status_migration_wiring.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 513,
+      "message": "FR-7: test path 'tests/integration/test_rename_status_migration_wiring.py' cited at specs/kailash-core-ml-integration.md:513 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/kailash-core-ml-integration.md",
+      "symbol": "tests/integration/test_rename_status_migration_wiring.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/integration/test_merge_legacy_stores_wiring.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 514,
+      "message": "FR-7: test path 'tests/integration/test_merge_legacy_stores_wiring.py' cited at specs/kailash-core-ml-integration.md:514 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/kailash-core-ml-integration.md",
+      "symbol": "tests/integration/test_merge_legacy_stores_wiring.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/integration/test_ml_training_node_emits_to_tracker_wiring.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 515,
+      "message": "FR-7: test path 'tests/integration/test_ml_training_node_emits_to_tracker_wiring.py' cited at specs/kailash-core-ml-integration.md:515 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/kailash-core-ml-integration.md",
+      "symbol": "tests/integration/test_ml_training_node_emits_to_tracker_wiring.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/integration/test_ml_registry_promote_node_wiring.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 516,
+      "message": "FR-7: test path 'tests/integration/test_ml_registry_promote_node_wiring.py' cited at specs/kailash-core-ml-integration.md:516 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/kailash-core-ml-integration.md",
+      "symbol": "tests/integration/test_ml_registry_promote_node_wiring.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-8",
+      "fix_hint": "\u2192 fix: (a) drop the `workspaces/issue-567-mlfp-diagnostics/02-plans/SYNTHESIS-proposal.md` workspace reference (specs are pristine), OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / `Per`), OR (c) move under `## Cross-References`",
+      "kind": "workspace_path",
+      "line": 108,
+      "message": "FR-8: workspaces/ path 'workspaces/issue-567-mlfp-diagnostics/02-plans/SYNTHESIS-proposal.md' cited at specs/kaizen-evaluation.md:108 without an Origin: / Citation: / Per <path> prefix \u2014 promote to an explicit citation or move under ## Cross-References",
+      "severity": "FAIL",
+      "spec": "specs/kaizen-evaluation.md",
+      "symbol": "workspaces/issue-567-mlfp-diagnostics/02-plans/SYNTHESIS-proposal.md",
+      "triage_category": "workspace_citation_format_reconciliation_required"
+    },
+    {
+      "finding": "FR-8",
+      "fix_hint": "\u2192 fix: (a) drop the `workspaces/issue-567-mlfp-diagnostics/02-plans/SYNTHESIS-proposal.md` workspace reference (specs are pristine), OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / `Per`), OR (c) move under `## Cross-References`",
+      "kind": "workspace_path",
+      "line": 332,
+      "message": "FR-8: workspaces/ path 'workspaces/issue-567-mlfp-diagnostics/02-plans/SYNTHESIS-proposal.md' cited at specs/kaizen-interpretability.md:332 without an Origin: / Citation: / Per <path> prefix \u2014 promote to an explicit citation or move under ## Cross-References",
+      "severity": "FAIL",
+      "spec": "specs/kaizen-interpretability.md",
+      "symbol": "workspaces/issue-567-mlfp-diagnostics/02-plans/SYNTHESIS-proposal.md",
+      "triage_category": "workspace_citation_format_reconciliation_required"
+    },
+    {
+      "finding": "FR-8",
+      "fix_hint": "\u2192 fix: (a) drop the `workspaces/issue-567-mlfp-diagnostics/02-plans/SYNTHESIS-proposal.md` workspace reference (specs are pristine), OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / `Per`), OR (c) move under `## Cross-References`",
+      "kind": "workspace_path",
+      "line": 187,
+      "message": "FR-8: workspaces/ path 'workspaces/issue-567-mlfp-diagnostics/02-plans/SYNTHESIS-proposal.md' cited at specs/kaizen-judges.md:187 without an Origin: / Citation: / Per <path> prefix \u2014 promote to an explicit citation or move under ## Cross-References",
+      "severity": "FAIL",
+      "spec": "specs/kaizen-judges.md",
+      "symbol": "workspaces/issue-567-mlfp-diagnostics/02-plans/SYNTHESIS-proposal.md",
+      "triage_category": "workspace_citation_format_reconciliation_required"
+    },
+    {
+      "finding": "FR-8",
+      "fix_hint": "\u2192 fix: (a) drop the `workspaces/issue-498-llm-deployment/` workspace reference (specs are pristine), OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / `Per`), OR (c) move under `## Cross-References`",
+      "kind": "workspace_path",
+      "line": 234,
+      "message": "FR-8: workspaces/ path 'workspaces/issue-498-llm-deployment/' cited at specs/kaizen-llm-deployments.md:234 without an Origin: / Citation: / Per <path> prefix \u2014 promote to an explicit citation or move under ## Cross-References",
+      "severity": "FAIL",
+      "spec": "specs/kaizen-llm-deployments.md",
+      "symbol": "workspaces/issue-498-llm-deployment/",
+      "triage_category": "workspace_citation_format_reconciliation_required"
+    },
+    {
+      "finding": "FR-8",
+      "fix_hint": "\u2192 fix: (a) drop the `workspaces/issue-498-llm-deployment/02-plans/02-adr-0001-llm-deployment-abstraction.md` workspace reference (specs are pristine), OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / `Per`), OR (c) move under `## Cross-References`",
+      "kind": "workspace_path",
+      "line": 235,
+      "message": "FR-8: workspaces/ path 'workspaces/issue-498-llm-deployment/02-plans/02-adr-0001-llm-deployment-abstraction.md' cited at specs/kaizen-llm-deployments.md:235 without an Origin: / Citation: / Per <path> prefix \u2014 promote to an explicit citation or move under ## Cross-References",
+      "severity": "FAIL",
+      "spec": "specs/kaizen-llm-deployments.md",
+      "symbol": "workspaces/issue-498-llm-deployment/02-plans/02-adr-0001-llm-deployment-abstraction.md",
+      "triage_category": "workspace_citation_format_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/integration/test_agent_diagnostics_tracker_wiring.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 543,
+      "message": "FR-7: test path 'tests/integration/test_agent_diagnostics_tracker_wiring.py' cited at specs/kaizen-ml-integration.md:543 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/kaizen-ml-integration.md",
+      "symbol": "tests/integration/test_agent_diagnostics_tracker_wiring.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/integration/test_llm_diagnostics_tracker_wiring.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 544,
+      "message": "FR-7: test path 'tests/integration/test_llm_diagnostics_tracker_wiring.py' cited at specs/kaizen-ml-integration.md:544 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/kaizen-ml-integration.md",
+      "symbol": "tests/integration/test_llm_diagnostics_tracker_wiring.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/integration/test_interpretability_diagnostics_tracker_wiring.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 545,
+      "message": "FR-7: test path 'tests/integration/test_interpretability_diagnostics_tracker_wiring.py' cited at specs/kaizen-ml-integration.md:545 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/kaizen-ml-integration.md",
+      "symbol": "tests/integration/test_interpretability_diagnostics_tracker_wiring.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/integration/test_cost_tracker_cross_sdk_parity_wiring.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 546,
+      "message": "FR-7: test path 'tests/integration/test_cost_tracker_cross_sdk_parity_wiring.py' cited at specs/kaizen-ml-integration.md:546 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/kaizen-ml-integration.md",
+      "symbol": "tests/integration/test_cost_tracker_cross_sdk_parity_wiring.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/integration/test_sqlitesink_shared_store_wiring.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 547,
+      "message": "FR-7: test path 'tests/integration/test_sqlitesink_shared_store_wiring.py' cited at specs/kaizen-ml-integration.md:547 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/kaizen-ml-integration.md",
+      "symbol": "tests/integration/test_sqlitesink_shared_store_wiring.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/regression/test_issue_NNN_cost_microdollar_truncation.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 551,
+      "message": "FR-7: test path 'tests/regression/test_issue_NNN_cost_microdollar_truncation.py' cited at specs/kaizen-ml-integration.md:551 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/kaizen-ml-integration.md",
+      "symbol": "tests/regression/test_issue_NNN_cost_microdollar_truncation.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/regression/test_issue_NNN_tracker_kwarg_type_is_experiment_run.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 552,
+      "message": "FR-7: test path 'tests/regression/test_issue_NNN_tracker_kwarg_type_is_experiment_run.py' cited at specs/kaizen-ml-integration.md:552 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/kaizen-ml-integration.md",
+      "symbol": "tests/regression/test_issue_NNN_tracker_kwarg_type_is_experiment_run.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-8",
+      "fix_hint": "\u2192 fix: (a) drop the `workspaces/kailash-ml-audit/04-validate/round-2b-open-tbd-triage.md` workspace reference (specs are pristine), OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / `Per`), OR (c) move under `## Cross-References`",
+      "kind": "workspace_path",
+      "line": 672,
+      "message": "FR-8: workspaces/ path 'workspaces/kailash-ml-audit/04-validate/round-2b-open-tbd-triage.md' cited at specs/ml-autolog.md:672 without an Origin: / Citation: / Per <path> prefix \u2014 promote to an explicit citation or move under ## Cross-References",
+      "severity": "FAIL",
+      "spec": "specs/ml-autolog.md",
+      "symbol": "workspaces/kailash-ml-audit/04-validate/round-2b-open-tbd-triage.md",
+      "triage_category": "workspace_citation_format_reconciliation_required"
+    },
+    {
+      "finding": "FR-8",
+      "fix_hint": "\u2192 fix: (a) drop the `workspaces/kailash-ml-audit/analysis/00-synthesis-redesign-proposal.md` workspace reference (specs are pristine), OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / `Per`), OR (c) move under `## Cross-References`",
+      "kind": "workspace_path",
+      "line": 14,
+      "message": "FR-8: workspaces/ path 'workspaces/kailash-ml-audit/analysis/00-synthesis-redesign-proposal.md' cited at specs/ml-backends.md:14 without an Origin: / Citation: / Per <path> prefix \u2014 promote to an explicit citation or move under ## Cross-References",
+      "severity": "FAIL",
+      "spec": "specs/ml-backends.md",
+      "symbol": "workspaces/kailash-ml-audit/analysis/00-synthesis-redesign-proposal.md",
+      "triage_category": "workspace_citation_format_reconciliation_required"
+    },
+    {
+      "finding": "FR-8",
+      "fix_hint": "\u2192 fix: (a) drop the `workspaces/kailash-ml-audit/infra/gpu-runner-acquisition.md` workspace reference (specs are pristine), OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / `Per`), OR (c) move under `## Cross-References`",
+      "kind": "workspace_path",
+      "line": 428,
+      "message": "FR-8: workspaces/ path 'workspaces/kailash-ml-audit/infra/gpu-runner-acquisition.md' cited at specs/ml-backends.md:428 without an Origin: / Citation: / Per <path> prefix \u2014 promote to an explicit citation or move under ## Cross-References",
+      "severity": "FAIL",
+      "spec": "specs/ml-backends.md",
+      "symbol": "workspaces/kailash-ml-audit/infra/gpu-runner-acquisition.md",
+      "triage_category": "workspace_citation_format_reconciliation_required"
+    },
+    {
+      "finding": "FR-8",
+      "fix_hint": "\u2192 fix: (a) drop the `workspaces/kailash-ml-audit/04-validate/approved-decisions.md` workspace reference (specs are pristine), OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / `Per`), OR (c) move under `## Cross-References`",
+      "kind": "workspace_path",
+      "line": 646,
+      "message": "FR-8: workspaces/ path 'workspaces/kailash-ml-audit/04-validate/approved-decisions.md' cited at specs/ml-backends.md:646 without an Origin: / Citation: / Per <path> prefix \u2014 promote to an explicit citation or move under ## Cross-References",
+      "severity": "FAIL",
+      "spec": "specs/ml-backends.md",
+      "symbol": "workspaces/kailash-ml-audit/04-validate/approved-decisions.md",
+      "triage_category": "workspace_citation_format_reconciliation_required"
+    },
+    {
+      "finding": "FR-8",
+      "fix_hint": "\u2192 fix: (a) drop the `workspaces/kailash-ml-audit/infra/gpu-runner-acquisition.md` workspace reference (specs are pristine), OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / `Per`), OR (c) move under `## Cross-References`",
+      "kind": "workspace_path",
+      "line": 650,
+      "message": "FR-8: workspaces/ path 'workspaces/kailash-ml-audit/infra/gpu-runner-acquisition.md' cited at specs/ml-backends.md:650 without an Origin: / Citation: / Per <path> prefix \u2014 promote to an explicit citation or move under ## Cross-References",
+      "severity": "FAIL",
+      "spec": "specs/ml-backends.md",
+      "symbol": "workspaces/kailash-ml-audit/infra/gpu-runner-acquisition.md",
+      "triage_category": "workspace_citation_format_reconciliation_required"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define KAILASH_ML_STORE_URL class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 96,
+      "message": "FR-1: class KAILASH_ML_STORE_URL cited at specs/ml-dashboard.md:96 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-dashboard.md",
+      "symbol": "KAILASH_ML_STORE_URL",
+      "triage_category": "non_class_token_misclassification"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define KAILASH_ML_STORE_URL class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 96,
+      "message": "FR-1: class KAILASH_ML_STORE_URL cited at specs/ml-dashboard.md:96 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-dashboard.md",
+      "symbol": "KAILASH_ML_STORE_URL",
+      "triage_category": "non_class_token_misclassification"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define KAILASH_ML_TRACKER_DB class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 96,
+      "message": "FR-1: class KAILASH_ML_TRACKER_DB cited at specs/ml-dashboard.md:96 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-dashboard.md",
+      "symbol": "KAILASH_ML_TRACKER_DB",
+      "triage_category": "non_class_token_misclassification"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define KAILASH_ML_STORE_URL class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 101,
+      "message": "FR-1: class KAILASH_ML_STORE_URL cited at specs/ml-dashboard.md:101 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-dashboard.md",
+      "symbol": "KAILASH_ML_STORE_URL",
+      "triage_category": "non_class_token_misclassification"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define KAILASH_ML_TRACKER_DB class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 101,
+      "message": "FR-1: class KAILASH_ML_TRACKER_DB cited at specs/ml-dashboard.md:101 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-dashboard.md",
+      "symbol": "KAILASH_ML_TRACKER_DB",
+      "triage_category": "non_class_token_misclassification"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define KAILASH_ML_TRACKER_DB class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 103,
+      "message": "FR-1: class KAILASH_ML_TRACKER_DB cited at specs/ml-dashboard.md:103 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-dashboard.md",
+      "symbol": "KAILASH_ML_TRACKER_DB",
+      "triage_category": "non_class_token_misclassification"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define KAILASH_ML_STORE_URL class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 111,
+      "message": "FR-1: class KAILASH_ML_STORE_URL cited at specs/ml-dashboard.md:111 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-dashboard.md",
+      "symbol": "KAILASH_ML_STORE_URL",
+      "triage_category": "non_class_token_misclassification"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define KAILASH_ML_STORE_URL class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 111,
+      "message": "FR-1: class KAILASH_ML_STORE_URL cited at specs/ml-dashboard.md:111 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-dashboard.md",
+      "symbol": "KAILASH_ML_STORE_URL",
+      "triage_category": "non_class_token_misclassification"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define KAILASH_ML_TRACKER_DB class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 111,
+      "message": "FR-1: class KAILASH_ML_TRACKER_DB cited at specs/ml-dashboard.md:111 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-dashboard.md",
+      "symbol": "KAILASH_ML_TRACKER_DB",
+      "triage_category": "non_class_token_misclassification"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define KAILASH_ML_TRACKER_DB class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 111,
+      "message": "FR-1: class KAILASH_ML_TRACKER_DB cited at specs/ml-dashboard.md:111 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-dashboard.md",
+      "symbol": "KAILASH_ML_TRACKER_DB",
+      "triage_category": "non_class_token_misclassification"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define STORE_URL class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 113,
+      "message": "FR-1: class STORE_URL cited at specs/ml-dashboard.md:113 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-dashboard.md",
+      "symbol": "STORE_URL",
+      "triage_category": "non_class_token_misclassification"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define MLDASHBOARD_URL class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 393,
+      "message": "FR-1: class MLDASHBOARD_URL cited at specs/ml-dashboard.md:393 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-dashboard.md",
+      "symbol": "MLDASHBOARD_URL",
+      "triage_category": "non_class_token_misclassification"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at packages/kailash-ml/tests/unit/test_dashboard_unit.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 746,
+      "message": "FR-7: test path 'packages/kailash-ml/tests/unit/test_dashboard_unit.py' cited at specs/ml-dashboard.md:746 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/ml-dashboard.md",
+      "symbol": "packages/kailash-ml/tests/unit/test_dashboard_unit.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at packages/kailash-ml/tests/integration/test_dashboard_wiring.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 758,
+      "message": "FR-7: test path 'packages/kailash-ml/tests/integration/test_dashboard_wiring.py' cited at specs/ml-dashboard.md:758 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/ml-dashboard.md",
+      "symbol": "packages/kailash-ml/tests/integration/test_dashboard_wiring.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at packages/kailash-ml/tests/e2e/test_dashboard_roundtrip.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 772,
+      "message": "FR-7: test path 'packages/kailash-ml/tests/e2e/test_dashboard_roundtrip.py' cited at specs/ml-dashboard.md:772 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/ml-dashboard.md",
+      "symbol": "packages/kailash-ml/tests/e2e/test_dashboard_roundtrip.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-8",
+      "fix_hint": "\u2192 fix: (a) drop the `workspaces/kailash-ml-audit/03-user-flows/` workspace reference (specs are pristine), OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / `Per`), OR (c) move under `## Cross-References`",
+      "kind": "workspace_path",
+      "line": 774,
+      "message": "FR-8: workspaces/ path 'workspaces/kailash-ml-audit/03-user-flows/' cited at specs/ml-dashboard.md:774 without an Origin: / Citation: / Per <path> prefix \u2014 promote to an explicit citation or move under ## Cross-References",
+      "severity": "FAIL",
+      "spec": "specs/ml-dashboard.md",
+      "symbol": "workspaces/kailash-ml-audit/03-user-flows/",
+      "triage_category": "workspace_citation_format_reconciliation_required"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define Callback class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 389,
+      "message": "FR-1: class Callback cited at specs/ml-diagnostics.md:389 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-diagnostics.md",
+      "symbol": "Callback",
+      "triage_category": "external_class_reference_outside_configured_roots"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define TrainerCallback class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 408,
+      "message": "FR-1: class TrainerCallback cited at specs/ml-diagnostics.md:408 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-diagnostics.md",
+      "symbol": "TrainerCallback",
+      "triage_category": "external_class_reference_outside_configured_roots"
+    },
+    {
+      "finding": "FR-2",
+      "fix_hint": "\u2192 fix: (a) implement DistributionEnv.detect method, OR (b) correct the cite, OR (c) move under `## Deferred to M2`",
+      "kind": "method",
+      "line": 457,
+      "message": "FR-2: class DistributionEnv (citing DistributionEnv.detect) at specs/ml-diagnostics.md:457 not found in any source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-diagnostics.md",
+      "symbol": "DistributionEnv.detect",
+      "triage_category": "owned_api_claim_requires_domain_reconciliation"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define ZeroStageEnum class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 461,
+      "message": "FR-1: class ZeroStageEnum cited at specs/ml-diagnostics.md:461 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-diagnostics.md",
+      "symbol": "ZeroStageEnum",
+      "triage_category": "external_class_reference_outside_configured_roots"
+    },
+    {
+      "finding": "FR-2",
+      "fix_hint": "\u2192 fix: (a) implement FullyShardedDataParallel.sharded_grad_norm method, OR (b) correct the cite, OR (c) move under `## Deferred to M2`",
+      "kind": "method",
+      "line": 478,
+      "message": "FR-2: class FullyShardedDataParallel (citing FullyShardedDataParallel.sharded_grad_norm) at specs/ml-diagnostics.md:478 not found in any source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-diagnostics.md",
+      "symbol": "FullyShardedDataParallel.sharded_grad_norm",
+      "triage_category": "external_method_reference_outside_configured_roots"
+    },
+    {
+      "finding": "FR-5",
+      "fix_hint": "\u2192 fix: (a) declare DeviceReport.zero_stage as an AnnAssign field on the dataclass, OR (b) correct the cite, OR (c) move under `## Deferred to M2`",
+      "kind": "field",
+      "line": 499,
+      "message": "FR-5: field DeviceReport.zero_stage cited at specs/ml-diagnostics.md:499 not declared as AnnAssign on class DeviceReport (v1.0 scope = AnnAssign-only per spec \u00a7 11.5; Pydantic / attrs detection v1.1)",
+      "severity": "FAIL",
+      "spec": "specs/ml-diagnostics.md",
+      "symbol": "DeviceReport.zero_stage",
+      "triage_category": "owned_api_claim_requires_domain_reconciliation"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define PartialState class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 503,
+      "message": "FR-1: class PartialState cited at specs/ml-diagnostics.md:503 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-diagnostics.md",
+      "symbol": "PartialState",
+      "triage_category": "external_class_reference_outside_configured_roots"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define RankSafetyCallback class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 522,
+      "message": "FR-1: class RankSafetyCallback cited at specs/ml-diagnostics.md:522 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-diagnostics.md",
+      "symbol": "RankSafetyCallback",
+      "triage_category": "owned_api_claim_requires_domain_reconciliation"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define CheckpointIO class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 553,
+      "message": "FR-1: class CheckpointIO cited at specs/ml-diagnostics.md:553 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-diagnostics.md",
+      "symbol": "CheckpointIO",
+      "triage_category": "external_class_reference_outside_configured_roots"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define CheckpointIO class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 553,
+      "message": "FR-1: class CheckpointIO cited at specs/ml-diagnostics.md:553 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-diagnostics.md",
+      "symbol": "CheckpointIO",
+      "triage_category": "external_class_reference_outside_configured_roots"
+    },
+    {
+      "finding": "FR-2",
+      "fix_hint": "\u2192 fix: (a) implement Trainer.save_checkpoint method, OR (b) correct the cite, OR (c) move under `## Deferred to M2`",
+      "kind": "method",
+      "line": 553,
+      "message": "FR-2: class Trainer (citing Trainer.save_checkpoint) at specs/ml-diagnostics.md:553 not found in any source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-diagnostics.md",
+      "symbol": "Trainer.save_checkpoint",
+      "triage_category": "external_method_reference_outside_configured_roots"
+    },
+    {
+      "finding": "FR-2",
+      "fix_hint": "\u2192 fix: (a) implement DLDiagnostics.from_checkpoint method, OR (b) correct the cite, OR (c) move under `## Deferred to M2`",
+      "kind": "method",
+      "line": 563,
+      "message": "FR-2: method DLDiagnostics.from_checkpoint cited at specs/ml-diagnostics.md:563 not found on class DLDiagnostics",
+      "severity": "FAIL",
+      "spec": "specs/ml-diagnostics.md",
+      "symbol": "DLDiagnostics.from_checkpoint",
+      "triage_category": "owned_api_claim_requires_domain_reconciliation"
+    },
+    {
+      "finding": "FR-2",
+      "fix_hint": "\u2192 fix: (a) implement DLDiagnostics.skip_batch method, OR (b) correct the cite, OR (c) move under `## Deferred to M2`",
+      "kind": "method",
+      "line": 565,
+      "message": "FR-2: method DLDiagnostics.skip_batch cited at specs/ml-diagnostics.md:565 not found on class DLDiagnostics",
+      "severity": "FAIL",
+      "spec": "specs/ml-diagnostics.md",
+      "symbol": "DLDiagnostics.skip_batch",
+      "triage_category": "owned_api_claim_requires_domain_reconciliation"
+    },
+    {
+      "finding": "FR-2",
+      "fix_hint": "\u2192 fix: (a) implement Trainer.save_checkpoint method, OR (b) correct the cite, OR (c) move under `## Deferred to M2`",
+      "kind": "method",
+      "line": 570,
+      "message": "FR-2: class Trainer (citing Trainer.save_checkpoint) at specs/ml-diagnostics.md:570 not found in any source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-diagnostics.md",
+      "symbol": "Trainer.save_checkpoint",
+      "triage_category": "external_method_reference_outside_configured_roots"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define RemovableHandle class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 590,
+      "message": "FR-1: class RemovableHandle cited at specs/ml-diagnostics.md:590 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-diagnostics.md",
+      "symbol": "RemovableHandle",
+      "triage_category": "external_class_reference_outside_configured_roots"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define Module class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 592,
+      "message": "FR-1: class Module cited at specs/ml-diagnostics.md:592 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-diagnostics.md",
+      "symbol": "Module",
+      "triage_category": "external_class_reference_outside_configured_roots"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at packages/kailash-ml/tests/unit/test_classical_diagnose_unit.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 890,
+      "message": "FR-7: test path 'packages/kailash-ml/tests/unit/test_classical_diagnose_unit.py' cited at specs/ml-diagnostics.md:890 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/ml-diagnostics.md",
+      "symbol": "packages/kailash-ml/tests/unit/test_classical_diagnose_unit.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at packages/kailash-ml/tests/unit/test_km_diagnose_unit.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 897,
+      "message": "FR-7: test path 'packages/kailash-ml/tests/unit/test_km_diagnose_unit.py' cited at specs/ml-diagnostics.md:897 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/ml-diagnostics.md",
+      "symbol": "packages/kailash-ml/tests/unit/test_km_diagnose_unit.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at packages/kailash-ml/tests/integration/test_ddp_diagnostics_wiring.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 915,
+      "message": "FR-7: test path 'packages/kailash-ml/tests/integration/test_ddp_diagnostics_wiring.py' cited at specs/ml-diagnostics.md:915 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/ml-diagnostics.md",
+      "symbol": "packages/kailash-ml/tests/integration/test_ddp_diagnostics_wiring.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at packages/kailash-ml/tests/e2e/test_dl_diagnostics_roundtrip.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 922,
+      "message": "FR-7: test path 'packages/kailash-ml/tests/e2e/test_dl_diagnostics_roundtrip.py' cited at specs/ml-diagnostics.md:922 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/ml-diagnostics.md",
+      "symbol": "packages/kailash-ml/tests/e2e/test_dl_diagnostics_roundtrip.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-8",
+      "fix_hint": "\u2192 fix: (a) drop the `workspaces/kailash-ml-audit/specs-draft/ml-engines-v2-draft.md` workspace reference (specs are pristine), OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / `Per`), OR (c) move under `## Cross-References`",
+      "kind": "workspace_path",
+      "line": 1100,
+      "message": "FR-8: workspaces/ path 'workspaces/kailash-ml-audit/specs-draft/ml-engines-v2-draft.md' cited at specs/ml-diagnostics.md:1100 without an Origin: / Citation: / Per <path> prefix \u2014 promote to an explicit citation or move under ## Cross-References",
+      "severity": "FAIL",
+      "spec": "specs/ml-diagnostics.md",
+      "symbol": "workspaces/kailash-ml-audit/specs-draft/ml-engines-v2-draft.md",
+      "triage_category": "workspace_citation_format_reconciliation_required"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define DriftMonitorConfig class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 79,
+      "message": "FR-1: class DriftMonitorConfig cited at specs/ml-drift.md:79 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-drift.md",
+      "symbol": "DriftMonitorConfig",
+      "triage_category": "explicitly_future_surface_in_current_implementation_note"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define DriftMonitorConfig class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 79,
+      "message": "FR-1: class DriftMonitorConfig cited at specs/ml-drift.md:79 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-drift.md",
+      "symbol": "DriftMonitorConfig",
+      "triage_category": "explicitly_future_surface_in_current_implementation_note"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/integration/test_drift_monitor_wiring.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 640,
+      "message": "FR-7: test path 'tests/integration/test_drift_monitor_wiring.py' cited at specs/ml-drift.md:640 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/ml-drift.md",
+      "symbol": "tests/integration/test_drift_monitor_wiring.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/regression/test_issue_mlops_HIGH_drift_scheduler_restart.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 797,
+      "message": "FR-7: test path 'tests/regression/test_issue_mlops_HIGH_drift_scheduler_restart.py' cited at specs/ml-drift.md:797 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/ml-drift.md",
+      "symbol": "tests/regression/test_issue_mlops_HIGH_drift_scheduler_restart.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-8",
+      "fix_hint": "\u2192 fix: (a) drop the `workspaces/kailash-ml-audit/04-validate/round-2b-open-tbd-triage.md` workspace reference (specs are pristine), OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / `Per`), OR (c) move under `## Cross-References`",
+      "kind": "workspace_path",
+      "line": 895,
+      "message": "FR-8: workspaces/ path 'workspaces/kailash-ml-audit/04-validate/round-2b-open-tbd-triage.md' cited at specs/ml-drift.md:895 without an Origin: / Citation: / Per <path> prefix \u2014 promote to an explicit citation or move under ## Cross-References",
+      "severity": "FAIL",
+      "spec": "specs/ml-drift.md",
+      "symbol": "workspaces/kailash-ml-audit/04-validate/round-2b-open-tbd-triage.md",
+      "triage_category": "workspace_citation_format_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/integration/test_mlengine_lifecycle_e2e.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 639,
+      "message": "FR-7: test path 'tests/integration/test_mlengine_lifecycle_e2e.py' cited at specs/ml-engines-v2-addendum.md:639 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/ml-engines-v2-addendum.md",
+      "symbol": "tests/integration/test_mlengine_lifecycle_e2e.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-8",
+      "fix_hint": "\u2192 fix: (a) drop the `workspaces/kailash-ml-audit/04-validate/approved-decisions.md` workspace reference (specs are pristine), OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / `Per`), OR (c) move under `## Cross-References`",
+      "kind": "workspace_path",
+      "line": 1641,
+      "message": "FR-8: workspaces/ path 'workspaces/kailash-ml-audit/04-validate/approved-decisions.md' cited at specs/ml-engines-v2.md:1641 without an Origin: / Citation: / Per <path> prefix \u2014 promote to an explicit citation or move under ## Cross-References",
+      "severity": "FAIL",
+      "spec": "specs/ml-engines-v2.md",
+      "symbol": "workspaces/kailash-ml-audit/04-validate/approved-decisions.md",
+      "triage_category": "workspace_citation_format_reconciliation_required"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define Embedding class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 1736,
+      "message": "FR-1: class Embedding cited at specs/ml-engines-v2.md:1736 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-engines-v2.md",
+      "symbol": "Embedding",
+      "triage_category": "external_class_reference_outside_configured_roots"
+    },
+    {
+      "finding": "FR-8",
+      "fix_hint": "\u2192 fix: (a) drop the `workspaces/kailash-ml-audit/04-validate/round-2b-open-tbd-triage.md` workspace reference (specs are pristine), OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / `Per`), OR (c) move under `## Cross-References`",
+      "kind": "workspace_path",
+      "line": 1139,
+      "message": "FR-8: workspaces/ path 'workspaces/kailash-ml-audit/04-validate/round-2b-open-tbd-triage.md' cited at specs/ml-registry.md:1139 without an Origin: / Citation: / Per <path> prefix \u2014 promote to an explicit citation or move under ## Cross-References",
+      "severity": "FAIL",
+      "spec": "specs/ml-registry.md",
+      "symbol": "workspaces/kailash-ml-audit/04-validate/round-2b-open-tbd-triage.md",
+      "triage_category": "workspace_citation_format_reconciliation_required"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define SyncVectorEnv class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 151,
+      "message": "FR-1: class SyncVectorEnv cited at specs/ml-rl-core.md:151 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-rl-core.md",
+      "symbol": "SyncVectorEnv",
+      "triage_category": "external_class_reference_outside_configured_roots"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define EvalCallback class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 620,
+      "message": "FR-1: class EvalCallback cited at specs/ml-rl-core.md:620 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-rl-core.md",
+      "symbol": "EvalCallback",
+      "triage_category": "external_class_reference_outside_configured_roots"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define Finding class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 732,
+      "message": "FR-1: class Finding cited at specs/ml-rl-core.md:732 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-rl-core.md",
+      "symbol": "Finding",
+      "triage_category": "owned_api_claim_requires_domain_reconciliation"
+    },
+    {
+      "finding": "FR-1",
+      "fix_hint": "\u2192 fix: (a) define InferenceSession class in the source tree, OR (b) correct the cite, OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` \u00a7 6",
+      "kind": "class",
+      "line": 216,
+      "message": "FR-1: class InferenceSession cited at specs/ml-serving.md:216 not found in any configured source root",
+      "severity": "FAIL",
+      "spec": "specs/ml-serving.md",
+      "symbol": "InferenceSession",
+      "triage_category": "external_class_reference_outside_configured_roots"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/regression/test_issue_mlops_HIGH_shadow_consumer_exists.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 1237,
+      "message": "FR-7: test path 'tests/regression/test_issue_mlops_HIGH_shadow_consumer_exists.py' cited at specs/ml-serving.md:1237 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/ml-serving.md",
+      "symbol": "tests/regression/test_issue_mlops_HIGH_shadow_consumer_exists.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/regression/test_issue_mlops_HIGH_prometheus_exists.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 1238,
+      "message": "FR-7: test path 'tests/regression/test_issue_mlops_HIGH_prometheus_exists.py' cited at specs/ml-serving.md:1238 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/ml-serving.md",
+      "symbol": "tests/regression/test_issue_mlops_HIGH_prometheus_exists.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/regression/test_issue_mlops_HIGH_tenant_required.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 1239,
+      "message": "FR-7: test path 'tests/regression/test_issue_mlops_HIGH_tenant_required.py' cited at specs/ml-serving.md:1239 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/ml-serving.md",
+      "symbol": "tests/regression/test_issue_mlops_HIGH_tenant_required.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/regression/test_issue_mlops_HIGH_rules_observability_mandatory_log_points.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 1240,
+      "message": "FR-7: test path 'tests/regression/test_issue_mlops_HIGH_rules_observability_mandatory_log_points.py' cited at specs/ml-serving.md:1240 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/ml-serving.md",
+      "symbol": "tests/regression/test_issue_mlops_HIGH_rules_observability_mandatory_log_points.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-8",
+      "fix_hint": "\u2192 fix: (a) drop the `workspaces/kailash-ml-audit/04-validate/round-2b-open-tbd-triage.md` workspace reference (specs are pristine), OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / `Per`), OR (c) move under `## Cross-References`",
+      "kind": "workspace_path",
+      "line": 1269,
+      "message": "FR-8: workspaces/ path 'workspaces/kailash-ml-audit/04-validate/round-2b-open-tbd-triage.md' cited at specs/ml-serving.md:1269 without an Origin: / Citation: / Per <path> prefix \u2014 promote to an explicit citation or move under ## Cross-References",
+      "severity": "FAIL",
+      "spec": "specs/ml-serving.md",
+      "symbol": "workspaces/kailash-ml-audit/04-validate/round-2b-open-tbd-triage.md",
+      "triage_category": "workspace_citation_format_reconciliation_required"
+    },
+    {
+      "finding": "FR-8",
+      "fix_hint": "\u2192 fix: (a) drop the `workspaces/kailash-ml-audit/04-validate/round-1-SYNTHESIS.md` workspace reference (specs are pristine), OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / `Per`), OR (c) move under `## Cross-References`",
+      "kind": "workspace_path",
+      "line": 10,
+      "message": "FR-8: workspaces/ path 'workspaces/kailash-ml-audit/04-validate/round-1-SYNTHESIS.md' cited at specs/ml-tracking.md:10 without an Origin: / Citation: / Per <path> prefix \u2014 promote to an explicit citation or move under ## Cross-References",
+      "severity": "FAIL",
+      "spec": "specs/ml-tracking.md",
+      "symbol": "workspaces/kailash-ml-audit/04-validate/round-1-SYNTHESIS.md",
+      "triage_category": "workspace_citation_format_reconciliation_required"
+    },
+    {
+      "finding": "FR-8",
+      "fix_hint": "\u2192 fix: (a) drop the `workspaces/kailash-ml-audit/04-validate/approved-decisions.md` workspace reference (specs are pristine), OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / `Per`), OR (c) move under `## Cross-References`",
+      "kind": "workspace_path",
+      "line": 1289,
+      "message": "FR-8: workspaces/ path 'workspaces/kailash-ml-audit/04-validate/approved-decisions.md' cited at specs/ml-tracking.md:1289 without an Origin: / Citation: / Per <path> prefix \u2014 promote to an explicit citation or move under ## Cross-References",
+      "severity": "FAIL",
+      "spec": "specs/ml-tracking.md",
+      "symbol": "workspaces/kailash-ml-audit/04-validate/approved-decisions.md",
+      "triage_category": "workspace_citation_format_reconciliation_required"
+    },
+    {
+      "finding": "FR-8",
+      "fix_hint": "\u2192 fix: (a) drop the `workspaces/kailash-ml-audit/04-validate/approved-decisions.md` workspace reference (specs are pristine), OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / `Per`), OR (c) move under `## Cross-References`",
+      "kind": "workspace_path",
+      "line": 1303,
+      "message": "FR-8: workspaces/ path 'workspaces/kailash-ml-audit/04-validate/approved-decisions.md' cited at specs/ml-tracking.md:1303 without an Origin: / Citation: / Per <path> prefix \u2014 promote to an explicit citation or move under ## Cross-References",
+      "severity": "FAIL",
+      "spec": "specs/ml-tracking.md",
+      "symbol": "workspaces/kailash-ml-audit/04-validate/approved-decisions.md",
+      "triage_category": "workspace_citation_format_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/integration/test_check_trial_admission_wiring.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 269,
+      "message": "FR-7: test path 'tests/integration/test_check_trial_admission_wiring.py' cited at specs/pact-ml-integration.md:269 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/pact-ml-integration.md",
+      "symbol": "tests/integration/test_check_trial_admission_wiring.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/integration/test_check_engine_method_clearance_wiring.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 270,
+      "message": "FR-7: test path 'tests/integration/test_check_engine_method_clearance_wiring.py' cited at specs/pact-ml-integration.md:270 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/pact-ml-integration.md",
+      "symbol": "tests/integration/test_check_engine_method_clearance_wiring.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/integration/test_check_cross_tenant_op_wiring.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 271,
+      "message": "FR-7: test path 'tests/integration/test_check_cross_tenant_op_wiring.py' cited at specs/pact-ml-integration.md:271 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/pact-ml-integration.md",
+      "symbol": "tests/integration/test_check_cross_tenant_op_wiring.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/integration/test_pact_ml_cross_sdk_parity.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 285,
+      "message": "FR-7: test path 'tests/integration/test_pact_ml_cross_sdk_parity.py' cited at specs/pact-ml-integration.md:285 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/pact-ml-integration.md",
+      "symbol": "tests/integration/test_pact_ml_cross_sdk_parity.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-8",
+      "fix_hint": "\u2192 fix: (a) drop the `workspaces/spec-drift-gate/` workspace reference (specs are pristine), OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / `Per`), OR (c) move under `## Cross-References`",
+      "kind": "workspace_path",
+      "line": 4,
+      "message": "FR-8: workspaces/ path 'workspaces/spec-drift-gate/' cited at specs/spec-drift-gate.md:4 without an Origin: / Citation: / Per <path> prefix \u2014 promote to an explicit citation or move under ## Cross-References",
+      "severity": "FAIL",
+      "spec": "specs/spec-drift-gate.md",
+      "symbol": "workspaces/spec-drift-gate/",
+      "triage_category": "workspace_citation_format_reconciliation_required"
+    },
+    {
+      "finding": "FR-8",
+      "fix_hint": "\u2192 fix: (a) drop the `workspaces/spec-drift-gate/01-analysis/02-requirements-and-adrs.md` workspace reference (specs are pristine), OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / `Per`), OR (c) move under `## Cross-References`",
+      "kind": "workspace_path",
+      "line": 84,
+      "message": "FR-8: workspaces/ path 'workspaces/spec-drift-gate/01-analysis/02-requirements-and-adrs.md' cited at specs/spec-drift-gate.md:84 without an Origin: / Citation: / Per <path> prefix \u2014 promote to an explicit citation or move under ## Cross-References",
+      "severity": "FAIL",
+      "spec": "specs/spec-drift-gate.md",
+      "symbol": "workspaces/spec-drift-gate/01-analysis/02-requirements-and-adrs.md",
+      "triage_category": "workspace_citation_format_reconciliation_required"
+    },
+    {
+      "finding": "FR-8",
+      "fix_hint": "\u2192 fix: (a) drop the `workspaces/spec-drift-gate/01-analysis/02-requirements-and-adrs.md` workspace reference (specs are pristine), OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / `Per`), OR (c) move under `## Cross-References`",
+      "kind": "workspace_path",
+      "line": 163,
+      "message": "FR-8: workspaces/ path 'workspaces/spec-drift-gate/01-analysis/02-requirements-and-adrs.md' cited at specs/spec-drift-gate.md:163 without an Origin: / Citation: / Per <path> prefix \u2014 promote to an explicit citation or move under ## Cross-References",
+      "severity": "FAIL",
+      "spec": "specs/spec-drift-gate.md",
+      "symbol": "workspaces/spec-drift-gate/01-analysis/02-requirements-and-adrs.md",
+      "triage_category": "workspace_citation_format_reconciliation_required"
+    },
+    {
+      "finding": "FR-4",
+      "fix_hint": "\u2192 fix: (a) define ManifestNotFoundError class in the errors module + add eager re-export per `rules/orphan-detection.md` MUST 6, OR (b) delete the assertion, OR (c) move under `## Deferred to M2`",
+      "kind": "class",
+      "line": 244,
+      "message": "FR-4: ManifestNotFoundError cited at specs/spec-drift-gate.md:244 not found in any configured errors module",
+      "severity": "FAIL",
+      "spec": "specs/spec-drift-gate.md",
+      "symbol": "ManifestNotFoundError",
+      "triage_category": "existing_tool_error_omitted_from_configured_error_roots"
+    },
+    {
+      "finding": "FR-4",
+      "fix_hint": "\u2192 fix: (a) define ManifestSchemaError class in the errors module + add eager re-export per `rules/orphan-detection.md` MUST 6, OR (b) delete the assertion, OR (c) move under `## Deferred to M2`",
+      "kind": "class",
+      "line": 245,
+      "message": "FR-4: ManifestSchemaError cited at specs/spec-drift-gate.md:245 not found in any configured errors module",
+      "severity": "FAIL",
+      "spec": "specs/spec-drift-gate.md",
+      "symbol": "ManifestSchemaError",
+      "triage_category": "existing_tool_error_omitted_from_configured_error_roots"
+    },
+    {
+      "finding": "FR-4",
+      "fix_hint": "\u2192 fix: (a) define BaselineParseError class in the errors module + add eager re-export per `rules/orphan-detection.md` MUST 6, OR (b) delete the assertion, OR (c) move under `## Deferred to M2`",
+      "kind": "class",
+      "line": 246,
+      "message": "FR-4: BaselineParseError cited at specs/spec-drift-gate.md:246 not found in any configured errors module",
+      "severity": "FAIL",
+      "spec": "specs/spec-drift-gate.md",
+      "symbol": "BaselineParseError",
+      "triage_category": "existing_tool_error_omitted_from_configured_error_roots"
+    },
+    {
+      "finding": "FR-4",
+      "fix_hint": "\u2192 fix: (a) define SweepRuntimeError class in the errors module + add eager re-export per `rules/orphan-detection.md` MUST 6, OR (b) delete the assertion, OR (c) move under `## Deferred to M2`",
+      "kind": "class",
+      "line": 247,
+      "message": "FR-4: SweepRuntimeError cited at specs/spec-drift-gate.md:247 not found in any configured errors module",
+      "severity": "FAIL",
+      "spec": "specs/spec-drift-gate.md",
+      "symbol": "SweepRuntimeError",
+      "triage_category": "existing_tool_error_omitted_from_configured_error_roots"
+    },
+    {
+      "finding": "FR-4",
+      "fix_hint": "\u2192 fix: (a) define MarkerSyntaxError class in the errors module + add eager re-export per `rules/orphan-detection.md` MUST 6, OR (b) delete the assertion, OR (c) move under `## Deferred to M2`",
+      "kind": "class",
+      "line": 248,
+      "message": "FR-4: MarkerSyntaxError cited at specs/spec-drift-gate.md:248 not found in any configured errors module",
+      "severity": "FAIL",
+      "spec": "specs/spec-drift-gate.md",
+      "symbol": "MarkerSyntaxError",
+      "triage_category": "existing_tool_error_omitted_from_configured_error_roots"
+    },
+    {
+      "finding": "FR-7",
+      "fix_hint": "\u2192 fix: (a) create file at tests/spec_drift_gate/integration/test_gate_wiring.py per `rules/facade-manager-detection.md` MUST 1, OR (b) correct the path, OR (c) mark as Wave 6 follow-up under `## Deferred to M2`",
+      "kind": "test_path",
+      "line": 286,
+      "message": "FR-7: test path 'tests/spec_drift_gate/integration/test_gate_wiring.py' cited at specs/spec-drift-gate.md:286 does not exist on disk (searched cwd + packages/*/)",
+      "severity": "FAIL",
+      "spec": "specs/spec-drift-gate.md",
+      "symbol": "tests/spec_drift_gate/integration/test_gate_wiring.py",
+      "triage_category": "literal_test_path_absent_semantic_reconciliation_required"
+    },
+    {
+      "finding": "FR-8",
+      "fix_hint": "\u2192 fix: (a) drop the `workspaces/issues-604-607/01-analysis/issue-604-signed-record-sites.md` workspace reference (specs are pristine), OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / `Per`), OR (c) move under `## Cross-References`",
+      "kind": "workspace_path",
+      "line": 804,
+      "message": "FR-8: workspaces/ path 'workspaces/issues-604-607/01-analysis/issue-604-signed-record-sites.md' cited at specs/trust-eatp.md:804 without an Origin: / Citation: / Per <path> prefix \u2014 promote to an explicit citation or move under ## Cross-References",
+      "severity": "FAIL",
+      "spec": "specs/trust-eatp.md",
+      "symbol": "workspaces/issues-604-607/01-analysis/issue-604-signed-record-sites.md",
+      "triage_category": "workspace_citation_format_reconciliation_required"
+    }
+  ],
+  "B1": {
+    "count": 7,
+    "root_cause": "Gate compares cited package export path with lazy map defining module; public top-level alias is not a claim of defining-module identity.",
+    "source": "scripts/spec_drift_gate.py:2367-2399",
+    "proposal": "Separate public package export citations from qualified defining-module citations. For a top-level export, verify map/export and resolvable target consistency; normalize relative target modules. For explicitly qualified modules retain mismatch detection. Do not alter public lazy maps. Add positive aliases and actual wrong-qualified-module/absent-target controls."
+  },
+  "zero_sections": {
+    "count": 55,
+    "explicit_assert_directives": 0,
+    "navigation_examples": [
+      "specs/_index.md",
+      "specs/kaizen-providers.md"
+    ],
+    "root_cause": "Domain headings fail small lexical allowlist; includes navigation documents. FR8 can still scan whole documents. This is absence of section-scoped assertion coverage, not proof every checker ignores the entire file.",
+    "proposal": "Define explicit coverage treatment for navigation documents and domain sections, then map intended assertions with domain specialists. Do not downgrade all WARNs or mass-rename headings. Existing promised Examples/Quickstart smoke sweeps are also missing from ALLOWLIST.",
+    "source": "scripts/spec_drift_gate.py:229-237; specs/spec-drift-gate.md:129; scripts/spec_drift_gate.py:2511-2517"
+  },
+  "bounded_repair_plan": [
+    "Tooling shard: fix B1 public alias semantics and detector token ownership; configure gate error module; honor promised smoke sections; real contrary fixtures for every changed detector.",
+    "Baseline housekeeping: remove exactly5 resolved identities using documented refresh/archive flow; does not clear111 active expiry warnings. Preserve dates and origins.",
+    "Documentation/test reconciliation shards:43 literal test paths,24 citation-format rows,2 explicitly future class rows,6 remaining owned API rows. Match intended assertions to real source/test behavior before editing claims; do not fabricate empty tests or infer missing SDK behavior solely from lexical absence.",
+    "Coverage policy shard: inventory55 documents and select intended assertions/navigation treatment through spec/domain authority. Re-run full detector and two independent scoped reviews after authorized implementation."
+  ],
+  "controls": {
+    "normal": {
+      "resolved": 5,
+      "expired": 111,
+      "new": 0
+    },
+    "remove_active_identity_control": {
+      "identity": [
+        "specs/align-ml-integration.md",
+        "FR-7",
+        "tests/integration/test_align_dpo_adapter_emits_to_tracker_wiring.py",
+        "test_path"
+      ],
+      "resolved": 6,
+      "expired": 110
+    },
+    "add_unbaselined_finding_control": {
+      "new": 1,
+      "symbol": "MissingControlClass"
+    },
+    "scope": "Baseline classification and counter discrimination only, not SDK runtime validity."
+  },
+  "limitations": [
+    "No broad framework runtime verification performed; external references classified from explicit spec context, not external API version validation.",
+    "The6 owned API rows (2classes,3methods,1field) are unresolved intended-contract questions, not proven runtime defects.",
+    "No source/spec/config/baseline/worktree/ref/stash edits; temporary evidence files only.",
+    "No expiry extensions, warning suppression, promotion clearance, or new exception granted."
+  ],
+  "artifacts": [
+    "/tmp/csq15-spec-drift-no-baseline.json",
+    "/tmp/csq15-spec-drift-baseline-classification.json",
+    "/tmp/csq15-spec-drift-triage-evidence.json",
+    "/tmp/csq15-spec-drift-triage-controls.json"
+  ]
+}

@@ -1,0 +1,882 @@
+{
+  "status": "All final source repairs integrated and scoped independent correctness/security reviews clean; full committed-candidate Linux/Mac gates and exact-head remote checks remain pending",
+  "initial_candidate": "376bf4914e76c09c6a3107c919ee653e1e13ccb6",
+  "full_gate_attempt": {
+    "candidate": "376bf4914e76c09c6a3107c919ee653e1e13ccb6",
+    "tree": "cac6070c82947032c5e02bd4e2c8972f676b8ff4",
+    "mac_full_hooks": {
+      "exit": 0,
+      "skip_env": "unset",
+      "tests": "5156 passed, 12 skipped, 3 deselected in 39.59s",
+      "log": "/tmp/csq16-full-mac.log",
+      "log_sha256": "29ce8a263fa212468c6f4455eb6db23640c1fbe838b2a2f7fcd9af50b2f9b59b",
+      "spec_warning_multiset_exact": 173,
+      "other_advisories": "21 dependency-floor advisories, no failing pin entries. Concrete helper-bearing Core/consumer-floor release prerequisite recorded in csq16-release-dependency-prerequisite.json under the existing no-publication boundary. 30 tracked ignore-matching paths are an intentional shipping disclosure."
+    },
+    "linux_status": "Completed: root8failed4488passed1skip24deselected; DataFlowunit3564passed17optional skips; DataFlowregression2failed1040passed4optional skips187deselected",
+    "promotion_complete": false,
+    "linux_tier2": {
+      "exit": 0,
+      "passed": 2609,
+      "skips": {
+        "missing_database_credentials": 4,
+        "existing_documented_2038_load_sensitive_benchmark_quarantine": 1
+      },
+      "deselected": 4,
+      "xpassed": 1,
+      "python_warnings": 0,
+      "log": "/tmp/csq16-linux-tier2.log"
+    },
+    "repair_status": "All10failures repaired and independently reviewed, including v2 closed-runtime admission repair; final complete candidate gatespending"
+  },
+  "reviews": {
+    "content_contract_author": {
+      "ran": true,
+      "status": "FROZEN test-only contract reconciliation; independent review pending",
+      "manifest": {
+        "tests/regression/test_async_content_failure_contract.py": {
+          "base_sha256": "32116560ebbed5c3a1ec9d4f842e45a310309a3fc2201aeeb457316d58321eb2",
+          "sha256": "12f5774b47874b4f3b1421df21273ad335bf9319767459fb605ee219e6dce11b"
+        }
+      },
+      "baseline_failure": "/tmp/csq16-union-content-probe.log expected raw local async failure inside frames-only audit error",
+      "assertions": {
+        "before": 43,
+        "after": 46,
+        "retained": 42,
+        "replacement": "Rawmessage asserted on caught public exception; audit asserts ContentAwareExecutionError frame prefix, _execute_async provenance and rawmessage absence. Typederror/output identity, no checkpoint and hook publication, ordered audit events unchanged."
+      },
+      "rounds": [
+        {
+          "ran": true,
+          "exit": 0,
+          "counts": {
+            "passed": 102
+          },
+          "warnings": [],
+          "skips": []
+        },
+        {
+          "ran": true,
+          "exit": 0,
+          "counts": {
+            "passed": 102
+          },
+          "warnings": [],
+          "skips": []
+        }
+      ],
+      "control": {
+        "hits": [
+          "ContentAwareExecutionError",
+          "ContentAwareExecutionError",
+          "ContentAwareExecutionError"
+        ],
+        "exit": 1
+      },
+      "scope": "Affected complete content-failure file plus runtime audit and cancellation tracking files; existing producer source unchanged.",
+      "sweep": "/tmp/csq16-union-audit-assertion-sweep.txt; read all matches; no other same-class raw error audit assertion discovered by sweep."
+    },
+    "content_contract_independent": {
+      "ran": true,
+      "verdict": "CLEAN scoped test contract reconciliation",
+      "source_changed": false,
+      "sha256": "12f5774b47874b4f3b1421df21273ad335bf9319767459fb605ee219e6dce11b",
+      "rounds": [
+        "102 passed in1.90s",
+        "102 passed in3.37s"
+      ],
+      "assertions_before": 43,
+      "after": 46,
+      "literal_retained": 42,
+      "replacement": "Raw content retained in public exception; audit exception type and call frame retained with content excluded",
+      "reached_control": {
+        "hits": [
+          "ContentAwareExecutionError",
+          "ContentAwareExecutionError",
+          "ContentAwareExecutionError"
+        ],
+        "exit": 1
+      },
+      "scope": "Three complete regression files; full root gate still requires final repair rerun",
+      "instrument_error": "Initial set comparison counts distinct assertion forms, not occurrences; failed before claiming result. Corrected Counter multiset preserves duplicate assertions."
+    },
+    "parameter_fixture_author": {
+      "ran": true,
+      "status": "Two root author rounds clean; independent review pending",
+      "manifest": {
+        "tests/regression/test_parameter_caller_log_safety.py": {
+          "base_sha256": "8657e40955d283fe7d0b9fd5cde3fc807b6c8520434530979c7dfd909be703c1",
+          "sha256": "3ad79c81570e92c46226b7948e595c95108ef3c4aec0414694d467e4747a0ade",
+          "assertions_old": 20,
+          "new": 20,
+          "retained": 20
+        },
+        "tests/regression/test_signal_wait_input_boundary.py": {
+          "base_sha256": "51abf6c10c8a1a5329fe96c1afad4168ead8ffb08b38e29c680566885cbaa884",
+          "sha256": "b384a03ae1e7942e56cab3b835a6a15d1f9a8f8edfa9ca7296accb5610526c8f",
+          "assertions_old": 28,
+          "new": 29,
+          "retained": 27
+        }
+      },
+      "baseline": "5 failed31passed with actualnode loggerERROR state",
+      "rounds": [
+        "36passed twice with node logger initiallyERROR; restored40aftereach"
+      ],
+      "control": "Omitting namedlogger override reached13calls;9failed27passed, includesSignalWait emission",
+      "source_changed": false,
+      "scope": "Explicit logger emission level scoped to tests; SignalWait verifies updated individually sanitized field prose and validparameter names; realreturnvalue/publicerrors/caplogprivacy assertions retained"
+    },
+    "parameter_fixture_independent": {
+      "ran": true,
+      "verdict": "CLEAN independent test-fixture correctness/security within two-file scope",
+      "manifest": {
+        "tests/regression/test_parameter_caller_log_safety.py": "3ad79c81570e92c46226b7948e595c95108ef3c4aec0414694d467e4747a0ade",
+        "tests/regression/test_signal_wait_input_boundary.py": "b384a03ae1e7942e56cab3b835a6a15d1f9a8f8edfa9ca7296accb5610526c8f"
+      },
+      "runs": {
+        "r1": {
+          "ran": true,
+          "mode": "r1",
+          "exit": 0,
+          "hits": 0,
+          "counts": {
+            "passed": 36
+          },
+          "python_warnings": [],
+          "restored_level": 40
+        },
+        "r2": {
+          "ran": true,
+          "mode": "r2",
+          "exit": 0,
+          "hits": 0,
+          "counts": {
+            "passed": 36
+          },
+          "python_warnings": [],
+          "restored_level": 40
+        },
+        "no-level": {
+          "ran": true,
+          "mode": "no-level",
+          "exit": 1,
+          "hits": 13,
+          "counts": {
+            "passed": 27,
+            "failed": 9
+          },
+          "python_warnings": [],
+          "restored_level": 40
+        },
+        "no-emission": {
+          "ran": true,
+          "mode": "no-emission",
+          "exit": 1,
+          "hits": 10,
+          "counts": {
+            "passed": 26,
+            "failed": 10
+          },
+          "python_warnings": [],
+          "restored_level": 40
+        },
+        "raw": {
+          "ran": true,
+          "mode": "raw",
+          "exit": 1,
+          "hits": 44,
+          "counts": {
+            "passed": 27,
+            "failed": 9
+          },
+          "python_warnings": [],
+          "restored_level": 40
+        }
+      },
+      "assertion_parity": [
+        {
+          "path": "tests/regression/test_parameter_caller_log_safety.py",
+          "original_assertions": 20,
+          "final_assertions": 20,
+          "removed": []
+        },
+        {
+          "path": "tests/regression/test_signal_wait_input_boundary.py",
+          "original_assertions": 28,
+          "final_assertions": 29,
+          "removed": [
+            "Assert(test=Compare(left=Constant(value=\"Unknown parameter(s) for SignalWaitNode: ['unknown_option']\"), ops=[In()], comparators=[Call(func=Attribute(value=Subscript(value=Attribute(value=Name(id='caplog', ctx=Load()), attr='records', ctx=Load()), slice=Constant(value=0), ctx=Load()), attr='getMessage', ctx=Load()), args=[], keywords=[])]))"
+          ]
+        }
+      ],
+      "semantic_disposition": "Only changed assertion matches safe warning prose rather than Python list repr; added exact declared names assertion. All runtime output, raw public validation errors, signal payload/queue ownership and other assertions retained. Named caplog levels restore caller logger ERROR after every run.",
+      "controls": "Removing named logger scope13hits9fails; suppressing actual warning10hits10fails; replacing masking with rawstr44hits9fails. Two final36pass rounds with initial namedloggerERROR, zero Pythonwarnings.",
+      "scope": "Regression fixture isolation only; no production changes. Own native gateway overlay does not change tested node diagnostic contract."
+    },
+    "dataflow_import_author": {
+      "ran": true,
+      "status": "author scoped clean two rounds",
+      "rounds": [
+        "/tmp/csq16-df-import-r1.log",
+        "/tmp/csq16-df-import-r2.log"
+      ],
+      "tests_each": 33,
+      "old_assertions_retained": 27,
+      "opposite": {
+        "original_actual_detector": [
+          "/tmp/csq16-df-trust-import-before.py:11 \u2014 bare top-level `from kailash.runtime.trust.verifier import TrustVerifier, TrustVerifierConfig` (PR #976 layer-3: drags the real async runtime into collection / forked workers). Move it inside a function, a `try`/`with` guard, or use `pytest.importorskip`."
+        ],
+        "final_actual_detector": []
+      },
+      "scope": "Deferred two imports to their actual test bodies; production unchanged; guard unchanged."
+    },
+    "dataflow_import_independent": {
+      "ran": true,
+      "verdict": "CLEAN scoped independent test repair",
+      "rounds": [
+        "33 passed2.78s",
+        "33 passed2.05s"
+      ],
+      "opposite": {
+        "before": [
+          "/tmp/csq16-root-df-import-before.py:11 \u2014 bare top-level `from kailash.runtime.trust.verifier import TrustVerifier, TrustVerifierConfig` (PR #976 layer-3: drags the real async runtime into collection / forked workers). Move it inside a function, a `try`/`with` guard, or use `pytest.importorskip`."
+        ],
+        "after": []
+      },
+      "scope": "Two imports deferred into exactly their consumers; no source or detector change; all27original assertions remain"
+    },
+    "gateway_author": {
+      "ran": true,
+      "status": "FROZEN v2; supersedes initial72959 follow-up, independent final review pending",
+      "base_head": "376bf4914e76c09c6a3107c919ee653e1e13ccb6",
+      "manifest": {
+        "src/kailash/runtime/async_local.py": {
+          "base_sha256": "5a5234e0b74b8246816fa0bfbec2229ed018c8cbd6d6ace76b071c93ae54ace2",
+          "sha256": "3763aa80191780730b726d49d0bc360809a7ea4904ffca403a02ad93fe0a0ec3"
+        },
+        "src/kailash/gateway/enhanced_gateway.py": {
+          "base_sha256": "b5ef813c89314379a66da6dd46f419fccc8e137d36b119fa308febd84b356bdf",
+          "sha256": "d1593a21eced16422060942c2369911634ffff262533c6dd573b3ff64eadc21d"
+        },
+        "specs/core-runtime.md": {
+          "base_sha256": "66ac9bb66e8bfc07b5f57e692323d1a0465f3509bea35999509ab60674de7cf0",
+          "sha256": "723f66f52328f3b106c5d44199b9981266a47394e95b70513efcd9f9006d60ce"
+        },
+        "tests/regression/test_runtime_aclose_contract.py": {
+          "base_sha256": null,
+          "sha256": "fecbf5e848be31caec816ba638ebbf68c6d3dd19132e92f72a9373b517ccfb34"
+        }
+      },
+      "original_gateway_test_all_bytes_preserved": true,
+      "trigger": "Original assert reached == [True] observed [True, True] for RuntimeError and CancelledError. Gateway cleanup()+close() called overridable cleanup twice.",
+      "fix": "One awaited aclose releases reference and awaits retained cleanup; __aexit__ delegates. Final executor release runs even if cleanup raises. Original inner CancelledError object retained because shield() can replace it with an empty cancellation.",
+      "rounds": [
+        {
+          "path": "/tmp/csq16-repair-runtime-gateway-v2-r1.json",
+          "ran": true,
+          "exit": 0,
+          "counts": {
+            "passed": 235
+          },
+          "warnings": [],
+          "skips": [],
+          "diagnostic_count": 43
+        },
+        {
+          "path": "/tmp/csq16-repair-runtime-gateway-v2-r2.json",
+          "ran": true,
+          "exit": 0,
+          "counts": {
+            "passed": 235
+          },
+          "warnings": [],
+          "skips": [],
+          "diagnostic_count": 43
+        }
+      ],
+      "command": "/tmp/csq16-html-venv/bin/python -P /tmp/csq16-repair-runtime-run.py gateway-v2-rN tests/regression/test_gateway_auth_validation_before_resources.py tests/regression/test_runtime_aclose_contract.py tests/regression/test_async_runtime_cleanup_ownership.py tests/regression/test_runtime_audit_emission.py tests/regression/test_runtime_cancelled_run_tracking.py tests/regression/test_async_runtime_option_forwarding.py tests/regression/test_runtime_control_contract.py tests/regression/test_issue_1248_localruntime_cross_loop_pool_disposal.py -m \"not integration\"",
+      "runner_flags": "-q -Werror --tb=short --timeout=45",
+      "controls": {
+        "delegate": {
+          "mode": "delegate",
+          "hits": 4,
+          "exit": 1
+        },
+        "executor": {
+          "mode": "executor",
+          "hits": 2,
+          "exit": 1
+        },
+        "cancellation": {
+          "mode": "cancellation",
+          "hits": 2,
+          "exit": 1
+        },
+        "foreign": {
+          "mode": "foreign",
+          "hits": 2,
+          "exit": 1
+        }
+      },
+      "control_failures": {
+        "delegate": 2,
+        "executor": 2,
+        "cancellation": 1,
+        "foreign": 2
+      },
+      "diagnostics": "Expected original runtime negative-path diagnostics plus deliberately failed gateway cleanup and direct aclose exception probes; safe exception frames only. No Python warnings or unexpected unawaited coroutine. One live PostgreSQL integration case deselected.",
+      "mechanical_callers": "/tmp/csq16-gateway-close-callers.json",
+      "limits": [
+        "No live PostgreSQL/service claim.",
+        "Root full Linux/Mac gates separate.",
+        "Source-only independent review pending."
+      ],
+      "followup": "Existing retained asyncio.Task on a distinct live owner loop is awaited through a shielded coroutine scheduled on task.get_loop(), then a concurrent future wrapped on caller loop. Completed futures remain directly awaitable; repeated caller cancellation still waits cleanup and preserves first exception.",
+      "excluded_instrument_attempts": [
+        "First delegate control lacked a __class__ closure for super; repaired to explicit actual parent close. Only corrected control (4hits,2expectedfails) banked.",
+        "First added foreign probe omitted execute_workflow_async inputs; fixed fixture API call and emergency lifecycle cleanup before final rounds."
+      ],
+      "foreign_control_diagnostics": "Old pending-task mutation reproduces both cross-loop failures; failed instrument task logs its original foreign-loop RuntimeError in addition to assertion failures. These expected control diagnostics are not final production round warnings."
+    },
+    "gateway_correctness": {
+      "ran": true,
+      "verdict": "CLEAN independent correctness on final gateway/native v2",
+      "rounds": [
+        "235passed1livePGdeselected5.17s",
+        "235passed1livePGdeselected5.02s"
+      ],
+      "manifest": {
+        "src/kailash/runtime/async_local.py": {
+          "base_sha256": "5a5234e0b74b8246816fa0bfbec2229ed018c8cbd6d6ace76b071c93ae54ace2",
+          "sha256": "3763aa80191780730b726d49d0bc360809a7ea4904ffca403a02ad93fe0a0ec3"
+        },
+        "src/kailash/gateway/enhanced_gateway.py": {
+          "base_sha256": "b5ef813c89314379a66da6dd46f419fccc8e137d36b119fa308febd84b356bdf",
+          "sha256": "d1593a21eced16422060942c2369911634ffff262533c6dd573b3ff64eadc21d"
+        },
+        "specs/core-runtime.md": {
+          "base_sha256": "66ac9bb66e8bfc07b5f57e692323d1a0465f3509bea35999509ab60674de7cf0",
+          "sha256": "723f66f52328f3b106c5d44199b9981266a47394e95b70513efcd9f9006d60ce"
+        },
+        "tests/regression/test_runtime_aclose_contract.py": {
+          "base_sha256": null,
+          "sha256": "fecbf5e848be31caec816ba638ebbf68c6d3dd19132e92f72a9373b517ccfb34"
+        }
+      },
+      "source_review": "Read full two-source and specification delta; public aclose reuses reference release and awaited completion, foreign pendingTask converted on owner loop; gateway parent close remainsfinally; original cleanup exception and executioncontract preserved. All original gateway regression bytes retained.",
+      "controls": [
+        {
+          "mode": "foreign",
+          "hits": 2,
+          "exit": 1
+        },
+        {
+          "mode": "delegate",
+          "hits": 4,
+          "exit": 1
+        }
+      ],
+      "diagnostics": {
+        "read_all": 43,
+        "same_normalized_multiset": true,
+        "classification": "Deliberate lifecycle handler/cleanup exceptions, audit severity, node execution failures, timeouts, realSQLite failure, forceddrift, missingnode negativecase; one explicitplatformmemorylimitation. No Pythonwarnings or orphaned coroutine warning."
+      },
+      "scope": "Local actualTCP/async runtime+gateway cohorts, no livePG/Windows claim"
+    },
+    "gateway_security": {
+      "ran": true,
+      "verdict": "CLEAN within final v2 gateway/native awaited-close lifecycle scope; both reproduced findings closed after two final independent rounds",
+      "base_head": "376bf4914e76c09c6a3107c919ee653e1e13ccb6",
+      "manifest": {
+        "src/kailash/runtime/async_local.py": {
+          "base_sha256": "5a5234e0b74b8246816fa0bfbec2229ed018c8cbd6d6ace76b071c93ae54ace2",
+          "sha256": "3763aa80191780730b726d49d0bc360809a7ea4904ffca403a02ad93fe0a0ec3"
+        },
+        "src/kailash/gateway/enhanced_gateway.py": {
+          "base_sha256": "b5ef813c89314379a66da6dd46f419fccc8e137d36b119fa308febd84b356bdf",
+          "sha256": "d1593a21eced16422060942c2369911634ffff262533c6dd573b3ff64eadc21d"
+        },
+        "specs/core-runtime.md": {
+          "base_sha256": "66ac9bb66e8bfc07b5f57e692323d1a0465f3509bea35999509ab60674de7cf0",
+          "sha256": "723f66f52328f3b106c5d44199b9981266a47394e95b70513efcd9f9006d60ce"
+        },
+        "tests/regression/test_runtime_aclose_contract.py": {
+          "base_sha256": null,
+          "sha256": "fecbf5e848be31caec816ba638ebbf68c6d3dd19132e92f72a9373b517ccfb34"
+        }
+      },
+      "rounds": [
+        {
+          "receipt": "/tmp/csq16-security-runtime-gateway-security-v2-r1.json",
+          "log": "/tmp/csq16-gateway-security-v2-r1.log",
+          "passed": 268,
+          "deselected": 1,
+          "python_warnings": [],
+          "skips": [],
+          "diagnostic_count": 51
+        },
+        {
+          "receipt": "/tmp/csq16-security-runtime-gateway-security-v2-r2.json",
+          "log": "/tmp/csq16-gateway-security-v2-r2.log",
+          "passed": 268,
+          "deselected": 1,
+          "python_warnings": [],
+          "skips": [],
+          "diagnostic_count": 51
+        }
+      ],
+      "controls": [
+        {
+          "mode": "delegate",
+          "hits": 4,
+          "exit": 1,
+          "failed_tests": 2,
+          "log": "/tmp/csq16-security-gateway-v2-control-delegate.log"
+        },
+        {
+          "mode": "executor",
+          "hits": 2,
+          "exit": 1,
+          "failed_tests": 2,
+          "log": "/tmp/csq16-security-gateway-v2-control-executor.log"
+        },
+        {
+          "mode": "cancellation",
+          "hits": 2,
+          "exit": 1,
+          "failed_tests": 1,
+          "log": "/tmp/csq16-security-gateway-v2-control-cancellation.log"
+        },
+        {
+          "mode": "foreign",
+          "hits": 2,
+          "exit": 1,
+          "failed_tests": 2,
+          "log": "/tmp/csq16-security-gateway-v2-control-foreign.log"
+        },
+        {
+          "hits": 4,
+          "exit": 1,
+          "mode": "missingwait",
+          "failed_tests": 4,
+          "log": "/tmp/csq16-security-gateway-missingwait.log"
+        }
+      ],
+      "command": "primary .venv/bin/python -P /tmp/csq16-security-runtime-run.py gateway-security-v2-rN [15 files in /tmp/csq16-gateway-security-final-files.json] -m not integration; harness -q -Werror --tb=short --timeout=45",
+      "cohort": "/tmp/csq16-gateway-security-final-files.json",
+      "original_gateway_test_bytes_unchanged": true,
+      "absolute_mechanical": "/tmp/csq16-gateway-security-absolute.json",
+      "callers_scope": "27 actual production close/cleanup/aclose calls; author40 includes tests. Reviewed constant and runtime ownership callers, native context and enhanced/inherited gateway chain.",
+      "source_review": {
+        "gateway": "One awaited runtime.aclose in finally; inherited durable gateway close still finally guaranteed. No direct runtime.cleanup followed by second close.",
+        "runtime": "aclose releases one reference; shield waits original cleanup; noncurrent pending asyncio.Future marshaled via get_loop/run_coroutine_threadsafe then wrap_future on caller. Completed task direct path valid. Executor release in _finish_async_close finally even when override raises. Stored original cleanup CancelledError restored across shield.",
+        "sibling_contract": "Synchronous close retains documented scheduling behavior on active loop. Awaited aclose/context exit waits completion. Caller-owned loops remain live. Shared acquire references not destroyed early."
+      },
+      "findings_closed": [
+        {
+          "finding": "Gateway called runtime cleanup twice on cleanup failure",
+          "before": "original gateway assertion reached == [True] observed [True, True] for RuntimeError and CancelledError",
+          "after": "Unchanged original gateway tests pass both final rounds; olddelegate4hits2fail."
+        },
+        {
+          "finding": "Foreign caller could not await already retained owner-loop asyncio.Task",
+          "before": "RuntimeError got Future ... attached to a different loop; socket_open=true cleanup_completed=false. Actual four independent variants failed.",
+          "before_evidence": [
+            "/tmp/csq16-security-aclose-foreign.json",
+            "/tmp/csq16-security-aclose-retained-before.log"
+          ],
+          "after": "All four real TCP variants pass twice: success, caller cancellation, cleanup RuntimeError identity, cleanup CancelledError identity; owner loop survives, socket closed, completion event set.",
+          "instrument": "/tmp/csq16-security-aclose-retained-tests.py"
+        }
+      ],
+      "prior_lifecycle_revalidated": "Six real TCP lifecycle, three original race, four additional ownership and other audit/progress/SQLite probes all rerun in final268; final retained-task four added.",
+      "spec_quotes": [
+        "specs/core-runtime.md resource ownership: final cleanup obeys reference counts and SQL pools only cleanup owner loop; caller-owned loops running.",
+        "specs/core-runtime.md Awaited close: cleanup errors retain original exception object, executor release still runs, gateways await single lifecycle.",
+        "specs/task-tracking.md run terminal states completed/failed; original cancellation persistence tests retained.",
+        "specs/security-threats.md Token creation with user_id (no token content)."
+      ],
+      "diagnostics": {
+        "round_sets_equal_after_timestamp_normalization": true,
+        "per_round": 51,
+        "python_warnings": 0,
+        "categories": "43 previously independently classified runtime negative-path/disclosure records; six explicit cleanup failure records now frames-only and two forced lifespan handler-failure warnings. No unexpected unclosed-resource, never-awaited coroutine or timeout warning.",
+        "opaque_cleanup_canary": "opaque-cleanup-canary-58319 absent from cleanup ERROR diagnostics; frames identify RuntimeError and probe source only.",
+        "platform_limit": "Existing explicit memory-limit-not-enforced disclosure remains scoped; no claim of process memory enforcement."
+      },
+      "open_findings": [],
+      "limits": [
+        "One live PostgreSQL integration test deselected; no live-service claim.",
+        "macOS asyncio actual TCP resources; no Windows runtime claim.",
+        "Root owns full Linux/Mac and publication metadata gates; this is not whole-promotion gate approval.",
+        "No blanket guarantee for arbitrary user cleanup callbacks; failure observation and resource owner release covered."
+      ],
+      "no_remote_operations": true,
+      "production_mutations": "Only exact immutable four-file archive overlays after hash verification and cp backups; no authored source changes",
+      "v1_open_receipt": "/tmp/csq16-gateway-close-security-v1-open.json"
+    },
+    "registry_v1_open": {
+      "status": "OPEN superseded by v2; not counted clean",
+      "observed": "Closed native runtime with refcount0/cleanedtrue still created a SQLite file through registry bridge; cleanup-only refcount1 also reproduced",
+      "repair": "Temporary public acquire/release around registry execution and atomic acquire rejection for already-cleaned native resources"
+    },
+    "registry_v2_author": {
+      "ran": true,
+      "status": "AUTHOR_SCOPED_CLEAN_TWO_ROUNDS; independent review pending",
+      "manifest": "/tmp/csq16-registry-v2-manifest.json",
+      "patch": "/tmp/csq16-registry-v2.patch",
+      "delta_from_v1": "/tmp/csq16-registry-v2-delta.patch",
+      "archive": "/tmp/csq16-registry-v2-files.tar.gz",
+      "rounds": [
+        {
+          "scope": "df",
+          "round": 1,
+          "json": "/tmp/csq16-correctness-native-df-registry-v2-df-r1.json",
+          "log": "/tmp/csq16-df-registry-v2-df-r1.log",
+          "passed": 43,
+          "intentional_log_records": 64
+        },
+        {
+          "scope": "df",
+          "round": 2,
+          "json": "/tmp/csq16-correctness-native-df-registry-v2-df-r2.json",
+          "log": "/tmp/csq16-df-registry-v2-df-r2.log",
+          "passed": 43,
+          "intentional_log_records": 64
+        },
+        {
+          "scope": "core",
+          "round": 1,
+          "json": "/tmp/csq16-correctness-native-df-registry-v2-core-r1.json",
+          "log": "/tmp/csq16-df-registry-v2-core-r1.log",
+          "passed": 20,
+          "intentional_log_records": 3
+        },
+        {
+          "scope": "core",
+          "round": 2,
+          "json": "/tmp/csq16-correctness-native-df-registry-v2-core-r2.json",
+          "log": "/tmp/csq16-df-registry-v2-core-r2.log",
+          "passed": 20,
+          "intentional_log_records": 3
+        }
+      ],
+      "selection_df": [
+        "packages/kailash-dataflow/tests/regression/test_issue_1498_model_registry_runtime.py",
+        "packages/kailash-dataflow/tests/regression/test_issue_352_fastapi_startup.py",
+        "packages/kailash-dataflow/tests/regression/test_model_registry_native_owner_bridge.py",
+        "packages/kailash-dataflow/tests/regression/test_issue_1002_close_releases_all_cached_runtimes.py",
+        "packages/kailash-dataflow/tests/unit/core/test_model_registry_runtime_injection.py",
+        "packages/kailash-dataflow/tests/regression/test_issue_1502_sqlite_memory_shared_cache.py"
+      ],
+      "selection_core": [
+        "tests/regression/test_async_runtime_cleanup_ownership.py",
+        "tests/regression/test_runtime_aclose_contract.py"
+      ],
+      "command_prefix": "/Users/esperie/repos/kailash/build/kailash-py/.venv/bin/python -P /tmp/csq16-correctness-native-run.py <mode>",
+      "runner_flags": "-q -Werror --tb=short --timeout=45",
+      "controls": {
+        "lease": {
+          "hits": 6,
+          "exit": 1
+        },
+        "cleaned": {
+          "hits": 8,
+          "exit": 1
+        },
+        "release": {
+          "hits": 2,
+          "exit": 1
+        }
+      },
+      "control_script": "/tmp/csq16-registry-v2-controls.py",
+      "control_logs": {
+        "lease": "/tmp/csq16-registry-v2-control-lease-final.log",
+        "cleaned": "/tmp/csq16-registry-v2-control-cleaned.log",
+        "release": "/tmp/csq16-registry-v2-control-release.log"
+      },
+      "failure_counts": {
+        "lease": 5,
+        "cleaned": 2,
+        "release": 1
+      },
+      "control_scope": "Lease removal exercises4alreadyclosed/cleaned paths and racing creatorclose. Cleanedflag omission exercisesdirect Core acquire aftercleanup(refcount1). Release omission fails retainedref assertion afteractualtrustdenial. Mutated runs may emit ownership warnings; final positive runs emit none. First lease control needed instrument-only closure of wrongly reopened persistentloop; final rerun completed and recordedhits.",
+      "mechanical": "/tmp/csq16-registry-v2-mechanical.json",
+      "original_assertions": "All23#352+24runtimeinjection and allv1newtest assertions retained; original1498 file untouched. Direct Core acquire rejection asserted for acclose0 and cleanup1 states.",
+      "source_contract": "Native resource-owner admission rejects closed and cleaned runtime; LocalRuntime.close explicitly permits reuse by execute, so no blanket Local execution guard. Existing public acquire prevents sharing closed runtime; it now consistently rejects cleaned resources too under same lock. Registry owns temporary public reference around inherited public execute, released in finally. No private native-loop guard weakened.",
+      "diagnostics": "DF each64=46testmode disclosures+10SQLite memory disclosures+8intentional trustdeny; Core each3=actual injected cleanup errors from existingtests. All records read.",
+      "guard": "Actual test_issue_979... passes. UNIT_DIR is PACKAGE_ROOT/tests/unit and only its test_*.py are scanned; newfile is tests/regression, so eager real runtime imports are outside this unit-only contract. Guard unchanged; separate unitfixture deferred imports preserved.",
+      "discarded_runs": [
+        "Initial combined Core+DataFlow collection produced tests.conftest ImportPathMismatchError, exit4, no tests; no evidence counted. Replaced with separate independent commands.",
+        "v1 remainsOPEN dueclosed admission finding; new v2 supersedes it."
+      ],
+      "exclusions": [
+        "No live PostgreSQL/MySQL scoped run",
+        "Not a blanket change to LocalRuntime documented postclose execution",
+        "Arbitrary native workflows still require original ownerloop",
+        "No claim that explicit cleanup may race any unrelated operation safely; the lease serializes refcount close, not directcleanup misuse",
+        "Whole Linux/Mac and final integrated head mapping parent-owned"
+      ],
+      "dependencies": {
+        "src/kailash/runtime/async_local.py": {
+          "base_sha256": "5a5234e0b74b8246816fa0bfbec2229ed018c8cbd6d6ace76b071c93ae54ace2",
+          "sha256": "3763aa80191780730b726d49d0bc360809a7ea4904ffca403a02ad93fe0a0ec3"
+        },
+        "src/kailash/gateway/enhanced_gateway.py": {
+          "base_sha256": "b5ef813c89314379a66da6dd46f419fccc8e137d36b119fa308febd84b356bdf",
+          "sha256": "d1593a21eced16422060942c2369911634ffff262533c6dd573b3ff64eadc21d"
+        },
+        "specs/core-runtime.md": {
+          "base_sha256": "66ac9bb66e8bfc07b5f57e692323d1a0465f3509bea35999509ab60674de7cf0",
+          "sha256": "723f66f52328f3b106c5d44199b9981266a47394e95b70513efcd9f9006d60ce"
+        },
+        "tests/regression/test_runtime_aclose_contract.py": {
+          "base_sha256": null,
+          "sha256": "fecbf5e848be31caec816ba638ebbf68c6d3dd19132e92f72a9373b517ccfb34"
+        }
+      }
+    },
+    "registry_v2_security": {
+      "ran": true,
+      "verdict": "CLEAN final v2 scoped independent adversarial security review; closed-runtime admission finding resolved",
+      "committed_head": "e4a789e73337c4dd8dfd18238f2ad1e44db19881",
+      "manifest": {
+        "base_head": "376bf4914e76c09c6a3107c919ee653e1e13ccb6",
+        "dependencies_head": "fbbce26c1d11eb64f6d08938d740fae7ffb91e55",
+        "unchanged_dependencies": {
+          "src/kailash/runtime/async_local.py": {
+            "base_sha256": "5a5234e0b74b8246816fa0bfbec2229ed018c8cbd6d6ace76b071c93ae54ace2",
+            "sha256": "3763aa80191780730b726d49d0bc360809a7ea4904ffca403a02ad93fe0a0ec3"
+          },
+          "src/kailash/gateway/enhanced_gateway.py": {
+            "base_sha256": "b5ef813c89314379a66da6dd46f419fccc8e137d36b119fa308febd84b356bdf",
+            "sha256": "d1593a21eced16422060942c2369911634ffff262533c6dd573b3ff64eadc21d"
+          },
+          "specs/core-runtime.md": {
+            "base_sha256": "66ac9bb66e8bfc07b5f57e692323d1a0465f3509bea35999509ab60674de7cf0",
+            "sha256": "723f66f52328f3b106c5d44199b9981266a47394e95b70513efcd9f9006d60ce"
+          },
+          "tests/regression/test_runtime_aclose_contract.py": {
+            "base_sha256": null,
+            "sha256": "fecbf5e848be31caec816ba638ebbf68c6d3dd19132e92f72a9373b517ccfb34"
+          }
+        },
+        "files": {
+          "packages/kailash-dataflow/src/dataflow/core/model_registry.py": {
+            "base": "089c339b47587f955041d38e2031b8f60b1511ea0f832ab9acacaa992b493f5d",
+            "final": "926b5a66ab1dbc22e77eda97a2d4aab728760a52bd8546a8e9cacc28b2642a8b"
+          },
+          "packages/kailash-dataflow/src/dataflow/core/engine.py": {
+            "base": "cf67fc195ee0f525e6010b965378975fa38816156b0cc47a9cb72a07248c6990",
+            "final": "d62f287c61a146bea09eeccc69d97601270ce29d45255f538fd96bb94b377dac"
+          },
+          "packages/kailash-dataflow/tests/regression/test_issue_352_fastapi_startup.py": {
+            "base": "aabef59ed8049a2625af5b0cde3a2116cee9da0043de5411f96b0470fb11c42c",
+            "final": "a0d9ebda2dece7b8cc90bf13c8cdefdab28cdb3886e5b22df573f53f40d8d73f"
+          },
+          "packages/kailash-dataflow/tests/unit/core/test_model_registry_runtime_injection.py": {
+            "base": "9a1400a52886eff4e872d2a6b70a08246e64de92a0745671f8df4c367989776b",
+            "final": "a6a700d8c76f540894fbd18fd838e094cca593eddcdd50ada9745ae98c9319bb"
+          },
+          "specs/dataflow-core.md": {
+            "base": "2346c62c8c30fc8f91a7911b5ae0baf0685c4f5ac5fc8bf53a484a2b64df461f",
+            "final": "d7d519663556ba8592ae08a1e506778f274d0cf6e2947cf2ae502588b3c2fa00"
+          },
+          "packages/kailash-dataflow/tests/regression/test_model_registry_native_owner_bridge.py": {
+            "base": null,
+            "final": "e325a8df4a2a9c19a22e6464ac9fa3d8d9ad7170627c082e7e98b08fdff51530"
+          },
+          "src/kailash/runtime/local.py": {
+            "base": "8c31a931391e4c6197aa34c5de4f6615b2f3aef2424ef20f067bf1596df3248c",
+            "final": "afaf1197c3308adbe86b641566ed86cad6e0ac30ace98f2aa8c93fb87e3b44fe"
+          }
+        }
+      },
+      "rounds": [
+        {
+          "registry-security-v2-": {
+            "receipt": "/tmp/csq16-security-runtime-registry-security-v2-r1.json",
+            "passed": 46,
+            "python_warnings": [],
+            "skips": [],
+            "WARN_plus": 70
+          },
+          "registry-security-core-v2-": {
+            "receipt": "/tmp/csq16-security-runtime-registry-security-core-v2-r1.json",
+            "passed": 37,
+            "python_warnings": [],
+            "skips": [],
+            "WARN_plus": 6
+          }
+        },
+        {
+          "registry-security-v2-": {
+            "receipt": "/tmp/csq16-security-runtime-registry-security-v2-r2.json",
+            "passed": 46,
+            "python_warnings": [],
+            "skips": [],
+            "WARN_plus": 70
+          },
+          "registry-security-core-v2-": {
+            "receipt": "/tmp/csq16-security-runtime-registry-security-core-v2-r2.json",
+            "passed": 37,
+            "python_warnings": [],
+            "skips": [],
+            "WARN_plus": 6
+          }
+        }
+      ],
+      "total_per_round": 83,
+      "controls": [
+        {
+          "hits": 6,
+          "exit": 1,
+          "mode": "lease",
+          "failed_tests": 5,
+          "log": "/tmp/csq16-registry-security-v2-control-lease.log"
+        },
+        {
+          "hits": 8,
+          "exit": 1,
+          "mode": "cleaned",
+          "failed_tests": 2,
+          "log": "/tmp/csq16-registry-security-v2-control-cleaned.log"
+        },
+        {
+          "hits": 2,
+          "exit": 1,
+          "mode": "release",
+          "failed_tests": 1,
+          "log": "/tmp/csq16-registry-security-v2-control-release.log"
+        }
+      ],
+      "commands": "primary .venv/bin/python -P /tmp/csq16-security-runtime-run.py registry-security-v2-rN [six repository DataFlow files from registry-security-files.json plus independent admission.py] --confcutdir=packages/kailash-dataflow/tests; Core separately includes native cleanup/aclose plus six realTCP/three race/four ownership/four foreign-retained cases; -q -Werror --tb=short --timeout=45",
+      "finding_closed": {
+        "before": "ref_count=0,_cleaned_up=true; registry inherited execute returned real CREATE TABLE results and created SQLite file after native aclose.",
+        "baseline": "/tmp/csq16-registry-security-closed-probe.json",
+        "repair": "Capture runtime once; public acquire checks refcount and completed cleanup under existing lock; reference retained through inherited execute and always released in finally.",
+        "final": "Both actual live/loopless closed-runtime variants reject before file creation; cleanup-with-ref1 rejects; concurrent creatorclose leaves operationref1 and actual SQL completes before final cleanup; original trust denial releases lease."
+      },
+      "independent_probes": "/tmp/csq16-registry-security-admission.py (3pass in each final DataFlow round; initial standalone3pass also observed)",
+      "source_parity": "/tmp/csq16-registry-security-parity.json",
+      "absolute_acquire_callers": "/tmp/csq16-registry-security-acquire-calls.json",
+      "absolute_scope": "All14internal registry workflow producers construct SQLDatabaseNode; 49 production runtime acquire/release calls inventoried. 43registry and211DataFlow methods: helper/runtime getter only; CoreLocalRuntime only acquire method changes. Original1498 exactbytes; all23+24 original fixture assertions retained.",
+      "contracts": [
+        "specs/dataflow-core.md lazy per-access runtime override resolution; one captured runtime per registry operation.",
+        "Registry synchronous SQL uses inherited Core execution under temporary reference, preserving captured trust context and mode; native owner/semaphore unchanged.",
+        "auto_migrate True fail-fast on DDL failure; False noDDL; warn explicitescape. No change to these branches.",
+        "CoreNative closed runtime cannot be reused; LocalRuntime directexecute reopen semantics unchanged; public acquire now rejects completed resource cleanup.",
+        "security-threats token content absent from diagnostics."
+      ],
+      "diagnostics": {
+        "DF_per_round": 70,
+        "DF_classification": "52 explicit testmode/aggressivecleanup disclosures,10SQLite-memory testing disclosures,8 deliberate enforcing/permissive denial records.",
+        "Core_per_round": 6,
+        "Core_classification": "Two deliberately failing resource callbacks and four deliberately failing cleanup RuntimeError/CancelledError probes, safe exception frames only.",
+        "python_warnings": 0,
+        "skips": 0,
+        "control_release_warning": "The deliberate missing release mutation also emits expected Unclosed AsyncLocalRuntime refcount1 warning; absent from positive rounds."
+      },
+      "open_findings": [],
+      "historical_open_receipt": "/tmp/csq16-registry-security-v1-open.json",
+      "known_instrument_errors_not_banked": [
+        "Initial extra concurrent-close baseline fixture stalled after two closed failures; terminated own process. Final probe has independent timer release and passes with lease.",
+        "Cross-package conftest collisions avoided by separate final Core/DF processes."
+      ],
+      "limits": [
+        "Real SQLite and actual Core verifier/context; deterministic policy backend test input, no mocked database.",
+        "No livePostgreSQL/MySQL or arbitrary native workflow foreign-loop execution claim.",
+        "Parent full Linux/Mac/source publication gates separate; no remote calls, source edits or commits from reviewer."
+      ],
+      "full_union_source_map": "/tmp/csq16-union-security-final-source-map.json"
+    },
+    "registry_v2_correctness": {
+      "ran": true,
+      "delivered": true,
+      "verdict": "CLEAN",
+      "head": "e4a789e73337c4dd8dfd18238f2ad1e44db19881",
+      "manifest": "/tmp/csq16-registry-v2-manifest.json",
+      "rounds": [
+        {
+          "scope": "df",
+          "round": 1,
+          "receipt": "/tmp/csq16-repair-runtime-registry-v2-df-r1.json",
+          "passed": 44,
+          "intentional_WARN_plus": 66
+        },
+        {
+          "scope": "df",
+          "round": 2,
+          "receipt": "/tmp/csq16-repair-runtime-registry-v2-df-r2.json",
+          "passed": 44,
+          "intentional_WARN_plus": 66
+        },
+        {
+          "scope": "core",
+          "round": 1,
+          "receipt": "/tmp/csq16-repair-runtime-registry-v2-core-r1.json",
+          "passed": 20,
+          "intentional_WARN_plus": 3
+        },
+        {
+          "scope": "core",
+          "round": 2,
+          "receipt": "/tmp/csq16-repair-runtime-registry-v2-core-r2.json",
+          "passed": 20,
+          "intentional_WARN_plus": 3
+        }
+      ],
+      "controls": {
+        "lease": {
+          "hits": 6,
+          "exit": 1
+        },
+        "cleaned": {
+          "hits": 8,
+          "exit": 1
+        },
+        "release": {
+          "hits": 2,
+          "exit": 1
+        }
+      },
+      "control_script": "/tmp/csq16-registry-independent-v2-controls.py",
+      "mechanical": "/tmp/csq16-registry-independent-v2-mechanical.json",
+      "prior_open_history": "/tmp/csq16-registry-correctness-review-v1-open-history.json",
+      "selection_df": [
+        "packages/kailash-dataflow/tests/regression/test_issue_1498_model_registry_runtime.py",
+        "packages/kailash-dataflow/tests/regression/test_issue_352_fastapi_startup.py",
+        "packages/kailash-dataflow/tests/regression/test_model_registry_native_owner_bridge.py",
+        "packages/kailash-dataflow/tests/regression/test_issue_1002_close_releases_all_cached_runtimes.py",
+        "packages/kailash-dataflow/tests/unit/core/test_model_registry_runtime_injection.py",
+        "packages/kailash-dataflow/tests/regression/test_issue_1502_sqlite_memory_shared_cache.py",
+        "/tmp/csq16-registry-correctness-capture.py"
+      ],
+      "selection_core": [
+        "tests/regression/test_async_runtime_cleanup_ownership.py",
+        "tests/regression/test_runtime_aclose_contract.py"
+      ],
+      "command": "/tmp/csq16-html-venv/bin/python -P /tmp/csq16-repair-runtime-run.py <mode> <selection>; runner adds -q -Werror --tb=short --timeout=45",
+      "spec_quotes": {
+        "specs/dataflow-core.md:188": "Runtime resolution is now lazy \u2014 performed on every read of db.runtime, not at construction.",
+        "specs/dataflow-core.md:86": "True (fail-fast on DDL failure, default since v2.4.0), False (no DDL execution), or warn",
+        "specs/core-runtime.md:157": "Same return type and semantics.",
+        "specs/core-runtime.md:192": "a closed runtime itself cannot be rebound."
+      },
+      "findings_closed": [
+        "Already closed and directly cleaned native owners reject before SQLite file creation.",
+        "Temporary acquired reference prevents creator close disposing owner during admitted registry dispatch; finally release also follows trust denial."
+      ],
+      "diagnostics": "Each DF round66 expected records:48 test-mode disclosures,10SQLite memory disclosures,8 intentional trust denials. Each Core round3 safe-frame errors from deliberately failing cleanup fixtures. Zero Python warnings/skips; no warning-free log claim.",
+      "limits": [
+        "Real SQLite only; no live PostgreSQL/MySQL.",
+        "Lease prevents reference-count close race, not unsupported explicit cleanup concurrent with execution.",
+        "Does not alter documented LocalRuntime execute reuse after close.",
+        "Independent security and full Linux/Mac candidate gates remain separately owned."
+      ]
+    }
+  },
+  "source_commit": "e4a789e73337c4dd8dfd18238f2ad1e44db19881"
+}

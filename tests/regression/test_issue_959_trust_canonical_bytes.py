@@ -452,7 +452,8 @@ class TestCrossSDKFixtureParity:
     sibling kailash-rs binding consumes the same file."""
 
     @pytest.fixture(scope="class")
-    def fixture(self) -> dict:
+    @classmethod
+    def fixture(cls) -> dict:
         assert _FIXTURE_PATH.exists(), (
             f"cross-SDK trust-plane fixture missing at {_FIXTURE_PATH}; "
             "this fixture is the cross-SDK byte contract per issue #959"

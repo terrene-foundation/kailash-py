@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import os
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
@@ -34,6 +33,12 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PrivateKey,
     Ed25519PublicKey,
+)
+
+from kailash.trust.plane._key_files import (
+    read_private_key,
+    read_public_key,
+    write_key_file,
 )
 
 logger = logging.getLogger(__name__)
@@ -122,13 +127,40 @@ class LocalFileKeyManager:
 
         priv_path = self._key_dir / self._PRIVATE_KEY_FILE
 
-        if priv_path.exists():
-            logger.info("Loading existing Ed25519 key from %s", self._key_dir)
+        pub_path = self._key_dir / self._PUBLIC_KEY_FILE
+        try:
             self._private_key = self._load_private_key(priv_path)
-        else:
+        except FileNotFoundError:
+            try:
+                read_public_key(pub_path)
+            except FileNotFoundError:
+                pass  # Both halves absent; initialization cannot replace an identity.
+            else:
+                raise ValueError("Public signing key exists without its private key")
             logger.info("Generating new Ed25519 keypair in %s", self._key_dir)
             self._private_key = Ed25519PrivateKey.generate()
-            self._save_keys()
+            self._save_keys(exclusive=True)
+        else:
+            logger.info("Loading existing Ed25519 key from %s", self._key_dir)
+            try:
+                public_pem = read_public_key(pub_path)
+            except FileNotFoundError:
+                self._save_public_key(exclusive=True)
+            else:
+                stored_public = serialization.load_pem_public_key(public_pem)
+                derived_public = self._private_key.public_key().public_bytes(
+                    serialization.Encoding.Raw, serialization.PublicFormat.Raw
+                )
+                if (
+                    not isinstance(stored_public, Ed25519PublicKey)
+                    or stored_public.public_bytes(
+                        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+                    )
+                    != derived_public
+                ):
+                    raise ValueError(
+                        "Stored public signing key does not match the private key"
+                    )
 
         self._public_key: Ed25519PublicKey = self._private_key.public_key()
 
@@ -185,18 +217,7 @@ class LocalFileKeyManager:
         Raises:
             ValueError: If the file does not contain a valid Ed25519 private key.
         """
-        flags = os.O_RDONLY
-        if hasattr(os, "O_NOFOLLOW"):
-            flags |= os.O_NOFOLLOW
-
-        fd = os.open(str(path), flags)
-        try:
-            f = os.fdopen(fd, "rb")
-        except Exception:
-            os.close(fd)
-            raise
-        with f:
-            pem_data = f.read()
+        pem_data = read_private_key(path)
 
         private_key = serialization.load_pem_private_key(pem_data, password=None)
         if not isinstance(private_key, Ed25519PrivateKey):
@@ -205,7 +226,7 @@ class LocalFileKeyManager:
             )
         return private_key
 
-    def _save_keys(self) -> None:
+    def _save_keys(self, *, exclusive: bool = False) -> None:
         """Persist the keypair to PEM files with restricted permissions.
 
         Private key is created with 0o600 permissions (owner read/write only).
@@ -213,37 +234,25 @@ class LocalFileKeyManager:
         O_NOFOLLOW is used where available to prevent symlink attacks.
         """
         priv_path = self._key_dir / self._PRIVATE_KEY_FILE
-        pub_path = self._key_dir / self._PUBLIC_KEY_FILE
-
         priv_pem = self._private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption(),
         )
 
+        write_key_file(priv_path, priv_pem, private=True, exclusive=exclusive)
+        self._save_public_key(exclusive=exclusive)
+
+        logger.debug("Saved Ed25519 keypair to %s", self._key_dir)
+
+    def _save_public_key(self, *, exclusive: bool = False) -> None:
         pub_pem = self._private_key.public_key().public_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
         )
-
-        # Write private key with restricted permissions and symlink protection
-        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-        if hasattr(os, "O_NOFOLLOW"):
-            flags |= os.O_NOFOLLOW
-        fd = os.open(str(priv_path), flags, 0o600)
-        try:
-            os.write(fd, priv_pem)
-        finally:
-            os.close(fd)
-
-        # Write public key with standard read permissions
-        pub_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-        if hasattr(os, "O_NOFOLLOW"):
-            pub_flags |= os.O_NOFOLLOW
-        pub_fd = os.open(str(pub_path), pub_flags, 0o644)
-        try:
-            os.write(pub_fd, pub_pem)
-        finally:
-            os.close(pub_fd)
-
-        logger.debug("Saved Ed25519 keypair to %s", self._key_dir)
+        write_key_file(
+            self._key_dir / self._PUBLIC_KEY_FILE,
+            pub_pem,
+            private=False,
+            exclusive=exclusive,
+        )

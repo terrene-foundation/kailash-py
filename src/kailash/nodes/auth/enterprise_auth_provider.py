@@ -193,7 +193,9 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
 
         # Core authentication nodes
         self.sso_node = SSOAuthenticationNode(
-            name=f"{self.name}_sso", **self.sso_config
+            name=f"{self.name}_sso",
+            log_name_parts=(self.name, "_sso"),
+            **self.sso_config,
         )
 
         # This provider is the authorizing host for its own MFA node, so it
@@ -237,14 +239,20 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
                 f"derived from this provider's own name as "
                 f"'{self.name}_mfa'. Remove the 'name' key."
             )
-        self.mfa_node = MultiFactorAuthNode(name=f"{self.name}_mfa", **mfa_config)
+        self.mfa_node = MultiFactorAuthNode(
+            name=f"{self.name}_mfa", log_name_parts=(self.name, "_mfa"), **mfa_config
+        )
 
         self.directory_node = DirectoryIntegrationNode(
-            name=f"{self.name}_directory", **self.directory_config
+            name=f"{self.name}_directory",
+            log_name_parts=(self.name, "_directory"),
+            **self.directory_config,
         )
 
         self.session_node = SessionManagementNode(
-            name=f"{self.name}_session", **self.session_config
+            name=f"{self.name}_session",
+            log_name_parts=(self.name, "_session"),
+            **self.session_config,
         )
 
         # Supporting nodes
@@ -257,9 +265,13 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         # (issue #2060). Both return {"success": ..., "response": ...}.
         self.http_client = AsyncHTTPRequestNode(name=f"{self.name}_http")
 
-        self.security_logger = SecurityEventNode(name=f"{self.name}_security")
+        self.security_logger = SecurityEventNode(
+            name=f"{self.name}_security", log_name_parts=(self.name, "_security")
+        )
 
-        self.audit_logger = AuditLogNode(name=f"{self.name}_audit")
+        self.audit_logger = AuditLogNode(
+            name=f"{self.name}_audit", log_name_parts=(self.name, "_audit")
+        )
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {

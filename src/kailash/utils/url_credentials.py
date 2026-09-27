@@ -41,13 +41,15 @@ one place. ``dataflow/utils/masking.py`` now re-exports from here.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import secrets as _secrets
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 from urllib.parse import (
     ParseResult,
     parse_qsl,
     unquote,
+    unquote_plus,
     urlencode,
     urlparse,
     urlunparse,
@@ -58,6 +60,7 @@ __all__ = [
     "preencode_password_special_chars",
     "mask_url",
     "mask_error_text",
+    "mask_error_query_params",
     "mask_secret",
     "fingerprint_secret",
     "fingerprint_value",
@@ -484,115 +487,203 @@ def _mask_multi_host_url(url: str) -> str:
 # through the urlparse-based ``mask_url``. ``mask_error_text`` scrubs
 # credentials out of such arbitrary strings via regex.
 #
-# CRITICAL — DOTALL / newline safety (see ``rules/observability.md`` Rule 6 +
-# the driver-error redaction requirement, cross-SDK):
-#   Database/provider drivers render a credential value's embedded newline
-#   LITERALLY into the error text (e.g. a password that contains ``\n``, so the
-#   rendered connection string is ``postgresql://user:sec\nret@host/db``). A
-#   naive scrubber whose value class is ``\S`` / ``[^\s]`` STOPS at the first
-#   ``\n`` — matching only ``sec`` — and the credential TAIL (``ret``) leaks.
-#   The defenses below therefore:
-#     * compile with ``re.DOTALL`` (so any ``.`` in a pattern is newline-aware),
-#       AND
-#     * bound the userinfo span with a class (``[^/?#\r\t ]``) that INCLUDES
-#       ``\n`` but stops at the real URL host-boundary delimiters (``/`` ``?``
-#       ``#``) and horizontal whitespace / CR — so an embedded ``\n`` in the
-#       credential does NOT terminate the match, while a bare ``@`` on a later
-#       log line cannot pull the match across an unrelated line.
-#   The userinfo match backtracks to the LAST ``@`` before the host boundary,
-#   so a password containing a raw ``@`` is masked WHOLE, not split at its
-#   first ``@``.
-#
-# The scrubber masks two credential carriers in an arbitrary string:
-#   1. ``scheme://user:password@host`` userinfo → ``scheme://***@host``
-#   2. sensitive query parameters (``?token=...`` / ``&password=...`` etc.),
-#      matched via the canonical :func:`is_sensitive_query_key` set → value
-#      replaced with ``***``.
-
-# Userinfo in an embedded URL. The userinfo class ``[^/?#\r\t ]`` bounds the
-# span by the real URL host-boundary delimiters (``/`` ``?`` ``#``) and by
-# horizontal whitespace / CR that end a token in log text — but it INCLUDES
-# newline (``\n``), so a credential value with an embedded newline (drivers
-# render these literally) does NOT terminate the match and cannot leak its
-# tail. The two greedy halves around a required ``:`` make the engine backtrack
-# to the LAST ``@`` before the host boundary, so a password containing a raw
-# ``@`` (e.g. ``user:p@ss@host``) is masked WHOLE — ``***@host`` — rather than
-# split at the first ``@``. The required ``:`` targets credential-bearing
-# userinfo (``user:pass@``), leaving a bare ``git@host`` ref untouched.
-_ERR_USERINFO_RE = re.compile(
-    r"([a-zA-Z][a-zA-Z0-9+.\-]*://)"  # group 1: scheme:// (preserved)
-    r"[^/?#\r\t ]*"  # userinfo head (allows @ and \n; greedy → last @)
-    r":"  # user:password separator (targets credential userinfo)
-    r"[^/?#\r\t ]*"  # userinfo tail (allows @ and \n)
-    r"@",  # last @ before the host boundary
-    re.DOTALL,
-)
-
-# Sensitive query parameter ``key=value``. The value class ``[^&#\r\t ]*``
-# tolerates an embedded newline (does NOT treat ``\n`` as a terminator, the
-# DOTALL requirement) while still stopping at the real URL delimiters ``&`` /
-# ``#`` and at horizontal whitespace / CR that end a token in log text. The
-# key is checked against the canonical sensitive-key set at substitution time.
-_ERR_QUERY_PAIR_RE = re.compile(
-    r"([?&;])"  # group 1: query/param delimiter (preserved)
-    r"([A-Za-z0-9_.\-]+)"  # group 2: key
-    r"(=)"  # group 3: equals (preserved)
-    r"([^&#\r\t ]*)",  # group 4: value — tolerates embedded newline
+# A boundary assertion prevents retrying an unbounded scheme run at every
+# interior character of a long non-URL token. Authority scans stop before the
+# next slash, so repeated schemes cannot repeatedly rescan the same suffix.
+_ERROR_SCHEME_RE = re.compile(r"(?<![A-Za-z0-9+.\-])[A-Za-z][A-Za-z0-9+.\-]*://")
+_ERROR_AUTHORITY_END_RE = re.compile(r"[/?# ]")
+_JSON_ERROR_TOKEN_RE = re.compile(
+    r'"(?:[^"\\]|\\.)*"|-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?|true|false|null',
     re.DOTALL,
 )
 
 
-def _mask_err_query_pair(match: "re.Match[str]") -> str:
-    """Replacement for :data:`_ERR_QUERY_PAIR_RE` — mask only sensitive keys."""
-    delim, key, eq, _value = match.groups()
-    if is_sensitive_query_key(key):
-        return f"{delim}{key}{eq}***"
-    return match.group(0)
+def _mask_json_error_text(
+    text: str,
+    transform: Callable[[str], str],
+    placeholder: str,
+    sensitive_key: Callable[[str], bool],
+) -> Optional[str]:
+    """Replace JSON token spans, preserving all unaffected source formatting."""
+    if not text.lstrip().startswith(("{", "[", '"')):
+        return None
+    try:
+        json.loads(text)
+    except RecursionError:
+        # A JSON document too deep to parse cannot be safely segmented.
+        return placeholder
+    except ValueError:
+        return None
+    decoder = json.JSONDecoder()
+    parts = []
+    cursor = 0
+    for match in _JSON_ERROR_TOKEN_RE.finditer(text):
+        if match.start() < cursor:
+            continue
+        token = match.group(0)
+        value = json.loads(token)
+        after = match.end()
+        while after < len(text) and text[after] in " \r\n\t":
+            after += 1
+        if (
+            isinstance(value, str)
+            and after < len(text)
+            and text[after] == ":"
+            and sensitive_key(value)
+        ):
+            start = after + 1
+            while start < len(text) and text[start] in " \r\n\t":
+                start += 1
+            _, end = decoder.raw_decode(text, start)
+            parts.append(text[cursor:start])
+            parts.append(json.dumps(placeholder))
+            cursor = end
+            continue
+        raw = value if isinstance(value, str) else token
+        masked = transform(raw)
+        if masked != raw:
+            parts.append(text[cursor : match.start()])
+            parts.append(json.dumps(masked))
+            cursor = match.end()
+    parts.append(text[cursor:])
+    return "".join(parts)
 
 
-def mask_error_text(text: Optional[object]) -> str:
-    """Mask credentials embedded anywhere in an arbitrary error / log string.
+def _error_userinfo_spans(text: str):
+    """Yield actual credential spans, excluding host/path/query diagnostics."""
+    for match in _ERROR_SCHEME_RE.finditer(text):
+        start = match.end()
+        boundary = _ERROR_AUTHORITY_END_RE.search(text, start)
+        end = boundary.start() if boundary else len(text)
+        authority = text[start:end]
+        separator = authority.rfind("@")
+        width = 1
+        if separator < 0:
+            separator = authority.lower().rfind("%40")
+            width = 3
+        if separator >= 0:
+            yield start, start + separator, width
 
-    The companion to :func:`mask_url` for the case where the credential is
-    inside an OPAQUE string chosen by a driver / provider — a rendered
-    exception (``f"connection failed: {e}"``) that may embed a credential-
-    bearing URL. Prefer :func:`mask_url` whenever the raw URL value is in hand;
-    use this only for opaque ``{e}``-style text.
 
-    Masks, in an arbitrary string:
+def _mask_error_authorities(
+    text: str,
+    placeholder: str,
+    preserve_userinfo_shape: bool,
+    transform: Callable[[str], str],
+) -> str:
+    parts = []
+    cursor = 0
+    for start, end, separator_width in _error_userinfo_spans(text):
+        if start < cursor:
+            continue
+        replacement = placeholder
+        if preserve_userinfo_shape and ":" in text[start:end]:
+            replacement = f"{placeholder}:{placeholder}"
+        parts.append(transform(text[cursor:start]))
+        parts.append(replacement)
+        parts.append(text[end : end + separator_width])
+        cursor = end + separator_width
+    parts.append(transform(text[cursor:]))
+    return "".join(parts)
 
-    - ``scheme://user:password@host`` userinfo → ``scheme://***@host``
-    - sensitive query parameters (``?token=`` / ``&password=`` / ``&api_key=``
-      etc., matched via the canonical :func:`is_sensitive_query_key` set) →
-      value replaced with ``***``.
 
-    DOTALL / newline safety: a credential value with an embedded newline
-    (drivers render these literally) is still FULLY masked — the password span
-    is bound by ``@``, not by whitespace, so the tail after a ``\\n`` cannot
-    leak. See the module-level comment above and ``rules/observability.md``
-    Rule 6.
+# Keep the canonical query rule separate so consumers with a bounded
+# userinfo implementation can reuse it without adopting the scan above.
+_ERR_QUERY_PAIR_RE = re.compile(r"([?&;])([A-Za-z0-9_.%+\-]+)(=)")
+_ERROR_QUERY_VALUE_END_RE = re.compile(r"[&# ]")
 
-    Non-credential input is returned unchanged. ``None`` returns ``""``; a
-    non-string is coerced via ``str()`` first (so
-    ``mask_error_text(some_exception)`` works).
 
-    Examples:
-        >>> mask_error_text("connect failed: postgresql://u:secret@db/x")
-        'connect failed: postgresql://***@db/x'
-        >>> mask_error_text("HTTPError for https://svc/api?token=abc123")
-        'HTTPError for https://svc/api?token=***'
-        >>> mask_error_text("ok: postgresql://localhost:5432/db")
-        'ok: postgresql://localhost:5432/db'
-        >>> mask_error_text(None)
-        ''
+def mask_error_query_params(
+    text: str,
+    *,
+    placeholder: str = "***",
+    transform_unmasked: Optional[Callable[[str], str]] = None,
+    sensitive_key: Callable[[str], bool] = is_sensitive_query_key,
+) -> str:
+    """Mask sensitive query values before flattening or truncation.
+
+    Reuses the canonical query rule and sensitive-key set. The optional
+    transformer processes only unmasked fragments, allowing another scrubber
+    to compose its rules without reinterpreting literal replacement markers.
+    Values may include LF, CR or TAB; ordinary-space boundaries remain intact.
+    The predicate receives decoded keys. Delimiters inside URL userinfo are
+    credential data, not query parameters, and are left for userinfo masking.
+    """
+    transform = transform_unmasked or (lambda fragment: fragment)
+    parts = []
+    cursor = 0
+    authorities = iter(_error_userinfo_spans(text))
+    authority = next(authorities, None)
+    scan_offset = 0
+    while (match := _ERR_QUERY_PAIR_RE.search(text, scan_offset)) is not None:
+        scan_offset = match.end()
+        while authority is not None and authority[1] <= match.start():
+            authority = next(authorities, None)
+        if authority is not None and authority[0] <= match.start() < authority[1]:
+            scan_offset = authority[1]
+            continue
+        if not sensitive_key(unquote_plus(match.group(2))):
+            continue
+        boundary = _ERROR_QUERY_VALUE_END_RE.search(text, match.end())
+        value_end = boundary.start() if boundary else len(text)
+        # A nested URL can carry '&' inside its userinfo. Mask the union of
+        # both credential carriers before rendering either replacement, so
+        # removing the nested scheme cannot strand an unrecognized tail.
+        while authority is not None and authority[0] <= value_end:
+            if value_end < authority[1]:
+                boundary = _ERROR_QUERY_VALUE_END_RE.search(
+                    text, authority[1] + authority[2]
+                )
+                value_end = boundary.start() if boundary else len(text)
+            authority = next(authorities, None)
+        parts.append(transform(text[cursor : match.end()]))
+        parts.append(placeholder)
+        cursor = value_end
+        scan_offset = value_end
+    parts.append(transform(text[cursor:]))
+    return "".join(parts)
+
+
+def mask_error_text(
+    text: Optional[object],
+    *,
+    placeholder: str = "***",
+    preserve_userinfo_shape: bool = False,
+    transform_unmasked: Optional[Callable[[str], str]] = None,
+    sensitive_key: Callable[[str], bool] = is_sensitive_query_key,
+) -> str:
+    """Mask URL credentials in opaque text, including JSON provider bodies.
+
+    The scanner recognizes complete URL authorities before other transforms
+    can erase their scheme. LF/CR/TAB remain credential data until masking.
+    A percent-encoded separator is recognized only without a literal @.
+    Valid JSON is handled through token spans so quotes inside values cannot
+    be confused with field boundaries; unaffected formatting is preserved.
+
+    Other scrubbers may transform unmasked fragments; replacement markers
+    are emitted literally once. Defaults retain the core ``scheme://***@``
+    form, while ``preserve_userinfo_shape`` retains a user:password marker pair.
+    ``sensitive_key`` classifies decoded query keys and JSON object keys, so a
+    consumer can retain its credential vocabulary across both representations.
     """
     if text is None:
         return ""
     if not isinstance(text, str):
         text = str(text)
-    masked = _ERR_USERINFO_RE.sub(r"\1***@", text)
-    masked = _ERR_QUERY_PAIR_RE.sub(_mask_err_query_pair, masked)
-    return masked
+    transform = transform_unmasked or (lambda fragment: fragment)
+
+    def mask_fragment(fragment: str) -> str:
+        return mask_error_query_params(
+            fragment,
+            placeholder=placeholder,
+            sensitive_key=sensitive_key,
+            transform_unmasked=lambda gap: _mask_error_authorities(
+                gap, placeholder, preserve_userinfo_shape, transform
+            ),
+        )
+
+    masked_json = _mask_json_error_text(text, mask_fragment, placeholder, sensitive_key)
+    return mask_fragment(text) if masked_json is None else masked_json
 
 
 def redact_pool_key(pool_key: Optional[str]) -> str:
@@ -666,12 +757,38 @@ def redact_pool_key(pool_key: Optional[str]) -> str:
 
 
 def fingerprint_secret(value: str, *, length: int = 8) -> str:
-    """Generate a short non-reversible fingerprint of a secret for log correlation.
+    """Generate a short UNKEYED correlation fingerprint of a secret.
 
     Returns a hex-encoded BLAKE2b digest truncated to ``length`` characters.
     This is a **fingerprint** (an opaque identifier used to correlate log
     lines that reference the same secret) NOT a password hash. It MUST NOT
     be used to store credentials for later verification.
+
+    .. warning::
+
+       This tag is **not** a confidentiality control, and is **reversible
+       for any input drawn from a space an attacker can enumerate** — a
+       URL, a hostname, a filesystem path, a field name, a preset name, an
+       IP address. There is no keying material (see the § below), so anyone
+       holding the tag can hash candidate plaintexts until one matches. On
+       commodity hardware that is roughly 1.3e5 candidates/second/core
+       single-threaded, which exhausts a realistic candidate list in
+       microseconds and the whole IPv4 space in single-core-hours.
+
+       The property this DOES provide is a *confirmation oracle* in
+       reverse: the tag reveals nothing to someone with no candidates, and
+       confirms a guess for someone who has them. What it is FOR is
+       correlation — joining a log line to an exception, or to another
+       service's log line, without reproducing the plaintext verbatim in
+       every record.
+
+       When the input is enumerable AND its confidentiality is genuinely
+       load-bearing, this helper is the wrong tool: use a keyed derivation.
+       :func:`process_local_config_key` below keys per process (defeats
+       enumeration, breaks cross-process correlation), and
+       ``nexus.auth.rate_limit.fingerprint.IdentifierFingerprinter`` keys
+       from deployment-scoped environment material (defeats enumeration and
+       KEEPS cross-node correlation) — that is the shape to copy.
 
     For password verification, use ``argon2-cffi`` or ``bcrypt`` (with
     per-password salts + adaptive work factors). Those libraries exist
@@ -687,11 +804,25 @@ def fingerprint_secret(value: str, *, length: int = 8) -> str:
       fingerprinting with password hashing — is correct, but the fix is
       to change the HELPER so the intent is explicit, not to misuse
       argon2 for log correlation.
-    * BLAKE2b is a fast keyed-hash that CodeQL does not flag for this
-      rule. The 4-byte (8-hex-char) truncation gives 32 bits of entropy:
-      enough to distinguish secrets in a log stream, not enough for
-      an attacker to reverse via rainbow table against typical secret
-      spaces.
+    * BLAKE2b *supports* keying, but this function does NOT use it — no
+      ``key=`` is passed below, so the digest here is unkeyed and every
+      reversibility caveat above applies in full. An earlier revision of
+      this docstring called BLAKE2b "a fast keyed-hash that CodeQL does
+      not flag for this rule" and both halves of that were false: the
+      call is unkeyed, and CodeQL *did* flag this exact line under this
+      exact rule (alert 11474 at ``:731``, re-minted as 11556 at ``:732``
+      after a one-line shift, dismissed on the store-then-verify premise
+      failing — NOT on the hash being strong). Do not restore either
+      half; the choice of BLAKE2b over SHA-256 is about matching the
+      rule's *intent*, and it never bought a cryptographic property.
+    * The 4-byte (8-hex-char) truncation gives 32 bits of entropy:
+      enough to distinguish secrets in a log stream. It is NOT enough to
+      resist reversal by enumeration, and the width is not what makes a
+      high-entropy secret safe here — the *pre-image's* entropy is. A
+      random 256-bit API key is unrecoverable from its tag because the
+      attacker cannot enumerate the key space, not because 32 bits is a
+      barrier. Feed this function an enumerable value and the tag is
+      recoverable regardless of ``length``.
 
     Examples:
         >>> len(fingerprint_secret("sk-1234567890abcdef"))
@@ -735,12 +866,22 @@ def fingerprint_secret(value: str, *, length: int = 8) -> str:
 
 
 def fingerprint_value(value: str, *, length: int = 8) -> str:
-    """Generate a short non-reversible correlation tag for ANY value.
+    """Generate a short UNKEYED correlation tag for ANY value.
 
     This is the canonical implementation; :func:`fingerprint_secret` is the
     same function under a name that says the input is a credential. Both
     return byte-identical output for the same input, so a tag produced by
     one joins a tag produced by the other in the same forensic query.
+
+    .. warning::
+
+       Unkeyed, and therefore **reversible for enumerable inputs** — which
+       is most of what this name is used for (URLs, hostnames, command
+       lines, field names, preset names). See the warning on
+       :func:`fingerprint_secret`, which applies here identically and is
+       not repeated. This is a correlation tag, not a confidentiality
+       control; the callers that log it have each accepted that the tag
+       confirms a guess for a reader who already holds candidates.
 
     Use THIS name when the input is not itself a secret — a URL, a hostname,
     a preset name, a field name, a rate-limit identifier — and especially

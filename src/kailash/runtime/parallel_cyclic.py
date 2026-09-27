@@ -2,7 +2,6 @@
 
 import contextvars
 import logging
-import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from typing import Any
@@ -25,6 +24,7 @@ from kailash.sdk_exceptions import (
 from kailash.tracking import TaskManager, TaskStatus
 from kailash.tracking.metrics_collector import MetricsCollector
 from kailash.tracking.models import TaskMetrics
+from kailash.utils.finalizer import warn_unclosed
 from kailash.workflow import Workflow
 from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor
 from kailash.workflow.dag import CycleDetectedError
@@ -62,10 +62,18 @@ class ParallelCyclicRuntime:
             self.local_runtime = runtime.acquire()
             self._owns_runtime = False
         else:
-            self.local_runtime = LocalRuntime(debug=debug, enable_cycles=enable_cycles)
+            self.local_runtime = LocalRuntime(
+                debug=debug, enable_cycles=enable_cycles, enable_async=enable_async
+            )
             self._owns_runtime = True
+            self.local_runtime.mark_externally_managed()
+
         if enable_cycles:
-            self.cyclic_executor = CyclicWorkflowExecutor()
+            self.cyclic_executor = (
+                self.local_runtime.cyclic_executor
+                if self._owns_runtime
+                else CyclicWorkflowExecutor()
+            )
 
         if debug:
             self.logger.setLevel(logging.DEBUG)
@@ -109,10 +117,22 @@ class ParallelCyclicRuntime:
         if not workflow:
             raise RuntimeExecutionError("No workflow provided")
 
+        if self.enable_cycles and workflow.has_cycles():
+            # One prepared attempt owns cyclic controls and durable publication.
+            with self.local_runtime._cycle_executor_scope(self.cyclic_executor):
+                return self.local_runtime.execute(
+                    workflow,
+                    task_manager,
+                    parameters,
+                    soft_time_limit=soft_time_limit,
+                    time_limit=time_limit,
+                    **kwargs,
+                )
+
         # #912 Shard 6: arm threading.Timer-based deadlines around the
-        # parallel/cyclic execution path. The fallback to LocalRuntime
+        # parallel-DAG execution path. The fallback to LocalRuntime
         # would re-arm the same limits via its own wiring, but doing
-        # the arm here covers the parallel-DAG and cyclic paths that
+        # the arm here covers the parallel-DAG paths that
         # never reach LocalRuntime.execute. Layer a fresh cancellation
         # token to keep timer state out of any user-supplied token.
         _has_time_limit = soft_time_limit is not None or time_limit is not None
@@ -131,16 +151,8 @@ class ParallelCyclicRuntime:
                 # Validate workflow
                 workflow.validate(runtime_parameters=parameters)
 
-                # Check for cycles first
-                if self.enable_cycles and workflow.has_cycles():
-                    self.logger.info(
-                        "Cyclic workflow detected, checking for parallel execution opportunities"
-                    )
-                    results = self._execute_cyclic_workflow(
-                        workflow, task_manager, parameters
-                    )
-                # Check for parallel execution opportunities in DAG workflows
-                elif parallel_nodes or self._can_execute_in_parallel(workflow):
+                # Cycles already entered the canonical attempt owner above.
+                if parallel_nodes or self._can_execute_in_parallel(workflow):
                     self.logger.info("Parallel execution opportunities detected")
                     results = self._execute_parallel_dag(
                         workflow, task_manager, parameters, parallel_nodes
@@ -214,22 +226,10 @@ class ParallelCyclicRuntime:
         Returns:
             Tuple of (results dict, run_id)
         """
-        # For now, delegate to cyclic executor
-        # Future enhancement: identify parallelizable parts within cycles
-        self.logger.info("Executing cyclic workflow with CyclicWorkflowExecutor")
-
-        try:
-            results, run_id = self.cyclic_executor.execute(workflow, parameters)
-
-            # TODO: Add cycle-aware parallel execution optimizations
-            # - Parallel execution of independent cycles
-            # - Parallel execution of DAG portions between cycles
-            # - Async cycle monitoring and resource management
-
-            return results, run_id
-
-        except Exception as e:
-            raise RuntimeExecutionError(f"Cyclic workflow execution failed: {e}") from e
+        with self.local_runtime._cycle_executor_scope(self.cyclic_executor):
+            return self.local_runtime.execute(
+                workflow, task_manager=task_manager, parameters=parameters
+            )
 
     def _execute_parallel_dag(
         self,
@@ -545,7 +545,7 @@ class ParallelCyclicRuntime:
         inputs = {}
 
         # Start with node configuration
-        inputs.update(node_instance.config)
+        inputs.update(node_instance._get_execution_config())
 
         # Add connected inputs from other nodes
         for edge in workflow.graph.in_edges(node_id, data=True):
@@ -633,14 +633,18 @@ class ParallelCyclicRuntime:
             self.local_runtime.release()
             self.local_runtime = None
 
-    def __del__(self, _warnings=warnings):
+    def __del__(self, _warn=warn_unclosed):
+        # Warn and RETURN. This finalizer performs no cleanup, deliberately.
+        #
+        # ``close()`` calls ``self.local_runtime.release()``, which is
+        # ``LocalRuntime.close()``: it emits ``logger.debug``, takes the
+        # runtime's ``_loop_lock``, then runs ``_cleanup_event_loop()`` (more
+        # logging, plus ``loop.run_until_complete``). A finalizer fires at an
+        # arbitrary bytecode boundary on whichever thread drops the last
+        # reference, which may already hold the root logging lock or that
+        # ``_loop_lock``; neither is reentrant, so re-entering wedges the
+        # process. The swallow-and-continue guard could not catch a deadlock
+        # (nothing is raised) and only hid real release failures. See
+        # ``rules/patterns.md`` § "Async Resource Cleanup" and issue #2107.
         if getattr(self, "local_runtime", None) is not None:
-            _warnings.warn(
-                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
-                ResourceWarning,
-                source=self,
-            )
-            try:
-                self.close()
-            except Exception:
-                pass
+            _warn(self, "Call close() explicitly to release the runtime reference.")

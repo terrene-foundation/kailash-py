@@ -227,8 +227,7 @@ def test_kailash_top_level_binds_bootstrap_callable():
     import sys
 
     import kailash
-    from kailash.bootstrap import BootstrapConfig
-    from kailash.bootstrap import bootstrap as module_bootstrap
+    from kailash.bootstrap import BootstrapConfig, bootstrap as module_bootstrap
 
     assert callable(kailash.bootstrap)
     assert kailash.bootstrap is module_bootstrap

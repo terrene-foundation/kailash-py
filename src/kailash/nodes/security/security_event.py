@@ -10,8 +10,10 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from kailash.nodes.base import Node, NodeParameter, register_node
+from kailash.nodes.security._log_identity import log_namespace
 from kailash.utils.secure_logging import (
     redact_mapping,
+    safe_log_field,
     sanitize_log_structure,
     sanitize_log_value,
 )
@@ -48,12 +50,16 @@ class SecurityEventNode(Node):
         name: str,
         alert_threshold: str = "HIGH",
         enable_real_time: bool = True,
+        *,
+        log_name_parts: tuple[object, ...] | None = None,
         **kwargs,
     ):
         super().__init__(name=name, **kwargs)
         self.alert_threshold = SeverityLevel(alert_threshold)
         self.enable_real_time = enable_real_time
-        self.logger = logging.getLogger(f"security.{name}")
+        self.logger = logging.getLogger(
+            log_namespace("security.", name, log_name_parts)
+        )
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Define parameters for security event processing."""
@@ -118,7 +124,7 @@ class SecurityEventNode(Node):
         except (ValueError, TypeError, AttributeError):
             logging.getLogger(__name__).warning(
                 "Unrecognized security severity %r; treating as CRITICAL",
-                sanitize_log_value(raw, 64),
+                safe_log_field(raw, 64),
             )
             return SeverityLevel.CRITICAL
 
@@ -177,9 +183,13 @@ class SecurityEventNode(Node):
         )
 
         # Log the event
-        log_message = f"[{severity.value}] {event_type}: {message}"
+        log_message = (
+            f"[{severity.value}] "
+            f"{safe_log_field(inputs.get('event_type', 'security_check'), 128)}: "
+            f"{safe_log_field(inputs.get('message', ''), 512)}"
+        )
         if user_id:
-            log_message += f" (User: {user_id})"
+            log_message += f" (User: {safe_log_field(raw_user_id, 128)})"
 
         # Use appropriate log level based on severity
         if severity in [SeverityLevel.CRITICAL, SeverityLevel.HIGH]:

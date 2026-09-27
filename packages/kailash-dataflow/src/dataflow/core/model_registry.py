@@ -5,8 +5,6 @@ This module integrates with DataFlow's existing migration system to provide
 persistent model storage, enabling multi-application access to shared model definitions.
 """
 
-import asyncio
-import concurrent.futures
 import hashlib
 import json
 import logging
@@ -17,14 +15,13 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from .async_utils import async_safe_run
 from .type_introspection import union_non_none_args
 
 try:
     from kailash.nodes.data.sql import SQLDatabaseNode
 except ImportError:
     SQLDatabaseNode = None  # type: ignore[assignment,misc]
-from kailash.runtime import AsyncLocalRuntime
+from kailash.runtime import AsyncLocalRuntime, LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
 logger = logging.getLogger(__name__)
@@ -254,9 +251,13 @@ class ModelRegistry:
         (file SQLite, PostgreSQL, MySQL), so the ``or`` fallback is a no-op off
         the in-memory path and those backends keep their normal connection URL.
         """
-        url = getattr(self.dataflow, "_memory_db_uri", None) or (
-            self.dataflow.config.database.get_connection_url(
-                self.dataflow.config.environment
+        url = (
+            getattr(self.dataflow, "_memory_db_uri", None)
+            or vars(self.dataflow).get("_sqlite_database_url")
+            or (
+                self.dataflow.config.database.get_connection_url(
+                    self.dataflow.config.environment
+                )
             )
         )
         # Issue #1547: the registry's SQLDatabaseNode is SQLAlchemy-sync; a bare
@@ -267,85 +268,30 @@ class ModelRegistry:
     def _execute_workflow_sync_safe(
         self, workflow: Any
     ) -> Tuple[Dict[str, Any], Optional[str]]:
-        """Execute a workflow safely from both sync and async contexts.
+        """Execute registry-owned SQL workflows through Core's sync bridge.
 
-        Fixes gh#352: the ModelRegistry's DDL workflows are called from
-        ``DataFlow.start()`` which may run under an async context
-        (FastAPI startup, uvicorn, pytest-asyncio). When the registry's
-        runtime is :class:`AsyncLocalRuntime`, calling ``runtime.execute``
-        from inside an event loop raises a ``RuntimeError`` that the
-        registry previously swallowed, leaving the
-        ``dataflow_model_registry`` table uncreated.
+        Resolve the runtime once in the caller's context so DataFlow's lazy
+        per-loop selection cannot change inside the bridge (#1498). For an
+        AsyncLocalRuntime, use its inherited LocalRuntime execution engine:
+        moving native async execution onto a new worker loop would violate
+        ownership of the runtime's existing loop-bound resources.
 
-        This helper dispatches on ``self._is_async``:
-
-        * ``False`` → use the sync :class:`LocalRuntime` path directly.
-        * ``True`` + no running event loop → ``asyncio.run`` the async
-          variant once (safe, no nested loops).
-        * ``True`` + running event loop → offload the async execution to
-          a dedicated worker thread with its own fresh event loop. The
-          worker thread blocks until the DDL workflow completes and
-          returns the result; the calling event loop is unaffected.
-          Bounded to the 13 model-registry DDL call sites — not a
-          general substitute for async-native code.
-
-        Returns:
-            The ``(results, run_id)`` tuple that callers already expect
-            from ``runtime.execute``.
+        Core's sync engine preserves the captured runtime's configuration and
+        trust policy, propagates context, and drains its worker-loop SQL pools.
+        This bridge is bounded to the registry's synchronous SQL workflows;
+        arbitrary native async workflows must run on their owning event loop.
         """
         built = workflow.build() if hasattr(workflow, "build") else workflow
-
-        # Resolve the runtime ONCE here, in the caller's context. `self.runtime`
-        # is the parent DataFlow's per-event-loop lazy property: it returns the
-        # cached AsyncLocalRuntime only while a loop is running, and the sync
-        # LocalRuntime singleton otherwise. Re-reading it inside the worker
-        # thread below evaluates `self.runtime.execute_workflow_async(...)`
-        # BEFORE run_until_complete starts the worker loop — a loop-less context
-        # that resolves to the sync LocalRuntime singleton, which has no
-        # execute_workflow_async (issue #1498). Bind the resolved runtime once
-        # and use that same object everywhere.
         runtime = self.runtime
-
         if not isinstance(runtime, AsyncLocalRuntime):
-            # Sync runtime — direct path, nothing to bridge.
             return runtime.execute(built)
-
-        # Async runtime. Check if there's a running event loop.
+        # Atomically reject a closed owner and retain it throughout dispatch.
+        # The bridge does not migrate or reacquire native loop resources.
+        runtime.acquire()
         try:
-            asyncio.get_running_loop()
-            in_event_loop = True
-        except RuntimeError:
-            in_event_loop = False
-
-        if not in_event_loop:
-            # Issue #1575: async_safe_run runs the coroutine on a transient loop
-            # stamped with BRIDGE_LOOP_ATTR, so any adapter / EnterpriseConnectionPool
-            # the DDL workflow opens on that loop is drained before it closes.
-            # Bare asyncio.run left those pools bound to a dead loop ->
-            # "Event loop is closed" + "Unclosed connection" at GC (#1572 class).
-            result = async_safe_run(runtime.execute_workflow_async(built, inputs={}))
-            return _normalize_runtime_result(result)
-
-        # We're inside an event loop; can't call asyncio.run.
-        # Offload to a worker thread that owns a fresh event loop. Use the
-        # runtime captured above — NOT self.runtime, which would re-resolve to
-        # the sync singleton in the worker thread's loop-less context (#1498).
-        def _run_in_thread() -> Any:
-            # Issue #1575: the worker thread owns no running loop, so
-            # async_safe_run routes through _run_on_new_loop — it stamps
-            # BRIDGE_LOOP_ATTR, drains any pool the DDL workflow opens on the
-            # transient loop, then closes it with asyncio.run() semantics. The
-            # runtime was resolved in the caller frame (issue #1498) and is
-            # closed over here, so no sync-singleton re-resolution occurs.
-            return async_safe_run(runtime.execute_workflow_async(built, inputs={}))
-
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=1,
-            thread_name_prefix="dataflow-model-registry-bridge",
-        ) as executor:
-            future = executor.submit(_run_in_thread)
-            result = future.result()
-        return _normalize_runtime_result(result)
+            return _normalize_runtime_result(LocalRuntime.execute(runtime, built))
+        finally:
+            runtime.release()
 
     @contextmanager
     def _transaction_context(self, operation_name: str):
@@ -1978,12 +1924,8 @@ class ModelRegistry:
         cleaning up the per-event-loop cache.
         """
         if getattr(self, "_explicit_runtime", None) is not None:
-            try:
-                _warnings.warn(
-                    f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
-                    ResourceWarning,
-                    source=self,
-                )
-            except Exception:
-                # Interpreter shutdown or recursive GC — best-effort only.
-                pass
+            _warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )

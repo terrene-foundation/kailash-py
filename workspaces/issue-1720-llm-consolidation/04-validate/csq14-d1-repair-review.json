@@ -1,0 +1,27 @@
+{
+  "source_commit": "e92882bbf",
+  "merge_commit": "dddf90871",
+  "files": 5,
+  "positive": "59 passed in9.87s with -Werror",
+  "reviewer": "archive_checkpoint",
+  "clean_rounds": 2,
+  "controls": [
+    "7order/cache/alias/validation mutants rejected",
+    "Unsafeoptionalparam,missinglogger,closedTDDguard mutants rejected",
+    "Actualguardsequence4True/5False"
+  ],
+  "logs": [
+    "/tmp/csq14-d1-behavior-final-gate.log",
+    "/tmp/csq14-d1-all-branches-probe.log",
+    "/tmp/csq14-d1-independent-original-controls.log",
+    "/tmp/csq14-d1-independent-tdd-controls.log"
+  ],
+  "limit": "Tier1SQLite/mockednode plumbing; no PostgreSQL integration",
+  "log_sha256": {
+    "/tmp/csq14-d1-behavior-final-gate.log": "55a598ee0c358c75def2bdc1429565f056db632e3ce5de3cc911f51583c4c53b",
+    "/tmp/csq14-d1-all-branches-probe.log": "708810f0bd5df4098addc41570e1d3ad882dacc1ba37559c37c6702b5ad2a7dd",
+    "/tmp/csq14-d1-independent-original-controls.log": "a1df8eb907fdb4026067afb51af46339992dafc3d02e45bed312daff1819296f",
+    "/tmp/csq14-d1-independent-tdd-controls.log": "ca460978982a022f89b0398a5bdf899aa98786ddc88fa4bedb3c71964eb54158"
+  },
+  "root_review": "Two source/contract passes; actual producer and reached-control evidence inspected. D1 earlier dead-branch finding fixed before clean rounds."
+}

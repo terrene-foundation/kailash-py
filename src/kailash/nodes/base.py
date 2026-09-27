@@ -37,7 +37,11 @@ from kailash.sdk_exceptions import (
     NodeExecutionError,
     NodeValidationError,
 )
-from kailash.utils.secure_logging import redact_mapping
+from kailash.utils.secure_logging import (
+    safe_exception_frames,
+    safe_log_field,
+    safe_type_name,
+)
 
 # ADR-002: Module-level logger for node registration messages
 _logger = logging.getLogger(__name__)
@@ -196,11 +200,10 @@ class Node(ABC):
     _env_cache: dict[str, str | None] = {}
 
     # Init-capture machinery — see __init_subclass__ below.
-    # Names here are NEVER captured into self.config from a subclass __init__'s
-    # bound parameters. They are either internal-routing keys (`_node_id`),
-    # NodeMetadata-derived (`name`, `description`, `version`, `author`, `tags`,
-    # `metadata`), or framework-private (`config` itself, `*args`, `**kwargs`).
-    # `name` IS captured separately via NodeMetadata; `description` likewise.
+    # Names here are NEVER captured from a subclass constructor: internal
+    # routing, the separately handled metadata object, and variadic arguments.
+    # Named metadata fields (e.g. name) remain in constructor serialization;
+    # _get_execution_config includes them only when declared as inputs.
     _INIT_CAPTURE_EXCLUDE: frozenset[str] = frozenset(
         {
             "self",
@@ -309,6 +312,13 @@ class Node(ABC):
                 # item-assignment operations below, which require a mapping.
                 return
 
+            # Serialization keeps constructor state, but execution must not
+            # reinterpret constructor-only options as runtime inputs. Merge
+            # provenance across inherited constructor wrappers as well.
+            captured = self.__dict__.setdefault("_constructor_config_keys", set())
+            captured.update(
+                name for name in param_names_to_capture if name in bound.arguments
+            )
             for name in param_names_to_capture:
                 if name in self.config:
                     # Subclass already forwarded this via **kwargs; preserve.
@@ -429,7 +439,9 @@ class Node(ABC):
             except Exception as e:
                 # If get_parameters() fails, log but continue with safe defaults
                 self.logger.debug(
-                    f"Could not get parameter definitions during init: {e}"
+                    "node.parameters_unavailable: %s (at %s)",
+                    safe_type_name(e),
+                    safe_exception_frames(e),
                 )
                 defined_params = set()
                 self._temp_param_definitions = {}
@@ -921,6 +933,27 @@ class Node(ABC):
                 ) from e
         return self._cached_params
 
+    def _get_execution_config(self) -> dict[str, Any]:
+        """Return input defaults, retaining constructor state only for serialization.
+
+        A captured constructor argument remains an input when the node's
+        parameter schema declares it. Unknown unconsumed configuration stays
+        visible to validation; explicit runtime inputs are merged by callers
+        afterwards and therefore never bypass unknown-parameter checks.
+        """
+        parameters = self._get_cached_parameters()
+        declared = set(parameters) | self._SPECIAL_PARAMS
+        for parameter in parameters.values():
+            declared.update(parameter.auto_map_from)
+            if parameter.workflow_alias:
+                declared.add(parameter.workflow_alias)
+        constructor_keys = self.__dict__.get("_constructor_config_keys", ())
+        return {
+            name: value
+            for name, value in self.config.items()
+            if name not in constructor_keys or name in declared
+        }
+
     def validate_inputs(self, **kwargs) -> dict[str, Any]:
         r"""Validate runtime inputs against node requirements.
 
@@ -1038,7 +1071,23 @@ class Node(ABC):
             if self._strict_unknown_params:
                 raise NodeValidationError(msg)
             else:
-                _logger.warning("[NODE] %s", msg)
+                # Sanitize each metadata field before prose/list formatting
+                # obscures JSON credential boundaries. Keep the public msg raw.
+                unknown_names = ", ".join(safe_log_field(k) for k in sorted(unknown))
+                declared_names = ", ".join(safe_log_field(k) for k in sorted(declared))
+                log_msg = (
+                    f"Unknown parameter(s) for {safe_log_field(self.__class__.__name__)}: "
+                    f"{unknown_names}. Valid parameters: {declared_names}."
+                )
+                if suggestions:
+                    log_hints = [
+                        f" '{safe_log_field(k)}' -> did you mean {', '.join(safe_log_field(name) for name in s)}?"
+                        for k, s in suggestions.items()
+                        if s
+                    ]
+                    if log_hints:
+                        log_msg += " Suggestions: " + " ".join(log_hints)
+                _logger.warning("[NODE] %s", safe_log_field(log_msg))
 
         # Phase 3: Validate resolved parameters
         validated = self._validate_resolved_parameters(resolved, params)
@@ -1536,7 +1585,7 @@ class Node(ABC):
             self.logger.info(f"Executing node {self.id}")
 
             # Merge runtime inputs with config (runtime inputs take precedence)
-            merged_inputs = {**self.config, **runtime_inputs}
+            merged_inputs = {**self._get_execution_config(), **runtime_inputs}
 
             # Resolve ${param} templates in merged parameters (v0.9.30)
             # This enables dynamic parameter injection in nested configurations
@@ -1561,24 +1610,12 @@ class Node(ABC):
 
             # Validate inputs
             validated_inputs = self.validate_inputs(**merged_inputs)
-            # REDACTED (#2167). This logged EVERY node's full validated input
-            # dict, so any credential parameter -- `auth_password`, `api_key`,
-            # `secret_key`, a connection string -- reached the log in clear text,
-            # for every node in the SDK rather than one. Surfaced by the #2167
-            # http.py regression test, which caught `auth_password` here after the
-            # http-level leak beside it was already fixed. DEBUG is not a defence:
-            # debug logging is routinely enabled in staging and shipped to an
-            # aggregator. Keys are preserved so the diagnostic still says which
-            # inputs bound.
-            # Guarded: `redact_mapping` walks the whole input structure, and this
-            # runs on EVERY node execution. Passing it as a lazy `%s` arg is not
-            # enough -- the call itself would still evaluate before `debug()` is
-            # entered. `isEnabledFor` keeps the cost at zero when DEBUG is off.
+            # Ordinary fields can contain personal data. Retain only the
+            # number of bound inputs, never their keys or values.
             if self.logger.isEnabledFor(logging.DEBUG):
                 self.logger.debug(
-                    "Validated inputs for %s: %s",
-                    self.id,
-                    redact_mapping(validated_inputs),
+                    "node.inputs_validated",
+                    extra={"input_count": len(validated_inputs)},
                 )
 
             # Execute node logic with progress context
@@ -1607,7 +1644,12 @@ class Node(ABC):
             raise
         except Exception as e:
             # Wrap any other exception in NodeExecutionError
-            self.logger.error(f"Node {self.id} execution failed: {e}", exc_info=True)
+            self.logger.error(
+                "Node %s execution failed: %s (at %s)",
+                self.id,
+                safe_type_name(e),
+                safe_exception_frames(e),
+            )
             raise NodeExecutionError(
                 f"Node '{self.id}' execution failed: {type(e).__name__}: {e}"
             ) from e
@@ -2163,7 +2205,7 @@ class AsyncTypedNode(TypedNode):
             self.logger.info(f"Executing async node {self.id}")
 
             # Merge runtime inputs with config (runtime inputs take precedence)
-            merged_inputs = {**self.config, **runtime_inputs}
+            merged_inputs = {**self._get_execution_config(), **runtime_inputs}
 
             # Handle nested config case (same as base Node)
             if "config" in merged_inputs and isinstance(merged_inputs["config"], dict):
@@ -2174,24 +2216,12 @@ class AsyncTypedNode(TypedNode):
 
             # Validate inputs (includes port validation and setting port values)
             validated_inputs = self.validate_inputs(**merged_inputs)
-            # REDACTED (#2167). This logged EVERY node's full validated input
-            # dict, so any credential parameter -- `auth_password`, `api_key`,
-            # `secret_key`, a connection string -- reached the log in clear text,
-            # for every node in the SDK rather than one. Surfaced by the #2167
-            # http.py regression test, which caught `auth_password` here after the
-            # http-level leak beside it was already fixed. DEBUG is not a defence:
-            # debug logging is routinely enabled in staging and shipped to an
-            # aggregator. Keys are preserved so the diagnostic still says which
-            # inputs bound.
-            # Guarded: `redact_mapping` walks the whole input structure, and this
-            # runs on EVERY node execution. Passing it as a lazy `%s` arg is not
-            # enough -- the call itself would still evaluate before `debug()` is
-            # entered. `isEnabledFor` keeps the cost at zero when DEBUG is off.
+            # Ordinary fields can contain personal data. Retain only the
+            # number of bound inputs, never their keys or values.
             if self.logger.isEnabledFor(logging.DEBUG):
                 self.logger.debug(
-                    "Validated inputs for async node %s: %s",
-                    self.id,
-                    redact_mapping(validated_inputs),
+                    "node.async_inputs_validated",
+                    extra={"input_count": len(validated_inputs)},
                 )
 
             # Execute async node logic with progress context
@@ -2221,7 +2251,10 @@ class AsyncTypedNode(TypedNode):
         except Exception as e:
             # Wrap any other exception in NodeExecutionError
             self.logger.error(
-                f"Async node {self.id} execution failed: {e}", exc_info=True
+                "Async node %s execution failed: %s (at %s)",
+                self.id,
+                safe_type_name(e),
+                safe_exception_frames(e),
             )
             raise NodeExecutionError(
                 f"Async node '{self.id}' execution failed: {type(e).__name__}: {e}"

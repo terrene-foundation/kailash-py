@@ -110,9 +110,12 @@ class TestGrantClearanceAddressResolution:
     @pytest.mark.regression
     def test_grant_backward_compat_config_id(self, engine: GovernanceEngine) -> None:
         """Existing callers using config role IDs continue to work."""
-        clearance = _make_clearance("D1-R1")
+        node = engine.get_node("r-provost")
+        assert node is not None
+        clearance = _make_clearance(node.address)
         # This was the only way that worked before the fix
         engine.grant_clearance("r-provost", clearance)
+        assert engine._clearance_store.get_clearance(node.address) == clearance
 
 
 # ---------------------------------------------------------------------------

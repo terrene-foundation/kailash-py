@@ -966,13 +966,15 @@ class TestDelegateExports:
 
     def test_event_imports_from_delegate_package(self) -> None:
         """Event classes can be imported from kaizen_agents.delegate."""
-        from kaizen_agents.delegate import BudgetExhausted as BE
-        from kaizen_agents.delegate import DelegateEvent as DE
-        from kaizen_agents.delegate import ErrorEvent as EE
-        from kaizen_agents.delegate import TextDelta as TD
-        from kaizen_agents.delegate import ToolCallEnd as TCE
-        from kaizen_agents.delegate import ToolCallStart as TCS
-        from kaizen_agents.delegate import TurnComplete as TC
+        from kaizen_agents.delegate import (
+            BudgetExhausted as BE,
+            DelegateEvent as DE,
+            ErrorEvent as EE,
+            TextDelta as TD,
+            ToolCallEnd as TCE,
+            ToolCallStart as TCS,
+            TurnComplete as TC,
+        )
 
         assert DE is DelegateEvent
         assert TD is TextDelta

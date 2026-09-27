@@ -48,8 +48,7 @@ from kailash.trust.chain import (
     TrustLineageChain,
 )
 from kailash.trust.chain_store.sqlite import SqliteTrustStore
-from kailash.trust.interop import jwt as jwt_interop
-from kailash.trust.interop import w3c_vc
+from kailash.trust.interop import jwt as jwt_interop, w3c_vc
 from kailash.trust.interop.ucan import from_ucan, to_ucan
 from kailash.trust.signing.crypto import generate_keypair, sign, verify_signature
 from kailash.trust.signing.delegation_payload import (

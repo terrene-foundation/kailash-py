@@ -365,8 +365,9 @@ jobs:
       - name: Install kailash-kaizen[dev] + sibling packages
         run: |
           uv venv .venv
-          # Root kailash editable — kaizen imports the current core surface.
-          uv pip install -e "." --python .venv/bin/python
+          # The #2218 parity gate imports TrustProject and its filesystem store.
+          # Install the owning trust extra, including its filelock dependency.
+          uv pip install -e ".[trust]" --python .venv/bin/python
           # Sibling packages kaizen's import graph pulls in at collection time.
           uv pip install -e "packages/kailash-nexus" --python .venv/bin/python
           uv pip install -e "packages/kailash-dataflow" --python .venv/bin/python

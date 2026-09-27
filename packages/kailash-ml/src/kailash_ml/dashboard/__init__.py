@@ -129,6 +129,7 @@ class MLDashboard:
             Override the port. Uses the constructor value if None.
         """
         import uvicorn
+
         from kailash_ml.dashboard.server import DashboardApp
 
         bind_host = host or self._host
@@ -170,6 +171,7 @@ class MLDashboard:
             Override the port. Uses the constructor value if None.
         """
         import uvicorn
+
         from kailash_ml.dashboard.server import DashboardApp
 
         bind_host = host or self._host

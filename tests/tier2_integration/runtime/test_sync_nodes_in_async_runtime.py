@@ -60,13 +60,15 @@ class TestSyncNodesInAsyncRuntime:
     """Test synchronous nodes execute correctly in AsyncLocalRuntime."""
 
     @pytest.mark.asyncio
-    async def test_single_sync_node_execution(self):
+    async def test_single_sync_node_execution(self, request):
         """Test a single sync node executes via thread pool."""
         runtime = AsyncLocalRuntime()
+        request.addfinalizer(runtime.close)
         builder = WorkflowBuilder()
 
         # Add a single sync node
-        builder.add_node(SimpleSyncNode, "sync_node", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            builder.add_node(SimpleSyncNode, "sync_node", {})
 
         workflow = builder.build()
         results, run_id = await runtime.execute_workflow_async(workflow, {})
@@ -74,14 +76,16 @@ class TestSyncNodesInAsyncRuntime:
         assert results["sync_node"]["result"] == "sync_success"
 
     @pytest.mark.asyncio
-    async def test_multiple_sync_nodes_parallel(self):
+    async def test_multiple_sync_nodes_parallel(self, request):
         """Test multiple sync nodes execute in parallel via thread pool."""
         runtime = AsyncLocalRuntime()
+        request.addfinalizer(runtime.close)
         builder = WorkflowBuilder()
 
         # Add 5 independent sync nodes
         for i in range(5):
-            builder.add_node(SimpleSyncNode, f"sync_node_{i}", {})
+            with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+                builder.add_node(SimpleSyncNode, f"sync_node_{i}", {})
 
         workflow = builder.build()
 
@@ -97,13 +101,15 @@ class TestSyncNodesInAsyncRuntime:
         assert duration < 0.5  # Would be >0.5s if sequential
 
     @pytest.mark.asyncio
-    async def test_sync_nodes_dont_block_event_loop(self):
+    async def test_sync_nodes_dont_block_event_loop(self, request):
         """Test that sync nodes in thread pool don't block the event loop."""
         runtime = AsyncLocalRuntime()
+        request.addfinalizer(runtime.close)
         builder = WorkflowBuilder()
 
         # Add slow sync node
-        builder.add_node(SlowSyncNode, "slow_sync", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            builder.add_node(SlowSyncNode, "slow_sync", {})
 
         workflow = builder.build()
 
@@ -134,15 +140,19 @@ class TestMixedSyncAsyncWorkflows:
     """Test workflows with both sync and async nodes."""
 
     @pytest.mark.asyncio
-    async def test_mixed_workflow_sequential(self):
+    async def test_mixed_workflow_sequential(self, request):
         """Test mixed workflow with sequential execution."""
         runtime = AsyncLocalRuntime()
+        request.addfinalizer(runtime.close)
         builder = WorkflowBuilder()
 
         # Create sequential pipeline: sync -> async -> sync
-        builder.add_node(SimpleSyncNode, "sync1", {})
-        builder.add_node(SimpleAsyncNode, "async1", {})
-        builder.add_node(SimpleSyncNode, "sync2", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            builder.add_node(SimpleSyncNode, "sync1", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            builder.add_node(SimpleAsyncNode, "async1", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            builder.add_node(SimpleSyncNode, "sync2", {})
 
         builder.connect("sync1", "async1")
         builder.connect("async1", "sync2")
@@ -156,16 +166,21 @@ class TestMixedSyncAsyncWorkflows:
         assert results["sync2"]["result"] == "sync_success"
 
     @pytest.mark.asyncio
-    async def test_mixed_workflow_parallel(self):
+    async def test_mixed_workflow_parallel(self, request):
         """Test mixed workflow with parallel execution."""
         runtime = AsyncLocalRuntime()
+        request.addfinalizer(runtime.close)
         builder = WorkflowBuilder()
 
         # Create parallel execution: 2 sync + 2 async nodes
-        builder.add_node(SimpleSyncNode, "sync1", {})
-        builder.add_node(SimpleSyncNode, "sync2", {})
-        builder.add_node(SimpleAsyncNode, "async1", {})
-        builder.add_node(SimpleAsyncNode, "async2", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            builder.add_node(SimpleSyncNode, "sync1", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            builder.add_node(SimpleSyncNode, "sync2", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            builder.add_node(SimpleAsyncNode, "async1", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            builder.add_node(SimpleAsyncNode, "async2", {})
 
         workflow = builder.build()
 
@@ -183,28 +198,35 @@ class TestMixedSyncAsyncWorkflows:
         assert duration < 0.5
 
     @pytest.mark.asyncio
-    async def test_mixed_workflow_complex(self):
+    async def test_mixed_workflow_complex(self, request):
         """Test complex workflow with multiple levels of sync/async nodes."""
         runtime = AsyncLocalRuntime()
+        request.addfinalizer(runtime.close)
         builder = WorkflowBuilder()
 
         # Level 0: sync node
-        builder.add_node(SimpleSyncNode, "sync_start", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            builder.add_node(SimpleSyncNode, "sync_start", {})
 
         # Level 1: 2 async nodes (parallel)
-        builder.add_node(SimpleAsyncNode, "async1", {})
-        builder.add_node(SimpleAsyncNode, "async2", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            builder.add_node(SimpleAsyncNode, "async1", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            builder.add_node(SimpleAsyncNode, "async2", {})
         builder.connect("sync_start", "async1")
         builder.connect("sync_start", "async2")
 
         # Level 2: 2 sync nodes (parallel)
-        builder.add_node(SimpleSyncNode, "sync1", {})
-        builder.add_node(SimpleSyncNode, "sync2", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            builder.add_node(SimpleSyncNode, "sync1", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            builder.add_node(SimpleSyncNode, "sync2", {})
         builder.connect("async1", "sync1")
         builder.connect("async2", "sync2")
 
         # Level 3: final async node
-        builder.add_node(SimpleAsyncNode, "async_end", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            builder.add_node(SimpleAsyncNode, "async_end", {})
         builder.connect("sync1", "async_end")
         builder.connect("sync2", "async_end")
 
@@ -225,14 +247,16 @@ class TestHybridExecutionPerformance:
     """Test performance characteristics of hybrid sync/async execution."""
 
     @pytest.mark.asyncio
-    async def test_sync_nodes_execute_in_parallel(self):
+    async def test_sync_nodes_execute_in_parallel(self, request):
         """Test that multiple sync nodes execute in parallel via thread pool."""
         runtime = AsyncLocalRuntime(thread_pool_size=4)
+        request.addfinalizer(runtime.close)
         builder = WorkflowBuilder()
 
         # Add 4 slow sync nodes (should execute in parallel with 4 workers)
         for i in range(4):
-            builder.add_node(SlowSyncNode, f"slow_{i}", {})
+            with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+                builder.add_node(SlowSyncNode, f"slow_{i}", {})
 
         workflow = builder.build()
 
@@ -249,15 +273,18 @@ class TestHybridExecutionPerformance:
         assert duration < 0.5  # Allow overhead for thread pool and CI
 
     @pytest.mark.asyncio
-    async def test_mixed_execution_no_performance_regression(self):
+    async def test_mixed_execution_no_performance_regression(self, request):
         """Test that mixing sync/async doesn't regress performance."""
         runtime = AsyncLocalRuntime()
+        request.addfinalizer(runtime.close)
         builder = WorkflowBuilder()
 
         # Create 10 fast sync nodes + 10 fast async nodes
         for i in range(10):
-            builder.add_node(SimpleSyncNode, f"sync_{i}", {})
-            builder.add_node(SimpleAsyncNode, f"async_{i}", {})
+            with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+                builder.add_node(SimpleSyncNode, f"sync_{i}", {})
+            with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+                builder.add_node(SimpleAsyncNode, f"async_{i}", {})
 
         workflow = builder.build()
 
@@ -276,16 +303,19 @@ class TestSyncNodeCompatibility:
     """Test that sync nodes maintain backward compatibility."""
 
     @pytest.mark.asyncio
-    async def test_sync_node_outputs_connect_to_async_node(self):
+    async def test_sync_node_outputs_connect_to_async_node(self, request):
         """Test sync node outputs correctly connect to async nodes."""
         runtime = AsyncLocalRuntime()
+        request.addfinalizer(runtime.close)
         builder = WorkflowBuilder()
 
         # Sync node produces output
-        builder.add_node(SimpleSyncNode, "sync_producer", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            builder.add_node(SimpleSyncNode, "sync_producer", {})
 
         # Async node consumes it
-        builder.add_node(SimpleAsyncNode, "async_consumer", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            builder.add_node(SimpleAsyncNode, "async_consumer", {})
         builder.connect("sync_producer", "async_consumer")
 
         workflow = builder.build()
@@ -295,16 +325,19 @@ class TestSyncNodeCompatibility:
         assert results["async_consumer"]["result"] == "async_success"
 
     @pytest.mark.asyncio
-    async def test_async_node_outputs_connect_to_sync_node(self):
+    async def test_async_node_outputs_connect_to_sync_node(self, request):
         """Test async node outputs correctly connect to sync nodes."""
         runtime = AsyncLocalRuntime()
+        request.addfinalizer(runtime.close)
         builder = WorkflowBuilder()
 
         # Async node produces output
-        builder.add_node(SimpleAsyncNode, "async_producer", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            builder.add_node(SimpleAsyncNode, "async_producer", {})
 
         # Sync node consumes it
-        builder.add_node(SimpleSyncNode, "sync_consumer", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            builder.add_node(SimpleSyncNode, "sync_consumer", {})
         builder.connect("async_producer", "sync_consumer")
 
         workflow = builder.build()
@@ -318,23 +351,26 @@ class TestThreadPoolManagement:
     """Test thread pool management in AsyncLocalRuntime."""
 
     @pytest.mark.asyncio
-    async def test_thread_pool_configurable_size(self):
+    async def test_thread_pool_configurable_size(self, request):
         """Test that thread pool size is configurable."""
         # Create runtime with custom thread pool size
         runtime = AsyncLocalRuntime(thread_pool_size=8)
+        request.addfinalizer(runtime.close)
 
         # Thread pool should be initialized
         assert runtime.thread_pool is not None
         assert runtime.thread_pool._max_workers == 8
 
     @pytest.mark.asyncio
-    async def test_thread_pool_cleanup(self):
+    async def test_thread_pool_cleanup(self, request):
         """Test that thread pool is properly cleaned up."""
         runtime = AsyncLocalRuntime()
+        request.addfinalizer(runtime.close)
 
         # Execute a workflow
         builder = WorkflowBuilder()
-        builder.add_node(SimpleSyncNode, "sync_node", {})
+        with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+            builder.add_node(SimpleSyncNode, "sync_node", {})
         workflow = builder.build()
 
         await runtime.execute_workflow_async(workflow, {})

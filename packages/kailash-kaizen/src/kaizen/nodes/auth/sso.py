@@ -15,10 +15,14 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from kailash.nodes.auth.sso import SSOAuthenticationNode as CoreSSONode
+from kailash.utils.secure_logging import (
+    safe_exception_frames,
+    safe_type_name,
+    sanitize_log_value,
+)
 from kaizen.core.structured_output import create_structured_output_config
 from kaizen.nodes._env_model import detect_provider, resolve_default_model
 from kaizen.nodes.ai import LLMAgentNode
-from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 from kaizen.nodes.auth.signatures import (
     SSOFieldMappingSignature,
     SSORoleAssignmentSignature,
@@ -228,17 +232,24 @@ Use empty strings "" for missing text fields. Return ONLY the JSON object, no ex
             response_content = result.get("response", {}).get("content", "{}")
             mapped_data = json.loads(response_content)
 
+            # `provider` is caller/IdP-supplied, so it is flattened before it
+            # reaches the record. The two `len()` operands are ints and carry
+            # no taint.
             logger.info(
-                f"AI field mapping for {provider}: mapped {len(attributes)} fields to {len(mapped_data)} internal fields"
+                f"AI field mapping for {sanitize_log_value(provider)}: "
+                f"mapped {len(attributes)} fields to {len(mapped_data)} internal fields"
             )
 
             return mapped_data
 
         except Exception as e:
             logger.warning(
-                "AI field mapping failed for %s, falling back to rule-based: %s",
-                provider,
-                sanitize_provider_error(e, "LLM"),
+                "AI field mapping failed for %s, falling back to rule-based",
+                sanitize_log_value(provider),
+                extra={
+                    "error_type": safe_type_name(e),
+                    "error_frames": safe_exception_frames(e),
+                },
             )
             # Fallback to Core SDK rule-based mapping
             return self._map_attributes(attributes, provider)
@@ -315,15 +326,19 @@ Return ONLY the JSON object, no explanation."""
                 roles.insert(0, "user")
 
             logger.info(
-                f"AI role assignment for {attributes.get('email', 'unknown')}: {roles}"
+                "AI role assignment completed",
+                extra={"role_count": len(roles) if isinstance(roles, list) else None},
             )
 
             return roles
 
         except Exception as e:
             logger.warning(
-                "AI role assignment failed, falling back to default: %s",
-                sanitize_provider_error(e, "LLM"),
+                "AI role assignment failed, falling back to default",
+                extra={
+                    "error_type": safe_type_name(e),
+                    "error_frames": safe_exception_frames(e),
+                },
             )
             # Fallback to safe default - always include "user" role
             return ["user"]

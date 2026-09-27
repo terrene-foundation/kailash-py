@@ -22,6 +22,8 @@ import warnings
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple
 
+from kailash.utils.finalizer import warn_unclosed
+
 from .redis_manager import RedisCacheManager
 
 logger = logging.getLogger(__name__)
@@ -404,11 +406,10 @@ class AsyncRedisCacheAdapter:
         Per ``rules/patterns.md`` § Async Resource Cleanup, callers MUST
         invoke this (or use the adapter as an ``async with`` context) to
         release the executor's worker threads. ``__del__`` emits a
-        ``ResourceWarning`` AND calls ``shutdown(wait=False)`` (a purely
-        synchronous, non-logging call that is safe from a finalizer); it does
-        NOT call ``close``/``close_async``, because their ``logger.debug`` line
-        would fire from inside GC's logging machinery and deadlock against the
-        root logging lock (see ``__del__``).
+        ``ResourceWarning`` and nothing else — it performs no cleanup at all,
+        because every drain path re-acquires a non-reentrant lock that the
+        finalizing thread may already hold (see ``__del__`` for the full
+        argument, and issue #2107).
 
         The join is offloaded via ``asyncio.to_thread`` so ``shutdown(wait=True)``
         (which blocks until every worker thread exits) does not freeze the event
@@ -436,8 +437,8 @@ class AsyncRedisCacheAdapter:
         self._closed = True
         logger.debug("AsyncRedisCacheAdapter executor shut down (sync)")
 
-    def __del__(self, _warnings=warnings) -> None:
-        """Emit ResourceWarning if the adapter was not closed.
+    def __del__(self, _warn=warn_unclosed) -> None:
+        """Warn and RETURN. This finalizer performs no cleanup, deliberately.
 
         Per ``rules/patterns.md`` § Async Resource Cleanup, ``__del__``
         MUST NOT call ``close()``, ``cleanup()``, or any method that
@@ -446,38 +447,35 @@ class AsyncRedisCacheAdapter:
         already held by the finalizer thread. Issue #1000 originated
         from a ``logger.debug(...)`` call AFTER the executor shutdown.
 
-        ``ThreadPoolExecutor.shutdown(wait=False)`` itself is safe — it
-        is purely synchronous (no logging, no event loop, no async), and
-        only acquires an instance-local ``_shutdown_lock`` to signal
-        workers via the work-queue. Calling it from ``__del__`` lets the
-        worker threads exit so Python's ``_Py_Finalize`` does not block
-        on non-daemon thread shutdown. The ResourceWarning is still
-        emitted so the leak is loud — the caller's contract remains
-        ``await adapter.close_async()`` for deterministic cleanup.
+        The previous body also called ``self._executor.shutdown(wait=False)``,
+        justified as safe because it "only acquires an instance-local
+        ``_shutdown_lock``". That reasoning was wrong, and issue #2107 is
+        exactly the class it missed: *instance-local* is not the relevant
+        property — *non-reentrant* is. ``ThreadPoolExecutor._shutdown_lock``
+        is a plain ``_thread.lock``, and ``ThreadPoolExecutor.submit()`` holds
+        it across its entire body. A finalizer fires at an arbitrary bytecode
+        boundary on whichever thread drops the last reference, so a GC pass
+        inside ``submit()`` runs this finalizer on a thread already holding
+        that lock, and ``shutdown()`` re-acquiring it there deadlocks the
+        process permanently. The enclosing swallow-and-continue guards could
+        not help: a deadlock is not an exception, so nothing was ever raised
+        for them to catch — all they did was hide genuine failures
+        (``zero-tolerance.md`` Rule 3).
 
-        The ``_warnings=warnings`` default arg keeps the ``warnings``
-        module reachable even during interpreter shutdown when module
-        globals have been torn down.
+        Dropping the ``shutdown`` call does NOT strand the worker threads at
+        interpreter exit: ``concurrent.futures.thread`` registers its own
+        ``_python_exit`` hook via ``threading._register_atexit``, which drains
+        every executor's work queue and joins its threads. That hook runs
+        outside GC, where taking the lock is safe. So the choice was never
+        "leak vs deadlock" — it is "let the stdlib's own atexit hook drain the
+        pool" vs "re-enter a non-reentrant lock from a GC callback".
+
+        Deterministic cleanup remains the caller's job, via
+        ``await adapter.close_async()`` / ``adapter.close()``.
         """
         if not getattr(self, "_closed", True):
-            try:
-                _warnings.warn(
-                    "AsyncRedisCacheAdapter not closed; call "
-                    "'await adapter.close_async()' before the adapter is "
-                    "garbage collected — the executor thread pool will "
-                    "leak otherwise.",
-                    ResourceWarning,
-                    stacklevel=2,
-                    source=self,
-                )
-            except Exception:
-                # Interpreter shutdown or recursive GC — best-effort only.
-                pass
-            # Sync thread-pool drain. NOT a log/close/cleanup call —
-            # see docstring for the rule-pragmatics distinction.
-            executor = getattr(self, "_executor", None)
-            if executor is not None:
-                try:
-                    executor.shutdown(wait=False)
-                except Exception:
-                    pass
+            _warn(
+                self,
+                "Call 'await adapter.close_async()' (or adapter.close()) to "
+                "release the executor thread pool.",
+            )

@@ -1,0 +1,100 @@
+{
+  "ran": true,
+  "time": "2026-09-27T15:17:17.001797+00:00",
+  "head": "68d4dbd4185435a03cd43604c12966558c9c934e",
+  "required_checks": {
+    "url": "https://api.github.com/repos/terrene-foundation/kailash-py/branches/main/protection/required_status_checks",
+    "strict": true,
+    "contexts": [
+      "CodeQL",
+      "Analyze Python",
+      "test-with-infrastructure"
+    ],
+    "contexts_url": "https://api.github.com/repos/terrene-foundation/kailash-py/branches/main/protection/required_status_checks/contexts",
+    "checks": [
+      {
+        "context": "CodeQL",
+        "app_id": 57789
+      },
+      {
+        "context": "Analyze Python",
+        "app_id": 15368
+      },
+      {
+        "context": "test-with-infrastructure",
+        "app_id": 15368
+      }
+    ]
+  },
+  "current_codeql_check": [
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-27T13:23:10Z",
+      "conclusion": "FAILURE",
+      "detailsUrl": "https://github.com/terrene-foundation/kailash-py/runs/108628061845",
+      "name": "CodeQL",
+      "startedAt": "2026-09-27T13:23:01Z",
+      "status": "COMPLETED",
+      "workflowName": ""
+    }
+  ],
+  "observed_policy": "Legacy branch protection explicitly requires CodeQL from app57789, Analyze Python and test-with-infrastructure from app15368, strict true. Rulesets and effective main rules APIs both return empty arrays. Advanced local workflow runs security-and-quality; neither workflow nor codeql-config declares severity failure thresholds. Default-setup is not-configured. Code-security-configuration returned204 with no configuration body.",
+  "severity_threshold_verdict": "UNRESOLVED by inspected supported repository APIs. No documented threshold field was returned; do not substitute customary defaults for actual repository settings. Three exposed annotations are failure-level, six warning and91notice; annotation display severity alone does not prove the configured check threshold.",
+  "aggregate": {
+    "count": 427,
+    "categories": {
+      "security_high": 8,
+      "security_medium": 32,
+      "error": 7,
+      "warning": 53,
+      "note": 327
+    },
+    "returned_annotations_page1": 100,
+    "page2": 0,
+    "mapped_failure_rows": [
+      {
+        "path": "packages/kailash-dataflow/src/dataflow/core/nodes.py",
+        "line": 372,
+        "title": "Missing call to superclass `__init__` during object initialization",
+        "candidate_alert_ids": [
+          10967
+        ]
+      },
+      {
+        "path": "packages/kailash-kaizen/src/kaizen/core/agents.py",
+        "line": 74,
+        "title": "Module-level cyclic import",
+        "candidate_alert_ids": [
+          10936
+        ]
+      },
+      {
+        "path": "packages/kailash-kaizen/src/kaizen/core/framework.py",
+        "line": 15,
+        "title": "Module-level cyclic import",
+        "candidate_alert_ids": [
+          185
+        ]
+      }
+    ],
+    "all_annotation_membership": "/tmp/csq16-repair-codeql-annotation-membership.json",
+    "decomposition_verdict": "Only exposed100 annotation rows map to actual alert IDs. Current downloaded2240-result SARIF has no baselineState fields; result properties expose alertNumber andalertUrl but no PR-new-membership. PRopen query returned2208branch rows, not427. Full blocking ID set cannot be established from these snapshots;58 absent-main identities remain a separate comparison."
+  },
+  "known_falsifying_results": {
+    "required_check": "CodeQL absent from required_status_checks would refute required gate; it is explicitly present.",
+    "complete_annotation_decomposition": "Additionalpage rows or427annotations would permit fuller reconstruction; actualpage2empty andcheckadvertises100.",
+    "sarif_membership": "Any baselineState or dedicatedPRnew property would enable direct membership; all2240results lack baselineState."
+  },
+  "scope": "Read-only same-repository ghGET/PRview + localworkflow/snapshot reads. No settings changes, dismissals, remotejobs or source writes. Currenthead remains68d4; local unpushed repairs have no current scanner result.",
+  "snapshots": {
+    "/tmp/csq16-codeql-policy-annotations-page2.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "/tmp/csq16-codeql-policy-default-setup.json": "ae940f55084037c8c1fcb8a71a1f026d5da5038857fada73bc51ce0087d7bb5b",
+    "/tmp/csq16-codeql-policy-rulesets.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "/tmp/csq16-codeql-policy-branch-protection.json": "7b20c4a5da9f00c1cdcaf27a5089aea3af72affd7c715973c35ee96ea42e3919",
+    "/tmp/csq16-codeql-policy-pr-current.json": "539ceda6c075b1859983cdc907719fbb4cfdab243db93ae6456eeb8856ddd038",
+    "/tmp/csq16-codeql-policy-security-configuration-http.txt": "9f7fe2b662cad6c3eaeb01606063a5c70c151128e864b3b2b921cf1487be3b7c",
+    "/tmp/csq16-codeql-policy-security-configuration.json": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/tmp/csq16-codeql-policy-effective-rules.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "/tmp/csq16-codeql-policy-annotations-page1.json": "329142fa0c533f17fcca6beb52d6502b4fd3d473fcc8782c2c797caad8d5671f"
+  }
+}

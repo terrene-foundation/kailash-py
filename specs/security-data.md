@@ -306,7 +306,7 @@ Security hardening for the Enterprise Agent Trust Protocol (EATP).
 - `on*=` event handler attributes
 - `data:text/html` URIs
 
-Applies recursively to nested dicts and lists.
+Applies recursively to nested dicts and lists, including dictionary keys. Safe HTML formatting (for example, `<b>` and `<em>`) is retained through the required `nh3` sanitizer; active elements and unsafe attributes are removed. Legacy token removal runs before final HTML sanitization, and the result is stabilized so repeated sanitization does not alter it again. Each string is limited to 8192 characters before any legacy regex or HTML parsing, and to 16 complete cleanup/sanitizer passes. An oversized key or value raises `ValidationError` before parsing. If it does not stabilize, `ValidationError` rejects the metadata without returning a partial result or including its content in the error. Literal entity text remains escaped rather than becoming active markup; serialization may normalize entities and safe attributes. `UNSAFE_PATTERNS` remains available as the legacy pattern list, while the maintained HTML sanitizer enforces the output boundary (source: `src/kailash/trust/security.py:215-220`, `src/kailash/trust/security.py:318-390`).
 
 ### 10.2 Rate Limiting (`TrustRateLimiter`)
 

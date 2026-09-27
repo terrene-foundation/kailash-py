@@ -198,7 +198,9 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         super().__init__(name=name, **kwargs)
 
         # Initialize audit logging
-        self.audit_log_node = AuditLogNode(name=f"{name}_audit_log")
+        self.audit_log_node = AuditLogNode(
+            name=f"{name}_audit_log", log_name_parts=(name, "_audit_log")
+        )
 
         # PII detection patterns
         self.pii_patterns = {

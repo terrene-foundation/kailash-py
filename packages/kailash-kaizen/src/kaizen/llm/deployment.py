@@ -22,7 +22,10 @@ Invariants enforced at type level:
   construction, no silent acceptance of unknown fields.
 * `Endpoint.base_url` routes through `url_safety.check_url()` before the
   model is finalized; validation failures raise `InvalidEndpoint` which is a
-  typed `LlmClientError`.
+  typed `LlmClientError`. Construction runs the OFFLINE checks only
+  (`resolve_dns=False`) — the DNS half belongs to
+  `http_client.SafeDnsResolver.check_host`, which owns the address the
+  socket actually connects to. See `Endpoint._validate_base_url` (#2168).
 * `ResolvedModel.with_extra_header(name, ...)` rejects the 7 forbidden header
   names case-insensitively — any of these would let the caller override the
   auth / routing layer installed by the deployment.
@@ -112,6 +115,40 @@ class Endpoint(BaseModel):
         `check_url`, which sees only the ASCII punycode and has no way to
         detect the confusable. Rejecting at the raw layer is the only place
         the Unicode form is still visible.
+
+        # Why construction does NOT resolve DNS (#2168)
+
+        `check_url` is called with `resolve_dns=False`, so construction runs
+        the OFFLINE half only: scheme, metadata hostname, encoded-IP and
+        `inet_aton` short-form bypasses, and literal-IP classification. All
+        of those are decidable from the string and stay here.
+
+        The DNS half is deliberately NOT run here, because construction is
+        not the moment of egress. `http_client.SafeDnsResolver.check_host`
+        re-resolves and re-classifies immediately before the TCP connect, and
+        it — not this validator — owns the address the socket actually uses.
+        A verdict computed here is stale by send time; an attacker who
+        controls the second lookup is unaffected by the first.
+
+        This was MEASURED rather than assumed. Comparing three ladders over
+        27 hosts (construction with DNS, construction without DNS, and the
+        connect-time gate), every address that the construction-time resolve
+        rejects and that the offline half would admit is independently
+        rejected by `check_host`, with the SAME reason bucket — `loopback`,
+        `metadata_service`, `private_ipv4`, `ipv4_mapped`, `link_local`,
+        `resolution_failed`. Zero addresses reach a TCP SYN that did not
+        before. Pinned by
+        `tests/regression/test_issue_2168_endpoint_construction_no_dns.py`.
+
+        What this removes is therefore cost, not coverage: network I/O inside
+        a constructor, and the rejection of well-formed endpoints whose DNS
+        is merely unpublished (an unreleased AWS Bedrock region constructs
+        now, and still cannot be connected to until AWS publishes the record,
+        because `check_host` raises `resolution_failed` at send time).
+
+        The default on `check_url` itself stays `resolve_dns=True` — this is
+        a call-site decision, not a widening of the shared guard, and no
+        config field or environment variable can reach it.
         """
         if isinstance(v, str):
             # ASCII-host check runs FIRST so a non-resolving IDN reject comes
@@ -126,7 +163,10 @@ class Endpoint(BaseModel):
                 host.encode("ascii")
             except UnicodeEncodeError:
                 raise InvalidEndpoint("malformed_url", raw_url=v)
-            check_url(v)
+            # `resolve_dns=False`: run every check DECIDABLE OFFLINE, and
+            # leave the DNS half to the gate that owns the socket. See the
+            # method docstring for the measurement behind this (#2168).
+            check_url(v, resolve_dns=False)
         return v
 
 

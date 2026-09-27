@@ -123,9 +123,10 @@ except ImportError:
     pass  # Agent nodes available when kaizen-agents is installed
 
 # Core framework components
-from kaizen.core.agents import (  # Legacy agent for internal use; noqa: F401 - Re-exported for backward compatibility
-    Agent as CoreAgent,
-)
+# Legacy agent re-export; keep its F401 scope separate from AgentManager.
+from kaizen.core.agents import Agent as CoreAgent  # noqa: F401
+
+# isort: split
 from kaizen.core.agents import AgentManager
 from kaizen.core.config import KaizenConfig, _global_config_manager
 

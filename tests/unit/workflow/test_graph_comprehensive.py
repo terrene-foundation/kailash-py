@@ -9,6 +9,7 @@ This test file focuses on the missing coverage areas identified in graph.py:
 """
 
 import json
+import logging
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -20,6 +21,7 @@ import yaml
 from pydantic import BaseModel
 
 from kailash.nodes.base import Node, NodeParameter
+from kailash.nodes.data.readers import CSVReaderNode
 from kailash.sdk_exceptions import (
     ConnectionError,
     ExportException,
@@ -38,12 +40,14 @@ class MockNode(Node):
         """Initialize with flexible parameter handling."""
         self.name = name or id or "mock_node"
         self.id = id or name or "mock_node"
-        self.config = kwargs
         self.executed = False
         self.execution_count = 0
         self.return_value = kwargs.get("return_value", {"result": "success"})
         self.should_fail = kwargs.get("should_fail", False)
         self.required_params = kwargs.get("required_params", [])
+        super().__init__(
+            name=self.name, _node_id=kwargs.pop("_node_id", self.id), **kwargs
+        )
 
     def get_parameters(self):
         """Get node parameters."""
@@ -85,7 +89,7 @@ class NodeWithNameConstructor(Node):
 
     def __init__(self, name, **kwargs):
         self.name = name
-        self.config = kwargs
+        super().__init__(name=name, **kwargs)
 
     def get_parameters(self):
         return {}
@@ -101,8 +105,7 @@ class NodeWithIdConstructor(Node):
     """Node that requires '_node_id' parameter in constructor (updated for namespace separation)."""
 
     def __init__(self, _node_id, **kwargs):
-        self._node_id = _node_id
-        self.config = kwargs
+        super().__init__(_node_id=_node_id, **kwargs)
 
     def get_parameters(self):
         return {}
@@ -119,7 +122,7 @@ class NodeWithInvalidConstructor(Node):
 
     def __init__(self, required_param, **kwargs):
         self.required_param = required_param
-        self.config = kwargs
+        super().__init__(**kwargs)
 
     def get_parameters(self):
         return {}
@@ -430,6 +433,11 @@ class TestWorkflowExecution:
         assert run_id is None
         # The runtime should not be called since workflow.run() calls workflow.execute() directly
         mock_runtime.execute.assert_not_called()
+        assert self.workflow._node_instances["node1"].execution_count == 1
+        assert self.workflow._node_instances["node2"].execution_count == 1
+        assert (
+            self.workflow._node_instances["node2"].last_inputs["input_data"] == "data1"
+        )
 
     @patch("kailash.runtime.local.LocalRuntime")
     def test_execute_method(self, mock_runtime_class):
@@ -493,7 +501,7 @@ class TestWorkflowStateWrapper:
         assert state_wrapper._state.data == ""
 
     @patch("kailash.runtime.local.LocalRuntime")
-    def test_execute_with_state(self, mock_runtime_class):
+    def test_execute_with_state(self, mock_runtime_class, caplog):
         """Test executing workflow with state."""
         # Mock runtime
         mock_runtime = Mock()
@@ -503,13 +511,42 @@ class TestWorkflowStateWrapper:
         )
         mock_runtime_class.return_value = mock_runtime
 
+        class StateUpdateNode(Node):
+            def get_parameters(self):
+                return {
+                    "state_wrapper": NodeParameter(
+                        name="state_wrapper", type=WorkflowStateWrapper, required=False
+                    )
+                }
+
+            def run(self, **inputs):
+                wrapper = inputs["state_wrapper"]
+                return {
+                    "result": "success",
+                    "state_wrapper": wrapper.merge(
+                        counter=wrapper.get_in(["counter"]) + 1, data="updated"
+                    ),
+                }
+
+        self.workflow = Workflow(workflow_id="state_update", name="state_update")
+        self.workflow.add_node("node1", StateUpdateNode)
         state = StateModel(counter=5, data="initial")
 
-        final_state, results = self.workflow.execute_with_state(state)
+        with caplog.at_level(logging.WARNING):
+            final_state, results = self.workflow.execute_with_state(state)
 
-        # results is a dictionary, not a tuple
-        assert results == {"node1": {"result": "success"}}
+        # Preserve the success result while requiring the final wrapped state.
+        assert set(results) == {"node1"}
+        assert set(results["node1"]) == {"result", "state_wrapper"}
+        assert results["node1"]["result"] == "success"
+        assert results["node1"]["state_wrapper"].get_state() is final_state
         assert isinstance(final_state, StateModel)
+        assert final_state.counter == 6
+        assert final_state.data == "updated"
+        assert state.counter == 5
+        assert state.data == "initial"
+        assert final_state is not state
+        assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
         # The runtime should not be called since execute_with_state calls execute() directly
         mock_runtime.execute.assert_not_called()
 
@@ -648,16 +685,46 @@ class TestWorkflowExportImport:
             assert workflow.author == "Import Author"
             assert workflow.metadata["custom"] == "value"
 
-    def test_export_to_kailash(self):
+    def test_export_to_kailash(self, caplog):
         """Test exporting to Kailash format."""
         with tempfile.TemporaryDirectory() as temp_dir:
             export_path = Path(temp_dir) / "exported_workflow.yaml"
 
-            self.workflow.export_to_kailash(str(export_path))
+            workflow = Workflow(workflow_id="csv_export", name="CSV export")
+            workflow.add_node(
+                "manifest", CSVReaderNode, file_path="manifest.csv", delimiter=";"
+            )
+            workflow.add_node("records", CSVReaderNode, headers=False)
+            # The manifest supplies the next CSV file's path.
+            workflow.connect("manifest", "records", {"data.0.file_path": "file_path"})
+            with caplog.at_level(logging.WARNING):
+                workflow.export_to_kailash(str(export_path))
 
-            # Verify file was created
             assert export_path.exists()
             assert export_path.is_file()
+            exported = yaml.safe_load(export_path.read_text())
+            assert set(exported["nodes"]) == {"manifest", "records"}
+            for node in exported["nodes"].values():
+                assert node["type"] == "CSVReaderNode"
+                assert node["container"]["image"] == "kailash/csv-reader:latest"
+            assert exported["nodes"]["manifest"]["config"] == {
+                "file_path": "manifest.csv",
+                "delimiter": ";",
+                "headers": True,
+            }
+            assert exported["nodes"]["records"]["config"] == {
+                "headers": False,
+                "delimiter": ",",
+            }
+            assert exported["connections"] == [
+                {
+                    "from": "manifest",
+                    "to": "records",
+                    "from_output": "data.0.file_path",
+                    "to_input": "file_path",
+                }
+            ]
+            assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
 
 
 class TestWorkflowErrorHandling:

@@ -348,6 +348,63 @@ Local `AgentSpec` fields are mapped to SDK `AgentSpec`:
 - `timedelta max_lifetime` -> float seconds (or None)
 - All other fields map directly
 
+
+### 14.3 Opt-in Owned Execution (#2249)
+
+`spawn_agent()` still creates Pending metadata and never starts executable work.
+`AgentFactory.dispatch(instance_id, executable)` explicitly binds one zero-argument
+async callable to that instance. Bind existing callback arguments with
+`functools.partial`; for example, bind `AsyncPlanExecutor.execute` to its Plan.
+`L3Runtime.dispatch_agent` and `AgentLifecycleManager.dispatch_agent` delegate to
+this same factory. Duplicate dispatch, dispatch during termination, and synchronous
+callables are rejected before invocation. Source: `AgentFactory.dispatch`,
+`packages/kailash-kaizen/src/kaizen/l3/factory/factory.py:279-329`;
+`L3Runtime.dispatch_agent`, `packages/kailash-kaizen/src/kaizen/l3/integration.py:143-160`;
+`AgentLifecycleManager.dispatch_agent`, `packages/kaizen-agents/src/kaizen_agents/_agent_lifecycle.py:87-103`.
+
+`OwnedExecution` retains the exact callable object and an execution UUID alongside
+its instance ID. `result()` returns the original result or raises the original
+exception after lifecycle and integration cleanup settles; a cleanup failure is
+raised through the same result observer. Cancelling a result observer does not
+cancel owned work. Immutable
+snapshots distinguish `metadata_only`, `not_started`, `never_started`, `running`,
+`still_running`, `returned`, `failed`, and `cancelled`. `local_stopped` is True only
+when the owned asyncio Task is done, False while it is live, and None when no
+execution was bound. Remote effects are `not_started` only before the callable
+was entered, otherwise `unknown`; metadata-only execution is also unknown.
+Source: `OwnedExecution.result` / `OwnedExecution.snapshot`,
+`packages/kailash-kaizen/src/kaizen/l3/factory/execution.py:17-108`.
+
+`terminate_owned(instance_id, reason, timeout=None)` requests cancellation
+across the captured subtree, deepest first, and returns a `TerminationReport`.
+A finite nonnegative timeout bounds waiting, not executable runtime. A task that
+suppresses cancellation remains nonterminal; spawn/dispatch remain blocked on the
+subtree until every owned task actually stops, even if the termination caller is
+cancelled. Repeated termination does not interrupt cancellation cleanup again.
+Completed work retains its outcome, including work whose done callback has not
+run yet. Both wrappers expose `terminate_owned_agent`; legacy `terminate` and
+`AgentLifecycleManager.terminate_agent` retain their None return and wait for owned
+tasks to stop. Source: `AgentFactory.terminate_owned` / `_settle_terminations`,
+`packages/kailash-kaizen/src/kaizen/l3/factory/factory.py:397-521`.
+
+Ownership is process-local and scoped to the bound asyncio Task. It does not prove
+that remote calls, threads, subprocesses, or detached tasks stopped or rolled back.
+It does not automatically connect metadata spawns to PlanMonitor, provider calls,
+or GovernedSupervisor execution. Callers explicitly dispatch the intended existing
+async execution path. Manual factory and registry terminal-state updates are rejected for owned
+executions; the task outcome or completed termination owns those transitions.
+The registry also prevents removal of live owned executions or their ancestors.
+Metadata-only registry state updates remain supported.
+Registry ownership and termination gates are shared across factories using that
+registry. Terminal cleanup uses the originating factory to close router channels
+and deregister the enforcer once, including return/failure/cancel and metadata
+termination; cleanup is independent of externally mutable AgentInstance state.
+Source: `AgentInstanceRegistry.update_state` / `_cleanup_terminal`,
+`packages/kailash-kaizen/src/kaizen/l3/factory/registry.py:255-292`.
+Source: `OwnedExecution` scope contract,
+`packages/kailash-kaizen/src/kaizen/l3/factory/execution.py:41-48`, and
+`AgentFactory.update_state`, `packages/kailash-kaizen/src/kaizen/l3/factory/factory.py:542-559`.
+
 ---
 
 ## 15. Message Transport

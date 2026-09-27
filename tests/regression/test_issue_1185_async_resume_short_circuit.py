@@ -139,7 +139,8 @@ def _build_two_node_workflow(marker_dir: Path, *, node_b_fails: bool = False):
     return wb.build()
 
 
-async def _make_engine(ckpt_conn: ConnectionManager):
+@pytest.fixture
+async def durable_engine(ckpt_conn: ConnectionManager):
     """Construct a DurableExecutionEngine wrapping AsyncLocalRuntime with a
     real SQLite-backed DBCheckpointStore (checkpoint_after_each_node=True
     is set by the builder when a checkpoint_store is configured)."""
@@ -149,7 +150,11 @@ async def _make_engine(ckpt_conn: ConnectionManager):
     store = DBCheckpointStore(ckpt_conn)
     await store.initialize()
     engine = DurableExecutionEngine.builder().checkpoint_store(store).build()
-    return engine
+    try:
+        yield engine
+    finally:
+        engine.runtime.close()
+        assert engine.runtime.ref_count == 0
 
 
 def _node_b_value(results: dict) -> str:
@@ -176,7 +181,7 @@ def _node_b_value(results: dict) -> str:
 
 
 async def test_async_runtime_skips_completed_nodes_on_resume(
-    ckpt_conn: ConnectionManager, marker_dir: Path
+    durable_engine, marker_dir: Path
 ):
     """First run completes both nodes; a second run with the same
     idempotency_key MUST short-circuit both from the saved checkpoint.
@@ -186,7 +191,7 @@ async def test_async_runtime_skips_completed_nodes_on_resume(
     returns the correct final result, proving restored outputs reach
     dependents.
     """
-    engine = await _make_engine(ckpt_conn)
+    engine = durable_engine
     workflow = _build_two_node_workflow(marker_dir)
     key = f"run-{uuid.uuid4().hex[:8]}"
 
@@ -225,7 +230,7 @@ async def test_async_runtime_skips_completed_nodes_on_resume(
 
 
 async def test_async_runtime_partial_resume_runs_only_remaining_node(
-    ckpt_conn: ConnectionManager, marker_dir: Path
+    durable_engine, marker_dir: Path
 ):
     """First run completes node_a then node_b raises (process "stops"
     after node_a checkpointed). The resume MUST replay node_a from the
@@ -235,7 +240,7 @@ async def test_async_runtime_partial_resume_runs_only_remaining_node(
     that node_a's restored output flows to node_b on the resume so node_b
     can complete with the correct concatenated value.
     """
-    engine = await _make_engine(ckpt_conn)
+    engine = durable_engine
     key = f"run-{uuid.uuid4().hex[:8]}"
 
     # First run — node_b raises after node_a completes + checkpoints.

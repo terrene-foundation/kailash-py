@@ -11,35 +11,45 @@ import asyncio
 import threading
 import time
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import pytest
 
+import kailash.runtime.watchdog as watchdog_module
 from kailash.runtime.watchdog import EventLoopWatchdog, StallReport
+
+
+def _block_until_stall(reported: threading.Event) -> None:
+    """Keep the loop blocked until the monitoring thread observes the stall."""
+    assert reported.wait(timeout=5.0), "Watchdog did not report the blocked loop"
+
+
+async def _wait_for_recovery(wd: EventLoopWatchdog) -> None:
+    """Yield to heartbeats until the monitoring thread acknowledges recovery."""
+
+    async def recovered() -> None:
+        while wd.is_stalled:
+            await asyncio.sleep(0.01)
+
+    await asyncio.wait_for(recovered(), timeout=5.0)
 
 
 @pytest.mark.asyncio
 async def test_watchdog_detects_stall() -> None:
     """Block the event loop and verify on_stall callback fires."""
     stall_reports: list[StallReport] = []
+    reported = threading.Event()
 
     def on_stall(report: StallReport) -> None:
         stall_reports.append(report)
+        reported.set()
 
     async with EventLoopWatchdog(
         heartbeat_interval_s=0.05,
         stall_threshold_s=0.2,
         on_stall=on_stall,
     ) as wd:
-        # Let the heartbeat coroutine run a few cycles first
-        await asyncio.sleep(0.15)
-
-        # Block the event loop synchronously -- the heartbeat coroutine
-        # cannot post updates while time.sleep holds the loop.
-        time.sleep(0.5)
-
-        # Give the watchdog thread time to detect the stall and the
-        # event loop to process pending callbacks
-        await asyncio.sleep(0.2)
+        _block_until_stall(reported)
 
     assert len(stall_reports) >= 1, "Expected at least one stall report"
     report = stall_reports[0]
@@ -74,18 +84,18 @@ async def test_watchdog_no_false_positive() -> None:
 async def test_watchdog_captures_stack_traces() -> None:
     """Verify StallReport contains task stack information."""
     stall_reports: list[StallReport] = []
+    reported = threading.Event()
 
     def on_stall(report: StallReport) -> None:
         stall_reports.append(report)
+        reported.set()
 
     async with EventLoopWatchdog(
         heartbeat_interval_s=0.05,
         stall_threshold_s=0.2,
         on_stall=on_stall,
     ) as wd:
-        await asyncio.sleep(0.1)
-        time.sleep(0.4)
-        await asyncio.sleep(0.15)
+        _block_until_stall(reported)
 
     assert len(stall_reports) >= 1
     report = stall_reports[0]
@@ -125,19 +135,23 @@ async def test_watchdog_configurable_thresholds() -> None:
     """Different threshold configurations work correctly."""
     # Tight thresholds -- short stall detected
     stall_reports_tight: list[StallReport] = []
+    reported = threading.Event()
+
+    def on_stall(report: StallReport) -> None:
+        stall_reports_tight.append(report)
+        reported.set()
 
     async with EventLoopWatchdog(
         heartbeat_interval_s=0.02,
         stall_threshold_s=0.1,
-        on_stall=lambda r: stall_reports_tight.append(r),
+        on_stall=on_stall,
     ):
-        await asyncio.sleep(0.05)
-        time.sleep(0.2)
-        await asyncio.sleep(0.1)
+        _block_until_stall(reported)
 
     assert len(stall_reports_tight) >= 1
+    assert stall_reports_tight[0].stall_duration_s >= 0.1
 
-    # Loose thresholds -- same stall NOT detected
+    # Loose thresholds -- a 0.2s stall is below the threshold
     stall_reports_loose: list[StallReport] = []
 
     async with EventLoopWatchdog(
@@ -154,39 +168,66 @@ async def test_watchdog_configurable_thresholds() -> None:
     ), "Loose threshold should not detect a 0.2s stall"
 
 
+@pytest.mark.parametrize("threshold, expected_reports", [(0.1, 1), (1.0, 0)])
+def test_watchdog_threshold_decision(
+    monkeypatch: pytest.MonkeyPatch, threshold: float, expected_reports: int
+) -> None:
+    """The same sampled 0.25s gap crosses only the configured tight threshold."""
+    wd = EventLoopWatchdog(
+        heartbeat_interval_s=0.02,
+        stall_threshold_s=threshold,
+    )
+    wd._last_heartbeat = 10.0
+    waits = 0
+
+    def wait_for_one_sample(timeout: float) -> bool:
+        nonlocal waits
+        waits += 1
+        if waits > 1:
+            wd._stop_event.set()
+        return wd._stop_event.is_set()
+
+    # Exercise the production sampling decision once, with no thread scheduling
+    # or wall-clock upper bound. The real-thread tests cover delivery and cleanup.
+    with monkeypatch.context() as sample:
+        sample.setattr(wd._stop_event, "wait", wait_for_one_sample)
+        sample.setattr(
+            watchdog_module, "time", SimpleNamespace(monotonic=lambda: 10.25)
+        )
+        wd._watchdog_loop()
+
+    assert len(wd.stall_reports) == expected_reports
+    assert wd.is_stalled is bool(expected_reports)
+    if expected_reports:
+        assert wd.stall_reports[0].stall_duration_s == 0.25
+
+
 @pytest.mark.asyncio
 async def test_watchdog_is_stalled_property() -> None:
     """Property reflects current stall state."""
+    reported = threading.Event()
     async with EventLoopWatchdog(
         heartbeat_interval_s=0.05,
         stall_threshold_s=0.2,
+        on_stall=lambda report: reported.set(),
     ) as wd:
-        # Before any stall
         assert wd.is_stalled is False
-
-        await asyncio.sleep(0.1)
-
-        # Block the loop
-        time.sleep(0.4)
-
-        # Give watchdog thread time to detect
-        await asyncio.sleep(0.15)
-
-        # Right after recovery, is_stalled should have cleared because
-        # the heartbeat resumes once we await (yielding back to the loop).
-        # The watchdog thread sees fresh heartbeats and clears the flag.
-        # But there is a window where it might still be True.
-        # We check that at least one stall was recorded.
+        _block_until_stall(reported)
+        assert wd.is_stalled is True
         assert len(wd.stall_reports) >= 1
+        await _wait_for_recovery(wd)
+        assert wd.is_stalled is False
 
 
 @pytest.mark.asyncio
 async def test_watchdog_multiple_stalls() -> None:
     """Stall, recover, stall again -- all reported."""
     stall_reports: list[StallReport] = []
+    reported = threading.Event()
 
     def on_stall(report: StallReport) -> None:
         stall_reports.append(report)
+        reported.set()
 
     async with EventLoopWatchdog(
         heartbeat_interval_s=0.03,
@@ -194,20 +235,17 @@ async def test_watchdog_multiple_stalls() -> None:
         on_stall=on_stall,
     ) as wd:
         # First stall
-        await asyncio.sleep(0.08)
-        time.sleep(0.3)
-        await asyncio.sleep(0.1)
+        _block_until_stall(reported)
 
         first_count = len(stall_reports)
         assert first_count >= 1, "First stall not detected"
 
-        # Recovery period -- let heartbeats flow to clear stall state
-        for _ in range(10):
-            await asyncio.sleep(0.03)
+        await _wait_for_recovery(wd)
+        assert wd.is_stalled is False
+        reported.clear()
 
         # Second stall
-        time.sleep(0.3)
-        await asyncio.sleep(0.1)
+        _block_until_stall(reported)
 
     assert (
         len(stall_reports) >= 2
@@ -267,10 +305,12 @@ async def test_watchdog_double_stop_is_safe() -> None:
 async def test_watchdog_callback_error_does_not_crash() -> None:
     """A failing on_stall callback does not crash the watchdog thread."""
     call_count = 0
+    reported = threading.Event()
 
     def bad_callback(report: StallReport) -> None:
         nonlocal call_count
         call_count += 1
+        reported.set()
         raise RuntimeError("callback exploded")
 
     async with EventLoopWatchdog(
@@ -278,11 +318,15 @@ async def test_watchdog_callback_error_does_not_crash() -> None:
         stall_threshold_s=0.2,
         on_stall=bad_callback,
     ) as wd:
-        await asyncio.sleep(0.1)
-        time.sleep(0.4)
-        await asyncio.sleep(0.15)
+        _block_until_stall(reported)
+        await _wait_for_recovery(wd)
+        reported.clear()
+        _block_until_stall(reported)
 
     # The callback was called despite raising
     assert call_count >= 1
     # The watchdog still captured the report
     assert len(wd.stall_reports) >= 1
+
+    assert call_count == 2
+    assert len(wd.stall_reports) == 2

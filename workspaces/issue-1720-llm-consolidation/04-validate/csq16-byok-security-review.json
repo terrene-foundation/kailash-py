@@ -1,0 +1,876 @@
+{
+  "ran": true,
+  "role": "Independent adversarial SECURITY; not BYOK author",
+  "verdict": "CLEAN: two final scoped rounds; original Unicode alias finding fixed",
+  "tree": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq16-storage-ci",
+  "manifest": {
+    "packages/kailash-kaizen/src/kaizen/nodes/ai/client_cache.py": "ccfbcf267388846e9bd0f3b878ecf99c590345f84e244e8908e4fb0ac0d29710",
+    "packages/kailash-kaizen/tests/regression/test_byok_cache_identity.py": "33e7c8fabdfd4d2c8490479bf5c66062aee70d3a01b44a1ea9834b9009c50192",
+    "packages/kailash-kaizen/tests/regression/test_issue_12_per_request_api_key.py": "77796a9cd5305a920420c3e553a7d1f12a5a78a5094f4977bad391215e1bf716"
+  },
+  "spec_quote": {
+    "source": "specs/kaizen-providers-provider-system.md:176",
+    "quote": "a generic bounded cache over an opaque caller-supplied factory; zero production call sites"
+  },
+  "runs": {
+    "final-r1": {
+      "mode": "final-r1",
+      "exit": 0,
+      "counts": {
+        "passed": 16
+      },
+      "hits": 0,
+      "warnings": [],
+      "skips": [],
+      "events": []
+    },
+    "final-r2": {
+      "mode": "final-r2",
+      "exit": 0,
+      "counts": {
+        "passed": 16
+      },
+      "hits": 0,
+      "warnings": [],
+      "skips": [],
+      "events": []
+    },
+    "delimiter": {
+      "mode": "delimiter",
+      "exit": 1,
+      "counts": {
+        "failed": 7,
+        "passed": 9
+      },
+      "hits": 37,
+      "warnings": [],
+      "skips": [],
+      "events": []
+    },
+    "raw": {
+      "mode": "raw",
+      "exit": 1,
+      "counts": {
+        "passed": 13,
+        "failed": 3
+      },
+      "hits": 48,
+      "warnings": [],
+      "skips": [],
+      "events": []
+    },
+    "surrogate": {
+      "mode": "surrogate",
+      "exit": 1,
+      "counts": {
+        "passed": 14,
+        "failed": 2
+      },
+      "hits": 45,
+      "warnings": [],
+      "skips": [],
+      "events": []
+    }
+  },
+  "grid": {
+    "before": {
+      "cases": 400,
+      "unique": 324,
+      "collisions": [
+        [
+          [
+            null,
+            "\ud83d\ude00"
+          ],
+          [
+            null,
+            "\ud83d\ude00"
+          ]
+        ],
+        [
+          [
+            null,
+            "\ud834\udd1e"
+          ],
+          [
+            null,
+            "\ud834\udd1e"
+          ]
+        ],
+        [
+          [
+            "",
+            "\ud83d\ude00"
+          ],
+          [
+            "",
+            "\ud83d\ude00"
+          ]
+        ],
+        [
+          [
+            "",
+            "\ud834\udd1e"
+          ],
+          [
+            "",
+            "\ud834\udd1e"
+          ]
+        ],
+        [
+          [
+            "null",
+            "\ud83d\ude00"
+          ],
+          [
+            "null",
+            "\ud83d\ude00"
+          ]
+        ],
+        [
+          [
+            "null",
+            "\ud834\udd1e"
+          ],
+          [
+            "null",
+            "\ud834\udd1e"
+          ]
+        ],
+        [
+          [
+            "None",
+            "\ud83d\ude00"
+          ],
+          [
+            "None",
+            "\ud83d\ude00"
+          ]
+        ],
+        [
+          [
+            "None",
+            "\ud834\udd1e"
+          ],
+          [
+            "None",
+            "\ud834\udd1e"
+          ]
+        ],
+        [
+          [
+            "|",
+            "\ud83d\ude00"
+          ],
+          [
+            "|",
+            "\ud83d\ude00"
+          ]
+        ],
+        [
+          [
+            "|",
+            "\ud834\udd1e"
+          ],
+          [
+            "|",
+            "\ud834\udd1e"
+          ]
+        ],
+        [
+          [
+            "\\",
+            "\ud83d\ude00"
+          ],
+          [
+            "\\",
+            "\ud83d\ude00"
+          ]
+        ],
+        [
+          [
+            "\\",
+            "\ud834\udd1e"
+          ],
+          [
+            "\\",
+            "\ud834\udd1e"
+          ]
+        ],
+        [
+          [
+            "\"",
+            "\ud83d\ude00"
+          ],
+          [
+            "\"",
+            "\ud83d\ude00"
+          ]
+        ],
+        [
+          [
+            "\"",
+            "\ud834\udd1e"
+          ],
+          [
+            "\"",
+            "\ud834\udd1e"
+          ]
+        ],
+        [
+          [
+            "[",
+            "\ud83d\ude00"
+          ],
+          [
+            "[",
+            "\ud83d\ude00"
+          ]
+        ],
+        [
+          [
+            "[",
+            "\ud834\udd1e"
+          ],
+          [
+            "[",
+            "\ud834\udd1e"
+          ]
+        ],
+        [
+          [
+            "]",
+            "\ud83d\ude00"
+          ],
+          [
+            "]",
+            "\ud83d\ude00"
+          ]
+        ],
+        [
+          [
+            "]",
+            "\ud834\udd1e"
+          ],
+          [
+            "]",
+            "\ud834\udd1e"
+          ]
+        ],
+        [
+          [
+            "\n",
+            "\ud83d\ude00"
+          ],
+          [
+            "\n",
+            "\ud83d\ude00"
+          ]
+        ],
+        [
+          [
+            "\n",
+            "\ud834\udd1e"
+          ],
+          [
+            "\n",
+            "\ud834\udd1e"
+          ]
+        ],
+        [
+          [
+            "\u0000",
+            "\ud83d\ude00"
+          ],
+          [
+            "\u0000",
+            "\ud83d\ude00"
+          ]
+        ],
+        [
+          [
+            "\u0000",
+            "\ud834\udd1e"
+          ],
+          [
+            "\u0000",
+            "\ud834\udd1e"
+          ]
+        ],
+        [
+          [
+            "\u00e9",
+            "\ud83d\ude00"
+          ],
+          [
+            "\u00e9",
+            "\ud83d\ude00"
+          ]
+        ],
+        [
+          [
+            "\u00e9",
+            "\ud834\udd1e"
+          ],
+          [
+            "\u00e9",
+            "\ud834\udd1e"
+          ]
+        ],
+        [
+          [
+            "e\u0301",
+            "\ud83d\ude00"
+          ],
+          [
+            "e\u0301",
+            "\ud83d\ude00"
+          ]
+        ],
+        [
+          [
+            "e\u0301",
+            "\ud834\udd1e"
+          ],
+          [
+            "e\u0301",
+            "\ud834\udd1e"
+          ]
+        ],
+        [
+          [
+            "\ud83d\ude00",
+            "\ud83d\ude00"
+          ],
+          [
+            "\ud83d\ude00",
+            "\ud83d\ude00"
+          ]
+        ],
+        [
+          [
+            "\ud83d\ude00",
+            "\ud834\udd1e"
+          ],
+          [
+            "\ud83d\ude00",
+            "\ud834\udd1e"
+          ]
+        ],
+        [
+          [
+            "\ud83d\ude00",
+            null
+          ],
+          [
+            "\ud83d\ude00",
+            null
+          ]
+        ],
+        [
+          [
+            "\ud83d\ude00",
+            ""
+          ],
+          [
+            "\ud83d\ude00",
+            ""
+          ]
+        ],
+        [
+          [
+            "\ud83d\ude00",
+            "null"
+          ],
+          [
+            "\ud83d\ude00",
+            "null"
+          ]
+        ],
+        [
+          [
+            "\ud83d\ude00",
+            "None"
+          ],
+          [
+            "\ud83d\ude00",
+            "None"
+          ]
+        ],
+        [
+          [
+            "\ud83d\ude00",
+            "|"
+          ],
+          [
+            "\ud83d\ude00",
+            "|"
+          ]
+        ],
+        [
+          [
+            "\ud83d\ude00",
+            "\\"
+          ],
+          [
+            "\ud83d\ude00",
+            "\\"
+          ]
+        ],
+        [
+          [
+            "\ud83d\ude00",
+            "\""
+          ],
+          [
+            "\ud83d\ude00",
+            "\""
+          ]
+        ],
+        [
+          [
+            "\ud83d\ude00",
+            "["
+          ],
+          [
+            "\ud83d\ude00",
+            "["
+          ]
+        ],
+        [
+          [
+            "\ud83d\ude00",
+            "]"
+          ],
+          [
+            "\ud83d\ude00",
+            "]"
+          ]
+        ],
+        [
+          [
+            "\ud83d\ude00",
+            "\n"
+          ],
+          [
+            "\ud83d\ude00",
+            "\n"
+          ]
+        ],
+        [
+          [
+            "\ud83d\ude00",
+            "\u0000"
+          ],
+          [
+            "\ud83d\ude00",
+            "\u0000"
+          ]
+        ],
+        [
+          [
+            "\ud83d\ude00",
+            "\u00e9"
+          ],
+          [
+            "\ud83d\ude00",
+            "\u00e9"
+          ]
+        ],
+        [
+          [
+            "\ud83d\ude00",
+            "e\u0301"
+          ],
+          [
+            "\ud83d\ude00",
+            "e\u0301"
+          ]
+        ],
+        [
+          [
+            "\ud83d\ude00",
+            "\ud83d\ude00"
+          ],
+          [
+            "\ud83d\ude00",
+            "\ud83d\ude00"
+          ]
+        ],
+        [
+          [
+            "\ud83d\ude00",
+            "\ud83d\ude00"
+          ],
+          [
+            "\ud83d\ude00",
+            "\ud83d\ude00"
+          ]
+        ],
+        [
+          [
+            "\ud83d\ude00",
+            "\ud83d"
+          ],
+          [
+            "\ud83d\ude00",
+            "\ud83d"
+          ]
+        ],
+        [
+          [
+            "\ud83d\ude00",
+            "\ude00"
+          ],
+          [
+            "\ud83d\ude00",
+            "\ude00"
+          ]
+        ],
+        [
+          [
+            "\ud83d\ude00",
+            "\ud834\udd1e"
+          ],
+          [
+            "\ud83d\ude00",
+            "\ud834\udd1e"
+          ]
+        ],
+        [
+          [
+            "\ud83d\ude00",
+            "\ud834\udd1e"
+          ],
+          [
+            "\ud83d\ude00",
+            "\ud834\udd1e"
+          ]
+        ],
+        [
+          [
+            "\ud83d\ude00",
+            "\\ud83d\\ude00"
+          ],
+          [
+            "\ud83d\ude00",
+            "\\ud83d\\ude00"
+          ]
+        ],
+        [
+          [
+            "\ud83d",
+            "\ud83d\ude00"
+          ],
+          [
+            "\ud83d",
+            "\ud83d\ude00"
+          ]
+        ],
+        [
+          [
+            "\ud83d",
+            "\ud834\udd1e"
+          ],
+          [
+            "\ud83d",
+            "\ud834\udd1e"
+          ]
+        ],
+        [
+          [
+            "\ude00",
+            "\ud83d\ude00"
+          ],
+          [
+            "\ude00",
+            "\ud83d\ude00"
+          ]
+        ],
+        [
+          [
+            "\ude00",
+            "\ud834\udd1e"
+          ],
+          [
+            "\ude00",
+            "\ud834\udd1e"
+          ]
+        ],
+        [
+          [
+            "\ud834\udd1e",
+            "\ud83d\ude00"
+          ],
+          [
+            "\ud834\udd1e",
+            "\ud83d\ude00"
+          ]
+        ],
+        [
+          [
+            "\ud834\udd1e",
+            "\ud834\udd1e"
+          ],
+          [
+            "\ud834\udd1e",
+            "\ud834\udd1e"
+          ]
+        ],
+        [
+          [
+            "\ud834\udd1e",
+            null
+          ],
+          [
+            "\ud834\udd1e",
+            null
+          ]
+        ],
+        [
+          [
+            "\ud834\udd1e",
+            ""
+          ],
+          [
+            "\ud834\udd1e",
+            ""
+          ]
+        ],
+        [
+          [
+            "\ud834\udd1e",
+            "null"
+          ],
+          [
+            "\ud834\udd1e",
+            "null"
+          ]
+        ],
+        [
+          [
+            "\ud834\udd1e",
+            "None"
+          ],
+          [
+            "\ud834\udd1e",
+            "None"
+          ]
+        ],
+        [
+          [
+            "\ud834\udd1e",
+            "|"
+          ],
+          [
+            "\ud834\udd1e",
+            "|"
+          ]
+        ],
+        [
+          [
+            "\ud834\udd1e",
+            "\\"
+          ],
+          [
+            "\ud834\udd1e",
+            "\\"
+          ]
+        ],
+        [
+          [
+            "\ud834\udd1e",
+            "\""
+          ],
+          [
+            "\ud834\udd1e",
+            "\""
+          ]
+        ],
+        [
+          [
+            "\ud834\udd1e",
+            "["
+          ],
+          [
+            "\ud834\udd1e",
+            "["
+          ]
+        ],
+        [
+          [
+            "\ud834\udd1e",
+            "]"
+          ],
+          [
+            "\ud834\udd1e",
+            "]"
+          ]
+        ],
+        [
+          [
+            "\ud834\udd1e",
+            "\n"
+          ],
+          [
+            "\ud834\udd1e",
+            "\n"
+          ]
+        ],
+        [
+          [
+            "\ud834\udd1e",
+            "\u0000"
+          ],
+          [
+            "\ud834\udd1e",
+            "\u0000"
+          ]
+        ],
+        [
+          [
+            "\ud834\udd1e",
+            "\u00e9"
+          ],
+          [
+            "\ud834\udd1e",
+            "\u00e9"
+          ]
+        ],
+        [
+          [
+            "\ud834\udd1e",
+            "e\u0301"
+          ],
+          [
+            "\ud834\udd1e",
+            "e\u0301"
+          ]
+        ],
+        [
+          [
+            "\ud834\udd1e",
+            "\ud83d\ude00"
+          ],
+          [
+            "\ud834\udd1e",
+            "\ud83d\ude00"
+          ]
+        ],
+        [
+          [
+            "\ud834\udd1e",
+            "\ud83d\ude00"
+          ],
+          [
+            "\ud834\udd1e",
+            "\ud83d\ude00"
+          ]
+        ],
+        [
+          [
+            "\ud834\udd1e",
+            "\ud83d"
+          ],
+          [
+            "\ud834\udd1e",
+            "\ud83d"
+          ]
+        ],
+        [
+          [
+            "\ud834\udd1e",
+            "\ude00"
+          ],
+          [
+            "\ud834\udd1e",
+            "\ude00"
+          ]
+        ],
+        [
+          [
+            "\ud834\udd1e",
+            "\ud834\udd1e"
+          ],
+          [
+            "\ud834\udd1e",
+            "\ud834\udd1e"
+          ]
+        ],
+        [
+          [
+            "\ud834\udd1e",
+            "\ud834\udd1e"
+          ],
+          [
+            "\ud834\udd1e",
+            "\ud834\udd1e"
+          ]
+        ],
+        [
+          [
+            "\ud834\udd1e",
+            "\\ud83d\\ude00"
+          ],
+          [
+            "\ud834\udd1e",
+            "\\ud83d\\ude00"
+          ]
+        ],
+        [
+          [
+            "\\ud83d\\ude00",
+            "\ud83d\ude00"
+          ],
+          [
+            "\\ud83d\\ude00",
+            "\ud83d\ude00"
+          ]
+        ],
+        [
+          [
+            "\\ud83d\\ude00",
+            "\ud834\udd1e"
+          ],
+          [
+            "\\ud83d\\ude00",
+            "\ud834\udd1e"
+          ]
+        ]
+      ]
+    },
+    "final-r1": {
+      "cases": 400,
+      "unique": 400,
+      "collisions": []
+    },
+    "final-r2": {
+      "cases": 400,
+      "unique": 400,
+      "collisions": []
+    }
+  },
+  "discovered_finding": "/tmp/csq16-security-byok-surrogate-probe.json shows original Unicode scalar U+1F600 and surrogate-pair U+D83D U+DE00 unequal strings serialized identically and returned the wrong cached client; original14pass is excluded as finalclean evidence.",
+  "representation_proof": "JSON array with ensure_ascii=False preserves both Optional[str] fields and null-vs-empty. Quoting escapes control/quote/backslash unambiguously. UTF8 surrogatepass represents literal surrogate codepoints as separate3byte sequences, distinct from Unicode scalar4byte encoding. SHA256 hashes only this encoding. This is serialization injectivity for supported values, not mathematical injectivity of a finite digest.",
+  "scanner_context": "SHA256 creates a bounded cache index fingerprint, not a password-verification/KDF operation. No stored password verifier or authentication comparison exists in this class. API clients and factory objects still hold credentials; no whole-cache-memory secrecy claim.",
+  "mechanical": {
+    "all_nonkey_module_AST_equal": true,
+    "retained_business_return_mutation_detected": true,
+    "original5tests_AST_identical": true,
+    "prior_new_test_assertions_retained": 19,
+    "final_new_test_assertions": 29,
+    "absolute_occurrences": "/tmp/csq16-security-byok-mechanical-initial.json; reread unchanged constructor/caller surface; sole key consumer get_or_create, no external production constructor callers"
+  },
+  "lifecycle": "LRU/TTL locks, factory outside lock, close losing concurrent client and clear all unchanged by fullmoduleAST; final tests exercise cachehit, TTL replacement, capacity, clear and actual ThreadPoolExecutor barrier same/different identity publication+exactclosecount.",
+  "opposites": "delimiter37hits:5 identity assertion failures plus2 surrogate encoding failures; raw48hits:3fail including plaintext index assertion; original ASCIIJSON45hits:2actual distinct-client assertion failures. Both controls execute same public get_or_create paths; none edits source.",
+  "limits": [
+    "No live provider construction/network; public generic cache uses closeable client objects",
+    "No password storage guarantee or cryptographic collision impossibility claim",
+    "No remote CodeQL rescan/dismissal; parent owns scanner disposition",
+    "Unsupported non-Optional[str] inputs excluded"
+  ],
+  "commands": [
+    "primary .venv python -P /tmp/csq16-security-byok-run.py final-r1/final-r2/delimiter/raw/surrogate",
+    "primary .venv python -P /tmp/csq16-security-byok-grid.py before/final-r1/final-r2"
+  ]
+}

@@ -4,6 +4,7 @@ import logging
 import threading
 import time
 from contextlib import contextmanager
+from copy import copy
 from typing import Any
 
 try:
@@ -25,6 +26,13 @@ class CycleSafetyManager:
         self.global_memory_limit = None  # MB
         self.global_timeout = None  # seconds
         self._lock = threading.Lock()
+
+    def _fork_for_execution(self):
+        """Copy configured safety policy without sharing live attempt monitors."""
+        manager = copy(self)
+        manager.active_cycles = {}
+        manager._lock = threading.Lock()
+        return manager
 
     def set_global_limits(
         self, memory_limit: int | None = None, timeout: float | None = None

@@ -512,20 +512,37 @@ class TestLoggingConfigIntegration:
 
 @pytest.mark.unit
 class TestMaskSensitiveValuesIntegration:
-    """Test that mask_sensitive_values is used in node log output."""
+    """Test diagnostic privacy and the standalone masking helper contract."""
 
-    def test_mask_sensitive_values_imported_in_nodes(self):
-        """Verify nodes.py imports mask_sensitive_values."""
-        import inspect
+    @pytest.mark.asyncio
+    async def test_generated_node_diagnostics_omit_private_values(
+        self, tmp_path, caplog
+    ):
+        """Exercise generated CRUD while ordinary fields contain private data."""
+        import json
 
-        from dataflow.core import nodes
+        from dataflow import DataFlow
 
-        source = inspect.getsource(nodes)
+        private = "record.person@example.invalid"
+        db = DataFlow(f"sqlite:///{tmp_path / 'logging.db'}", test_mode=False)
+        try:
 
-        # Check that mask_sensitive_values is imported
-        assert (
-            "from .logging_config import mask_sensitive_values" in source
-        ), "nodes.py should import mask_sensitive_values from logging_config"
+            @db.model
+            class PrivateDiagnosticRecord:
+                id: str
+                note: str
+
+            await db.initialize()
+            node = db._nodes["PrivateDiagnosticRecordCreateNode"]()
+            with caplog.at_level(logging.DEBUG, logger="dataflow.core.nodes"):
+                result = await node.execute_async(id="row-one", note=private)
+            assert result["note"] == private
+            records = [r for r in caplog.records if r.name == "dataflow.core.nodes"]
+            assert any(r.getMessage() == "nodes.inputs_received" for r in records)
+            assert private not in json.dumps([r.__dict__ for r in records], default=str)
+            assert all(private not in logging.Formatter().format(r) for r in records)
+        finally:
+            await db.close_async()
 
     def test_mask_sensitive_values_imported_in_engine(self):
         """Verify engine.py imports mask_sensitive_values."""

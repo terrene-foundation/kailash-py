@@ -8,6 +8,7 @@ auto-selection, error hierarchy).
 from __future__ import annotations
 
 import pytest
+
 from kailash_ml._device import BackendInfo, BackendUnavailable, detect_backend
 
 

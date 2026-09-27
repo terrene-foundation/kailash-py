@@ -128,6 +128,12 @@ class EdgeCapabilities:
     encryption_at_rest: bool = True
     encryption_in_transit: bool = True
     audit_logging: bool = True
+    # Access controls. These default False, unlike the three above, because they
+    # are NEW: a location that has never declared them has not been audited for
+    # them, and ComplianceEngine treats an undeclared control as unmet rather
+    # than assumed-present (security.md secure-default: fail closed).
+    mfa_supported: bool = False
+    rbac_supported: bool = False
 
     def __post_init__(self):
         if self.database_support is None:
@@ -491,6 +497,11 @@ class EdgeLocation:
                 "bandwidth_gbps": self.capabilities.bandwidth_gbps,
                 "database_support": self.capabilities.database_support,
                 "ai_models_available": self.capabilities.ai_models_available,
+                "encryption_at_rest": self.capabilities.encryption_at_rest,
+                "encryption_in_transit": self.capabilities.encryption_in_transit,
+                "audit_logging": self.capabilities.audit_logging,
+                "mfa_supported": self.capabilities.mfa_supported,
+                "rbac_supported": self.capabilities.rbac_supported,
             },
             "compliance_zones": [zone.value for zone in self.compliance_zones],
             "status": self.status.value,
@@ -535,6 +546,11 @@ class EdgeLocation:
                 "database_support", ["postgresql", "redis"]
             ),
             ai_models_available=capabilities_data.get("ai_models_available", []),
+            encryption_at_rest=capabilities_data.get("encryption_at_rest", True),
+            encryption_in_transit=capabilities_data.get("encryption_in_transit", True),
+            audit_logging=capabilities_data.get("audit_logging", True),
+            mfa_supported=capabilities_data.get("mfa_supported", False),
+            rbac_supported=capabilities_data.get("rbac_supported", False),
         )
 
         compliance_zones = [
@@ -585,6 +601,9 @@ PREDEFINED_LOCATIONS = {
             bandwidth_gbps=10.0,
             database_support=["postgresql", "mongodb", "redis"],
             ai_models_available=["llama3.2", "gpt-4", "claude-3"],
+            # Declares HIPAA + SOX, which require MFA / RBAC to be real.
+            mfa_supported=True,
+            rbac_supported=True,
         ),
         compliance_zones=[
             ComplianceZone.PUBLIC,

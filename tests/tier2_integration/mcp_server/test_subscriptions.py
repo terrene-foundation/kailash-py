@@ -15,8 +15,10 @@ from kailash_mcp.advanced.subscriptions import (
     ResourceSubscriptionManager,
     SubscriptionError,
 )
-from kailash_mcp.auth.providers import AuthManager
-from kailash_mcp.auth.providers import PermissionError as PermissionDeniedError
+from kailash_mcp.auth.providers import (
+    AuthManager,
+    PermissionError as PermissionDeniedError,
+)
 from kailash_mcp.protocol.protocol import ResourceChange, ResourceChangeType
 
 

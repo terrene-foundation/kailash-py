@@ -21,8 +21,9 @@ Implements cascade termination (I-02): deepest-first, all descendants.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
-from collections import deque
+import math
 from typing import TYPE_CHECKING
 
 from kaizen.l3.factory.errors import (
@@ -30,6 +31,12 @@ from kaizen.l3.factory.errors import (
     MaxChildrenExceeded,
     MaxDepthExceeded,
     ToolNotInParent,
+)
+from kaizen.l3.factory.execution import (
+    Executable,
+    ExecutionSnapshot,
+    OwnedExecution,
+    TerminationReport,
 )
 from kaizen.l3.factory.instance import (
     AgentInstance,
@@ -86,8 +93,11 @@ class AgentFactory:
         # Spec registry: maps spec_id -> AgentSpec for tool/depth checks
         self._specs: dict[str, AgentSpec] = {}
         # AD-L3-10: Track ancestors currently being cascade-terminated
-        self._terminating_ancestors: set[str] = set()
-        self._lock = asyncio.Lock()
+        self._terminating_ancestors = registry._terminating_instances
+        self._executions = registry._owned_executions
+        self._termination_groups = registry._termination_groups
+        self._termination_reasons = registry._termination_reasons
+        self._lock = registry._lifecycle_lock
 
     async def spawn(
         self,
@@ -139,7 +149,11 @@ class AgentFactory:
             # We key by instance_id to handle multiple instances of same spec
             self._specs[f"_inst_{instance.instance_id}"] = child_spec
 
-        await self._registry.register(instance)
+            # Registration and cascade census share the factory lock.
+            await self._registry.register(instance)
+            self._registry._terminal_cleanup[instance.instance_id] = (
+                self._release_integrations
+            )
 
         # L3 integration: Factory -> Enforcer
         if self._enforcer is not None and child_spec.envelope:
@@ -262,75 +276,249 @@ class AgentFactory:
         # We're already under self._lock so this is safe.
         return set(self._registry._instances.keys())
 
-    async def terminate(
+    async def dispatch(
+        self, instance_id: str, executable: Executable
+    ) -> OwnedExecution:
+        """Opt in to one process-local async execution for a Pending instance.
+
+        Bind arguments with functools.partial. Synchronous callables, coroutine
+        objects and async generators are rejected before invocation. Existing
+        plan/agent callbacks can be bound directly; no execution engine is replaced.
+        """
+        if not (
+            inspect.iscoroutinefunction(executable)
+            or (
+                callable(executable)
+                and inspect.iscoroutinefunction(executable.__call__)
+            )
+        ):
+            raise TypeError(
+                "executable must be an async callable returning a coroutine"
+            )
+        async with self._lock:
+            instance = await self._registry.get(instance_id)
+            if instance_id in self._terminating_ancestors:
+                raise ValueError("Cannot dispatch an instance being terminated")
+            if (
+                instance_id in self._executions
+                or instance.state.tag != _StateTag.PENDING
+            ):
+                raise ValueError(
+                    "Dispatch requires a Pending instance without execution"
+                )
+            handle = OwnedExecution(instance_id, executable)
+            self._executions[instance_id] = handle
+            handle._task = asyncio.create_task(
+                self._run_owned(instance, handle), name=handle.execution_id
+            )
+            handle._task.add_done_callback(
+                lambda task: self._execution_done(instance, handle)
+            )
+            logger.info(
+                "agent.execution.dispatched",
+                extra={
+                    "instance_id": instance_id,
+                    "execution_id": handle.execution_id,
+                },
+            )
+            return handle
+
+    async def _run_owned(self, instance: AgentInstance, handle: OwnedExecution):
+        handle._started = True
+        instance.transition_to(AgentLifecycleState.running())
+        return await handle.executable()
+
+    def _execution_done(self, instance: AgentInstance, handle: OwnedExecution) -> None:
+        if handle._settled.done():
+            return
+        try:
+            self._finish_execution(instance, handle)
+        except Exception as error:  # noqa: BLE001 - forwarded through result()
+            handle._settled.set_exception(error)
+            # result() can still retrieve this error; consume it here as well
+            # so an unobserved handle does not produce a future warning.
+            handle._settled.exception()
+            logger.error(
+                "agent.execution.cleanup_failed",
+                extra={
+                    "instance_id": instance.instance_id,
+                    "execution_id": handle.execution_id,
+                },
+            )
+        else:
+            handle._settled.set_result(None)
+
+    def _finish_execution(
+        self, instance: AgentInstance, handle: OwnedExecution
+    ) -> None:
+        if handle._finalized:
+            return
+        task = handle._task
+        if task is None or not task.done():
+            raise RuntimeError("Owned execution completion requires a stopped task")
+        # Retrieving the exception here also prevents unobserved-task warnings;
+        # the original exception remains available through handle.result().
+        error = None if task.cancelled() else task.exception()
+        if (
+            instance.instance_id not in self._termination_reasons
+            and not instance.is_terminal
+        ):
+            if task.cancelled():
+                state = AgentLifecycleState.terminated(
+                    TerminationReason.EXPLICIT_TERMINATION
+                )
+            elif error is not None:
+                state = AgentLifecycleState.failed("Owned execution failed")
+            else:
+                state = AgentLifecycleState.completed(task.result())
+            if instance.state.tag == _StateTag.WAITING and not task.cancelled():
+                instance.transition_to(AgentLifecycleState.running())
+            instance.transition_to(state)
+        # Task completion owns cleanup independently of mutable lifecycle
+        # metadata. External mutation must never orphan router/enforcer state.
+        self._cleanup_terminal(instance.instance_id)
+        handle._finalized = True
+        self._settle_terminations()
+        log = logger.error if error is not None else logger.info
+        log(
+            "agent.execution.stopped",
+            extra={
+                "instance_id": instance.instance_id,
+                "execution_id": handle.execution_id,
+                "status": handle.snapshot().status,
+            },
+        )
+
+    async def get_execution(self, instance_id: str) -> OwnedExecution | None:
+        """Return the exact owned execution, or None for metadata-only instances."""
+        await self._registry.get(instance_id)
+        return self._executions.get(instance_id)
+
+    async def terminate(self, instance_id: str, reason: TerminationReason) -> None:
+        """Legacy None-returning cascade; await actual stop for opted-in tasks.
+
+        A task that suppresses cancellation can keep this call waiting. Use
+        terminate_owned(timeout=...) for a bounded wait and explicit observations.
+        """
+        await self.terminate_owned(instance_id, reason)
+
+    async def terminate_owned(
         self,
         instance_id: str,
         reason: TerminationReason,
-    ) -> None:
-        """Terminate an instance and cascade to all descendants.
+        *,
+        timeout: float | None = None,
+    ) -> TerminationReport:
+        """Request cancellation deepest-first and observe actual local completion.
 
-        Per I-02: descendants are terminated deepest-first with
-        reason ParentTerminated. The instance itself is terminated
-        with the given reason.
-
-        Idempotent: terminating an already-terminal instance is a no-op.
-
-        Per AD-L3-10: spawn requests are blocked for any instance
-        in the _terminating_ancestors set during cascade.
-
-        Args:
-            instance_id: The instance to terminate.
-            reason: The termination reason for the root instance.
-
-        Raises:
-            InstanceNotFound: If the instance does not exist.
+        Timeout/caller cancellation never marks running tasks stopped. Spawn and
+        dispatch remain blocked across the captured subtree until it stops.
+        Already returned tasks retain their outcome. Remote effects are unknown
+        once an executable was entered; cancellation cannot undo provider work.
         """
-        # Check existence
-        instance = await self._registry.get(instance_id)
-
-        # Idempotent: already terminal -> no-op
-        if instance.is_terminal:
-            return
-
-        # Mark as terminating ancestor to block spawns (AD-L3-10)
+        if not isinstance(reason, TerminationReason):
+            raise TypeError("reason must be a TerminationReason")
+        if timeout is not None and (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, (int, float))
+            or not math.isfinite(timeout)
+            or timeout < 0
+        ):
+            raise ValueError("timeout must be finite and non-negative, or None")
         async with self._lock:
-            self._terminating_ancestors.add(instance_id)
-
-        try:
-            # Collect all descendants
+            instance = await self._registry.get(instance_id)
             descendants = await self._registry.all_descendants(instance_id)
+            depths = [(len(await self._registry.lineage(i)), i) for i in descendants]
+            depths.sort(reverse=True)
+            instances = [await self._registry.get(i) for _, i in depths] + [instance]
+            # Completion may precede its scheduled done callback. Preserve that
+            # outcome before this termination request acquires ownership.
+            for member in instances:
+                handle = self._executions.get(member.instance_id)
+                if (
+                    handle is not None
+                    and handle._task is not None
+                    and handle._task.done()
+                ):
+                    self._execution_done(member, handle)
+            self._termination_groups[instance_id] = instances
+            tasks = []
+            for member in instances:
+                member_id = member.instance_id
+                self._terminating_ancestors.add(member_id)
+                self._termination_reasons.setdefault(
+                    member_id,
+                    (
+                        reason
+                        if member_id == instance_id
+                        else TerminationReason.PARENT_TERMINATED
+                    ),
+                )
+                handle = self._executions.get(member_id)
+                if handle is not None and handle._task is not None:
+                    tasks.append(handle._task)
+                    if not handle._task.done() and not handle._stop_requested:
+                        handle._stop_requested = True
+                        handle._task.cancel()
+            self._settle_terminations()
+        # asyncio.wait does not propagate waiter cancellation to owned tasks.
+        if tasks:
+            await asyncio.wait(tasks, timeout=timeout)
+        self._settle_terminations()
+        entries = tuple(
+            (
+                self._executions[i.instance_id].snapshot()
+                if i.instance_id in self._executions
+                else ExecutionSnapshot(
+                    i.instance_id, None, "metadata_only", None, "unknown"
+                )
+            )
+            for i in instances
+        )
+        logger.info(
+            "agent.termination.observed",
+            extra={
+                "instance_id": instance_id,
+                "still_running": sum(e.local_stopped is False for e in entries),
+            },
+        )
+        return TerminationReport(entries)
 
-            # Sort by depth (deepest first) — use lineage length as proxy
-            depths: list[tuple[int, str]] = []
-            for desc_id in descendants:
-                lineage = await self._registry.lineage(desc_id)
-                depths.append((len(lineage), desc_id))
-            depths.sort(reverse=True)  # deepest first
-
-            # Terminate descendants (deepest first)
-            for _, desc_id in depths:
-                desc = await self._registry.get(desc_id)
-                if not desc.is_terminal:
-                    desc.transition_to(
+    def _settle_terminations(self) -> None:
+        # No awaits: callbacks and factory operations use one event-loop thread.
+        for root_id, instances in list(self._termination_groups.items()):
+            if any(
+                i.instance_id in self._executions
+                and not self._executions[i.instance_id].snapshot().local_stopped
+                for i in instances
+            ):
+                continue
+            for member in instances:
+                member_id = member.instance_id
+                if not member.is_terminal:
+                    member.transition_to(
                         AgentLifecycleState.terminated(
-                            TerminationReason.PARENT_TERMINATED
+                            self._termination_reasons[member_id]
                         )
                     )
-                    # H2 fix: deregister descendant from enforcer on termination
-                    if self._enforcer is not None:
-                        self._enforcer.deregister(desc_id)
-                    logger.debug("Cascade terminated %s (parent_terminated)", desc_id)
+                self._cleanup_terminal(member_id)
+            del self._termination_groups[root_id]
+        still_terminating = {
+            i.instance_id for group in self._termination_groups.values() for i in group
+        }
+        self._terminating_ancestors.intersection_update(still_terminating)
+        for instance_id in self._termination_reasons.keys() - still_terminating:
+            del self._termination_reasons[instance_id]
 
-            # Terminate the instance itself
-            instance.transition_to(AgentLifecycleState.terminated(reason))
-            # H2 fix: deregister terminated instance from enforcer
-            if self._enforcer is not None:
-                self._enforcer.deregister(instance_id)
-            logger.debug("Terminated %s (reason=%s)", instance_id, reason.value)
+    def _cleanup_terminal(self, instance_id: str) -> None:
+        """Release integration registrations after local execution stops."""
+        self._registry._cleanup_terminal(instance_id)
 
-        finally:
-            async with self._lock:
-                self._terminating_ancestors.discard(instance_id)
+    def _release_integrations(self, instance_id: str) -> None:
+        if self._router is not None:
+            self._router.close_channels_for(instance_id)
+        if self._enforcer is not None:
+            self._enforcer.deregister(instance_id)
 
     # -----------------------------------------------------------------------
     # Delegation to registry (read operations)
@@ -358,7 +546,17 @@ class AgentFactory:
 
         Delegates to registry.update_state() with transition validation.
         """
-        await self._registry.update_state(instance_id, new_state)
+        async with self._lock:
+            handle = self._executions.get(instance_id)
+            if handle is not None and (
+                not handle._started
+                or new_state.is_terminal
+                or instance_id in self._terminating_ancestors
+            ):
+                raise ValueError(
+                    "Owned execution controls terminal lifecycle transitions"
+                )
+            await self._registry.update_state(instance_id, new_state)
 
     async def children_of(self, parent_id: str) -> list[AgentInstance]:
         """Return direct children of a parent instance."""

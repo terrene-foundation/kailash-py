@@ -84,8 +84,9 @@ dependencies = [
     "kailash-mcp>=0.5.0",
     "pydantic>=2.0.0",          # llm/deployment.py + auth modules
     "typing-extensions>=4.5.0", # core/schema_factory.py
-    "anyio>=4.0.0",             # autonomy observability/hooks/interrupts
-    "httpx>=0.25.0",            # llm/http_client.py + llm/client.py module-scope
+    "anyio>=4.1",             # autonomy observability/hooks/interrupts
+    "httpx>=0.25.0",
+    "httpcore>=0.18.0",  # public async network backend for DNS pinning
     "aiohttp>=3.13.3",          # autonomy/control/transports/http + nodes/ai/semantic_memory
     "PyJWT>=2.8.0",             # security/authentication.py module-scope
     "cryptography>=41.0.0",     # security/encryption.py (AESGCM, PBKDF2HMAC, hashes)
@@ -264,20 +265,6 @@ Documentation = "https://docs.kailash.com/kaizen"
 Repository = "https://github.com/terrene-foundation/kailash-py"
 Issues = "https://github.com/terrene-foundation/kailash-py/issues"
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-markers = [
-    "unit: Unit tests (fast, isolated)",
-    "integration: Integration tests (real services)",
-    "e2e: End-to-end tests (complete flows)",
-    "requires_azure: Tests requiring Azure AI Foundry credentials",
-    "requires_docker: Tests requiring Docker Model Runner",
-    "requires_google: Tests requiring Google Gemini credentials",
-    "regression: Regression tests for fixed bugs",
-    "benchmark: Performance benchmark tests (pytest-benchmark)",
-]
-asyncio_mode = "auto"
-
 [tool.coverage.run]
 source = ["src"]
 omit = ["tests/*", "examples/*"]
@@ -296,13 +283,15 @@ target-version = ['py311']
 
 [tool.isort]
 profile = "black"
+# Keep aliased imports compatible with Black, including narrow inline pragmas.
+combine_as_imports = true
 line_length = 88
 # MUST match the root pyproject.toml list exactly. isort resolves config from the
 # nearest file, so a per-package block that omits `known_first_party` silently
 # reclassifies `kailash` as THIRD-party for every file under this package — which
 # is the blank-line-between-import-blocks that flip-flopped on every run and left
 # ~2,000 files permanently modified (#1995).
-known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact", "kailash_mcp"]
+known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact", "kailash_mcp", "kailash_ml", "kailash_align"]
 
 [tool.ruff]
 line-length = 88
@@ -325,3 +314,7 @@ extend-ignore = [
 [tool.ruff.lint.per-file-ignores]
 # Allow all patterns in test files
 "tests/**/*.py" = ["E", "F"]
+
+# Build checkout uses the paired Core source; published metadata is unchanged.
+[tool.uv.sources]
+kailash = { path = "../..", editable = true }

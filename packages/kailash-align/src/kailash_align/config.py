@@ -80,8 +80,7 @@ class LoRAConfig:
 
     def to_peft_config(self):
         """Convert to peft.LoraConfig. Lazy import to avoid loading peft at config time."""
-        from peft import LoraConfig as PeftLoraConfig
-        from peft import TaskType
+        from peft import LoraConfig as PeftLoraConfig, TaskType
 
         return PeftLoraConfig(
             r=self.rank,

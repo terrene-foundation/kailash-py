@@ -1,0 +1,354 @@
+{
+  "recovery_validation": {
+    "head": "709759a385ae5950fdeab2eda739718dddfb75e3",
+    "verdict": "Pass",
+    "verified": "Recomputed all selected paths using archived source and Git-enumerated historical blobs; reproduced the prior JSON exactly. Same-path ancestor receipt checked for each matching row. Literal-change and whitespace controls executed.",
+    "scope": "Forty-eight previously selected Python paths only; not the entire mixed archive. Git rev-list --objects supplies candidate versions; absence of a match is not proof of missing implementation.",
+    "limitation": "Whole AST equality excludes comments, whitespace and external dependency/runtime behavior. Import-normalized and import-removed equality are candidate matching only: binding order and module side effects are not proved. No behavioral equivalence, whole-archive closure or ref deletion follows."
+  },
+  "source_report_sha256": "e4da1ee94519e5725d3740fed74d869dac32337a3cad81564773ffcc0f218165",
+  "prior_session_report": {
+    "head": "709759a385ae5950fdeab2eda739718dddfb75e3",
+    "archive_ref": "refs/archive/2026-08-21/scrap/pre-triage-snapshot-2026-04-08",
+    "scope": "Whole Python AST identity including ordered imports against same-path ancestor blobs. Proves historical implementation retention only, not current behavioral conformance. Whitespace/comments are excluded by AST; no non-Python disposition.",
+    "negative_control": "changed literal x=1 to x=2 rejected; whitespace equivalent accepted",
+    "files": [
+      {
+        "path": "packages/kailash-kaizen/src/kaizen/core/base_agent.py",
+        "historical_versions": 42,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "packages/kailash-kaizen/src/kaizen/nodes/ai/ai_providers.py",
+        "historical_versions": 8,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "packages/kailash-kaizen/src/kaizen/nodes/ai/unified_azure_provider.py",
+        "historical_versions": 3,
+        "exact_ast_matching_blobs": [
+          "6ebe969c5a1d8c038bdfd4626842aea6307b27d0"
+        ],
+        "status": "historical-whole-AST-retained",
+        "ancestor_receipt": "626b008b47cf18b4796303542b6952247c9db340"
+      },
+      {
+        "path": "packages/kailash-kaizen/src/kaizen/providers/__init__.py",
+        "historical_versions": 8,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "packages/kailash-kaizen/src/kaizen/providers/embedding/huggingface.py",
+        "historical_versions": 4,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "packages/kailash-kaizen/src/kaizen/providers/llm/google.py",
+        "historical_versions": 4,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "packages/kailash-kaizen/tests/unit/core/test_base_agent_slimming.py",
+        "historical_versions": 9,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "packages/kailash-mcp/src/kailash_mcp/__init__.py",
+        "historical_versions": 30,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "packages/kailash-mcp/src/kailash_mcp/advanced/features.py",
+        "historical_versions": 12,
+        "exact_ast_matching_blobs": [
+          "ef94be1170587142f3b58b5d4ded97c39675ec33"
+        ],
+        "status": "historical-whole-AST-retained",
+        "ancestor_receipt": "cdc75a81bae83eb9013d90224810287e2b16029f"
+      },
+      {
+        "path": "packages/kailash-mcp/src/kailash_mcp/advanced/subscriptions.py",
+        "historical_versions": 6,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "packages/kailash-mcp/src/kailash_mcp/auth/oauth.py",
+        "historical_versions": 11,
+        "exact_ast_matching_blobs": [
+          "3677ae9663f8ed728c11472b61a6a9dfd59d9e58"
+        ],
+        "status": "historical-whole-AST-retained",
+        "ancestor_receipt": "cdc75a81bae83eb9013d90224810287e2b16029f"
+      },
+      {
+        "path": "packages/kailash-mcp/src/kailash_mcp/client.py",
+        "historical_versions": 7,
+        "exact_ast_matching_blobs": [
+          "04c498daa9f9b132f395ca7c84edea083bce593f"
+        ],
+        "status": "historical-whole-AST-retained",
+        "ancestor_receipt": "cdc75a81bae83eb9013d90224810287e2b16029f"
+      },
+      {
+        "path": "packages/kailash-mcp/src/kailash_mcp/contrib/core.py",
+        "historical_versions": 1,
+        "exact_ast_matching_blobs": [
+          "ff4a51f53085eab2788f5529d6b3dcdf38c5b6ed"
+        ],
+        "status": "historical-whole-AST-retained",
+        "ancestor_receipt": "cdc75a81bae83eb9013d90224810287e2b16029f"
+      },
+      {
+        "path": "packages/kailash-mcp/src/kailash_mcp/contrib/kaizen.py",
+        "historical_versions": 1,
+        "exact_ast_matching_blobs": [
+          "7ef1bfae7e0f27154ab66a30a2210dacf2749531"
+        ],
+        "status": "historical-whole-AST-retained",
+        "ancestor_receipt": "cdc75a81bae83eb9013d90224810287e2b16029f"
+      },
+      {
+        "path": "packages/kailash-mcp/src/kailash_mcp/contrib/nexus.py",
+        "historical_versions": 1,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "packages/kailash-mcp/src/kailash_mcp/contrib/pact.py",
+        "historical_versions": 1,
+        "exact_ast_matching_blobs": [
+          "babe062dfa47b58dd86183bd245f136f526c75c7"
+        ],
+        "status": "historical-whole-AST-retained",
+        "ancestor_receipt": "cdc75a81bae83eb9013d90224810287e2b16029f"
+      },
+      {
+        "path": "packages/kailash-mcp/src/kailash_mcp/contrib/trust.py",
+        "historical_versions": 1,
+        "exact_ast_matching_blobs": [
+          "8c49426560ef2ed72bd76e57d0b921ac6170b060"
+        ],
+        "status": "historical-whole-AST-retained",
+        "ancestor_receipt": "cdc75a81bae83eb9013d90224810287e2b16029f"
+      },
+      {
+        "path": "packages/kailash-nexus/src/nexus/auth/dependencies.py",
+        "historical_versions": 2,
+        "exact_ast_matching_blobs": [
+          "9fdcb33faae4773557bc6463d7e4f915b6d24b5c"
+        ],
+        "status": "historical-whole-AST-retained",
+        "ancestor_receipt": "0447b938905e7b8047ec01ee1ed5882e8f73ce26"
+      },
+      {
+        "path": "packages/kailash-nexus/src/nexus/auth/exceptions.py",
+        "historical_versions": 2,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "packages/kailash-nexus/src/nexus/auth/jwt.py",
+        "historical_versions": 8,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "packages/kailash-nexus/src/nexus/auth/plugin.py",
+        "historical_versions": 3,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "packages/kailash-nexus/src/nexus/auth/rate_limit/decorators.py",
+        "historical_versions": 4,
+        "exact_ast_matching_blobs": [
+          "2ea1bbf5edb6f0ed5a3455f327f7456e1ff33e68"
+        ],
+        "status": "historical-whole-AST-retained",
+        "ancestor_receipt": "0447b938905e7b8047ec01ee1ed5882e8f73ce26"
+      },
+      {
+        "path": "packages/kailash-nexus/src/nexus/auth/rate_limit/middleware.py",
+        "historical_versions": 7,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "packages/kailash-nexus/src/nexus/auth/rbac.py",
+        "historical_versions": 2,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "packages/kailash-nexus/src/nexus/auth/tenant/middleware.py",
+        "historical_versions": 3,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "packages/kailash-nexus/src/nexus/auth/tenant/resolver.py",
+        "historical_versions": 3,
+        "exact_ast_matching_blobs": [
+          "e9af291464d85e430890ac59948a27fbed4e848b"
+        ],
+        "status": "historical-whole-AST-retained",
+        "ancestor_receipt": "0447b938905e7b8047ec01ee1ed5882e8f73ce26"
+      },
+      {
+        "path": "packages/kaizen-agents/src/kaizen_agents/delegate/delegate.py",
+        "historical_versions": 12,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "packages/kaizen-agents/src/kaizen_agents/governed_agent.py",
+        "historical_versions": 6,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "packages/kaizen-agents/src/kaizen_agents/monitored_agent.py",
+        "historical_versions": 1,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "packages/kaizen-agents/src/kaizen_agents/streaming_agent.py",
+        "historical_versions": 7,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "packages/kaizen-agents/src/kaizen_agents/wrapper_base.py",
+        "historical_versions": 3,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "scripts/convergence-verify.py",
+        "historical_versions": 2,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "src/kailash/runtime/validation/__init__.py",
+        "historical_versions": 5,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "src/kailash/trust/__init__.py",
+        "historical_versions": 13,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "src/kailash/trust/auth/__init__.py",
+        "historical_versions": 1,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "src/kailash/trust/auth/chain.py",
+        "historical_versions": 1,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "src/kailash/trust/auth/jwt.py",
+        "historical_versions": 7,
+        "exact_ast_matching_blobs": [
+          "cd50ac1f84f51aa992d219b9ed636174faf5ea1b"
+        ],
+        "status": "historical-whole-AST-retained",
+        "ancestor_receipt": "0447b938905e7b8047ec01ee1ed5882e8f73ce26"
+      },
+      {
+        "path": "src/kailash/trust/auth/sso/__init__.py",
+        "historical_versions": 1,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "src/kailash/trust/auth/sso/apple.py",
+        "historical_versions": 3,
+        "exact_ast_matching_blobs": [
+          "9d63befd10407b6d8a8ccdaf7f48958d35d5fb6a"
+        ],
+        "status": "historical-whole-AST-retained",
+        "ancestor_receipt": "0447b938905e7b8047ec01ee1ed5882e8f73ce26"
+      },
+      {
+        "path": "src/kailash/trust/auth/sso/azure.py",
+        "historical_versions": 3,
+        "exact_ast_matching_blobs": [
+          "2ad2425323e1af07f5e24e5aa5057f244656601f"
+        ],
+        "status": "historical-whole-AST-retained",
+        "ancestor_receipt": "0447b938905e7b8047ec01ee1ed5882e8f73ce26"
+      },
+      {
+        "path": "src/kailash/trust/auth/sso/google.py",
+        "historical_versions": 3,
+        "exact_ast_matching_blobs": [
+          "b14ded19f6265becc86b0f33336cde2362346999"
+        ],
+        "status": "historical-whole-AST-retained",
+        "ancestor_receipt": "0447b938905e7b8047ec01ee1ed5882e8f73ce26"
+      },
+      {
+        "path": "src/kailash/trust/envelope.py",
+        "historical_versions": 13,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "src/kailash/trust/rate_limit/backends/memory.py",
+        "historical_versions": 1,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "src/kailash/trust/rate_limit/backends/redis.py",
+        "historical_versions": 3,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "tests/trust/unit/test_audit_event.py",
+        "historical_versions": 1,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "tests/trust/unit/test_canonical_envelope.py",
+        "historical_versions": 3,
+        "exact_ast_matching_blobs": [
+          "6453af50d999407ef4c41246c4f59c96616c967d"
+        ],
+        "status": "historical-whole-AST-retained",
+        "ancestor_receipt": "c695004e4231d65b3e9de0c19f0f1939c68d4c5b"
+      },
+      {
+        "path": "tests/trust/unit/test_in_memory_audit_store.py",
+        "historical_versions": 3,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      },
+      {
+        "path": "tests/trust/unit/test_sqlite_audit_store.py",
+        "historical_versions": 6,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-exact-AST-match"
+      }
+    ]
+  }
+}

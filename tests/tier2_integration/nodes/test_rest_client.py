@@ -476,41 +476,23 @@ class TestRESTClientAsyncUpgrade:
         ), "RESTClientNode missing async_run method"
 
     @pytest.mark.asyncio
-    async def test_rest_client_async_get_request(self):
-        """Test async GET request execution."""
-        # Mock the AsyncHTTPRequestNode that RESTClientNode uses internally
-        with patch("kailash.nodes.api.http.AsyncHTTPRequestNode") as mock_async_http:
-            mock_instance = AsyncMock()
-            mock_async_http.return_value = mock_instance
-
-            # Mock async_run return value (match AsyncHTTPRequestNode response format)
-            mock_instance.async_run.return_value = {
-                "success": True,
-                "status_code": 200,
-                "content": {"id": 123, "name": "Test User"},
-                "headers": {"content-type": "application/json"},
-                "response_time_ms": 150,
-                "url": "https://api.example.com/users/123",
-            }
-
-            # Execute async_run
+    async def test_rest_client_async_get_request(self, httpserver):
+        """Parse the real async HTTP envelope and preserve path parameters."""
+        payload = {"id": 123, "name": "Test User"}
+        httpserver.expect_request("/users/123", method="GET").respond_with_json(payload)
+        try:
             result = await self.client.async_run(
-                base_url="https://api.example.com",
+                base_url=httpserver.url_for(""),
                 resource="users/{id}",
                 path_params={"id": "123"},
                 method="GET",
             )
-
-            # Verify results
-            assert result["success"] is True
-            assert result["status_code"] == 200
-            assert result["data"] == {"id": 123, "name": "Test User"}
-
-            # Verify async HTTP was called
-            mock_instance.async_run.assert_called_once()
-            call_args = mock_instance.async_run.call_args[1]
-            assert call_args["method"] == "GET"
-            assert call_args["url"] == "https://api.example.com/users/123"
+        finally:
+            await self.client.cleanup()
+        assert result["success"] is True
+        assert result["status_code"] == 200
+        assert result["data"] == payload
+        httpserver.check_assertions()
 
     @pytest.mark.asyncio
     async def test_rest_client_async_runtime_integration(self):
@@ -596,36 +578,19 @@ class TestRESTClientAsyncUpgrade:
         assert hasattr(client, "async_run"), "RESTClientNode missing async_run method"
 
     @pytest.mark.asyncio
-    async def test_rest_client_async_fallback(self):
-        """Test async execution with proper mocking (from 070-upgrade-components)."""
+    async def test_rest_client_async_json_response(self, httpserver):
+        """A second real response is parsed rather than a fabricated flat envelope."""
+        httpserver.expect_request("/test", method="GET").respond_with_json(
+            {"test": "async works"}
+        )
         client = RESTClientNode(name="rest_client_async")
-
-        # Mock the AsyncHTTPRequestNode that RESTClientNode uses internally
-        from unittest.mock import AsyncMock
-
-        with patch("kailash.nodes.api.http.AsyncHTTPRequestNode") as mock_async_http:
-            mock_instance = AsyncMock()
-            mock_async_http.return_value = mock_instance
-
-            # Mock successful async HTTP response
-            mock_instance.async_run.return_value = {
-                "success": True,
-                "status_code": 200,
-                "content": {"test": "async works"},
-                "headers": {"content-type": "application/json"},
-                "response_time_ms": 100,
-                "url": "https://api.example.com/test",
-            }
-
-            # Execute async_run
+        try:
             result = await client.async_run(
-                base_url="https://api.example.com", resource="test", method="GET"
+                base_url=httpserver.url_for(""), resource="test", method="GET"
             )
-
-            # Verify results
-            assert result["success"] is True
-            assert result["status_code"] == 200
-            assert result["data"]["test"] == "async works"
-
-            # Verify async HTTP was called
-            mock_instance.async_run.assert_called_once()
+        finally:
+            await client.cleanup()
+        assert result["success"] is True
+        assert result["status_code"] == 200
+        assert result["data"] == {"test": "async works"}
+        httpserver.check_assertions()

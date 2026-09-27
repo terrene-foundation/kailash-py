@@ -27,11 +27,11 @@ class TestConstraintEnvelopeModel:
     def test_default_envelope(self):
         """Default envelope has all dimensions with permissive defaults."""
         env = ConstraintEnvelope()
-        assert env.operational.blocked_actions == []
-        assert env.data_access.blocked_paths == []
+        assert env.operational.blocked_actions == ()
+        assert env.data_access.blocked_paths == ()
         assert env.financial.max_cost_per_session is None
         assert env.temporal.max_session_hours is None
-        assert env.communication.blocked_channels == []
+        assert env.communication.blocked_channels == ()
 
     def test_roundtrip(self):
         """to_dict / from_dict preserves all fields."""
@@ -63,12 +63,12 @@ class TestConstraintEnvelopeModel:
         data = env.to_dict()
         restored = ConstraintEnvelope.from_dict(data)
 
-        assert restored.operational.blocked_actions == ["fabricate", "delete_project"]
+        assert restored.operational.blocked_actions == ("fabricate", "delete_project")
         # "keys/" normalized to "keys" by DataAccessConstraints.__post_init__()
-        assert restored.data_access.blocked_paths == ["keys", ".env"]
+        assert restored.data_access.blocked_paths == ("keys", ".env")
         assert restored.financial.max_cost_per_session == 10.0
         assert restored.temporal.allowed_hours == (9, 17)
-        assert restored.communication.requires_review == ["pr_merge"]
+        assert restored.communication.requires_review == ("pr_merge",)
         assert restored.signed_by == "Dr. Jack Hong"
 
     def test_from_dict_ignores_legacy_required_outputs(self):
@@ -86,8 +86,8 @@ class TestConstraintEnvelopeModel:
             "signed_by": "legacy-author",
         }
         env = ConstraintEnvelope.from_dict(data)
-        assert env.operational.blocked_actions == ["fabricate"]
-        assert env.operational.allowed_actions == ["draft"]
+        assert env.operational.blocked_actions == ("fabricate",)
+        assert env.operational.allowed_actions == ("draft",)
         assert not hasattr(env.operational, "required_outputs")
 
     def test_envelope_hash_deterministic(self):
@@ -115,13 +115,13 @@ class TestConstraintEnvelopeModel:
         env = ConstraintEnvelope.from_legacy(
             ["no_fabrication", "honest_limitations"], "Alice"
         )
-        assert env.operational.blocked_actions == [
+        assert env.operational.blocked_actions == (
             "no_fabrication",
             "honest_limitations",
-        ]
+        )
         assert env.signed_by == "Alice"
         # Other dimensions are permissive
-        assert env.data_access.blocked_paths == []
+        assert env.data_access.blocked_paths == ()
         assert env.financial.max_cost_per_session is None
 
     def test_json_serialization(self):
@@ -132,7 +132,7 @@ class TestConstraintEnvelopeModel:
         )
         json_str = json.dumps(env.to_dict(), indent=2, default=str)
         restored = ConstraintEnvelope.from_dict(json.loads(json_str))
-        assert restored.operational.blocked_actions == ["fabricate"]
+        assert restored.operational.blocked_actions == ("fabricate",)
 
 
 class TestMonotonicTightening:
@@ -366,7 +366,7 @@ class TestConstraintEnvelopeInProject:
             constraint_envelope=env,
         )
         assert project.constraint_envelope is not None
-        assert project.constraint_envelope.operational.blocked_actions == ["fabricate"]
+        assert project.constraint_envelope.operational.blocked_actions == ("fabricate",)
 
     async def test_envelope_persisted_to_file(self, trust_dir):
         """Constraint envelope is written to constraint-envelope.json."""
@@ -401,7 +401,7 @@ class TestConstraintEnvelopeInProject:
         )
         loaded = await TrustProject.load(trust_dir)
         assert loaded.constraint_envelope is not None
-        assert loaded.constraint_envelope.operational.blocked_actions == ["delete"]
+        assert loaded.constraint_envelope.operational.blocked_actions == ("delete",)
         assert loaded.constraint_envelope.financial.max_cost_per_session == 25.0
 
     async def test_legacy_constraints_still_work(self, trust_dir):
@@ -414,10 +414,10 @@ class TestConstraintEnvelopeInProject:
         )
         # Legacy constraints create an envelope
         assert project.constraint_envelope is not None
-        assert project.constraint_envelope.operational.blocked_actions == [
+        assert project.constraint_envelope.operational.blocked_actions == (
             "no_fabrication",
             "honest_limitations",
-        ]
+        )
 
     async def test_no_envelope_is_valid(self, trust_dir):
         """Projects without constraints have no envelope."""
@@ -647,7 +647,7 @@ class TestAdversarial:
 
         # Load ignores tampered file — constraints come from manifest
         loaded = await TrustProject.load(trust_dir)
-        assert loaded.constraint_envelope.operational.blocked_actions == ["fabricate"]
+        assert loaded.constraint_envelope.operational.blocked_actions == ("fabricate",)
         assert loaded.constraint_envelope.envelope_hash() == env.envelope_hash()
 
     async def test_tampered_decision_detected_by_verify(self, trust_dir):

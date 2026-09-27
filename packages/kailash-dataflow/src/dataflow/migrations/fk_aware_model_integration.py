@@ -54,8 +54,10 @@ from dataflow.core.type_introspection import (  # issue #772: shared union detec
 
 # from dataflow.core.schema_change import SchemaChange, ChangeType
 from dataflow.migrations.migration_engine import MigrationEngine
-from dataflow.migrations.schema_state_manager import ChangeType
-from dataflow.migrations.schema_state_manager import MigrationOperation as SchemaChange
+from dataflow.migrations.schema_state_manager import (
+    ChangeType,
+    MigrationOperation as SchemaChange,
+)
 
 from .fk_aware_workflow_orchestrator import FKAwareWorkflowOrchestrator
 from .fk_safe_migration_executor import FKSafeMigrationExecutor

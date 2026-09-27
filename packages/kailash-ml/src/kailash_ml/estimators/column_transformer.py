@@ -6,8 +6,9 @@ from __future__ import annotations
 
 from typing import Any, List, Tuple
 
-from kailash_ml.estimators._protocol import check_transformer_step
 from sklearn.compose import ColumnTransformer as _SKColumnTransformer
+
+from kailash_ml.estimators._protocol import check_transformer_step
 
 __all__ = ["ColumnTransformer"]
 

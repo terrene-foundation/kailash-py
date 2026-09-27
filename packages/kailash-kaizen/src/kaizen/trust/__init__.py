@@ -62,6 +62,9 @@ Example:
 
 # Phase 3 Week 9: A2A HTTP Service
 from kailash.trust.a2a import (
+    TrustVerificationError as A2ATrustVerificationError,  # Service; Agent Card; JSON-RPC; Authentication; Request/Response Models; Exceptions
+)
+from kailash.trust.a2a import (
     A2AAuthenticator,
     A2AError,
     A2AMethodHandlers,
@@ -75,11 +78,9 @@ from kailash.trust.a2a import (
     AgentCardGenerator,
     AuditQueryRequest,
     AuditQueryResponse,
-)
-from kailash.trust.a2a import AuthenticationError as A2AAuthenticationError
-from kailash.trust.a2a import AuthorizationError as A2AAuthorizationError
-from kailash.trust.a2a import DelegationError as A2ADelegationError
-from kailash.trust.a2a import (
+    AuthenticationError as A2AAuthenticationError,
+    AuthorizationError as A2AAuthorizationError,
+    DelegationError as A2ADelegationError,
     DelegationRequest,
     DelegationResponse,
     InvalidTokenError,
@@ -93,11 +94,6 @@ from kailash.trust.a2a import (
     JsonRpcResponse,
     TokenExpiredError,
     TrustExtensions,
-)
-from kailash.trust.a2a import (
-    TrustVerificationError as A2ATrustVerificationError,  # Service; Agent Card; JSON-RPC; Authentication; Request/Response Models; Exceptions
-)
-from kailash.trust.a2a import (
     VerificationRequest,
     VerificationResponse,
     create_a2a_app,
@@ -291,9 +287,7 @@ from kailash.trust.registry import (
     AgentAlreadyRegisteredError,
     AgentHealthMonitor,
     AgentMetadata,
-)
-from kailash.trust.registry import AgentNotFoundError as RegistryAgentNotFoundError
-from kailash.trust.registry import (
+    AgentNotFoundError as RegistryAgentNotFoundError,
     AgentRegistry,
     AgentRegistryStore,
     AgentStatus,
@@ -303,8 +297,8 @@ from kailash.trust.registry import (
     RegistrationRequest,
     RegistryError,
     TrustVerificationError,
+    ValidationError as RegistryValidationError,
 )
-from kailash.trust.registry import ValidationError as RegistryValidationError
 
 # CARE-007: Revocation Event Broadcasting
 from kailash.trust.revocation import (

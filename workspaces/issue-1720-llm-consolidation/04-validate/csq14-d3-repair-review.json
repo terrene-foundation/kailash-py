@@ -1,0 +1,25 @@
+{
+  "state": "landed, drained",
+  "files": 5,
+  "positive": "17 passed1deselected-Werror;final1564file5passed1deselected",
+  "reviewer": "ml_gate_recovery",
+  "clean_rounds": 2,
+  "controls": [
+    "71originalassertASTs preserved; assertiondeletion rejected",
+    "15caller runtime contexts",
+    "ActualSQLiteexception cleanup order runtime thenDataFlow",
+    "Omittedruntime/dbclose each rejected"
+  ],
+  "logs": [
+    "/tmp/csq14-d3-independent-review.log",
+    "/tmp/csq14-d3-exception-review.log"
+  ],
+  "limit": "PostgreSQL markedcase remains excluded until infrastructuregate",
+  "log_sha256": {
+    "/tmp/csq14-d3-independent-review.log": "6ee028eb2f7ffb8649dd71931aaf7e94c71aab2bbbf2fe2a5ee4a26435e83eb8",
+    "/tmp/csq14-d3-exception-review.log": "78ad7618a675260aee63c21066d46647a117830e0e60f351047c3b2efdf7c497"
+  },
+  "root_review": "Two source/contract passes; actual producer and reached-control evidence inspected. D1 earlier dead-branch finding fixed before clean rounds.",
+  "source_commit": "ea6aa40c7",
+  "merge_commit": "30cbafa19"
+}

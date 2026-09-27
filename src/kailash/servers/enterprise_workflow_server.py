@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional, Set, Union
 # handler body is invisible to it (see websocket_endpoint's docstring).
 try:
     from fastapi import WebSocket
+    from starlette.websockets import WebSocketDisconnect, WebSocketState
 except ImportError as exc:  # pragma: no cover -- covered by structural test
     raise ImportError(
         "kailash.servers.enterprise_workflow_server requires server "
@@ -696,13 +697,24 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
             uncredentialed refusal would have read as "gated" when the route
             was simply broken.
             """
-            await websocket.accept()
             try:
+                await websocket.accept()
                 while True:
                     # Basic WebSocket echo - subclasses can override
                     data = await websocket.receive_text()
                     await websocket.send_text(f"Echo: {data}")
+            except WebSocketDisconnect:
+                # Peer disconnects are normal transport termination.
+                pass
             except Exception as e:
                 logger.error(f"WebSocket error: {e}")
             finally:
-                await websocket.close()
+                if (
+                    websocket.client_state is not WebSocketState.DISCONNECTED
+                    and websocket.application_state is not WebSocketState.DISCONNECTED
+                ):
+                    try:
+                        await websocket.close()
+                    except WebSocketDisconnect:
+                        # The peer can disconnect between the state check and send.
+                        pass

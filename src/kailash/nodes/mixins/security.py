@@ -10,6 +10,8 @@ import time
 from functools import wraps
 from typing import Any, Dict, Optional
 
+from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
+
 
 class SecurityMixin:
     """
@@ -145,8 +147,8 @@ class LoggingMixin:
         """
         log_data = {**self._log_context, **extra}
         if error:
-            log_data["error_type"] = type(error).__name__
-            log_data["error_message"] = str(error)
+            log_data["error_type"] = safe_type_name(error)
+            log_data["error_message"] = safe_exception_frames(error)
         self.logger.error(message, extra=log_data)
 
     def log_warning(self, message: str, **extra) -> Any:
@@ -159,16 +161,14 @@ class LoggingMixin:
     def log_error_with_traceback(
         self, error: Exception, operation: str = "unknown"
     ) -> Any:
-        """Log an error with full traceback information.
+        """Log an error with frame locations, without exception payloads.
 
         Return type is Any to allow async overrides in AsyncNode subclasses.
         """
-        import traceback
-
         self.log_error(
             f"Operation failed: {operation}",
             error=error,
-            traceback=traceback.format_exc(),
+            traceback=safe_exception_frames(error),
         )
 
     def log_node_execution(self, operation: str, **context) -> Any:

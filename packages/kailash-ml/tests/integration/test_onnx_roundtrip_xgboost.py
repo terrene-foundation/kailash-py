@@ -39,8 +39,9 @@ def test_xgboost_onnx_roundtrip_prediction_parity(tmp_path: Path) -> None:
     """Train a small XGBoost classifier, export to ONNX, assert parity."""
     import onnxruntime as ort
     import xgboost as xgb
-    from kailash_ml.bridge.onnx_bridge import OnnxBridge
     from sklearn.datasets import make_classification
+
+    from kailash_ml.bridge.onnx_bridge import OnnxBridge
 
     X, y = make_classification(
         n_samples=200,

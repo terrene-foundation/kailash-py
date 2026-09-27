@@ -30,8 +30,11 @@ from pathlib import Path
 
 import pytest
 
-from kailash.middleware.auth import JWTAuthManager, JWTConfig
-from kailash.middleware.auth import jwt_auth as jwt_auth_module
+from kailash.middleware.auth import (
+    JWTAuthManager,
+    JWTConfig,
+    jwt_auth as jwt_auth_module,
+)
 
 #: At least 32 characters, matching the floor documented for JWT signing keys.
 CONFIGURED_SECRET = "a-configured-signing-secret-at-least-32-chars"

@@ -17,8 +17,7 @@ import pytest
 
 from kailash.delegate.envelope import DelegateConstraintEnvelope, EnvelopeWideningError
 from kailash.delegate.types import DelegateGenesisRecord
-from kailash.trust.chain import AuthorityType
-from kailash.trust.chain import GenesisRecord as SubstrateGenesisRecord
+from kailash.trust.chain import AuthorityType, GenesisRecord as SubstrateGenesisRecord
 from kailash.trust.envelope import ConstraintEnvelope, FinancialConstraint
 
 

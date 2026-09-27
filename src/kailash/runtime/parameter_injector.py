@@ -8,6 +8,7 @@ import logging
 from typing import Any, Dict, List, Optional, Union
 
 from kailash.nodes.base import Node
+from kailash.utils.secure_logging import safe_exception_frames, safe_log_field
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,7 @@ class DeferredConfigNode(Node):
         """Set runtime configuration parameters."""
         self._runtime_config.update(config)
         logger.debug(
-            f"Set runtime config for {self._node_class.__name__}: {list(config.keys())}"
+            f"Set runtime config for {safe_log_field(self._node_class.__name__)}: {len(config)}"
         )
 
     def get_effective_config(self):
@@ -60,10 +61,12 @@ class DeferredConfigNode(Node):
                 self._actual_node = self._node_class(**effective_config)
                 self._is_initialized = True
                 logger.info(
-                    f"Initialized {self._node_class.__name__} with runtime config"
+                    f"Initialized {safe_log_field(self._node_class.__name__)} with runtime config"
                 )
             except Exception as e:
-                logger.warning(f"Failed to initialize {self._node_class.__name__}: {e}")
+                logger.warning(
+                    f"Failed to initialize {safe_log_field(self._node_class.__name__)}: {safe_exception_frames(e)}"
+                )
 
     def _has_required_config(self):
         """Check if we have enough configuration to initialize the node."""
@@ -87,12 +90,14 @@ class DeferredConfigNode(Node):
                 ]
                 if missing_params:
                     logger.warning(
-                        f"Missing required parameters for {node_name}: {missing_params}"
+                        f"Missing required parameters for {safe_log_field(node_name)}: {len(missing_params)}"
                     )
                     return False
 
         except Exception as e:
-            logger.debug(f"Could not get parameter definitions for {node_name}: {e}")
+            logger.debug(
+                f"Could not get parameter definitions for {safe_log_field(node_name)}: {safe_exception_frames(e)}"
+            )
 
         # Node-specific validation rules
         if "OAuth2" in node_name:
@@ -100,7 +105,7 @@ class DeferredConfigNode(Node):
             missing_oauth = [p for p in required_oauth if p not in effective_config]
             if missing_oauth:
                 logger.warning(
-                    f"Missing OAuth2 parameters for {node_name}: {missing_oauth}"
+                    f"Missing OAuth2 parameters for {safe_log_field(node_name)}: {len(missing_oauth)}"
                 )
                 return False
 
@@ -117,32 +122,38 @@ class DeferredConfigNode(Node):
                 has_connection_string or has_individual_params or has_minimal_config
             ):
                 logger.warning(
-                    f"Missing database connection parameters for {node_name}"
+                    f"Missing database connection parameters for {safe_log_field(node_name)}"
                 )
                 return False
             if not has_query:
-                logger.warning(f"Missing query parameter for {node_name}")
+                logger.warning(
+                    f"Missing query parameter for {safe_log_field(node_name)}"
+                )
                 return False
 
         elif "HTTP" in node_name or "Request" in node_name:
             if "url" not in effective_config:
-                logger.warning(f"Missing url parameter for {node_name}")
+                logger.warning(f"Missing url parameter for {safe_log_field(node_name)}")
                 return False
 
         elif "LLM" in node_name or "Agent" in node_name:
             if "model" not in effective_config and "provider" not in effective_config:
-                logger.warning(f"Missing model/provider parameters for {node_name}")
+                logger.warning(
+                    f"Missing model/provider parameters for {safe_log_field(node_name)}"
+                )
                 return False
 
         elif "Cache" in node_name or "Redis" in node_name:
             redis_params = ["redis_host", "redis_port", "host", "port"]
             has_redis_config = any(param in effective_config for param in redis_params)
             if not has_redis_config:
-                logger.warning(f"Missing Redis connection parameters for {node_name}")
+                logger.warning(
+                    f"Missing Redis connection parameters for {safe_log_field(node_name)}"
+                )
                 return False
 
         # Validation passed
-        logger.debug(f"Configuration validation passed for {node_name}")
+        logger.debug(f"Configuration validation passed for {safe_log_field(node_name)}")
         return True
 
     def get_parameters(self):
@@ -371,14 +382,17 @@ class WorkflowParameterInjector:
             workflow_params: Dictionary of workflow-level parameters
         """
         if self.debug:
-            self.logger.debug(
-                f"Injecting workflow parameters: {list(workflow_params.keys())}"
-            )
+            self.logger.debug(f"Injecting workflow parameters: {len(workflow_params)}")
 
-        # For now, this is a placeholder implementation
-        # In a full implementation, this would traverse the workflow
-        # and inject parameters into any DeferredConfigNode instances
-        pass
+        mapped_parameters = self.transform_workflow_parameters(workflow_params)
+        for node_id, node in self._get_all_nodes().items():
+            parameters = mapped_parameters.get(node_id)
+            if not parameters:
+                continue
+            if callable(getattr(node, "set_runtime_config", None)):
+                node.set_runtime_config(**parameters)
+            elif callable(getattr(node, "set_runtime_parameters", None)):
+                node.set_runtime_parameters(**parameters)
 
     def transform_workflow_parameters(
         self, parameters: Dict[str, Any]
@@ -412,8 +426,7 @@ class WorkflowParameterInjector:
                             # emitted verbatim, which is what every sibling
                             # debug line in this method already avoids.
                             self.logger.debug(
-                                f"Mapping workflow input {workflow_param} -> {node_param} "
-                                f"for node {node_id} (type: {type(value).__name__})"
+                                f"Mapping workflow input {safe_log_field(workflow_param)} -> {safe_log_field(node_param)} for node {safe_log_field(node_id)} (type: {safe_log_field(type(value).__name__)})"
                             )
 
                 if node_params:
@@ -425,8 +438,7 @@ class WorkflowParameterInjector:
 
         if self.debug:
             self.logger.debug(
-                f"Found nodes for parameter injection: {list(all_nodes.keys())}, "
-                f"injecting parameters: {list(parameters.keys())}"
+                f"Found nodes for parameter injection: {len(all_nodes)}, injecting parameters: {len(parameters)}"
             )
 
         # Distribute workflow parameters to ALL nodes that can accept them
@@ -447,7 +459,7 @@ class WorkflowParameterInjector:
                     node_params[mapped_param_name] = value
                     if self.debug:
                         self.logger.debug(
-                            f"Injecting {param_name} -> {mapped_param_name} into node {node_id}"
+                            f"Injecting {safe_log_field(param_name)} -> {safe_log_field(mapped_param_name)} into node {safe_log_field(node_id)}"
                         )
 
             if node_params:
@@ -620,12 +632,14 @@ class WorkflowParameterInjector:
         """
         # Validate inputs
         if not isinstance(param_name, str):
-            logger.warning(f"Parameter name must be string, got {type(param_name)}")
+            logger.warning(
+                f"Parameter name must be string, got {safe_log_field(type(param_name))}"
+            )
             return None
 
         if not isinstance(node_param_defs, dict):
             logger.warning(
-                f"Node parameter definitions must be dict, got {type(node_param_defs)}"
+                f"Node parameter definitions must be dict, got {safe_log_field(type(node_param_defs))}"
             )
             return None
 
@@ -662,7 +676,7 @@ class WorkflowParameterInjector:
 
             except Exception as e:
                 logger.warning(
-                    f"Error processing parameter definition for {node_param_name}: {e}"
+                    f"Error processing parameter definition for {safe_log_field(node_param_name)}: {safe_exception_frames(e)}"
                 )
                 continue
 
@@ -677,7 +691,7 @@ class WorkflowParameterInjector:
         if node_instance and self._node_accepts_kwargs(node_instance):
             # PythonCodeNode with **kwargs can accept any workflow parameter
             logger.debug(
-                f"Injecting workflow parameter '{param_name}' into **kwargs function"
+                f"Injecting workflow parameter '{safe_log_field(param_name)}' into **kwargs function"
             )
             return param_name
 
@@ -812,7 +826,7 @@ class WorkflowParameterInjector:
                 node_instance._initialize_if_needed()
             if self.debug:
                 self.logger.debug(
-                    f"Configured deferred node '{node_id}' with parameters: {list(config.keys())}"
+                    f"Configured deferred node '{safe_log_field(node_id)}' with parameters: {len(config)}"
                 )
         else:
             raise ValueError(f"Node '{node_id}' is not a deferred configuration node")

@@ -1,0 +1,52 @@
+{
+  "base_head": "376bf4914e76c09c6a3107c919ee653e1e13ccb6",
+  "dependencies_head": "fbbce26c1d11eb64f6d08938d740fae7ffb91e55",
+  "unchanged_dependencies": {
+    "src/kailash/runtime/async_local.py": {
+      "base_sha256": "5a5234e0b74b8246816fa0bfbec2229ed018c8cbd6d6ace76b071c93ae54ace2",
+      "sha256": "3763aa80191780730b726d49d0bc360809a7ea4904ffca403a02ad93fe0a0ec3"
+    },
+    "src/kailash/gateway/enhanced_gateway.py": {
+      "base_sha256": "b5ef813c89314379a66da6dd46f419fccc8e137d36b119fa308febd84b356bdf",
+      "sha256": "d1593a21eced16422060942c2369911634ffff262533c6dd573b3ff64eadc21d"
+    },
+    "specs/core-runtime.md": {
+      "base_sha256": "66ac9bb66e8bfc07b5f57e692323d1a0465f3509bea35999509ab60674de7cf0",
+      "sha256": "723f66f52328f3b106c5d44199b9981266a47394e95b70513efcd9f9006d60ce"
+    },
+    "tests/regression/test_runtime_aclose_contract.py": {
+      "base_sha256": null,
+      "sha256": "fecbf5e848be31caec816ba638ebbf68c6d3dd19132e92f72a9373b517ccfb34"
+    }
+  },
+  "files": {
+    "packages/kailash-dataflow/src/dataflow/core/model_registry.py": {
+      "base": "089c339b47587f955041d38e2031b8f60b1511ea0f832ab9acacaa992b493f5d",
+      "final": "926b5a66ab1dbc22e77eda97a2d4aab728760a52bd8546a8e9cacc28b2642a8b"
+    },
+    "packages/kailash-dataflow/src/dataflow/core/engine.py": {
+      "base": "cf67fc195ee0f525e6010b965378975fa38816156b0cc47a9cb72a07248c6990",
+      "final": "d62f287c61a146bea09eeccc69d97601270ce29d45255f538fd96bb94b377dac"
+    },
+    "packages/kailash-dataflow/tests/regression/test_issue_352_fastapi_startup.py": {
+      "base": "aabef59ed8049a2625af5b0cde3a2116cee9da0043de5411f96b0470fb11c42c",
+      "final": "a0d9ebda2dece7b8cc90bf13c8cdefdab28cdb3886e5b22df573f53f40d8d73f"
+    },
+    "packages/kailash-dataflow/tests/unit/core/test_model_registry_runtime_injection.py": {
+      "base": "9a1400a52886eff4e872d2a6b70a08246e64de92a0745671f8df4c367989776b",
+      "final": "a6a700d8c76f540894fbd18fd838e094cca593eddcdd50ada9745ae98c9319bb"
+    },
+    "specs/dataflow-core.md": {
+      "base": "2346c62c8c30fc8f91a7911b5ae0baf0685c4f5ac5fc8bf53a484a2b64df461f",
+      "final": "d7d519663556ba8592ae08a1e506778f274d0cf6e2947cf2ae502588b3c2fa00"
+    },
+    "packages/kailash-dataflow/tests/regression/test_model_registry_native_owner_bridge.py": {
+      "base": null,
+      "final": "e325a8df4a2a9c19a22e6464ac9fa3d8d9ad7170627c082e7e98b08fdff51530"
+    },
+    "src/kailash/runtime/local.py": {
+      "base": "8c31a931391e4c6197aa34c5de4f6615b2f3aef2424ef20f067bf1596df3248c",
+      "final": "afaf1197c3308adbe86b641566ed86cad6e0ac30ace98f2aa8c93fb87e3b44fe"
+    }
+  }
+}

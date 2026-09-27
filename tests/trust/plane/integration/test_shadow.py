@@ -422,9 +422,9 @@ class TestConstraintInference:
     def test_infer_empty_session(self):
         session = ShadowSession()
         envelope = infer_constraints(session)
-        assert envelope.operational.allowed_actions == []
-        assert envelope.data_access.read_paths == []
-        assert envelope.data_access.write_paths == []
+        assert envelope.operational.allowed_actions == ()
+        assert envelope.data_access.read_paths == ()
+        assert envelope.data_access.write_paths == ()
 
 
 # ---------------------------------------------------------------------------

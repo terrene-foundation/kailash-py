@@ -16,6 +16,7 @@ import logging
 import threading
 
 import pytest
+
 from kailash_ml._env import (
     CANONICAL_STORE_URL_ENV,
     DEFAULT_STORE_URL,

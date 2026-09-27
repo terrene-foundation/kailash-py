@@ -1,0 +1,74 @@
+{
+  "scope": {
+    "archive_ref": "scrap/pre-triage-snapshot-2026-04-08",
+    "archive_commit": "4cd5ef5124e8360c47784c786bf554130e830942",
+    "reviewed_head": "db9565623dd03620e03869fc63e4d51c9ceedd67",
+    "files": [
+      "src/kailash/trust/envelope.py",
+      "src/kailash/trust/auth/chain.py"
+    ],
+    "excludes": "remaining271snapshotpaths, runtime middleware installation beyond these2files, independently-produced cross-SDK crypto bytes"
+  },
+  "specs_read": [
+    "specs/_index.md Trust Plane",
+    "specs/trust-eatp.md section4",
+    "specs/trust-crypto.md section12",
+    "specs/trust-canonical-encoders.md familiesA/B",
+    "specs/nexus-auth.md section9.4 distinguishes NexusAuthPlugin from AuthMiddlewareChain"
+  ],
+  "files": [
+    {
+      "path": "src/kailash/trust/envelope.py",
+      "disposition": "retained, then superseded by later hardening",
+      "landing": "c695004e4231d65b3e9de0c19f0f1939c68d4c5b",
+      "landing_evidence": "All non-import AST identical archive\u2192landing; only unused timezone import removal and equivalent converter import splitting. Mutated budget_limit default rejected comparator.",
+      "current_evidence": "All48 archived methods remain;36 unchanged AST;12 differ through canonical AgentPosture, canonical scalar hashing, safer YAML reads, algorithm dispatch, NaN JSON rejection, empty allowlist tightening and import formatting.",
+      "missing_archived_contracts": []
+    },
+    {
+      "path": "src/kailash/trust/auth/chain.py",
+      "disposition": "superseded deliberately",
+      "landing": "0447b938905e7b8047ec01ee1ed5882e8f73ce26",
+      "landing_quote": "Auth middleware chain reordered to rate_limit \u2192 JWT \u2192 RBAC \u2192 session \u2192 audit (audit innermost) per SPEC-06 \u00a78.2.",
+      "current_evidence": "Entire current AST equals landing. Six of8 archived methods unchanged; priority and validate intentionally replaced TENANT with SESSION and changed audit priority; no missing methods.",
+      "observed_installation_order": [
+        "audit",
+        "session",
+        "rbac",
+        "jwt",
+        "rate_limit"
+      ],
+      "observed_execution_order": [
+        "rate_limit",
+        "jwt",
+        "rbac",
+        "session",
+        "audit"
+      ],
+      "negative_controls": "RBAC without JWT and SESSION without JWT raise ValueError; full chain validates.",
+      "missing_archived_contracts": []
+    }
+  ],
+  "receipts_all_ancestors": [
+    "c695004e4231d65b3e9de0c19f0f1939c68d4c5b",
+    "0447b938905e7b8047ec01ee1ed5882e8f73ce26",
+    "1e39a06121fe0313ff0c2c1bbfdd57bf2f8e7f85",
+    "31fd670e725273fac2d0d207ba6735807fd0854a",
+    "ae0118b640394495e6c8fe1c960dc48337da8d9f",
+    "9dfb1d9680c51fcfa2e8f65f1ff32f9fc52ef6ea",
+    "554c5e8cf92b131bccc14d5f4ff6c730b983035a",
+    "ee573694105d0d58df02a8246a61c6daffc168e8"
+  ],
+  "probes": [
+    {
+      "case": "common finite financial/operational/supervised envelope",
+      "result": "archive/current canonical bytes and HMAC equal; tampered budget fails; tightening min100,25=25 and intersection read/write with read=read; widening false; numeric NaN rejected"
+    },
+    {
+      "case": "current empty allowed_actions",
+      "result": "empty child tighter than read parent=True; read child tighter than empty parent=False",
+      "receipt": "ee573694105d0d58df02a8246a61c6daffc168e8"
+    }
+  ],
+  "conclusion": "Neither named archived file contains an unlanded unique implementation requiring recovery. Do not restore archived chain priority/TENANT over deliberately landed successor. No current defect established by bounded audit. This is archive adjudication, not whole-trust security certification."
+}

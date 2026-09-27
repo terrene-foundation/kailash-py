@@ -74,6 +74,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from kailash.utils.secure_logging import sanitize_log_value
+
 logger = logging.getLogger(__name__)
 
 
@@ -283,7 +285,9 @@ class ConstraintDimension(ABC):
         except (TypeError, ValueError):
             # Non-numeric: subclass should override
             logger.warning(
-                f"validate_tightening not implemented for non-numeric dimension {self.name}, returning False"
+                "validate_tightening not implemented for non-numeric dimension "
+                "%s, returning False",
+                sanitize_log_value(self.name, 128),
             )
             return False
 
@@ -404,12 +408,20 @@ class ConstraintDimensionRegistry:
 
         # Built-in dimensions are auto-approved
         if name in self.BUILTIN_DIMENSIONS:
-            logger.debug(f"Auto-approved built-in dimension: {name}")
+            logger.debug(
+                "Auto-approved built-in dimension: %s", sanitize_log_value(name, 128)
+            )
         elif requires_review:
             self._pending_review.add(name)
-            logger.info(f"Dimension '{name}' registered pending review")
+            logger.info(
+                "Dimension '%s' registered pending review",
+                sanitize_log_value(name, 128),
+            )
         else:
-            logger.debug(f"Dimension '{name}' registered (no review required)")
+            logger.debug(
+                "Dimension '%s' registered (no review required)",
+                sanitize_log_value(name, 128),
+            )
 
     def approve_dimension(self, name: str, reviewer: str) -> None:
         """
@@ -426,12 +438,18 @@ class ConstraintDimensionRegistry:
             raise ValueError(f"Dimension '{name}' not found")
 
         if name not in self._pending_review:
-            logger.debug(f"Dimension '{name}' is already approved")
+            logger.debug(
+                "Dimension '%s' is already approved", sanitize_log_value(name, 128)
+            )
             return
 
         self._pending_review.remove(name)
         self._reviewers[name] = reviewer
-        logger.info(f"Dimension '{name}' approved by {reviewer}")
+        logger.info(
+            "Dimension '%s' approved by %s",
+            sanitize_log_value(name, 128),
+            sanitize_log_value(reviewer, 128),
+        )
 
     def get(self, name: str) -> Optional[ConstraintDimension]:
         """
@@ -451,7 +469,10 @@ class ConstraintDimensionRegistry:
 
         # Check if pending review
         if name in self._pending_review and not self._allow_unreviewed:
-            logger.warning(f"Dimension '{name}' is pending review and cannot be used")
+            logger.warning(
+                "Dimension '%s' is pending review and cannot be used",
+                sanitize_log_value(name, 128),
+            )
             return None
 
         return self._dimensions[name]

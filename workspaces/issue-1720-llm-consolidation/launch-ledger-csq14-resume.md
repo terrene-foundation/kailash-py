@@ -1,0 +1,219 @@
+# CSQ 14 continuation — 2026-09-26
+
+## Live repair checkpoint — supersedes earlier statuses
+
+Committed source is `07ee23ffee758a74ec42abd2bdc90c3aba57e062`; final promotion gates remain OPEN.
+Runtime automatic diagnostics (9279d92c3), temporary connection ownership
+(fb7187f36), memory cache/connection identities (48a36aef8), single-owner
+conditional fallback (74c330005), and durable conditional state (ec01c3b87)
+are landed with two scoped independent rounds and reached negative controls.
+Fixtures now preserve actual gateway lifetimes, native graph ordering, import
+security, and real SQLite rollback while asserting safe automatic diagnostics.
+The final conformance fixture commit is 07ee23ffe. Runtime state receipts include
+349 author, 166 independent, 229 parent integration and 21 final focused passes;
+DataFlow memory/address receipts include 134 author, 114 independent and 39
+revised parent passes. These overlapping totals are not unique coverage counts.
+Real Redis cache isolation and real SQLite tenant-separated replay were exercised.
+
+ONE source shard remains: shared SQLite address parsing and cache identity
+across sync/async adapters, registry, migrations, DDL and connection producers.
+Author archive_checkpoint works in root-created sibling csq14-sqlite-address-parity,
+branch fix/csq14-sqlite-address-parity at cb92f3261 with memory39ce as borrowed base.
+Core correctness and security specialists consult/review independently. Public
+spec defines standard three-slash relative and four-slash absolute URLs; retain
+legacy two-slash relative compatibility and native URI options. A shared helper
+must preserve driver options and distinguish disk versus memdb VFS databases in
+cache identity. Actual disk/memdb rows differed while a draft key collided; this
+finding is OPEN until the frozen correction and reached controls pass. Generic
+Rust-pinned key encoders stay byte-identical. Caller cache namespaces may change
+to close this isolation defect; no persistent data migration is intended.
+
+The a6ff5afe full gates ran and were NOT clean: Linux root 8 failed/3398 passed,
+DataFlow unit 3 failed/3481 passed, Mac hook pytest-check 1 failed/4897 passed.
+Those identified defects/fixtures are repaired, but those runs do not cover the
+current source. Final full root/DataFlow suites, all configured all-files hooks
+including pytest-check, and three whole-union reviews must run after the final
+shard converges. Authorized interim pytest-check skips remain tracked here until
+that full hook gate passes. No push has occurred; PR #2229 remains ce4c9de67.
+D1 promotion approval persists. Exact-head required checks and all previously
+failing test jobs must pass before a separate merge command. Three post-main
+union/tree-parity reviews remain due, then drain only clean landed siblings.
+
+All nine CodeQL false-positive dismissals (11595,11596,11466,11467,10866,5153,
+131,133,6082) were explicitly approved, executed and independently re-read as
+dismissed on 2026-09-26. The receipt is
+`04-validate/csq14-codeql-disposition-receipt.json`; no approval remains pending
+for these IDs. CodeQL and other promotion checks were not waived.
+Preserve five stashes and 52 uncertain historical refs. No package publishing,
+owner acceptance, whole-forest completion, Windows runtime or filesystem race
+prevention claim. Existing final2/memory review overlays remain held until
+source parity is proven and their owned contents are safely drained.
+
+
+## Current continuation checkpoint — supersedes historical gate states
+
+Primary dev: `51fcd96c003587ce6ca16ba56cde799e135850b4`. Content failure, DataFlow utility/options,
+gateway sibling ownership and safe logging are now landed. Individual review
+receipts, frozen hashes and validation scope are retained in
+`04-validate/csq14-active-repair-checkpoint.json`.
+
+A bounded follow-on shard repairs the actual compatibility-wrapper option drop:
+`fix/csq14-runtime-option-forwarding`, sibling `csq14-runtime-forwarding`, owner
+`archive_checkpoint`. The orchestrator created it at e7c1085 before dispatch;
+the prompt mandates resolved-root/branch assertions and concrete report-back.
+Supported canonical options must be forwarded; non-None unsupported controls
+must fail before execution. No new runtime engine is authorized by this shard.
+
+The nine CodeQL dispositions remain proposals pending explicit approval. D1
+promotion approval persists; package publishing remains unauthorized. The final
+all-files hook obligation is OPEN, including pytest-check; individual commit
+skips do not discharge it. Final whole-union reviews and exact-head successful
+remote checks are also OPEN. Five stashes and uncertain historical refs remain
+held. No forest-completion or owner-acceptance claim is made.
+
+Recovered parent thread: `01a0d8a0-e67b-7dc2-8628-1e1bfbbd3eca`.
+Source checkpoint: `709759a385ae5950fdeab2eda739718dddfb75e3`.
+Prior user approval for D1 and the advisory-type exception was read from
+thread `01a0d7ea-e2a1-74b3-8af2-2a47dc410525`; it remains in force.
+
+| Lane | Branch | Task set | Agent roster | Status |
+| --- | --- | --- | --- | --- |
+| ML gate | `fix/csq14-ml-seed` | Diagnose failed seed unit test; preserve independent opt-outs; bounded ML gate and controls | `/root/ml_gate_recovery`: committing; `/root/ml_correctness_review`: two clean rounds; `/root/archive_checkpoint`: two clean adversarial rounds | Landed `6fa357a1b`; branch and sibling removed |
+| Archive evidence | `docs/csq14-archive-recovery` | Recover five temporary reports; verify historical receipts and 52-ref inventory; retain unresolved scope | `/root/archive_checkpoint`: delivered; `/root/ml_correctness_review`: independent verification | Landed `6d5e34e35`; branch and sibling removed |
+| Integration | `dev` | Recover completed gate result; exact-head promotion checks; land and drain completed lanes | `/root`: coordinating | All implementation lanes drained; full configured hooks passed; promotion checks next |
+
+Sibling root: `/Users/esperie/repos/kailash/build/.kailash-py-wt/`.
+Both dispatched lanes received a mandatory resolved-root/branch assertion.
+No lane may push, merge, delete archive refs, or modify the five held stashes.
+
+## Recovered gate outcome
+
+`/tmp/kailash-csq13-final-delta-gate.log` ended with
+`[trestle-remote-run] exit=1 command wall=404.3s host=esperie-ai`.
+The earlier handoff's pending Core and hook checks actually completed:
+`FINAL_DELTA_STEP core_tier1_exact exit=0` and
+`FINAL_DELTA_STEP full_hooks exit=0`. Core reported
+`5371 passed, 5 skipped, 3 deselected, 6 xfailed, 5 xpassed`.
+Those exclusions do not certify their paths.
+
+The remaining failure was
+`test_torch_deterministic_false_when_torch_opted_out`, with
+`Failed: Timeout (>30.0s)` while importing `pytorch_lightning`.
+The bounded ML selection reported `1 failed, 235 passed`.
+This is recovered evidence, not a newly executed test run.
+
+## Live inventory at recovery
+
+After fetching origin: `dev` and `origin/dev` both at `709759a38`;
+`main` and `origin/main` at `50f98afe4`; PR #2229 still open at
+`28602f1a0` on `promote/2026-09-11-cont30`.
+Before dispatch, only the primary checkout remained. The two sibling trees
+above were created by this continuation and must be drained after completion.
+Five stashes remain held. No historical archive ref was deleted.
+
+Required main checks read from branch protection: `CodeQL`, `Analyze Python`,
+and `test-with-infrastructure`. All previously failing test jobs must also
+succeed on the final promotion head. Read evidence and merge remain separate
+operations. Package publication is outside D1.
+
+## Final gate obligation
+
+The ML lane may skip only `pytest-check` on its local commit, documenting the
+bypass and this follow-up in the commit body. The orchestrator must run the
+complete configured all-files hooks, including `pytest-check`, before the
+consolidated promotion push. This preserves the existing final-gate obligation
+without repeating the Core suite at every lane checkpoint. No skipped hook is
+represented as having passed.
+
+Obligation discharged: full configured all-files hooks including `pytest-check` passed
+at `fe791935c`; `git diff --exit-code` passed. See `04-validate/csq14-final-hooks-receipt.json`.
+Only evidence/continuity documents changed after that gate.
+
+## New repair dispatch after refreshed CI
+
+ (head ce4c9de67)
+
+DataFlow unit job: 3 failed, 3469 passed, 31 skipped, 56 warnings.
+Root regression job: 3 failed, 3000 passed, 4 skipped, 24 deselected, 64 warnings.
+Other completed workflows pass; CodeQL still pending at observation. No merge yet.
+
+| Active lane | Agent | Branch / sibling suffix | Scope |
+| --- | --- | --- | --- |
+| D1 | ml_gate_recovery | fix/csq14-dataflow-gate / csq14-dataflow-gate | Constructor fixture, configuration, expected warnings |
+| D2 | archive_checkpoint | test/csq14-dataflow-lifecycle / csq14-dataflow-lifecycle | Coroutine rejection cleanup, lifecycle fixtures |
+| R1 | ml_correctness_review | fix/csq14-root-regression / csq14-root-regression | Capability producer inventory and proxy assertion contracts |
+
+All siblings under /Users/esperie/repos/kailash/build/.kailash-py-wt/.
+Root owns test dependency declaration and remaining root-regression warning triage.
+Every new repair needs negative controls, reviews, local parity, then a consolidated push.
+
+R2 active: ml_gate_recovery now also owns frozen-D1-independent six-file root warning repair in sibling csq14-root-warning-contracts, branch test/csq14-root-warning-contracts. R1 additionally owns compatible aiohttp typed request-key migration across all three success paths. Four active siblings; three agents. CodeQL passed; two test jobs remain blockers.
+
+Final-hook obligation reopened for refreshed CI repairs. Per-commit pytest-check may be skipped only with explicit body receipt; rerun complete all-files hooks including pytest-check before nextpromotionpush. D3 regression fixture cleanup active in sibling csq14-dataflow-regression-cleanup, branch test/csq14-dataflow-regression-cleanup, ml_correctness_review owns; original CI DataFlow regression812passed,6skipped,181deselected, but stricter warning run exposed caller-ownedruntime leaks now underrepair.
+
+## Final source freeze and holistic dispatch
+
+Allfive CI-repair implementationlanes landed through13687209e and drained.
+Three detachedsiblingscsq14-holistic-correctness/security/coverage created byroot
+at13687209e beforedispatch; eachprompt requiresresolvedSTEP0 andsourcepin.
+Agents respectivelyml_gate_recovery/archive_checkpoint/ml_correctness_review.
+Each reviews thewhole ce4c9de67...13687209e union with absoluteAST/grepsweeps
+and boundedactualnegativecontrols; no latestshardonlyreview. Parent final
+CIselections running; all-filehookobligation remainsopen beforepush.
+
+## Final corrections landed; CodeQL investigation
+
+The source import scanner now prunes vendor descendants relative to each source root,
+then uses a Unicode-aware candidate filter before semantic AST checks. The independent
+reference covered the same 4,866 files; scan time decreased from 26.306s to 4.286s.
+Commit 7c85f6a2e, merge 78b3a35fb; two clean review rounds and five reached mutations.
+
+The optional aiohttp import guard names `pip install 'kailash[server]'` and chains the
+missing-module cause. Commit a1ba6c826; 13 strict tests, source-origin opposite control,
+and two independent clean rounds. No scanner allowlist changed.
+
+The bridge deadline rejects non-finite, non-positive, unrepresentable, or unsupported
+bounds before runtime resources are acquired. Supported int/float values normalize once
+to float; None remains unbounded. Commit c8b2377fb, merge 8f77625056e37ffd993d803a3cddd473408e0a08.
+23 strict tests, five reached admission mutations, actual public-path timeout forwarding
+mutation, and two independent correctness/security rounds passed.
+
+Integrated gate at 13687209e: DataFlow 3,484 unit passes / 31 skips; 812 regression
+passes / 6 skips / 181 deselections. Root: 3,017 passes, two failures, 3 skips,
+24 deselections; the import scan timeout and optional import failure are repaired above.
+These skips and deselections are not coverage. Full root rerun is active at 8f77625056e37ffd993d803a3cddd473408e0a08.
+
+CodeQL check 108304848821 failed on ce4c9de67 with "265 new alerts including 10 high
+severity security vulnerabilities". This is the scanner's report, not a confirmed exploit
+count. Current analysis 1842994026 has 2,253 results; previous 1838845444 has three.
+Exact membership and dispositions are being independently verified. No new alert dismissal
+is authorized. The prior scoped approvals cover 11587, 11588, and 11594 only.
+
+All-files hooks, including pytest-check, remain required before the next push. The attempted
+`mac-mini` runner was rejected before execution; the corrected declared host is
+`esperie-mac-mini`. Never count the rejected launch as a gate run.
+
+## Current parallel lanes — 4fe79789f continuation
+
+| Lane / sibling | Branch | Task set | Agent roster | Status |
+| --- | --- | --- | --- | --- |
+| csq14-sqlite-address-parity | fix/csq14-sqlite-address-parity | Shared SQLite producers, URI admission, cache identity, native ownership | archive_checkpoint: implementing; ml_gate_recovery: consultation delivered, frozen review pending | Active, not frozen |
+| csq14-final3-correctness | detached 4fe79789f | Whole-union interface and assertion inventory preparation; later final-source review | ml_correctness_review: running | Preparation only; final SHA must be repinned |
+
+Root created the final3 sibling before dispatch. STEP0 requires resolved cwd/git-root equality and exact HEAD. Current SQLite Linux filename probe observed distinct rows `%FF` and `%FE` with `IDENTITIES_EQUAL True` at helper SHA256 b96af59bdf4b69a2b47951171326aadd8d7e0d18dda0fef02939a9e03acef42e; author is repairing malformed-encoding admission. No final clean verdict is recorded. Memory39ce source sibling was drained after exact file parity; backup `/tmp/csq14-drained-memory-identity-39ce/` remains. Five stashes remain unchanged.
+
+Final3 preparation delivered at4fe79789f:127repairfiles/781promotionfiles,764originalnamedtests/745exactcheckretentions/19semanticrows;7post-a6 changedassertionrows inspected. No final runtime verdict. Scripts `/tmp/csq14-final3-regenerate.sh` await the final source SHA. Root created fresh final3-security/coverage siblings at33d02c1c6 before final review dispatch.
+
+The three old final2 siblings were backed up to `/tmp/csq14-drained-final2-overlays-33d`, their owned overlays reversed, clean status verified, and removed.31files matched primary bytes exactly; graph AST matched; the fallback test only had an isort import reorder; old coverage engine exactly matched48a36aef8parent and primary exactly matched48a36aef8; namespace coldchild gained the already-landed explicit SecurityConfig fixture. Five stash SHAs are unchanged.
+
+SQLite freeze da42c706 applied to primary and final3-correctness/security after all25file hashes matched. Parent53DataFlow+17Core strict checks passed; independent Linux native helper probe passed and oldb96 reached-control failed as intended. This is NOT convergence: independent reviewers reproduced missing sync-transaction/lightweight native URI consumers and encoded memory/NUL semantic gaps. Author has a coordinated reopen in its own sibling; reviewtrees/primary keep da42 until correction patch.
+
+Final3-correctness agent independently reviews root-only backend fixture patch0b4c34f6 while author repairs production; root103 ownership/conformance checks passed, all21 original ownership asserts retained, Pythonwarnings0, intentional61logrecords inventoried. Final3-security continues immutable-da42 adversarial review; no clean round banked.
+
+- Refined SQLite7d87 is applied to primary and final3 correctness/security. Author lane reopened only for independently reproduced Core readonly initialization/owned-handle cleanup and DataFlow physical-size metrics. Primary owns three manual-finalizer test fixture cleanups (patch5f15); correctness lane reviews separately. Zero final SQLite clean rounds; final3 coverage remains clean until final source. Pending pools-contract user question is unchanged.
+
+- SQLite f54 landed as c7078698fcfc02ac4316014a96762388efd97f16 after two correctness and two security scoped CLEAN rounds; all28 source hashes and explicit opposite controls retained in durable repair receipt. Fixture commits ab6fd9f3a and4e479097e also independently clean. Author lane ready for final3 whole-union coverage; correctness/security transition to whole-union after clean repin. Final full gates and pending pools-contract user decision remain open.
+
+- Final1f3 fullgates NOTCLEAN: root2fail3554pass,DFunit3fail3501pass,hook1fail2620pass. Rootcreated three sibling implementation lanes at1f3 beforedispatch: final-gate-fixtures (archive,33a486frozen + graphfollowup), final-diagnostic-sinks (security,6f347frozen), retry-policy-ownership (correctness,active). Rootstreamfixture02288 independentlyclean; rootmigration7b50 undersecurityreview in final3-security. All finalgate snapshots preserved, no remote push. Pendingpools decision unchanged.
+
+2026-09-26 continuation: user explicitly selected “Record separately; finish promotion (Recommended)” for DataFlow pools. Separate design task recorded; five final-gate repairs committed through dfd71cb7f68602bd621cc1e2268b5d2ac8a8afc4. Retry remains under correction after independent terminal/privacy/observer/enterprise findings. Diagnostic and SQLite source trees drained with committed content parity/backups. Full final gates remain mandatory; no push/merge/publication.

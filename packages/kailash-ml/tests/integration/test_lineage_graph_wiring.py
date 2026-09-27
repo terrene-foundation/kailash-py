@@ -38,6 +38,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
+from kailash.db.connection import ConnectionManager
 from kailash_ml.engines.lineage import (
     LineageEdge,
     LineageGraph,
@@ -50,8 +52,6 @@ from kailash_ml.errors import (
     MigrationRequiredError,
     ModelNotFoundError,
 )
-
-from kailash.db.connection import ConnectionManager
 
 # ---------------------------------------------------------------------------
 # Migration module — imported via importlib because the filename starts

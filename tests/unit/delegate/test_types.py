@@ -34,8 +34,7 @@ from kailash.delegate.types import (
     RoleScope,
 )
 from kailash.trust._json import canonical_json_dumps
-from kailash.trust.chain import AuthorityType
-from kailash.trust.chain import GenesisRecord as SubstrateGenesisRecord
+from kailash.trust.chain import AuthorityType, GenesisRecord as SubstrateGenesisRecord
 
 # ---------------------------------------------------------------------------
 # Test fixtures — substrate genesis block (cryptographic surface)

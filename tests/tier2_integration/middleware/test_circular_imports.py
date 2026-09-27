@@ -5,6 +5,7 @@ This test verifies that the auth refactoring successfully
 resolved the circular import issues.
 """
 
+import secrets
 import sys
 import traceback
 
@@ -54,17 +55,20 @@ def test_create_gateway_with_auth():
         # previous "test-secret" was 11 bytes and raised. This test asserts auth
         # is WIRED, so it gets a real key rather than an opt-out -- swapping in
         # require_auth=False here would delete the only thing it checks.
-        auth = JWTAuthManager(
-            secret_key="test-secret-key-minimum-32-bytes!", algorithm="HS256"
-        )
+        auth = JWTAuthManager(secret_key=secrets.token_hex(32), algorithm="HS256")
 
         # Create gateway with auth
         gateway = create_gateway(title="Test Gateway", auth_manager=auth)
 
-        print("✅ create_gateway works with JWTAuthManager")
-        print(f"✅ Gateway auth_manager type: {type(gateway.auth_manager).__name__}")
-        assert gateway.auth_manager is not None
-        assert isinstance(gateway.auth_manager, JWTAuthManager)
+        try:
+            print("✅ create_gateway works with JWTAuthManager")
+            print(
+                f"✅ Gateway auth_manager type: {type(gateway.auth_manager).__name__}"
+            )
+            assert gateway.auth_manager is not None
+            assert isinstance(gateway.auth_manager, JWTAuthManager)
+        finally:
+            gateway.agent_ui.close()
     except Exception as e:
         print(f"❌ Failed to create gateway with auth: {e}")
         traceback.print_exc()
@@ -107,7 +111,7 @@ def test_jwt_functionality():
         from kailash.middleware.auth import JWTAuthManager
 
         # Create manager
-        auth = JWTAuthManager(secret_key="test-key")
+        auth = JWTAuthManager(secret_key=secrets.token_hex(32))
 
         # Create token
         token = auth.create_access_token(
@@ -309,11 +313,11 @@ def test_runtime_imports():
         from kailash.workflow.builder import WorkflowBuilder
 
         # Should be able to use them together
-        runtime = LocalRuntime()
-        builder = WorkflowBuilder()
+        with LocalRuntime() as runtime:
+            builder = WorkflowBuilder()
 
-        assert runtime is not None
-        assert builder is not None
+            assert runtime is not None
+            assert builder is not None
 
         print("✅ Runtime imports safe")
 

@@ -260,12 +260,19 @@ class TestShape2KaizenNodeExecuteCatchAll:
         with caplog.at_level(logging.ERROR):
             node.execute(prompt="hi")
 
-        records = "\n".join(r.getMessage() for r in caplog.records)
-        assert_scrubbed(
-            records,
-            raw_secret=FAKE_OPENAI_KEY,
-            label="KaizenNode.execute -> ERROR log record",
-        )
+        records = [
+            r
+            for r in caplog.records
+            if r.name == node.logger.name and r.levelno >= logging.ERROR
+        ]
+        assert len(records) == 1
+        record = records[0]
+        assert record.getMessage() == "Node execution failed"
+        assert record.error_type == "RuntimeError"
+        assert record.error_frames
+        assert record.exc_info is None
+        assert FAKE_OPENAI_KEY not in repr(vars(record))
+        assert RAW_PROVIDER_ERROR not in repr(vars(record))
 
 
 # ==========================================================================
@@ -312,12 +319,19 @@ class TestShape3LogAndReraise:
             with pytest.raises(RuntimeError):
                 node.run(prompt="hi")
 
-        records = "\n".join(r.getMessage() for r in caplog.records)
-        assert_scrubbed(
-            records,
-            raw_secret=FAKE_OPENAI_KEY,
-            label="KaizenNode.run -> ERROR log record",
-        )
+        records = [
+            r
+            for r in caplog.records
+            if r.name == node.logger.name and r.levelno >= logging.ERROR
+        ]
+        assert len(records) == 1
+        record = records[0]
+        assert record.getMessage() == "KaizenNode execution failed"
+        assert record.error_type == "RuntimeError"
+        assert record.error_frames
+        assert record.exc_info is None
+        assert FAKE_OPENAI_KEY not in repr(vars(record))
+        assert RAW_PROVIDER_ERROR not in repr(vars(record))
 
 
 # ==========================================================================

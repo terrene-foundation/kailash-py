@@ -14,6 +14,7 @@ from typing import Any
 
 import numpy as np
 import polars as pl
+
 from kailash_ml.engines._shared import NUMERIC_DTYPES
 from kailash_ml.interop import to_sklearn_input
 

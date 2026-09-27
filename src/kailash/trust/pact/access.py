@@ -597,6 +597,19 @@ def can_access(
         now = datetime.now(UTC)
 
     # --- Step 1: Resolve role clearance ---
+    role_node = compiled_org.get_role_node(role_address)
+    if role_node is None or role_node.address != role_address:
+        return AccessDecision(
+            allowed=False,
+            reason=f"No role exists at address '{role_address}'",
+            step_failed=1,
+            audit_details={
+                "role_address": role_address,
+                "item_id": item.item_id,
+                "step": 1,
+                "detail": "missing_role",
+            },
+        )
     role_clearance = clearances.get(role_address)
     if role_clearance is None:
         logger.warning(
@@ -612,6 +625,19 @@ def can_access(
                 "item_id": item.item_id,
                 "step": 1,
                 "detail": "missing_clearance",
+            },
+        )
+
+    if role_clearance.role_address != role_address:
+        return AccessDecision(
+            allowed=False,
+            reason="Clearance record does not name the requesting role",
+            step_failed=1,
+            audit_details={
+                "role_address": role_address,
+                "item_id": item.item_id,
+                "step": 1,
+                "detail": "clearance_role_mismatch",
             },
         )
 
@@ -733,7 +759,7 @@ def can_access(
     # Step 4a: Same unit
     if _is_same_unit(role_address, item.owning_unit_address, compiled_org):
         logger.debug(
-            "Access allowed (step 4a): same unit — role_address=%s, " "item_owner=%s",
+            "Access allowed (step 4a): same unit — role_address=%s, item_owner=%s",
             role_address,
             item.owning_unit_address,
         )
@@ -773,8 +799,7 @@ def can_access(
     # Step 4c: T-inherits-D (role in T can access parent D's data)
     if _t_inherits_d(role_address, item.owning_unit_address, compiled_org):
         logger.debug(
-            "Access allowed (step 4c): T-inherits-D — role_address=%s, "
-            "item_owner=%s",
+            "Access allowed (step 4c): T-inherits-D — role_address=%s, item_owner=%s",
             role_address,
             item.owning_unit_address,
         )
@@ -881,8 +906,7 @@ def _evaluate_conditions(
         for req_key, req_value in env_required.items():
             if env.get(req_key) != req_value:
                 return (
-                    f"environment requirement '{req_key}={req_value!r}' "
-                    f"not satisfied"
+                    f"environment requirement '{req_key}={req_value!r}' not satisfied"
                 )
 
     return None
@@ -1247,7 +1271,7 @@ def _check_bridges(
             continue
 
         logger.debug(
-            "Access allowed (step 4e): bridge=%s — role_address=%s, " "item_owner=%s",
+            "Access allowed (step 4e): bridge=%s — role_address=%s, item_owner=%s",
             bridge.id,
             role_address,
             item.owning_unit_address,

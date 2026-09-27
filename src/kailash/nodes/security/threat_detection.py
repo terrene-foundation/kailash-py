@@ -86,8 +86,12 @@ class ThreatDetectionNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         super().__init__(name=name, **kwargs)
 
         # Initialize security event and audit logging
-        self.security_event_node = SecurityEventNode(name=f"{name}_security_events")
-        self.audit_log_node = AuditLogNode(name=f"{name}_audit_log")
+        self.security_event_node = SecurityEventNode(
+            name=f"{name}_security_events", log_name_parts=(name, "_security_events")
+        )
+        self.audit_log_node = AuditLogNode(
+            name=f"{name}_audit_log", log_name_parts=(name, "_audit_log")
+        )
 
         # Threat detection patterns and rules
         self.threat_patterns = {

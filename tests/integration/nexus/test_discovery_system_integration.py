@@ -328,6 +328,15 @@ class TestDiscoveryDiagnostics:
         handler.setLevel(logging.INFO)
         logger = logging.getLogger("nexus.discovery")
         logger.addHandler(handler)
+        # Raise the LOGGER level, not just the handler's. A handler level only
+        # filters records the logger already emitted; `logger.info` is a no-op
+        # unless the logger's EFFECTIVE level admits INFO. Under this repo's
+        # pytest configuration the root logger sits at WARNING (measured: 30),
+        # and `nexus.discovery` sets no level of its own, so every assertion
+        # below ran against an empty stream. That was masked while the whole
+        # module failed earlier on #2056's resource-registration error.
+        previous_level = logger.level
+        logger.setLevel(logging.INFO)
 
         try:
             with tempfile.TemporaryDirectory() as tmpdir:
@@ -350,6 +359,7 @@ workflow.add_node("PythonCodeNode", "log", {"code": "result = 'logged'"})
 
         finally:
             logger.removeHandler(handler)
+            logger.setLevel(previous_level)
 
     def test_discovery_warning_on_load_failure(self):
         """Test that discovery logs warnings for failed loads.

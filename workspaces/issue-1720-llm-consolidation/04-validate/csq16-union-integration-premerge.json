@@ -1,0 +1,134 @@
+{
+  "ran": true,
+  "delivered": true,
+  "head": "e4a789e73337c4dd8dfd18238f2ad1e44db19881",
+  "verdict": "CLEAN within reviewed integration and original-test parity scope; final exact-candidate Linux/Mac/CI gates remain parent-owned",
+  "scope": "Full origin/main merge-base union; original test assertions through Counter occurrences; cross-package exports/imports, dependency origins and shared runtime/helper integration.",
+  "spec_quotes": {
+    "specs/core-runtime.md:157": "Async variant of execute(). Same return type and semantics.",
+    "specs/core-runtime.md:166": "Inherits: LocalRuntime",
+    "specs/task-tracking.md:80": "completed and failed are terminal.",
+    "specs/security-threats.md:32": "Token creation with user_id (no token content)."
+  },
+  "mechanical": {
+    "artifact": "/tmp/csq16-union-integration-inventory.json",
+    "paths": 947,
+    "production_modules": 291,
+    "production_exact_c8ce": 251,
+    "production_new_or_changed_since_c8ce": 40,
+    "export_modules20_byte_identical_c8ce": "/tmp/csq16-union-export-continuity.json",
+    "counts_are_not_behavior_coverage": true,
+    "final_carry": "/tmp/csq16-union-integration-final-carry.json",
+    "final_paths": 951
+  },
+  "original_test_parity": {
+    "artifact": "/tmp/csq16-union-final-e4a-test-parity.json",
+    "reconciliation": "/tmp/csq16-union-original-assertion-reconciliation.json",
+    "files": 513,
+    "counts": {
+      "original": 6375,
+      "current": 7672,
+      "retained": 6250,
+      "reconcile": 125,
+      "new": 1330
+    },
+    "prior_rows_carried_with_exact_source_or_successor_AST": 115,
+    "new_rows_semantically_reconciled": 10,
+    "newly_included_original_tests_since_prior_inventory": 214,
+    "counter_controls": [
+      "known removed assertion emits exact missing expression",
+      "unittest camel-case assertion detected",
+      "helper not miscounted as named test",
+      "duplicate assertion removal retained by Counter occurrence accounting"
+    ],
+    "missing_dispositions": [],
+    "all125_semantic_rows_exact_prior": true,
+    "post376bf_semantic_rows": 2,
+    "post376bf_semantic_evidence": {
+      "tests/regression/test_async_content_failure_contract.py": {
+        "disposition": "Public ContentAwareExecutionError retains raw message. Automatic audit now checks typed source-frame provenance and explicitly excludes raw exception payload, matching reviewed runtime audit contract.",
+        "evidence": "/tmp/csq16-union-content-author-receipt.json"
+      },
+      "tests/regression/test_signal_wait_input_boundary.py": {
+        "disposition": "Same unknown-parameter warning retains single event and successful result; expectation now follows safe scalar field formatting and additionally asserts declared parameter names.",
+        "evidence": "/tmp/csq16-integration-fixture-independent-receipt.json"
+      }
+    },
+    "newly_included_original_tests_since_376bf": 21
+  },
+  "dependency_and_wiring": {
+    "fresh_runtime_origins_and8bindings": "/tmp/csq16-union-import-wiring.json",
+    "binding_negative_control": "Replacing actual shared helper with anotherobject returns false; currentbindings returntrue.",
+    "tag_source_imports": "/tmp/csq16-floor-import-controls.json",
+    "actual_published_wheel": "/tmp/csq16-floor-published-wheel.json",
+    "declared_minimal_requirements": "Core nh3>=0.3.7 mandatory; DataFlowdev psycopg2-binary>=2.9 andPyMySQL>=1.0 match actual driverparsing tests; unified-ci478\u2013479 installs rootminimal+dataflow[dev].",
+    "release_disposition": "/tmp/csq16-release-dependency-prerequisite.json",
+    "release_scope": "ExistingPR explicitly prohibits publication until helper-bearingCore release and consumerfloor/lock updates. Published2.65wheel lacks APIs; currentconsumer release tags do not import them. This is not a new securityexception or claim existingpublishedconsumers arebroken.",
+    "remaining_pin_advisories": "Crossmanifest floor divergence/far-behind tallies alone do not establish incompatibility; no blind versionbump."
+  },
+  "fresh_scoped_execution": [
+    {
+      "scope": "Independent two-file loggerfixture review",
+      "receipt": "/tmp/csq16-integration-fixture-independent-receipt.json",
+      "rounds": "36x2",
+      "controls": "namedlevel13hits9fail; noemission10hits10fail; rawmask44hits9fail"
+    },
+    {
+      "scope": "Authored gateway/native aclose cross-shard rootcause followup",
+      "receipt": "/tmp/csq16-gateway-close-v2-author-receipt.json",
+      "rounds": "235x2",
+      "independent_security": "/tmp/csq16-gateway-close-security-review.json",
+      "independent_security_rounds": "268x2"
+    }
+  ],
+  "historical_evidence": [
+    "/tmp/csq15-whole-promotion-final-coverage-receipt.json",
+    "/tmp/csq16-security-cache-final-receipt.json",
+    "/tmp/csq16-security-injection-receipt.json",
+    "/tmp/csq16-security-runtime-final-receipt.json",
+    "/tmp/csq16-audit-independent-receipt.json",
+    "/tmp/csq16-pool-independent-receipt.json",
+    "/tmp/csq16-security-key-fifo-receipt.json",
+    "/tmp/csq16-security-byok-final-receipt.json"
+  ],
+  "found_and_disposed": [
+    {
+      "finding": "gateway cleanup calledtwice afterinitialfailure",
+      "evidence": "assert reached==[True] observed[True,True] for RuntimeError/CancelledError",
+      "disposition": "Integrated exact frozen gatewayv2 at e4a;235x2author/268x2independentsecurity, mapped four hashes in final carry."
+    },
+    {
+      "finding": "foreign aclose awaiting ownerTaskdirectly",
+      "evidence": "realTCP probe RuntimeError attached to a different loop",
+      "disposition": "Integrated gatewayv2 marshals wait on retained task owner; old path2hits2fails, four independent realTCP cases green; final carry exact."
+    },
+    {
+      "finding": "DataFlow1498 capturednative ownerbridge",
+      "disposition": "Integrated final registryv2 at e4a; independent correctness44DF+20Core twice, exact source map and reached lease/cleaned/release controls; canonical registry receipt CLEAN."
+    },
+    {
+      "finding": "consumer floor mismatch toshippingCore",
+      "disposition": "Existingexplicit no-publication prerequisite; no knowinglyfalse2.65floorfix."
+    }
+  ],
+  "skip_classification": "FourreportedLinuxTier2 credential skips excluded; fifth is explicit#2038 absoluteperformancequarantine, not environmentinability and notperformancecoverage. Source571/unified-ci260documents existingquarantine and structural replacement requirement. No newbenchmarkfailure executed/claimed.",
+  "pending": [
+    "Parent-owned exact final candidate full Linux/Mac gates and live required CI; no open finding in scoped integration review."
+  ],
+  "limits": [
+    "No freshfullsuite claim.",
+    "Originalassertionretention doesnotprove reachability/adequacy.",
+    "Importprobe useslocal sources+existingdependency environment, notisolatedwheelinstallation.",
+    "No livePostgres/MySQL/LLM/ML engine claim.",
+    "This lane authorednativefix; security convergence reliesonseparate reviewer receipts."
+  ],
+  "prior_history": "/tmp/csq16-union-integration-premerge-376bf-history.json",
+  "final_carry": "/tmp/csq16-union-integration-final-carry.json",
+  "fresh_scoped_execution_final": {
+    "registry_correctness": "/tmp/csq16-registry-correctness-review.json",
+    "fixture_review": "/tmp/csq16-integration-fixture-independent-receipt.json",
+    "gateway_security": "/tmp/csq16-gateway-close-security-review.json"
+  },
+  "release_prerequisite": "/tmp/csq16-release-dependency-prerequisite.json",
+  "historical_evidence_scope": "Prior receipts and original source mappings retained; counts do not imply newly rerun broad suites. Fresh scoped final rounds and exact committed source maps are listed separately."
+}

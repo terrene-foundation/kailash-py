@@ -103,14 +103,16 @@ def test_registered_region_flows_through_aws_bearer_token() -> None:
 
     Note on full preset construction: ``bedrock_claude_preset``
     additionally builds the deployment endpoint at
-    ``bedrock-runtime.{region}.amazonaws.com``. The SSRF guard's DNS
-    resolution check rejects unresolvable hostnames with
-    ``resolution_failed``, which is correct behavior — DNS for an
-    unreleased AWS region does NOT resolve until AWS publishes it.
-    Operators registering a runtime region must wait for AWS DNS to
-    publish the new endpoint regardless of this SDK; the registry
-    mechanism (this test) and the full preset (below, against
-    ``us-east-1``) triangulate the contract.
+    ``bedrock-runtime.{region}.amazonaws.com``. Since #2168 that
+    construction no longer resolves DNS, so an unreleased region's preset
+    BUILDS — the ``resolution_failed`` verdict moved to send time, where
+    ``http_client.SafeDnsResolver.check_host`` raises it against the
+    address the socket would actually use. Operators registering a runtime
+    region must still wait for AWS DNS to publish the endpoint before
+    requests succeed; what changed is that they no longer have to wait
+    before they can model the deployment. The registry mechanism (this
+    test) and the full preset (below, against ``us-east-1``) triangulate
+    the contract.
     """
     register_bedrock_region("xx-flowtest-1")
     auth = AwsBearerToken(token="not-a-real-credential", region="xx-flowtest-1")

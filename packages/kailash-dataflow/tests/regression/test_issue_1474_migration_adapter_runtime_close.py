@@ -109,3 +109,27 @@ async def test_issue_1474_owned_runtimes_released_across_instances(tmp_path):
         "AsyncLocalRuntime(s) left unreleased after DataFlow.close() — "
         "issue #1474 (ConnectionManagerAdapter runtime leak)"
     )
+
+
+@pytest.mark.asyncio
+async def test_async_close_releases_migration_adapter_owned_runtime(tmp_path):
+    """The async cleanup surface releases the real migration adapter owner."""
+    db = DataFlow(f"sqlite:///{tmp_path / 'async-close.sqlite'}", cache_enabled=False)
+    _ = db.express
+    migration = db._migration_system
+    assert migration is not None
+    adapter = migration._connection_adapter
+    assert adapter is not None and adapter._owns_runtime
+    runtime = adapter._runtime
+    assert isinstance(runtime, AsyncLocalRuntime)
+    assert runtime.ref_count > 0, "negative control: this adapter owns a live reference"
+    try:
+        await db.close_async()
+        assert adapter._runtime is None
+        assert runtime.ref_count == 0
+        await db.close_async()
+        assert runtime.ref_count == 0
+    finally:
+        # Also release the owner when the negative-control run fails its check.
+        migration.close()
+        await db.close_async()

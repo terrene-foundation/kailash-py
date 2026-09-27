@@ -286,7 +286,8 @@ class TestCrossSDKFixtureParity:
     """
 
     @pytest.fixture(scope="class")
-    def fixture(self) -> dict:
+    @classmethod
+    def fixture(cls) -> dict:
         assert _FIXTURE_PATH.exists(), (
             f"cross-SDK audit-chain fixture missing at {_FIXTURE_PATH}; "
             f"this fixture is the cross-SDK byte contract — its absence "

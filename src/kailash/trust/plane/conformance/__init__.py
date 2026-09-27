@@ -690,9 +690,13 @@ class ConformanceSuite:
             return False
         # Create a tighter version by adding a blocked action
         tighter_data = env.to_dict()
-        tighter_data["operational"]["blocked_actions"] = (
-            env.operational.blocked_actions + ["__conformance_extra_block__"]
-        )
+        # Derive from the SERIALIZED form already built above, not from the
+        # live dataclass field: to_dict() is the declared list-shaped boundary,
+        # so this stays correct whatever collection type the field holds
+        # (blocked_actions is a tuple since GH #2225, and tuple + list raises).
+        tighter_data["operational"]["blocked_actions"] = list(
+            tighter_data["operational"]["blocked_actions"]
+        ) + ["__conformance_extra_block__"]
         tighter = ConstraintEnvelope.from_dict(tighter_data)
         if not tighter.is_tighter_than(env):
             return False

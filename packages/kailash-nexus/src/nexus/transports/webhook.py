@@ -8,9 +8,7 @@ import base64
 import binascii
 import hashlib
 import hmac
-import ipaddress
 import logging
-import socket
 import time
 import urllib.parse
 import uuid
@@ -18,6 +16,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Protocol, runtime_checkable
 
+from kailash.utils.network_guard import BlockedDestinationError, resolve_url_ips
+from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
 from nexus.registry import HandlerDef, HandlerRegistry
 from nexus.transports.base import Transport
 
@@ -208,66 +208,17 @@ class TwilioSigner:
         return hmac.compare_digest(expected_digest, provided_digest)
 
 
-_BLOCKED_IPV4 = [
-    ipaddress.ip_network("0.0.0.0/8"),
-    ipaddress.ip_network("10.0.0.0/8"),
-    ipaddress.ip_network("172.16.0.0/12"),
-    ipaddress.ip_network("192.168.0.0/16"),
-    ipaddress.ip_network("127.0.0.0/8"),
-    ipaddress.ip_network("169.254.0.0/16"),
-]
-
-_BLOCKED_IPV6 = [
-    ipaddress.ip_network("::1/128"),
-    ipaddress.ip_network("::/128"),
-    ipaddress.ip_network("fc00::/7"),
-    ipaddress.ip_network("fe80::/10"),
-    ipaddress.ip_network("::ffff:0:0/96"),  # IPv4-mapped IPv6
-]
-
-
-def _is_blocked_address(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
-    """Check if an IP address falls within a blocked private range."""
-    if isinstance(addr, ipaddress.IPv6Address):
-        # Check IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1)
-        mapped = addr.ipv4_mapped
-        if mapped is not None:
-            return any(mapped in net for net in _BLOCKED_IPV4)
-        return any(addr in net for net in _BLOCKED_IPV6)
-    return any(addr in net for net in _BLOCKED_IPV4)
-
-
-def _validate_target_url(url: str) -> Optional[str]:
-    """Validate a webhook target URL to prevent SSRF attacks.
-
-    Rejects URLs with non-HTTP schemes or hostnames that resolve to
-    private/internal IP ranges, including IPv4-mapped IPv6 addresses.
-    If DNS resolution fails (e.g. offline), the URL is allowed —
-    delivery will fail at send time instead.
-
-    Returns:
-        The first resolved IP address as a string (for DNS-pinned delivery),
-        or None if DNS resolution was not possible.
-    """
-    parsed = urllib.parse.urlparse(url)
-    if parsed.scheme not in ("http", "https"):
-        raise ValueError(f"Unsupported URL scheme: {parsed.scheme!r}")
-    hostname = parsed.hostname
-    if not hostname:
-        raise ValueError("URL has no hostname")
-    resolved_ip: Optional[str] = None
+def _validate_target_url(
+    url: str, *, require_resolution: bool = False
+) -> Optional[str]:
+    """Use the shared destination policy, permitting offline registration only."""
     try:
-        for info in socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP):
-            addr = ipaddress.ip_address(info[4][0])
-            if _is_blocked_address(addr):
-                raise ValueError("Target URL resolves to blocked private address")
-            if resolved_ip is None:
-                resolved_ip = str(addr)
-    except socket.gaierror:
-        # DNS resolution may fail in offline/sandboxed environments.
-        # Allow registration; delivery will fail at send time.
-        logger.debug("Could not resolve hostname %r during SSRF check", hostname)
-    return resolved_ip
+        return resolve_url_ips(url)[0]
+    except BlockedDestinationError as exc:
+        if exc.reason != "resolution_failed" or require_resolution:
+            raise
+        logger.debug("Webhook target registration deferred DNS validation")
+        return None
 
 
 class DeliveryStatus(str, Enum):
@@ -786,7 +737,7 @@ class WebhookTransport(Transport):
     ) -> WebhookDelivery:
         """Deliver a payload to a target URL with retry and backoff.
 
-        By default, uses an HTTP POST via the stdlib. A custom
+        By default, uses a DNS-pinned Nexus HttpClient POST without redirects. A custom
         ``send_func`` can be provided for testing or custom transports.
 
         The ``send_func`` signature is::
@@ -801,17 +752,21 @@ class WebhookTransport(Transport):
             handler_name: Name of the handler that produced the payload.
             payload: The payload dict to deliver.
             target_url: The URL to POST to.
-            send_func: Optional async callable for sending. If None, uses
-                urllib (not recommended for production; provide an
-                httpx/aiohttp sender).
+            send_func: Optional async callable receiving a validated numeric
+                URL and the original Host header. If None, the owned Nexus
+                HttpClient retains the original hostname for TLS verification.
 
         Returns:
             A WebhookDelivery tracking the delivery outcome.
 
         Raises:
-            ValueError: If the URL resolves to a private/internal address (SSRF prevention).
+            ValueError: If the destination is blocked or DNS cannot resolve it.
         """
-        resolved_ip = _validate_target_url(target_url)
+        resolved_ip = await asyncio.to_thread(
+            _validate_target_url, target_url, require_resolution=True
+        )
+        if resolved_ip is None:
+            raise BlockedDestinationError("resolution_failed", raw_url=target_url)
 
         import json
 
@@ -829,40 +784,36 @@ class WebhookTransport(Transport):
             oldest_key = next(iter(self._deliveries))
             del self._deliveries[oldest_key]
 
-        # Pin DNS: replace hostname with resolved IP to prevent rebinding
-        if resolved_ip is not None:
-            pinned_url = self._pin_url(target_url, resolved_ip)
-        else:
-            pinned_url = target_url
+        # Custom senders retain their numeric-URL contract. The default client
+        # binds validated addresses at TCP connect while retaining TLS origin.
+        pinned_url = self._pin_url(target_url, resolved_ip)
 
         body = json.dumps(payload).encode("utf-8")
         headers: Dict[str, str] = {"Content-Type": "application/json"}
 
         # Preserve original Host header for the target server
         parsed = urllib.parse.urlparse(target_url)
-        if parsed.hostname and resolved_ip is not None:
-            headers["Host"] = (
-                f"{parsed.hostname}:{parsed.port}" if parsed.port else parsed.hostname
-            )
+        if parsed.hostname:
+            host = f"[{parsed.hostname}]" if ":" in parsed.hostname else parsed.hostname
+            headers["Host"] = f"{host}:{parsed.port}" if parsed.port else host
 
         if self._secret is not None:
             sig = self.compute_signature(body)
             headers[self._signature_header] = sig
 
-        sender = send_func or self._default_send
+        sender = self._default_send if send_func is None else send_func
 
         for attempt in range(1, self._max_retries + 1):
             delivery.attempts = attempt
             try:
-                status_code = await sender(pinned_url, body, headers)
+                status_code = await sender(
+                    pinned_url if send_func is not None else target_url, body, headers
+                )
 
                 if 200 <= status_code < 300:
                     delivery.status = DeliveryStatus.DELIVERED
                     delivery.delivered_at = time.time()
-                    logger.info(
-                        f"Webhook delivered: {delivery.delivery_id} "
-                        f"to {target_url} (attempt {attempt})"
-                    )
+                    logger.info("Webhook delivered", extra={"attempt": attempt})
                     return delivery
 
                 if 400 <= status_code < 500 and status_code != 429:
@@ -881,8 +832,12 @@ class WebhookTransport(Transport):
             except Exception as exc:
                 delivery.last_error = str(exc)
                 logger.warning(
-                    f"Webhook delivery attempt {attempt} failed: "
-                    f"{delivery.delivery_id} - {exc}"
+                    "Webhook delivery attempt failed",
+                    extra={
+                        "attempt": attempt,
+                        "error_type": safe_type_name(exc),
+                        "error_frames": safe_exception_frames(exc),
+                    },
                 )
 
             # Exponential backoff with cap
@@ -896,8 +851,8 @@ class WebhookTransport(Transport):
         # Exhausted retries
         delivery.status = DeliveryStatus.FAILED
         logger.error(
-            f"Webhook delivery failed after {self._max_retries} attempts: "
-            f"{delivery.delivery_id} to {target_url}"
+            "Webhook delivery exhausted retries",
+            extra={"attempts": self._max_retries},
         )
         return delivery
 
@@ -990,27 +945,13 @@ class WebhookTransport(Transport):
 
     @staticmethod
     async def _default_send(url: str, body: bytes, headers: Dict[str, str]) -> int:
-        """Fallback sender using urllib (synchronous, for dev/testing).
+        """Send through the shared DNS-bound client, preserving Host and TLS."""
+        from nexus.http_client import HttpClient, HttpClientConfig
 
-        Production deployments should provide an httpx or aiohttp sender
-        via the ``send_func`` parameter of :meth:`deliver`.
-        """
-        import urllib.error
-        import urllib.request
-
-        loop = asyncio.get_event_loop()
-
-        def _do_send() -> int:
-            req = urllib.request.Request(
-                url,
-                data=body,
-                headers=headers,
-                method="POST",
+        async with HttpClient(
+            HttpClientConfig(timeout_seconds=30.0, connect_timeout_seconds=30.0)
+        ) as client:
+            response = await client.post(
+                url, content=body, headers=headers, follow_redirects=False
             )
-            try:
-                with urllib.request.urlopen(req, timeout=30) as resp:
-                    return int(resp.status)
-            except urllib.error.HTTPError as e:
-                return int(e.code)
-
-        return await loop.run_in_executor(None, _do_send)
+            return response.status_code

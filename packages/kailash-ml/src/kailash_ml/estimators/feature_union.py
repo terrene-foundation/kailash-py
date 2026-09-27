@@ -6,8 +6,9 @@ from __future__ import annotations
 
 from typing import Any, List, Tuple
 
-from kailash_ml.estimators._protocol import check_transformer_step
 from sklearn.pipeline import FeatureUnion as _SKFeatureUnion
+
+from kailash_ml.estimators._protocol import check_transformer_step
 
 __all__ = ["FeatureUnion"]
 

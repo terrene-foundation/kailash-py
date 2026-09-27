@@ -1547,8 +1547,11 @@ class LinkedHashChain:
             )
 
         if len(self._entries) == 0:
-            # Empty chain is structurally valid
-            return (True, None)
+            # Fail CLOSED (#2221). An empty chain is vacuously well-formed, but
+            # callers read this boolean as "the chain is sound", and a wiped
+            # chain is byte-identical to a never-written one here. An absent
+            # chain is unverifiable, not verified.
+            return (False, None)
 
         if len(self._entries) == 1:
             # Single entry chain - verify it has valid hash format
@@ -1592,7 +1595,13 @@ class LinkedHashChain:
             return (False, min(len(original_hashes), len(self._entries)))
 
         if len(original_hashes) == 0:
-            return (True, None)
+            # Fail CLOSED (#2221). This method is the one the SECURITY NOTE on
+            # ``verify_chain`` designates as FULL cryptographic verification, so
+            # a caller reads True as "the chain is cryptographically proven".
+            # Zero original hashes prove nothing -- and a chain wiped alongside
+            # the hashes derived from it lands here, which is exactly the case
+            # linkage verification exists to detect.
+            return (False, None)
 
         # Recompute and verify each linked hash
         previous_hash = None

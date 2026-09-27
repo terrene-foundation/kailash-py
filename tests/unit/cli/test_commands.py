@@ -1,7 +1,6 @@
 """Tests for CLI commands module."""
 
 import pytest
-import yaml
 from click.testing import CliRunner
 
 from kailash.cli.commands import cli
@@ -31,12 +30,16 @@ class TestCLICommands:
         assert result.exit_code == 0
         assert "init" in result.output.lower()
 
-    def test_init_command_basic(self):
+    def test_init_command_basic(self, tmp_path, monkeypatch):
         """Test basic init command."""
-        with self.runner.isolated_filesystem():
-            result = self.runner.invoke(cli, ["init", "test-project"])
-            # Allow success or failure as template might not exist
-            assert result.exit_code in [0, 1, 2]
+        monkeypatch.chdir(tmp_path)
+        result = self.runner.invoke(cli, ["init", "test-project"])
+        assert result.exit_code == 0, result.output
+        assert "Created new Kailash project: test-project" in result.output
+        assert (tmp_path / "test-project" / "README.md").is_file()
+        assert (
+            tmp_path / "test-project" / "workflows" / "example_workflow.py"
+        ).is_file()
 
     def test_run_command_help(self):
         """Test run command help."""
@@ -66,13 +69,11 @@ class TestCLICommands:
         assert result.exit_code == 0
         assert "export" in result.output.lower()
 
-    def test_export_nonexistent_file(self):
+    def test_export_nonexistent_file(self, tmp_path, monkeypatch):
         """Test exporting non-existent workflow."""
-        with self.runner.isolated_filesystem():
-            result = self.runner.invoke(
-                cli, ["export", "nonexistent.yaml", "output.yaml"]
-            )
-            assert result.exit_code != 0
+        monkeypatch.chdir(tmp_path)
+        result = self.runner.invoke(cli, ["export", "nonexistent.yaml", "output.yaml"])
+        assert result.exit_code != 0
 
     def test_global_debug_flag(self):
         """Test global debug flag."""
@@ -90,30 +91,35 @@ class TestCLICommands:
         result = self.runner.invoke(cli, ["--invalid-option"])
         assert result.exit_code != 0
 
-    def test_cli_error_handling(self):
+    def test_cli_error_handling(self, tmp_path, monkeypatch):
         """Test CLI error handling."""
         # Test with corrupted workflow file
-        with self.runner.isolated_filesystem():
-            with open("corrupted.yaml", "w") as f:
-                f.write("invalid: yaml: content: [")
+        monkeypatch.chdir(tmp_path)
+        with open("corrupted.yaml", "w") as f:
+            f.write("invalid: yaml: content: [")
 
-            result = self.runner.invoke(cli, ["run", "corrupted.yaml"])
-            assert result.exit_code != 0
+        result = self.runner.invoke(cli, ["run", "corrupted.yaml"])
+        assert result.exit_code != 0
 
-    def test_cli_workflow_validation(self):
-        """Test workflow validation through CLI."""
-        with self.runner.isolated_filesystem():
-            # Create a simple valid workflow
-            workflow_data = {
-                "metadata": {"name": "Test Workflow", "version": "1.0.0"},
-                "nodes": [],
-                "connections": [],
-            }
+    def test_cli_workflow_validation(self, tmp_path, monkeypatch):
+        """Validate an actual supported Python workflow through the CLI."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "valid.py").write_text(
+            "from kailash.workflow.builder import WorkflowBuilder\n"
+            "workflow = WorkflowBuilder()\n"
+            "workflow.add_node('PythonCodeNode', 'value', {'code': 'result = 1'})\n"
+            "workflow = workflow.build()\n"
+        )
+        result = self.runner.invoke(cli, ["validate", "valid.py"])
+        assert result.exit_code == 0, result.output
+        assert "is valid" in result.output
 
-            with open("valid.yaml", "w") as f:
-                yaml.dump(workflow_data, f)
-
-            # Test validation
-            result = self.runner.invoke(cli, ["validate", "valid.yaml"])
-            # Allow various exit codes as validation logic may vary
-            assert result.exit_code in [0, 1, 2]
+    def test_cli_workflow_validation_rejects_unsupported_format(
+        self, tmp_path, monkeypatch
+    ):
+        """A real YAML file must fail, rather than accidentally count as valid."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "workflow.yaml").write_text("nodes: []\n")
+        result = self.runner.invoke(cli, ["validate", "workflow.yaml"])
+        assert result.exit_code == 1
+        assert "Only Python workflow files are supported" in result.output

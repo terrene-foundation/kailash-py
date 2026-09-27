@@ -74,6 +74,7 @@ __all__ = [
     "embedded_ipv4",
     "is_private_ipv4",
     "is_private_ipv6",
+    "loopback_allowed",
     "ip_reason",
     "iter_resolved_ips",
     "metadata_candidates",
@@ -206,12 +207,15 @@ def is_private_ipv4(ip: ipaddress.IPv4Address) -> bool:
 
 
 def is_private_ipv6(ip: ipaddress.IPv6Address) -> bool:
+    # Older Python patch releases mark the entire mapped range reserved;
+    # newer releases delegate these flags to the embedded IPv4 address.
+    # Classify that address explicitly so the policy is version-independent.
+    if ip.ipv4_mapped is not None:
+        return is_private_ipv4(ip.ipv4_mapped)
     if ip.is_private or ip.is_loopback or ip.is_link_local:
         return True
     if ip.is_multicast or ip.is_reserved or ip.is_unspecified:
         return True
-    if ip.ipv4_mapped is not None:
-        return is_private_ipv4(ip.ipv4_mapped)
     if ip in _IPV4_TRANSLATED_NETWORK or ip in _NAT64_WELLKNOWN_NETWORK:
         return True
     return False
@@ -244,10 +248,23 @@ def embedded_ipv4(
     return None
 
 
+def loopback_allowed(
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
+    host: str,
+    loopback_hosts: Sequence[str],
+) -> bool:
+    """Apply a label-scoped loopback exception consistently at both gates."""
+    # Only mapped IPv4 is an alternate spelling of the same local address;
+    # SIIT and NAT64 translation prefixes do not gain a loopback exception.
+    target = ip.ipv4_mapped if isinstance(ip, ipaddress.IPv6Address) else None
+    target = target if target is not None else ip
+    return host.lower() in loopback_hosts and target.is_loopback
+
+
 def metadata_candidates(
     ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
 ) -> "list[ipaddress.IPv4Address | ipaddress.IPv6Address]":
-    """The address plus any IPv4 it embeds -- both must clear the metadata gate.
+    """Embedded IPv4 first, then the address; both clear the metadata gate.
 
     PUBLIC because the metadata gate has more than one enforcement surface.
     ``check_url`` below is the parse-time one; ``kaizen.llm.http_client``'s
@@ -256,12 +273,15 @@ def metadata_candidates(
     that is guaranteed rather than hoped for: a wrapper-aware metadata check
     added here lands at every surface at once (``security.md`` §
     Enforcement-Surface Parity).
+
+    The embedded address runs first so its specific metadata classification
+    wins over a wrapper's link-local flag, which Python patch releases may
+    delegate to the embedded address differently.
     """
-    candidates: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = [ip]
     inner = embedded_ipv4(ip)
     if inner is not None:
-        candidates.append(inner)
-    return candidates
+        return [inner, ip]
+    return [ip]
 
 
 def ip_reason(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> str:
@@ -521,6 +541,47 @@ def check_url(
         raise error_factory("resolution_failed", raw_url=url)
 
 
+def resolve_url_ips(
+    url: str,
+    *,
+    blocked_networks=None,
+    host_allowlist=None,
+    allow_loopback: bool = False,
+    error_factory=BlockedDestinationError,
+) -> tuple[str, ...]:
+    """Return the exact validated TCP candidates, preserving the hostname policy.
+
+    Unlike :func:`check_url`, an empty answer always fails: a transport must
+    never fall back to a second, unchecked hostname resolution.
+    """
+    check_url(
+        url,
+        blocked_networks=blocked_networks,
+        host_allowlist=host_allowlist,
+        allow_loopback=allow_loopback,
+        resolve_dns=False,
+        error_factory=error_factory,
+    )
+    host = urlparse(url).hostname.lower()
+    literal = _try_parse_ip(host)
+    addresses = [literal] if literal is not None else iter_resolved_ips(host)
+    if not addresses:
+        raise error_factory("resolution_failed", raw_url=url)
+    for ip in addresses:
+        _validate_ip(
+            ip,
+            url=url,
+            blocked_networks=blocked_networks,
+            allow_loopback=allow_loopback,
+            host_lc=host,
+            loopback_hosts=set(DEFAULT_LOOPBACK_HOSTS),
+            allow_private=False,
+            allow_metadata=False,
+            error_factory=error_factory,
+        )
+    return tuple(str(ip) for ip in addresses)
+
+
 def _validate_ip(
     ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
     url: str,
@@ -538,7 +599,7 @@ def _validate_ip(
     Central routine for both literal-IP URLs and DNS-resolved IPs.
     """
     loopback_hosts = loopback_hosts or set(DEFAULT_LOOPBACK_HOSTS)
-    loopback_carveout = allow_loopback and ip.is_loopback and host_lc in loopback_hosts
+    loopback_carveout = allow_loopback and loopback_allowed(ip, host_lc, loopback_hosts)
 
     # Metadata and link-local are checked FIRST and are not relaxed by
     # ``allow_private``. Hoisting them above the private-range check is
@@ -585,13 +646,14 @@ def _validate_ip(
     # because loopback is unsafe for production) re-rejects the IP the
     # carve-out just permitted.
     if blocked_networks and not loopback_carveout:
-        for net in blocked_networks:
-            try:
-                if ip in net:
-                    raise error_factory(ip_reason(ip), raw_url=url)
-            except TypeError:
-                # Network family mismatch (v4 vs v6) is normal -- skip.
-                continue
+        for candidate in metadata_candidates(ip):
+            for net in blocked_networks:
+                try:
+                    if candidate in net:
+                        raise error_factory(ip_reason(ip), raw_url=url)
+                except TypeError:
+                    # Network family mismatch (v4 vs v6) is normal -- skip.
+                    continue
 
 
 def _check_host_allowlist(

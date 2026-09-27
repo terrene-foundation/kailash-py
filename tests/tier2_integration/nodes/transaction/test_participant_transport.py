@@ -231,6 +231,9 @@ class TestLocalNodeTransportWithMockExecutor:
 # ---------------------------------------------------------------------------
 
 
+_CALL_LOG_KEY = web.AppKey("call_log", list)
+
+
 def _make_2pc_app(
     prepare_response: Optional[Dict[str, Any]] = None,
     commit_response: Optional[Dict[str, Any]] = None,
@@ -265,7 +268,7 @@ def _make_2pc_app(
     app.router.add_post("/2pc/prepare", handle_prepare)
     app.router.add_post("/2pc/commit", handle_commit)
     app.router.add_post("/2pc/abort", handle_abort)
-    app["call_log"] = call_log
+    app[_CALL_LOG_KEY] = call_log
     return app
 
 
@@ -303,8 +306,8 @@ class TestHttpTransportPrepare:
             assert result.details["wal_position"] == 42
 
             # Verify the server received the correct payload
-            assert len(app["call_log"]) == 1
-            log_entry = app["call_log"][0]
+            assert len(app[_CALL_LOG_KEY]) == 1
+            log_entry = app[_CALL_LOG_KEY][0]
             assert log_entry["phase"] == "prepare"
             assert log_entry["body"]["transaction_id"] == "tx-200"
             assert log_entry["body"]["context"]["key"] == "val"
@@ -398,7 +401,7 @@ class TestHttpTransportCommit:
 
             result = await transport.commit(participant, "tx-300")
             assert result.success is True
-            assert app["call_log"][0]["body"]["transaction_id"] == "tx-300"
+            assert app[_CALL_LOG_KEY][0]["body"]["transaction_id"] == "tx-300"
 
             await transport.close()
         finally:
@@ -448,7 +451,7 @@ class TestHttpTransportCommit:
             result = await transport.commit(participant, "tx-302")
             assert result.success is False
             # All 3 retries should have been attempted
-            assert len(app["call_log"]) == 3
+            assert len(app[_CALL_LOG_KEY]) == 3
 
             await transport.close()
         finally:
@@ -473,7 +476,7 @@ class TestHttpTransportAbort:
 
             result = await transport.abort(participant, "tx-400")
             assert result.success is True
-            assert app["call_log"][0]["body"]["transaction_id"] == "tx-400"
+            assert app[_CALL_LOG_KEY][0]["body"]["transaction_id"] == "tx-400"
 
             await transport.close()
         finally:
@@ -497,7 +500,7 @@ class TestHttpTransportAbort:
 
             result = await transport.abort(participant, "tx-401")
             assert result.success is False
-            assert len(app["call_log"]) == 2
+            assert len(app[_CALL_LOG_KEY]) == 2
 
             await transport.close()
         finally:

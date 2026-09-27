@@ -1,0 +1,45 @@
+{
+  "ran": true,
+  "verdict": "CLEAN independent correctness on final gateway/native v2",
+  "rounds": [
+    "235passed1livePGdeselected5.17s",
+    "235passed1livePGdeselected5.02s"
+  ],
+  "manifest": {
+    "src/kailash/runtime/async_local.py": {
+      "base_sha256": "5a5234e0b74b8246816fa0bfbec2229ed018c8cbd6d6ace76b071c93ae54ace2",
+      "sha256": "3763aa80191780730b726d49d0bc360809a7ea4904ffca403a02ad93fe0a0ec3"
+    },
+    "src/kailash/gateway/enhanced_gateway.py": {
+      "base_sha256": "b5ef813c89314379a66da6dd46f419fccc8e137d36b119fa308febd84b356bdf",
+      "sha256": "d1593a21eced16422060942c2369911634ffff262533c6dd573b3ff64eadc21d"
+    },
+    "specs/core-runtime.md": {
+      "base_sha256": "66ac9bb66e8bfc07b5f57e692323d1a0465f3509bea35999509ab60674de7cf0",
+      "sha256": "723f66f52328f3b106c5d44199b9981266a47394e95b70513efcd9f9006d60ce"
+    },
+    "tests/regression/test_runtime_aclose_contract.py": {
+      "base_sha256": null,
+      "sha256": "fecbf5e848be31caec816ba638ebbf68c6d3dd19132e92f72a9373b517ccfb34"
+    }
+  },
+  "source_review": "Read full two-source and specification delta; public aclose reuses reference release and awaited completion, foreign pendingTask converted on owner loop; gateway parent close remainsfinally; original cleanup exception and executioncontract preserved. All original gateway regression bytes retained.",
+  "controls": [
+    {
+      "mode": "foreign",
+      "hits": 2,
+      "exit": 1
+    },
+    {
+      "mode": "delegate",
+      "hits": 4,
+      "exit": 1
+    }
+  ],
+  "diagnostics": {
+    "read_all": 43,
+    "same_normalized_multiset": true,
+    "classification": "Deliberate lifecycle handler/cleanup exceptions, audit severity, node execution failures, timeouts, realSQLite failure, forceddrift, missingnode negativecase; one explicitplatformmemorylimitation. No Pythonwarnings or orphaned coroutine warning."
+  },
+  "scope": "Local actualTCP/async runtime+gateway cohorts, no livePG/Windows claim"
+}

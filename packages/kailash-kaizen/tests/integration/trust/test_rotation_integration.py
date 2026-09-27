@@ -55,10 +55,10 @@ from kailash.trust.chain import AuthorityType, CapabilityType
 from kailash.trust.exceptions import AuthorityNotFoundError
 from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
 from kailash.trust.signing.crypto import generate_keypair
-from kailash.trust.signing.rotation import CredentialRotationManager
-from kailash.trust.signing.rotation import RotationError
-from kailash.trust.signing.rotation import RotationError as RotationErrorException
 from kailash.trust.signing.rotation import (
+    CredentialRotationManager,
+    RotationError,
+    RotationError as RotationErrorException,
     RotationResult,
     RotationStatus,
     RotationStatusInfo,

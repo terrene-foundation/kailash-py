@@ -1,0 +1,308 @@
+{
+  "scope": "Bounded archived EnhancedParameterValidator and LocalRuntime parameter integration only; excludes debugger, optimizer, other archived35-file changes, unrelated inject_parameters placeholder, all async-runtime parity.",
+  "archive_ref": "refs/archive/2026-08-21/todo-096-parameter-injection-testing",
+  "archive_commit": "b7ecec280",
+  "current_head": "db9565623dd03620e03869fc63e4d51c9ceedd67",
+  "ran": true,
+  "probe_command": ".venv/bin/python -I /tmp/kailash-csq13-parameter-validator-probe.py",
+  "probe_exit_code": 0,
+  "probe_provenance": "Asserted current LocalRuntime origin; actual current Node/Workflow/LocalRuntime execution. Archived383-line validator loaded from git object in memory, only missing exception import replaced with its actual archived ParameterValidationError declaration; current NodeParameter objects supplied. Not a full archived checkout execution.",
+  "spec_quotes": [
+    {
+      "path": "specs/core-runtime.md",
+      "symbol": "4.1.2 execute",
+      "line": 97,
+      "quote": "parameters -- Optional parameter overrides. Can be dict[str, dict[str, Any]] (per-node: {\"node_id\": {\"param\": value}}) or dict[str, Any] (flat, injected into root nodes)"
+    },
+    {
+      "path": "specs/core-runtime.md",
+      "symbol": "4.1.1 constructor",
+      "line": 66,
+      "quote": "connection_validation -- \"off\" (no validation), \"warn\" (log warnings, default), \"strict\" (raise errors)",
+      "interpretation": "Connection validation only; not equivalent to archived parameter_validation mode."
+    },
+    {
+      "path": "specs/core-nodes.md",
+      "symbol": "1.1.6 Class-Level Configuration",
+      "line": 113,
+      "quote": "_strict_unknown_params = False -- When True, errors on unknown parameters instead of ignoring them"
+    },
+    {
+      "path": "specs/core-nodes.md",
+      "symbol": "1.2 NodeParameter Contracts",
+      "line": 152,
+      "quote": "When required=True and no default is provided, the parameter must be supplied at runtime"
+    }
+  ],
+  "dispositions": [
+    {
+      "invariant": "required/type rejection",
+      "status": "safety behavior retained/superseded, not identical preflight API",
+      "former": "Node-specific STRICT adds missing/type issues and raises; WARN returns bad types with issues. Basic coercible types accepted. Integration validates processed per-node inputs before execute; skips if result falsey. Standalone flat path distributes without checking type/required.",
+      "current": "Workflow.validate checks missing required inputs against config/connections/processed overrides; Node.execute always calls validate_inputs and _validate_resolved_parameters, including connection_validation=off. Coercible str7 becomes int7; missing and nonconvertible int rejected.",
+      "evidence": [
+        "node_valid_coercion",
+        "node_missing",
+        "node_wrong_type",
+        "runtime_root_only",
+        "runtime_invalid_type_with_connection_validation_off",
+        "archived_strict_missing",
+        "archived_strict_wrong_type",
+        "archived_warn_wrong_type",
+        "archived_flat_wrong_type_not_checked"
+      ],
+      "limits": "Do not claim equal timing: archival preflight could reject supplied downstream bad values before any node executes; current per-node type validation happens at execution."
+    },
+    {
+      "invariant": "undeclared parameter handling",
+      "status": "partially superseded; runtime-wide strict policy/report API remains unlanded archival capability",
+      "former": "STRICT rejects undeclared input; WARN emits structured issue, permits kwargs nodes, otherwise filters. Runtime parameter_validation controls off/warn/strict/debug. All issue classes become errors in STRICT, including normal config overrides.",
+      "current": "Base Node logs/drop unknown by default; _strict_unknown_params=True rejects unknown. Explicit special names and underscore inputs exempt. Current LocalRuntime does not accept parameter_validation keyword. Constructor rejects unexpected keyword rather than silently treating connection_validation as this policy.",
+      "evidence": [
+        "node_unknown_default",
+        "node_unknown_strict",
+        "runtime_archival_mode_kwarg",
+        "archived_strict_unknown",
+        "archived_warn_unknown",
+        "archived_strict_expected_config_override"
+      ],
+      "recommendation": "Do not restore old implementation wholesale. If runtime-wide policy is still desired, treat as an explicit feature with precedence-aware shared node validation and required tests; not proven required by current specs."
+    },
+    {
+      "invariant": "flat versus per-node injection",
+      "status": "actual archived behavior retained; current spec wording divergence remains explicit",
+      "former": "Standalone validator distributes flat names to ALL accepting nodes; LocalRuntime first normalizes via existing injector then validates processed per-node dictionary.",
+      "current": "LocalRuntime._separate_parameter_formats distinguishes recognized node+dict vs flat. _process_workflow_parameters uses WorkflowParameterInjector._get_all_nodes, merges per-node overrides above flat. Actual two-node linked workflow: flat7 gives root7/downstream7; per-node2/3 preserved; mixedflat7/downstream3 preserves downstream3.",
+      "evidence": [
+        "runtime_flat",
+        "runtime_per_node",
+        "runtime_mixed",
+        "runtime_root_only",
+        "archived_flat_all_accepting"
+      ],
+      "open": "core-runtime.md says injected into root nodes while actual implementation injects all accepting nodes. This is not an archive-only missing implementation. Existing code comments explicitly intend all-node injection; bounded preferred correction is clarify spec with actual scoped behavior rather than blindly restrict runtime, pending parent disposition. No edits made."
+    }
+  ],
+  "overall": "PARTIALLY_SUPERSEDED_WITH_NAMED_UNLANDED_POLICY_AND_SPEC_DIVERGENCE; not a blanket landed-equivalent claim; no demonstrated loss of required/type safety or flat/per-node mechanics.",
+  "mechanical_ast_receipts": [
+    {
+      "path": "src/kailash/runtime/local.py",
+      "symbol": "_process_workflow_parameters",
+      "line": 4565
+    },
+    {
+      "path": "src/kailash/runtime/local.py",
+      "symbol": "_separate_parameter_formats",
+      "line": 4673
+    },
+    {
+      "path": "src/kailash/runtime/parameter_injector.py",
+      "symbol": "validate_inputs",
+      "line": 226
+    },
+    {
+      "path": "src/kailash/runtime/parameter_injector.py",
+      "symbol": "transform_workflow_parameters",
+      "line": 383
+    },
+    {
+      "path": "src/kailash/nodes/base.py",
+      "symbol": "validate_inputs",
+      "line": 924
+    },
+    {
+      "path": "src/kailash/nodes/base.py",
+      "symbol": "_validate_resolved_parameters",
+      "line": 1253
+    },
+    {
+      "path": "src/kailash/nodes/base.py",
+      "symbol": "validate_inputs",
+      "line": 1897
+    },
+    {
+      "path": "src/kailash/workflow/graph.py",
+      "symbol": "validate",
+      "line": 909
+    }
+  ],
+  "source_hashes": {
+    "src/kailash/runtime/local.py": "1f187fdc2273a6bc02edbbf2fb6138d6a1dcbd304a6a36448b0052794121dc9a",
+    "src/kailash/runtime/parameter_injector.py": "f3908fbe39cfaa47b2f6fc17227e63e25d8ca332c9832bedf5ab7f2ab96cce01",
+    "src/kailash/nodes/base.py": "b52318755c973426dad7f23b21d8ad6bd853ab2e96d374494aa8648df2c26000",
+    "src/kailash/workflow/graph.py": "94a0e37bf06e70da5649be2736b28427b36042e6d7a286dbac45df380ba206c9",
+    "specs/core-runtime.md": "6ecab3c10a04b0cc24455ad80a7509f4f8d4fdfa7ea0c5e17c51675f99e55a6d",
+    "specs/core-nodes.md": "d704ac9b32df3ddbbb974328d4ad2a0bd8351ae100dc7ea8c1fb0f512ab5b6af"
+  },
+  "probe_results": [
+    {
+      "probe": "node_valid_coercion",
+      "outcome": "returned",
+      "value": {
+        "count": 7,
+        "trigger": 0
+      }
+    },
+    {
+      "probe": "node_missing",
+      "outcome": "NodeValidationError",
+      "message": "Required parameter 'count' not provided. Available resolved inputs: ['trigger']. Mapping suggestions: []. Description: No description available"
+    },
+    {
+      "probe": "node_wrong_type",
+      "outcome": "NodeValidationError",
+      "message": "Input 'count' must be of type int, got str. Conversion failed: invalid literal for int() with base 10: 'nope'"
+    },
+    {
+      "probe": "node_unknown_default",
+      "outcome": "returned",
+      "value": {
+        "count": 7,
+        "trigger": 0
+      }
+    },
+    {
+      "probe": "node_unknown_strict",
+      "outcome": "NodeValidationError",
+      "message": "Unknown parameter(s) for StrictCountNode: ['unrecognized']. Valid parameters: ['count', 'trigger']. Suggestions:\n  'unrecognized' -> did you mean ['count', 'trigger']?"
+    },
+    {
+      "probe": "runtime_flat",
+      "outcome": "returned",
+      "value": {
+        "root": {
+          "count": 7,
+          "trigger": 0
+        },
+        "downstream": {
+          "count": 7,
+          "trigger": 7
+        }
+      }
+    },
+    {
+      "probe": "runtime_per_node",
+      "outcome": "returned",
+      "value": {
+        "root": {
+          "count": 2,
+          "trigger": 0
+        },
+        "downstream": {
+          "count": 3,
+          "trigger": 2
+        }
+      }
+    },
+    {
+      "probe": "runtime_mixed",
+      "outcome": "returned",
+      "value": {
+        "root": {
+          "count": 7,
+          "trigger": 0
+        },
+        "downstream": {
+          "count": 3,
+          "trigger": 7
+        }
+      }
+    },
+    {
+      "probe": "runtime_root_only",
+      "outcome": "WorkflowValidationError",
+      "message": "Node 'downstream' missing required inputs: ['count']. Provide these inputs via connections, node configuration, or runtime parameters"
+    },
+    {
+      "probe": "runtime_invalid_type_with_connection_validation_off",
+      "outcome": "RuntimeExecutionError",
+      "message": "Unified enterprise workflow execution failed: WorkflowExecutionError: Node 'root' failed: Input 'count' must be of type int, got str. Conversion failed: invalid literal for int() with base 10: 'nope'"
+    },
+    {
+      "probe": "runtime_archival_mode_kwarg",
+      "outcome": "TypeError",
+      "message": "LocalRuntime.__init__() got an unexpected keyword argument 'parameter_validation'"
+    },
+    {
+      "probe": "archived_strict_missing",
+      "outcome": "ParameterValidationError",
+      "message": "Parameter validation failed: Required parameter 'count' not provided in runtime parameters or node config"
+    },
+    {
+      "probe": "archived_strict_wrong_type",
+      "outcome": "ParameterValidationError",
+      "message": "Parameter validation failed: Parameter 'count' type mismatch. Expected <class 'int'>, got <class 'str'>"
+    },
+    {
+      "probe": "archived_warn_wrong_type",
+      "outcome": "returned",
+      "value": {
+        "result": {
+          "root": {
+            "count": "nope"
+          }
+        },
+        "issues": [
+          "type_mismatch"
+        ]
+      }
+    },
+    {
+      "probe": "archived_strict_unknown",
+      "outcome": "ParameterValidationError",
+      "message": "Parameter validation failed: Runtime parameter 'unrecognized' not declared in node's get_parameters()"
+    },
+    {
+      "probe": "archived_warn_unknown",
+      "outcome": "returned",
+      "value": {
+        "result": {
+          "root": {
+            "count": 7
+          }
+        },
+        "issues": [
+          "undeclared_parameter"
+        ]
+      }
+    },
+    {
+      "probe": "archived_flat_all_accepting",
+      "outcome": "returned",
+      "value": {
+        "result": {
+          "root": {
+            "count": 7
+          },
+          "downstream": {
+            "count": 7
+          }
+        },
+        "issues": []
+      }
+    },
+    {
+      "probe": "archived_flat_wrong_type_not_checked",
+      "outcome": "returned",
+      "value": {
+        "result": {
+          "root": {
+            "count": "nope"
+          },
+          "downstream": {
+            "count": "nope"
+          }
+        },
+        "issues": []
+      }
+    },
+    {
+      "probe": "archived_strict_expected_config_override",
+      "outcome": "ParameterValidationError",
+      "message": "Parameter validation failed: Runtime parameter 'count' overrides node config value"
+    }
+  ],
+  "instrument_controls": "Known valid and invalid data pairs; default versus strict unknown policy; per-node and mixed overrides; root-only missing downstream versus all-node flat input.19 observed rows with discriminating assertions on rejection, coercion, distribution, and missing API; actual runtime closed with context manager.",
+  "initial_non_evidence": "First nonisolated temp script launch imported unrelated /tmp/ast.py and errored. Reran with Python -I, exact local module provenance, exit0; only isolated run counted.",
+  "mutations": "None to repository, refs, stashes, source or dependencies; /tmp report/probe artifacts only."
+}

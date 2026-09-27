@@ -233,6 +233,29 @@ async with db.transactions.begin() as outer:
     # Outer transaction continues -- User is committed, Profile is not
 ```
 
+The lower-level Core `SQLiteAdapter` (also inherited by
+`ProductionSQLiteAdapter`) pins one connection for the entire nested stack.
+Implicit nested `adapter.begin_transaction()` belongs to the task that opened
+the outer scope; another task must use its own adapter for an independent
+transaction. An explicitly handed-off scope/handle may execute statements and
+complete that transaction from another task, as DataFlow's transaction nodes
+require. Scopes complete in reverse nesting order; stale issued handles raise
+`RuntimeError`. Legacy bare-connection completion remains supported for an outer
+scope, but is rejected while nested scopes are active. A completion rejected
+before admission, including cancellation while waiting for the lifecycle lock,
+leaves its scope usable; an admitted driver completion attempt remains single-shot.
+This is the Core adapter lifecycle contract, separate from DataFlow `TransactionManager`'s
+ContextVar routing above (source: `src/kailash/nodes/data/async_sql.py:3009-3249`).
+
+For the Core adapter's retained memory connection, unscoped auto-commit queries
+cannot run inside an active transaction: pass the active handle explicitly.
+An unscoped memory stream holds the connection until its context exits;
+starting another operation or disconnecting from that same task while the
+stream is open raises `RuntimeError`. File connections close at outer
+completion; memory connections remain owned until disconnect
+(source: `src/kailash/nodes/data/async_sql.py:2656-2754`,
+`src/kailash/nodes/data/async_sql.py:3177-3249`).
+
 ### 12.4 Automatic Rollback
 
 Exceptions within the transaction body trigger automatic rollback. The exception is re-raised after rollback.

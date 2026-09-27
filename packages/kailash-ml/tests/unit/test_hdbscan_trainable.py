@@ -17,10 +17,11 @@ from __future__ import annotations
 
 import logging
 
-import kailash_ml
 import numpy as np
 import polars as pl
 import pytest
+
+import kailash_ml
 from kailash_ml import HDBSCANTrainable
 from kailash_ml.trainable import TrainingContext
 

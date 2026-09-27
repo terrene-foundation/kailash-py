@@ -12,6 +12,7 @@ import asyncio
 import hashlib
 import hmac as hmac_mod
 import json
+import socket
 import time
 from unittest.mock import AsyncMock, patch
 
@@ -23,6 +24,19 @@ from nexus.transports.webhook import DeliveryStatus, WebhookDelivery, WebhookTra
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def outbound_test_dns(monkeypatch):
+    """Unit callbacks use deterministic public addresses without external DNS."""
+    original = socket.getaddrinfo
+
+    def resolve(host, port, *args, **kwargs):
+        if host in {"example.com", "a.com", "b.com"}:
+            host = "93.184.216.34"
+        return original(host, port, *args, **kwargs)
+
+    monkeypatch.setattr(socket, "getaddrinfo", resolve)
 
 
 @pytest.fixture

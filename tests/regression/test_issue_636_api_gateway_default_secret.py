@@ -76,8 +76,11 @@ def test_construction_with_valid_env_var_succeeds(monkeypatch, env_serialized):
         "x" * 64,  # 64 bytes, well above the 32-byte minimum
     )
     gw = APIGateway(enable_auth=True)
-    assert gw.auth_manager is not None
-    assert gw.enable_auth is True
+    try:
+        assert gw.auth_manager is not None
+        assert gw.enable_auth is True
+    finally:
+        gw.agent_ui.close()
 
 
 @pytest.mark.regression
@@ -110,10 +113,13 @@ def test_construction_with_explicit_auth_manager_ignores_env_var(
 
     fake = _FakeAuthManager()
     gw = APIGateway(enable_auth=True, auth_manager=fake)
-    assert gw.auth_manager is fake
-    # The env var was genuinely not consulted, and the gate uses the caller's key.
-    assert gw._auth_config is not None
-    assert gw._auth_config.secret == _FakeConfig.secret_key
+    try:
+        assert gw.auth_manager is fake
+        # The env var was not consulted; the gate uses the caller's key.
+        assert gw._auth_config is not None
+        assert gw._auth_config.secret == _FakeConfig.secret_key
+    finally:
+        gw.agent_ui.close()
 
 
 @pytest.mark.regression
@@ -149,5 +155,8 @@ def test_construction_without_auth_does_not_require_env_var(
     """enable_auth=False bypasses the secret requirement entirely."""
     monkeypatch.delenv("KAILASH_API_GATEWAY_SECRET", raising=False)
     gw = APIGateway(enable_auth=False)
-    assert gw.auth_manager is None
-    assert gw.enable_auth is False
+    try:
+        assert gw.auth_manager is None
+        assert gw.enable_auth is False
+    finally:
+        gw.agent_ui.close()

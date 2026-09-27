@@ -27,8 +27,8 @@ from kailash.observability import (
     ObservabilityHandle,
     configure_observability,
     get_observability_handle,
+    otlp as _otlp,
 )
-from kailash.observability import otlp as _otlp
 
 
 @pytest.fixture(autouse=True)

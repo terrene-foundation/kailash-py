@@ -7,12 +7,145 @@ resource providers for workflow definitions, documentation, and data access.
 import json
 import logging
 import os
+import re
 from typing import Any, Dict, List, Optional
 
+from kailash.utils.url_credentials import (
+    UNPARSEABLE_URL_SENTINEL,
+    is_sensitive_query_key,
+    mask_url,
+)
 from kailash.workflow import Workflow
 from kailash_mcp import MCPServer
 
 logger = logging.getLogger(__name__)
+
+#: Marker written in place of a credential-bearing value. Deliberately
+#: grep-able, and deliberately NOT length-preserving -- a mask that echoed the
+#: original length would leak it.
+REDACTED = "[REDACTED]"
+
+#: SUPPLEMENT to :func:`kailash.utils.url_credentials.is_sensitive_query_key`,
+#: which is the SINGLE SOURCE OF TRUTH for credential-bearing key names
+#: (``rules/security.md`` § "No secrets in logs") and is consulted FIRST. It is
+#: authoritative but was built for URL QUERY keys, so it does not recognise
+#: several families that routinely appear in a NODE CONFIG -- measured:
+#: ``connection_string``, ``credentials``, ``passphrase``, ``dsn``, ``bearer``,
+#: ``aws_secret_access_key`` and ``session_key`` all return False.
+#:
+#: These are matched as SUBSTRINGS of the normalized key, not exact members, so
+#: ``db_connection_string`` and ``aws_secret_access_key`` are both caught. Add
+#: here only what the canonical set genuinely does not cover; never copy an
+#: entry that it already handles, or the two lists drift.
+_SENSITIVE_CONFIG_SUBSTRINGS = (
+    "connstr",
+    "connectionstring",
+    "credential",
+    "passphrase",
+    "privatekey",
+    "secret",
+    "password",
+    "token",
+    "apikey",
+    "bearer",
+    "sessionkey",
+    "dsn",
+    "dburl",
+    "databaseurl",
+    # `authorization` and `cookie` are the two most common HTTP-header key
+    # names a node config carries a live credential under
+    # (`{"headers": {"Authorization": "Bearer ..."}}`). They are matched as
+    # SUBSTRINGS of the separator-stripped key, which is safe: no common
+    # non-secret key name contains either run.
+    "authorization",
+    "cookie",
+)
+
+#: Standalone credential-bearing words matched only as a WHOLE
+#: separator-delimited token of the key. This is what distinguishes `x-auth`
+#: and `auth_header` (token `auth` -> redacted) from `author` and
+#: `oauth_provider_name` (whose `auth` is a substring, NOT a token -> kept).
+#: A substring rule for `auth` cannot draw that line; a token rule can.
+#:
+#: `key` is deliberately ABSENT -- `public_key` is not a secret, and the
+#: canonical set already draws the public/secret-key distinction. Compound
+#: key families (`api_key`, `session_key`) are caught by the substring list
+#: above, not here.
+_SENSITIVE_CONFIG_TOKENS = frozenset(
+    {
+        "auth",
+        "token",
+        "secret",
+        "password",
+        "passwd",
+        "pwd",
+        "cookie",
+        "bearer",
+        "credential",
+        "credentials",
+        "passphrase",
+    }
+)
+
+
+def _is_sensitive_config_key(key: str) -> bool:
+    """True when a node-config key name is credential-bearing.
+
+    Three passes, cheapest and most authoritative first:
+
+    1. the canonical :func:`is_sensitive_query_key` (exact-normalized match),
+    2. a substring pass for compound single-run families (``apikey``,
+       ``connectionstring``, ``authorization``, ...),
+    3. a token pass for standalone credential words that appear as a whole
+       separator-delimited component (``x-auth``, ``auth_header``).
+
+    Pass 3 exists because pass 2 cannot both catch ``x-auth`` and spare
+    ``author``: a substring ``auth`` matches both. Splitting on separators
+    first restores the token boundary the normalization destroys.
+    """
+    if is_sensitive_query_key(key):
+        return True
+    normalized = key.lower().replace("_", "").replace("-", "")
+    if any(marker in normalized for marker in _SENSITIVE_CONFIG_SUBSTRINGS):
+        return True
+    tokens = re.split(r"[^a-z0-9]+", key.lower())
+    return any(token in _SENSITIVE_CONFIG_TOKENS for token in tokens)
+
+
+def redact_config(value: Any) -> Any:
+    """Recursively replace credential-bearing values with :data:`REDACTED`.
+
+    Node configuration routinely carries ``api_key``, ``connection_string`` and
+    ``password`` entries. ``workflow://{name}`` serves that configuration to any
+    MCP client that can reach the resource surface, so it MUST NOT be emitted
+    verbatim -- ``rules/security.md`` § "No secrets in logs" applies with more
+    force here, because this is a response body rather than a log file.
+
+    Redaction is by KEY NAME, which bounds what it can catch: a secret stored
+    under a name neither the canonical set nor the supplement recognises is
+    still emitted. Node authors who need a guarantee should keep credentials in
+    the environment and reference them by name, which is what
+    ``rules/env-models.md`` already requires.
+    """
+    if isinstance(value, dict):
+        return {
+            k: (REDACTED if _is_sensitive_config_key(str(k)) else redact_config(v))
+            for k, v in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [redact_config(item) for item in value]
+    if isinstance(value, str) and "://" in value:
+        # A URL carries its credential in the VALUE, not the key name, so
+        # key-name matching cannot see it: `redis_url` is not in the canonical
+        # set and adding a `url` substring would redact every harmless
+        # endpoint. Delegate to the canonical masker, which strips userinfo and
+        # sensitive query parameters while leaving the host and path readable
+        # -- an operator still needs to see WHICH cache the limiter points at.
+        # UNPARSEABLE_URL_SENTINEL means it was not a URL after all, so the
+        # original is returned rather than a misleading sentinel.
+        masked = mask_url(value)
+        return value if masked == UNPARSEABLE_URL_SENTINEL else masked
+    return value
 
 
 class NexusResourceManager:
@@ -37,101 +170,177 @@ class NexusResourceManager:
         self._setup_default_resources()
 
     def _setup_default_resources(self):
-        """Set up default resource providers."""
+        """Set up default resource providers.
+
+        URI templates, NOT wildcards (issue #2056)
+        ------------------------------------------
+
+        Every provider registers an RFC 6570-style ``{param}`` template whose
+        parameter names match its handler's signature exactly. Until #2056
+        these registered ``scheme://*`` while the handlers took a single
+        ``uri`` argument, and official FastMCP rejects that outright::
+
+            ValueError: Mismatch between URI parameters set() and
+                        function parameters {'uri'}
+
+        raised from ``mcp/server/fastmcp/server.py`` at the point where it
+        compares ``re.findall(r"{(\\w+)}", uri)`` against the handler's
+        parameters. ``*`` declares NO parameters while the handler declared
+        one, so ``NexusResourceManager.__init__`` raised for every deployment
+        with the official ``mcp`` package installed. ``kailash_mcp``'s own
+        non-FastMCP fallback stores handlers under the URI string verbatim and
+        imposes no such constraint, so it accepted both forms -- which is why
+        the failure looked import-order dependent rather than constant.
+
+        Handlers therefore take the template parameters and RECONSTRUCT the
+        full URI for the response's ``uri`` field, which keeps the response
+        shape byte-identical to what MCP clients already consume.
+
+        Why ``data://`` is registered at four depths
+        --------------------------------------------
+
+        FastMCP compiles a template parameter to ``(?P<name>[^/]+)``
+        (``resources/templates.py::ResourceTemplate.matches``), so ONE
+        parameter cannot span a ``/``. Measured: with ``data://{path}``
+        registered, ``data://examples/sample.json`` -- this module's own
+        documented example, pinned by ``test_data_resource_content`` -- does
+        not match and would 404. The RFC 6570 explode form ``{path*}`` is not
+        supported either; it crashes ``re.compile`` with
+        ``bad character in group name 'path*'``.
+
+        Registering one template per depth is the construction FastMCP's
+        matcher actually supports. Four is the documented ceiling, and it is a
+        real limit rather than a guess: deeper paths simply do not match any
+        template and are reported as not found, exactly as an absent file is.
+        """
 
         # Workflow definitions as resources
-        @self.server.resource("workflow://*")
-        async def get_workflow_definition(uri: str) -> Dict[str, Any]:
+        @self.server.resource("workflow://{name}")
+        async def get_workflow_definition(name: str) -> Dict[str, Any]:
             """Provide workflow definition and schema."""
-            workflow_name = uri.replace("workflow://", "")
-
-            if workflow_name not in self.nexus._workflows:
-                return {
-                    "uri": uri,
-                    "mimeType": "application/json",
-                    "error": f"Workflow '{workflow_name}' not found",
-                }
-
-            workflow = self.nexus._workflows[workflow_name]
-
-            # Extract workflow information
-            workflow_info = self._extract_workflow_info(workflow_name, workflow)
-
-            return {
-                "uri": uri,
-                "mimeType": "application/json",
-                "content": json.dumps(workflow_info, indent=2),
-            }
+            return self._workflow_response(name)
 
         # Documentation resources
-        @self.server.resource("docs://*")
-        async def get_documentation(uri: str) -> Dict[str, Any]:
+        @self.server.resource("docs://{topic}")
+        async def get_documentation(topic: str) -> Dict[str, Any]:
             """Provide documentation content."""
-            doc_path = uri.replace("docs://", "")
+            return self._documentation_response(topic)
 
-            # Map documentation paths
-            doc_content = self._get_documentation(doc_path)
-
-            if doc_content:
-                return {"uri": uri, "mimeType": "text/markdown", "content": doc_content}
-            else:
-                return {
-                    "uri": uri,
-                    "mimeType": "text/plain",
-                    "error": f"Documentation '{doc_path}' not found",
-                }
-
-        # Data resources (files, configurations, etc.)
-        @self.server.resource("data://*")
-        async def get_data_resource(uri: str) -> Dict[str, Any]:
+        # Data resources (files, configurations, etc.). One template per path
+        # depth -- see the class docstring for why a single {path} cannot work.
+        @self.server.resource("data://{seg1}")
+        async def get_data_resource(seg1: str) -> Dict[str, Any]:
             """Provide data resources."""
-            resource_path = uri.replace("data://", "")
+            return self._data_response(seg1)
 
-            # Security check - only allow specific data access
-            if not self._is_allowed_resource(resource_path):
-                return {
-                    "uri": uri,
-                    "mimeType": "application/json",
-                    "error": "Access denied to this resource",
-                }
+        @self.server.resource("data://{seg1}/{seg2}")
+        async def get_data_resource_d2(seg1: str, seg2: str) -> Dict[str, Any]:
+            """Provide data resources nested one directory deep."""
+            return self._data_response(f"{seg1}/{seg2}")
 
-            content = self._get_data_content(resource_path)
-            mime_type = self._get_mime_type(resource_path)
+        @self.server.resource("data://{seg1}/{seg2}/{seg3}")
+        async def get_data_resource_d3(
+            seg1: str, seg2: str, seg3: str
+        ) -> Dict[str, Any]:
+            """Provide data resources nested two directories deep."""
+            return self._data_response(f"{seg1}/{seg2}/{seg3}")
 
-            if content is not None:
-                return {"uri": uri, "mimeType": mime_type, "content": content}
-            else:
-                return {
-                    "uri": uri,
-                    "mimeType": "application/json",
-                    "error": f"Resource '{resource_path}' not found",
-                }
+        @self.server.resource("data://{seg1}/{seg2}/{seg3}/{seg4}")
+        async def get_data_resource_d4(
+            seg1: str, seg2: str, seg3: str, seg4: str
+        ) -> Dict[str, Any]:
+            """Provide data resources nested three directories deep."""
+            return self._data_response(f"{seg1}/{seg2}/{seg3}/{seg4}")
 
         # Configuration resources
-        @self.server.resource("config://*")
-        async def get_configuration(uri: str) -> Dict[str, Any]:
+        @self.server.resource("config://{key}")
+        async def get_configuration(key: str) -> Dict[str, Any]:
             """Provide configuration information."""
-            config_key = uri.replace("config://", "")
+            return self._configuration_response(key)
 
-            config_data = self._get_configuration(config_key)
+        # Help resources
+        @self.server.resource("help://{topic}")
+        async def get_help(topic: str) -> Dict[str, Any]:
+            """Provide context-sensitive help."""
+            return self._help_response(topic)
 
+        logger.info("Default resource providers configured")
+
+    #: Deepest ``data://`` path the registered templates can match. See
+    #: :meth:`_setup_default_resources` for why this is bounded at all.
+    DATA_MAX_PATH_SEGMENTS = 4
+
+    def _workflow_response(self, name: str) -> Dict[str, Any]:
+        """Build the ``workflow://<name>`` resource payload."""
+        uri = f"workflow://{name}"
+
+        if name not in self.nexus._workflows:
             return {
                 "uri": uri,
                 "mimeType": "application/json",
-                "content": json.dumps(config_data, indent=2),
+                "error": f"Workflow '{name}' not found",
             }
 
-        # Help resources
-        @self.server.resource("help://*")
-        async def get_help(uri: str) -> Dict[str, Any]:
-            """Provide context-sensitive help."""
-            help_topic = uri.replace("help://", "")
+        workflow = self.nexus._workflows[name]
+        workflow_info = self._extract_workflow_info(name, workflow)
 
-            help_content = self._get_help_content(help_topic)
+        return {
+            "uri": uri,
+            "mimeType": "application/json",
+            "content": json.dumps(workflow_info, indent=2),
+        }
 
-            return {"uri": uri, "mimeType": "text/markdown", "content": help_content}
+    def _documentation_response(self, topic: str) -> Dict[str, Any]:
+        """Build the ``docs://<topic>`` resource payload."""
+        uri = f"docs://{topic}"
+        doc_content = self._get_documentation(topic)
 
-        logger.info("Default resource providers configured")
+        if doc_content:
+            return {"uri": uri, "mimeType": "text/markdown", "content": doc_content}
+        return {
+            "uri": uri,
+            "mimeType": "text/plain",
+            "error": f"Documentation '{topic}' not found",
+        }
+
+    def _data_response(self, resource_path: str) -> Dict[str, Any]:
+        """Build the ``data://<path>`` resource payload."""
+        uri = f"data://{resource_path}"
+
+        # Security check - only allow specific data access
+        if not self._is_allowed_resource(resource_path):
+            return {
+                "uri": uri,
+                "mimeType": "application/json",
+                "error": "Access denied to this resource",
+            }
+
+        content = self._get_data_content(resource_path)
+        mime_type = self._get_mime_type(resource_path)
+
+        if content is not None:
+            return {"uri": uri, "mimeType": mime_type, "content": content}
+        return {
+            "uri": uri,
+            "mimeType": "application/json",
+            "error": f"Resource '{resource_path}' not found",
+        }
+
+    def _configuration_response(self, key: str) -> Dict[str, Any]:
+        """Build the ``config://<key>`` resource payload."""
+        return {
+            "uri": f"config://{key}",
+            "mimeType": "application/json",
+            "content": json.dumps(self._get_configuration(key), indent=2),
+        }
+
+    def _help_response(self, topic: str) -> Dict[str, Any]:
+        """Build the ``help://<topic>`` resource payload."""
+        return {
+            "uri": f"help://{topic}",
+            "mimeType": "text/markdown",
+            "content": self._get_help_content(topic),
+        }
 
     def _extract_workflow_info(self, name: str, workflow: Workflow) -> Dict[str, Any]:
         """Extract comprehensive workflow information.
@@ -151,9 +360,11 @@ class NexusResourceManager:
             "metadata": {},
         }
 
-        # Extract metadata if available
+        # Extract metadata if available. Redacted on the same grounds as node
+        # config -- metadata is author-supplied and free-form, so it is exactly
+        # where a stray credential ends up.
         if hasattr(workflow, "metadata"):
-            info["metadata"] = workflow.metadata
+            info["metadata"] = redact_config(workflow.metadata)
 
         # Extract nodes.
         #
@@ -169,7 +380,16 @@ class NexusResourceManager:
                 {
                     "id": node_id,
                     "type": getattr(node, "node_type", type(node).__name__),
-                    "parameters": getattr(node, "config", None) or {},
+                    # REDACTED, not raw. Node config routinely holds api_key /
+                    # connection_string / password, and this dict is served to
+                    # any MCP client that can read the resource surface. Two
+                    # changes in this file made that reachable at once: the
+                    # dead-guard fix above (which previously left `nodes` empty
+                    # for every real workflow) and #2056's template repair
+                    # (`workflow://*` matched nothing, so the handler was never
+                    # invoked). Emitting it verbatim would have turned a pair of
+                    # correctness fixes into a credential-disclosure surface.
+                    "parameters": redact_config(getattr(node, "config", None) or {}),
                 }
             )
 
@@ -189,8 +409,8 @@ class NexusResourceManager:
 
         # Add schema information
         info["schema"] = {
-            "inputs": self._extract_workflow_inputs(workflow),
-            "outputs": self._extract_workflow_outputs(workflow),
+            "inputs": redact_config(self._extract_workflow_inputs(workflow)),
+            "outputs": redact_config(self._extract_workflow_outputs(workflow)),
         }
 
         return info
@@ -351,17 +571,83 @@ Send `tools/list` to discover available workflows.
                 {"example": "data", "timestamp": "2024-01-01T00:00:00Z"}, indent=2
             )
 
-        # Try to read from file system (with security checks)
-        safe_base = os.path.abspath("./data")
-        requested_path = os.path.abspath(os.path.join(safe_base, resource_path))
+        # Try to read from file system (with security checks).
+        #
+        # Containment is tested on the REAL canonical form of BOTH sides, per
+        # rules/security.md Path Containment. The previous check was
+        #     requested_path.startswith(safe_base)
+        # over `abspath`-only paths, which is unsound twice over:
+        #
+        # 1. `startswith` is a PREFIX test, not a boundary test, so a sibling
+        #    directory whose name extends the base -- `/srv/database` against a
+        #    base of `/srv/data` -- satisfies it.
+        # 2. `abspath` normalizes `..` lexically but never resolves SYMLINKS, so
+        #    a link inside ./data pointing anywhere on the filesystem passed the
+        #    string check and was then read.
+        #
+        # Resolution failure is treated as denial (fail closed) rather than
+        # falling through to the read.
+        try:
+            safe_base = os.path.realpath("./data")
+            requested_path = os.path.realpath(os.path.join(safe_base, resource_path))
+        except OSError as exc:
+            logger.warning(
+                "Refusing data resource %r: path could not be resolved (%s)",
+                resource_path,
+                type(exc).__name__,
+            )
+            return None
 
-        # Security: Ensure path is within safe directory
-        if requested_path.startswith(safe_base) and os.path.exists(requested_path):
+        # Boundary-aware containment: equal to the base, or beneath it with a
+        # separator. `commonpath` raises when the paths share no root (different
+        # drives on Windows), which is itself a denial.
+        try:
+            contained = os.path.commonpath([safe_base, requested_path]) == safe_base
+        except ValueError:
+            contained = False
+
+        if not contained:
+            logger.warning(
+                "Refusing data resource %r: resolves outside the data directory",
+                resource_path,
+            )
+            return None
+
+        if not os.path.isfile(requested_path):
+            return None
+
+        try:
+            # O_NOFOLLOW refuses a symlink at the FINAL component, narrowing the
+            # check-to-use window between the realpath above and this open. It
+            # does not close it for intermediate directories; a deployment that
+            # lets an attacker create links inside ./data needs the directory
+            # locked down as well.
+            #
+            # Windows caveat: os.O_NOFOLLOW is absent there, so the getattr
+            # falls back to 0 and this final-component protection is dropped on
+            # Windows. That is an accepted residual, not an oversight: the
+            # realpath+commonpath containment above still holds on every
+            # platform, and creating a symlink on Windows requires either
+            # administrator privilege or Developer Mode, so the attacker who
+            # could plant one inside ./data already has more than this guard
+            # would deny them.
+            fd = os.open(requested_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
             try:
-                with open(requested_path, "r") as f:
-                    return f.read()
-            except Exception as e:
-                logger.error(f"Error reading resource {resource_path}: {e}")
+                handle = os.fdopen(fd, "r")
+            except BaseException:
+                # fdopen did not take ownership of the descriptor; close it
+                # here. On success the `with` below owns and closes it, so this
+                # arm must not also close (that would be a double close).
+                os.close(fd)
+                raise
+            with handle:
+                return handle.read()
+        except OSError as exc:
+            # Logged WITHOUT the resolved absolute path, which would disclose
+            # filesystem layout to an MCP client.
+            logger.error(
+                "Error reading data resource %r: %s", resource_path, type(exc).__name__
+            )
 
         return None
 
@@ -424,7 +710,9 @@ Send `tools/list` to discover available workflows.
                 "count": len(self.nexus._workflows),
             },
             "limits": {
-                "rate_limit": self.nexus.rate_limit_config,
+                # Redacted for the same reason as node config: a rate-limit
+                # config carries `redis_url`, which embeds a password.
+                "rate_limit": redact_config(self.nexus.rate_limit_config),
                 "max_workflows": 1000,
                 "max_connections": 10000,
             },
@@ -502,8 +790,20 @@ Or check documentation:
         """Register a custom resource handler.
 
         Args:
-            pattern: URI pattern (e.g., "custom://*")
-            handler: Async function to handle resource requests
+            pattern: URI template whose ``{param}`` placeholders match
+                ``handler``'s parameter names EXACTLY -- e.g.
+                ``"custom://{name}"`` for ``async def handler(name: str)``, or
+                a parameterless concrete URI like ``"custom://status"`` for
+                ``async def handler()``.
+
+                The example here used to read ``"custom://*"``. That form is
+                rejected by official FastMCP, which raises ``ValueError:
+                Mismatch between URI parameters ... and function parameters
+                ...`` because ``*`` declares no parameters (issue #2056). A
+                template parameter matches ``[^/]+`` and so cannot span ``/``;
+                register one template per path depth if the handler needs
+                nested paths, as the built-in ``data://`` provider does.
+            handler: Async function to handle resource requests.
         """
         self.server.resource(pattern)(handler)
         logger.info(f"Registered custom resource handler for {pattern}")

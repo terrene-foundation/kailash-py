@@ -174,12 +174,22 @@ async def test_unified_agent_default_path_fires_its_observability_hooks(
     builds the manager, BaseAgent receives it, the audit hook writes JSONL.
 
     Nothing is passed but the model: the point is the UNTOUCHED default path,
-    writing to the shipped default `audit_log_path` relative to the CWD.
+    writing to the shipped default `audit_log_path`.
+
+    #2110 -- that default is now ANCHORED to the XDG state directory rather
+    than resolved against the CWD, so `XDG_STATE_HOME` is redirected into
+    `tmp_path` here. Without that redirect this test would write into the
+    developer's real `~/.local/state`, which is a defect in a test, not a
+    detail: a unit test that mutates the user's home is one that cannot be
+    run twice with confidence. `chdir` is kept so the assertion below that
+    nothing lands in the CWD is made from a directory the agent could have
+    written to.
     """
     import json
 
     from kaizen.agent import Agent
 
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     monkeypatch.chdir(tmp_path)
 
     agent = Agent(model=MODEL, llm_provider=PROVIDER, show_startup_banner=False)
@@ -191,8 +201,17 @@ async def test_unified_agent_default_path_fires_its_observability_hooks(
         HookEvent.PRE_AGENT_LOOP, data={"inputs": {"prompt": "hello"}}
     )
 
-    audit_file = tmp_path / ".kaizen" / "audit.jsonl"
+    audit_file = tmp_path / "state" / "kaizen" / "audit.jsonl"
     assert audit_file.exists(), f"no audit file at the default path: {audit_file}"
+    # Scoped to what #2110 defect 2 actually governs: the AUDIT trail no
+    # longer resolves against the CWD. A `.kaizen/` directory may still appear
+    # here from `checkpoint_path`, which is a separate CWD-relative default
+    # (same class, different field) and is deliberately NOT asserted away by
+    # this audit-scoped test -- asserting it here would couple this test to a
+    # defect it does not fix and would go red for the wrong reason.
+    assert not (
+        tmp_path / ".kaizen" / "audit.jsonl"
+    ).exists(), "the audit trail still landed in the working directory"
     lines = audit_file.read_text().splitlines()
     assert lines, (
         "Agent() was constructed with enable_audit=True (the default), an event "

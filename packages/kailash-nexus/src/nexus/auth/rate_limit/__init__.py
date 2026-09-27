@@ -11,6 +11,13 @@ from kailash.trust.rate_limit.backends.memory import InMemoryBackend
 from kailash.trust.rate_limit.config import RateLimitConfig
 from kailash.trust.rate_limit.result import RateLimitResult
 from nexus.auth.rate_limit.decorators import rate_limit
+from nexus.auth.rate_limit.fingerprint import (
+    FINGERPRINT_KEY_ENV,
+    MIN_FINGERPRINT_KEY_BYTES,
+    IdentifierFingerprinter,
+    InvalidFingerprintKeyError,
+    build_identifier_fingerprinter,
+)
 from nexus.auth.rate_limit.middleware import RateLimitMiddleware
 
 __all__ = [
@@ -20,4 +27,9 @@ __all__ = [
     "RateLimitMiddleware",
     "RateLimitResult",
     "rate_limit",
+    "FINGERPRINT_KEY_ENV",
+    "MIN_FINGERPRINT_KEY_BYTES",
+    "IdentifierFingerprinter",
+    "InvalidFingerprintKeyError",
+    "build_identifier_fingerprinter",
 ]

@@ -52,10 +52,14 @@ class TestReasoningExports:
 
     def test_reasoning_trace_identity(self):
         """The eatp-level import must be the exact same class as eatp.reasoning."""
-        from kailash.trust import ConfidentialityLevel as CL_top
-        from kailash.trust import ReasoningTrace as RT_top
-        from kailash.trust.reasoning.traces import ConfidentialityLevel as CL_mod
-        from kailash.trust.reasoning.traces import ReasoningTrace as RT_mod
+        from kailash.trust import (
+            ConfidentialityLevel as CL_top,
+            ReasoningTrace as RT_top,
+        )
+        from kailash.trust.reasoning.traces import (
+            ConfidentialityLevel as CL_mod,
+            ReasoningTrace as RT_mod,
+        )
 
         assert CL_top is CL_mod, "ConfidentialityLevel must be the same object"
         assert RT_top is RT_mod, "ReasoningTrace must be the same object"

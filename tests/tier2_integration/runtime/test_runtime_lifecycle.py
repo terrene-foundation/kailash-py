@@ -63,8 +63,21 @@ class TestRefCounting:
         assert rt.ref_count == 1
         rt.close()  # final cleanup
 
-    def test_del_forces_cleanup(self):
-        """__del__ on unclosed runtime forces cleanup and emits ResourceWarning."""
+    def test_del_warns_and_performs_no_cleanup(self):
+        """__del__ on an unclosed runtime WARNS and returns; it cleans up nothing.
+
+        Renamed from ``test_del_forces_cleanup`` (issue #2107). The old name and
+        its final two assertions pinned the exact behaviour ``rules/patterns.md``
+        § "Async Resource Cleanup" BLOCKS: forcing ``close()`` from a finalizer.
+        ``close()`` emits ``logger.debug``, takes ``self._loop_lock`` and drives
+        ``_cleanup_event_loop()`` -- and a finalizer fires at an arbitrary
+        bytecode boundary on whichever thread drops the last reference, so it can
+        re-enter the root logging lock or ``_loop_lock``. Neither is reentrant,
+        so the process deadlocks.
+
+        The ResourceWarning half of the old contract is unchanged and still
+        asserted below; only the forced-cleanup half is inverted.
+        """
         import warnings
 
         rt = LocalRuntime()
@@ -72,20 +85,33 @@ class TestRefCounting:
         assert rt._persistent_loop is not None
         assert rt.ref_count == 1
 
-        # Call __del__ directly to test its behavior deterministically.
-        # In production, __del__ is called by the garbage collector.
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            rt.__del__()
+        try:
+            # Call __del__ directly to test its behavior deterministically.
+            # In production, __del__ is called by the garbage collector.
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                rt.__del__()
 
-        # Verify ResourceWarning was emitted
-        resource_warnings = [x for x in w if issubclass(x.category, ResourceWarning)]
-        assert len(resource_warnings) == 1
-        assert "Unclosed LocalRuntime" in str(resource_warnings[0].message)
+            # The leak signal is preserved -- it is now the ONLY thing __del__ does.
+            resource_warnings = [
+                x for x in w if issubclass(x.category, ResourceWarning)
+            ]
+            assert len(resource_warnings) == 1
+            assert "Unclosed LocalRuntime" in str(resource_warnings[0].message)
 
-        # Verify cleanup actually happened
-        assert rt._persistent_loop is None
-        assert rt.ref_count == 0
+            # And nothing was cleaned up: that is the deadlock fix, not a leak.
+            # The event loop is released deterministically by close()/__exit__.
+            assert rt._persistent_loop is not None, (
+                "__del__ must not tear down the event loop: _cleanup_event_loop() "
+                "logs and runs loop.run_until_complete, which deadlocks when the "
+                "finalizer fires from inside logging during GC (issue #2107)."
+            )
+            assert rt.ref_count == 1, (
+                "__del__ must not decrement the ref count -- every release path "
+                "reaches the logging-and-lock code above (issue #2107)."
+            )
+        finally:
+            rt.close()
 
     def test_context_manager_close_at_ref_one(self):
         """Context manager exit calls close(), which should fully clean up at ref_count=1."""

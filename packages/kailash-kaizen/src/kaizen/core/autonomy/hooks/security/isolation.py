@@ -960,7 +960,9 @@ class IsolatedHookManager(HookManager):
         Args:
             handler: Hook handler to execute
             context: Hook context
-            timeout: Maximum execution time in seconds
+            timeout: Shared execution budget from the ``trigger`` caller. A
+                handler may select a different finite budget by declaring
+                ``timeout_seconds``; see ``HookManager._resolve_timeout``.
 
         Returns:
             HookResult with success/failure status
@@ -995,9 +997,34 @@ class IsolatedHookManager(HookManager):
         # A caller that genuinely wants non-isolated execution asks for it by
         # constructing the manager with ``enable_isolation=False``, which is
         # visible at the call site and logged as a warning at construction.
+
+        # The isolated branch must apply the SAME per-hook budget the
+        # non-isolated branch receives from ``super()._execute_hook``. Without
+        # this, a hook that declares ``timeout_seconds`` -- ``AuditTrailHook``
+        # does, because a dropped audit record is a compliance failure rather
+        # than a gap in a graph -- was silently held to the shared 0.5s guard
+        # whenever isolation was enabled, and its records still dropped. That
+        # is issue #2109 defect 1, fixed on one path and left live on the other.
+        #
+        # Resolved HERE rather than before the branch above so that the
+        # non-isolated branch stays a verbatim handoff to the parent, which
+        # OWNS this policy. Pre-resolving would apply it in two places and
+        # would silently change the parent's branch if its treatment of the
+        # ``timeout`` argument ever changed. Resolution is idempotent, so this
+        # placement is a readability choice, not a correctness one.
+        #
+        # ``_resolve_timeout`` fails CLOSED: a missing, non-numeric, bool,
+        # non-positive, infinite or NaN declaration falls back to the shared
+        # budget, so "SECURITY FIX #10" cannot be switched off from a handler
+        # attribute -- including on a caller-supplied hook loaded off disk by
+        # ``discover_filesystem_hooks``.
+        effective_timeout = self._resolve_timeout(handler, timeout, handler_name)
+
         try:
             logger.debug(f"Executing hook in isolated process: {handler_name}")
-            result = await self.executor.execute_isolated(handler, context, timeout)
+            result = await self.executor.execute_isolated(
+                handler, context, effective_timeout
+            )
         except HookIsolationError as e:
             # Re-logged so the operator sees WHICH control failed, then
             # propagated unchanged.

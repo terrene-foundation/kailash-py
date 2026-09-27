@@ -339,7 +339,8 @@ jobs:
         #   kaizen        -> EXERCISED  (4 files) -> editable below
         #   kailash_mcp   -> EXERCISED  (3 files) -> editable below
         #   kaizen_agents -> EXERCISED  (1 file)  -> editable below
-        #   kailash_ml / kailash_align / kailash_pact -> 0 files, NOT installed
+        #   pact          -> governance API logging regression -> editable [api]
+        #   kailash_ml / kailash_align -> 0 files, NOT installed
         # Several of these imports are UNGUARDED at module scope
         # (`from nexus import Nexus`, `from kaizen.providers.registry import ...`),
         # so a missing sibling is a COLLECTION error, not a skip.
@@ -350,6 +351,7 @@ jobs:
           uv pip install -e packages/kailash-dataflow --python .venv/bin/python
           uv pip install -e packages/kailash-kaizen --python .venv/bin/python
           uv pip install -e packages/kailash-nexus --python .venv/bin/python
+          uv pip install -e "packages/kailash-pact[api]" --python .venv/bin/python
           # test_issue_443_kaizen_mcp_dependency.py does `from kaizen_agents
           # import Delegate` — without this the test fails ModuleNotFoundError.
           uv pip install -e packages/kaizen-agents --python .venv/bin/python
@@ -615,7 +617,7 @@ jobs:
           uv pip install -e packages/kailash-mcp --python .venv/bin/python
           uv pip install -e packages/kailash-kaizen --python .venv/bin/python
           uv pip install -e packages/kailash-nexus --python .venv/bin/python
-          uv pip install -e packages/kailash-pact --python .venv/bin/python
+          uv pip install -e "packages/kailash-pact[api]" --python .venv/bin/python
           uv pip install -e packages/kaizen-agents --python .venv/bin/python
 
       - name: Run Postgres/Redis-marked regression tests

@@ -18,6 +18,8 @@ import logging
 import os
 from typing import Optional
 
+from kailash.utils.secure_logging import safe_exception_frames, safe_log_field
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -62,14 +64,14 @@ def detect_worker_count() -> int:
         except ValueError:
             logger.warning(
                 "Invalid worker count in %s=%r (expected integer), skipping",
-                var_name,
-                raw,
+                safe_log_field(var_name),
+                safe_log_field(raw),
             )
             continue
         if value < 1:
             logger.warning(
                 "Worker count in %s=%d is less than 1, clamping to 1",
-                var_name,
+                safe_log_field(var_name),
                 value,
             )
             return 1
@@ -97,11 +99,13 @@ def is_postgresql(url: Optional[str]) -> bool:
 def is_sqlite(url: Optional[str]) -> bool:
     """Check if a database URL is for SQLite.
 
-    Recognizes schemes: sqlite://, sqlite+aiosqlite://, etc.
+    Recognizes SQLite URL schemes, the memory alias, and native file URIs.
     """
     if not url:
         return False
-    return url.lower().startswith("sqlite://") or url.lower().startswith("sqlite+")
+    return url == ":memory:" or url.lower().startswith(
+        ("sqlite://", "sqlite+", "file:")
+    )
 
 
 def is_mysql(url: Optional[str]) -> bool:
@@ -148,7 +152,7 @@ def probe_max_connections(database_url: Optional[str]) -> Optional[int]:
     scheme = database_url.split("://")[0] if "://" in database_url else "unknown"
     logger.debug(
         "probe_max_connections: unrecognized database URL scheme '%s', returning None",
-        scheme,
+        safe_log_field(scheme),
     )
     return None
 
@@ -189,9 +193,9 @@ def _probe_postgresql(database_url: str) -> Optional[int]:
         # Log only the exception type at WARNING — str(exc) may contain credentials
         logger.warning(
             "Failed to probe PostgreSQL max_connections: %s",
-            type(exc).__name__,
+            safe_log_field(type(exc).__name__),
         )
-        logger.debug("PostgreSQL probe error details", exc_info=True)
+        logger.debug("PostgreSQL probe error details: %s", safe_exception_frames(exc))
         return None
 
 
@@ -231,8 +235,11 @@ def _probe_mysql(database_url: str) -> Optional[int]:
             "connect_timeout": _PROBE_TIMEOUT_SECS,
         }
     except Exception as exc:
-        logger.warning("Failed to parse MySQL URL for probe: %s", type(exc).__name__)
-        logger.debug("MySQL URL parse error details", exc_info=True)
+        logger.warning(
+            "Failed to parse MySQL URL for probe: %s",
+            safe_log_field(type(exc).__name__),
+        )
+        logger.debug("MySQL URL parse error details: %s", safe_exception_frames(exc))
         return None
 
     try:
@@ -247,6 +254,9 @@ def _probe_mysql(database_url: str) -> Optional[int]:
             )
             return None
     except Exception as exc:
-        logger.warning("Failed to probe MySQL max_connections: %s", type(exc).__name__)
-        logger.debug("MySQL probe error details", exc_info=True)
+        logger.warning(
+            "Failed to probe MySQL max_connections: %s",
+            safe_log_field(type(exc).__name__),
+        )
+        logger.debug("MySQL probe error details: %s", safe_exception_frames(exc))
         return None

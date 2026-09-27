@@ -244,20 +244,30 @@ class ConnectionManager:
                 "Install it with: pip install kailash"
             ) from exc
 
-        # Extract path from sqlite:///path or sqlite:///:memory:
-        path = self.url
-        if path.startswith("sqlite:///"):
-            path = path[len("sqlite:///") :]
-        elif path.startswith("sqlite://"):
-            path = path[len("sqlite://") :]
+        from kailash.utils.resource_manager import _await_cleanup
+        from kailash.utils.sqlite_url import (
+            sqlite_connection_target,
+            sqlite_is_readonly,
+            sqlite_memory_uri_kind,
+        )
 
-        # aiosqlite returns a Connection, not a pool.
-        conn = await aiosqlite.connect(path)
-        conn.row_factory = aiosqlite.Row
-        # Enable WAL mode for file-based databases
-        if path and path != ":memory:":
-            await conn.execute("PRAGMA journal_mode=WAL")
-            await conn.execute("PRAGMA foreign_keys=ON")
+        path, options = sqlite_connection_target(self.url)
+        conn = await aiosqlite.connect(path, **options)
+        try:
+            conn.row_factory = aiosqlite.Row
+            if not sqlite_memory_uri_kind(self.url) and not sqlite_is_readonly(
+                self.url
+            ):
+                async with conn.execute("PRAGMA journal_mode=WAL"):
+                    pass
+            async with conn.execute("PRAGMA foreign_keys=ON"):
+                pass
+        except BaseException as setup_error:
+            try:
+                await _await_cleanup(conn.close())
+            except Exception as close_error:
+                raise setup_error from close_error
+            raise
         self._pool = conn
         logger.debug("SQLite connection opened: %s", path)
 

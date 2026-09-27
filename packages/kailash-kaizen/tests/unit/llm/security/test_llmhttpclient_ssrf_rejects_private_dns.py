@@ -115,3 +115,69 @@ def test_safe_dns_resolver_rejects_dns_that_resolves_to_rfc1918(
 def test_safe_dns_resolver_kind_label_stable() -> None:
     """Observability label MUST be stable across SDKs ('safe_dns')."""
     assert SafeDnsResolver().kind() == "safe_dns"
+
+
+@pytest.mark.parametrize("host", ["localhost", "LOCALHOST", "provider.example"])
+@pytest.mark.parametrize("addr", ["127.0.0.1", "127.0.0.2", "::1", "::ffff:127.0.0.1"])
+def test_loopback_carveout_requires_localhost_label(monkeypatch, host, addr):
+    import ipaddress
+
+    from kaizen.llm.url_safety import check_url
+
+    family = socket.AF_INET6 if ":" in addr else socket.AF_INET
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [(family, socket.SOCK_STREAM, 6, "", (addr, 80))],
+    )
+    # Exercise the older stdlib behavior for IPv4-mapped loopback addresses.
+    if addr.startswith("::ffff:"):
+        monkeypatch.setattr(
+            ipaddress.IPv6Address, "is_loopback", property(lambda ip: False)
+        )
+    if host.lower() == "localhost":
+        check_url(f"https://{host}/")
+        SafeDnsResolver().check_host(host)
+    else:
+        for check in (
+            lambda: check_url(f"https://{host}/"),
+            lambda: SafeDnsResolver().check_host(host),
+        ):
+            with pytest.raises(InvalidEndpoint) as exc:
+                check()
+            assert exc.value.reason == (
+                "ipv4_mapped" if "::ffff:" in addr else "loopback"
+            )
+
+
+@pytest.mark.parametrize(
+    "addr,reason",
+    [
+        ("10.0.0.1", "private_ipv4"),
+        ("169.254.169.254", "metadata_service"),
+        ("fd00:ec2::254", "metadata_service"),
+        ("::ffff:169.254.169.254", "metadata_service"),
+        ("64:ff9b::127.0.0.1", "ipv4_mapped"),
+    ],
+)
+def test_localhost_dns_poison_still_rejects_every_private_answer(
+    monkeypatch, addr, reason
+):
+    from kaizen.llm.url_safety import check_url
+
+    family = socket.AF_INET6 if ":" in addr else socket.AF_INET
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 80)),
+            (family, socket.SOCK_STREAM, 6, "", (addr, 80)),
+        ],
+    )
+    for check in (
+        lambda: check_url("http://localhost:11434/"),
+        lambda: SafeDnsResolver().check_host("localhost"),
+    ):
+        with pytest.raises(InvalidEndpoint) as exc:
+            check()
+        assert exc.value.reason == reason

@@ -1,0 +1,156 @@
+{
+  "ran": true,
+  "role": "Independent adversarial SECURITY review; not cache author",
+  "verdict": "CLEAN: two final scoped rounds; no open finding in this scope",
+  "tree": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq16-storage-ci",
+  "manifest": {
+    "src/kailash/runtime/trust/verifier.py": "fb98faedc1a5bcc04cd5f97e855371b997f791c5ff78bc69914d62a685ee41d1",
+    "src/kailash/utils/secure_logging.py": "a7480350b249222dce9952eda0d288084eb2a13b910da12894aa4828fdda5d97",
+    "src/kailash/runtime/base.py": "fca51bd6787d0e7a4773e8c61e8805fcec7b8d1eb98d90656ad4dc3b93b967d6",
+    "tests/regression/test_trust_cache_context.py": "7338797ad0987fe77fe954ea6d96366cf8af614f60a8eedfd44c61464372ea69",
+    "tests/regression/test_trust_cache_identity.py": "ebee9c982652a0ed00f17b9db0db247813143e3da8f262aeecac82c4eda1bb9c",
+    "tests/regression/test_runtime_trust_log_hygiene.py": "dc551f3fa2147e299fa5bfe8793dc4e84cfe5f9af4267f13f16b0883e8e499f5",
+    "tests/tier2_integration/runtime/trust/test_trust_verifier.py": "cde7a42ffd9648ea5c836fee45a0179047238b1b93cfbd0032d4b0bc8046f784",
+    "tests/tier2_integration/runtime/trust/test_verifier_thread_safety.py": "115484f6606518087a6d9666367cb107ea205a9a7d29283b59844c527779e6c4",
+    "tests/tier2_integration/runtime/trust/test_verifier_security_hardening.py": "62c2c950d13485ed7b1e452c0a9529743a6eef81491d76df96f9c641a7eec1b9",
+    "tests/tier2_integration/runtime/trust/test_base_trust_integration.py": "2193117f48ae4fd323c7f10a7eab6fbfcd5adbef0f456130e2df1a4342f21941"
+  },
+  "spec_contracts": [
+    "specs/core-runtime.md:123 workflow trust verified before checkpoint/node execution; denial raises WorkflowExecutionError",
+    "specs/trust-eatp.md:173-175 unexpected verification error fails closed"
+  ],
+  "scope": "All six real/mock workflow/node/resource cache publishers; context snapshot and typed identity; exact identity invalidation; empty-cache generation barrier; decision/public diagnostic separation; shared safe helper dependency",
+  "runs": {
+    "final-r1": {
+      "exit": 0,
+      "counts": {
+        "passed": 285
+      },
+      "warnings": [],
+      "skips": [],
+      "hits": 0,
+      "records": {
+        "WARNING": 489,
+        "CRITICAL": 16,
+        "ERROR": 40
+      }
+    },
+    "final-r2": {
+      "exit": 0,
+      "counts": {
+        "passed": 285
+      },
+      "warnings": [],
+      "skips": [],
+      "hits": 0,
+      "records": {
+        "WARNING": 489,
+        "CRITICAL": 16,
+        "ERROR": 40
+      }
+    },
+    "context-control": {
+      "exit": 1,
+      "counts": {
+        "failed": 39,
+        "passed": 40
+      },
+      "warnings": [],
+      "skips": [],
+      "hits": 179,
+      "records": {
+        "WARNING": 132,
+        "CRITICAL": 3
+      }
+    },
+    "snapshot-control": {
+      "exit": 1,
+      "counts": {
+        "failed": 1
+      },
+      "warnings": [],
+      "skips": [],
+      "hits": 1,
+      "records": {
+        "WARNING": 1
+      }
+    },
+    "shared-mask-control": {
+      "exit": 1,
+      "counts": {
+        "failed": 46
+      },
+      "warnings": [],
+      "skips": [],
+      "hits": 514,
+      "records": {
+        "WARNING": 97,
+        "ERROR": 17,
+        "CRITICAL": 3
+      }
+    }
+  },
+  "independent_thread_barrier_and_unsupported_context_probe": {
+    "final-r1": {
+      "cases": 64,
+      "hits": 0,
+      "failures": 0
+    },
+    "final-r2": {
+      "cases": 64,
+      "hits": 0,
+      "failures": 0
+    },
+    "opposite": {
+      "cases": 28,
+      "hits": 28,
+      "failures": 28
+    }
+  },
+  "type_identity_opposites": {
+    "scalar": {
+      "exit": 1,
+      "hits": 180,
+      "actual_opaque_hits": 18,
+      "expected_failures": 6
+    },
+    "container": {
+      "exit": 1,
+      "hits": 72,
+      "actual_opaque_hits": 18,
+      "expected_failures": 6
+    }
+  },
+  "absolute_sweep": {
+    "publishers": 6,
+    "invalidation_generation_increments": 3,
+    "verifier_log_sinks": 9,
+    "lexical_caller_occurrences": 16,
+    "actual_external_production_callers": [
+      "runtime/base.py workflow",
+      "runtime/base.py node",
+      "dataflow/trust/query_wrapper.py resource"
+    ],
+    "artifact": "/tmp/csq16-security-cache-mechanical.json"
+  },
+  "assertion_retention": {
+    "type_fix_prior_context_assertions": 46,
+    "final_context_assertions": 53,
+    "lost": 0
+  },
+  "expected_records": "489 WARNING (denial/permissive and explicit absent-verifier fixtures), 16 CRITICAL and 40 ERROR (intentional backend and enforcement failure fixtures), inspected exact messages and source sinks; no Python warning or skip. Control records intentionally unsanitized only in temp process.",
+  "helper_lint_delta": "Two final285 rounds ran 0d674cf helper; final a7480350 overlay proven entire AST identical; noqa placement only.",
+  "excluded_runs": "Initial273pass6fail rounds use old tuple-cache test fixtures and are explicitly excluded; final285 rounds copied and pinned current legacy tests. Initial07902484 metaclass finding fixed by fb98faed; no CLEAN attributed to07902484.",
+  "commands": [
+    "primary .venv/bin/python -P /tmp/csq16-security-context-cache-run.py final-r1/final-r2/context-control/snapshot-control/shared-mask-control",
+    "primary .venv/bin/python -P /tmp/csq16-security-cache-adversarial.py final-r1/final-r2/opposite",
+    "primary .venv/bin/python -P /tmp/csq16-security-cache-type-control.py scalar/container"
+  ],
+  "limits": [
+    "in-process cache semantics; controlled backend responses, not live external trust-service integration",
+    "invalidation prevents later reuse/publication, does not retroactively cancel an already-started authorization decision",
+    "private _set_cache direct calls without generation remain a compatibility hook; all six public producers supply generation",
+    "DataFlow caller code previously authored by me was inspected for wiring only, not independently certified in this receipt",
+    "No remote checks, full repository gate or unrelated trust/key/HTML security claim"
+  ]
+}

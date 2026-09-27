@@ -17,9 +17,24 @@ module-import-time concern with no infrastructure dependency.
 
 from __future__ import annotations
 
+import re
 import warnings
+from contextlib import contextmanager
 
 import pytest
+
+
+@contextmanager
+def _expected_alias_warning():
+    message = (
+        "MLTenantRequiredError is deprecated; use TenantRequiredError. "
+        "Alias will be removed in kailash-dataflow v3.0."
+    )
+    with pytest.warns(DeprecationWarning, match=re.escape(message)) as caught:
+        yield
+    assert [(warning.category, str(warning.message)) for warning in caught] == [
+        (DeprecationWarning, message)
+    ]
 
 
 @pytest.mark.unit
@@ -44,8 +59,7 @@ def test_alias_resolves_to_canonical_class_via_dataflow_ml():
 
     canonical = ml_mod.TenantRequiredError
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("always")
+    with _expected_alias_warning():
         alias = ml_mod.MLTenantRequiredError
 
     assert alias is canonical, (
@@ -61,8 +75,7 @@ def test_alias_resolves_to_canonical_class_via__errors():
 
     canonical = errors_mod.TenantRequiredError
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("always")
+    with _expected_alias_warning():
         alias = errors_mod.MLTenantRequiredError
 
     assert alias is canonical
@@ -73,21 +86,9 @@ def test_alias_emits_deprecation_warning_on_access():
     """Accessing ``MLTenantRequiredError`` emits exactly one DeprecationWarning."""
     import dataflow.ml as ml_mod
 
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
+    with _expected_alias_warning():
         # Trigger the __getattr__ once.
         _ = ml_mod.MLTenantRequiredError
-
-    deprecation_warnings = [
-        w for w in caught if issubclass(w.category, DeprecationWarning)
-    ]
-    assert (
-        len(deprecation_warnings) == 1
-    ), f"expected exactly 1 DeprecationWarning, got {len(deprecation_warnings)}"
-    msg = str(deprecation_warnings[0].message)
-    assert "MLTenantRequiredError" in msg
-    assert "TenantRequiredError" in msg
-    assert "v3.0" in msg, "deprecation warning MUST cite removal milestone"
 
 
 @pytest.mark.unit
@@ -95,15 +96,8 @@ def test_alias_emits_deprecation_warning_via__errors_module():
     """The same DeprecationWarning fires when accessing through ``_errors``."""
     import dataflow.ml._errors as errors_mod
 
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
+    with _expected_alias_warning():
         _ = errors_mod.MLTenantRequiredError
-
-    deprecation_warnings = [
-        w for w in caught if issubclass(w.category, DeprecationWarning)
-    ]
-    assert len(deprecation_warnings) == 1
-    assert "v3.0" in str(deprecation_warnings[0].message)
 
 
 @pytest.mark.unit
@@ -115,10 +109,11 @@ def test_raise_via_alias_caught_by_canonical_except():
     with pytest.raises(TenantRequiredError, match="canonical"):
         raise TenantRequiredError("canonical")
 
-    # Raise via the alias (ignoring the deprecation warning emitted on lookup).
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        from dataflow.ml import MLTenantRequiredError as AliasCls
+    # Attribute lookup emits one warning, independently of import internals.
+    import dataflow.ml as ml_mod
+
+    with _expected_alias_warning():
+        AliasCls = ml_mod.MLTenantRequiredError
 
     with pytest.raises(TenantRequiredError, match="via alias"):
         raise AliasCls("via alias")

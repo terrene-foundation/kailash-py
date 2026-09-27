@@ -167,9 +167,12 @@ class TestTrustSigningPreimageRejectsNanInf:
         from kailash.trust.pact.stores.sqlite import SqliteAuditLog
 
         store = SqliteAuditLog(str(tmp_path / "audit.db"))
-        for bad in _NONFINITE:
-            with pytest.raises(ValueError, match=_MATCH):
-                store.append("test-action", {"cost": bad})
+        try:
+            for bad in _NONFINITE:
+                with pytest.raises(ValueError, match=_MATCH):
+                    store.append("test-action", {"cost": bad})
+        finally:
+            store.close()
 
     def test_pact_sqlite_audit_log_append_finite_is_byte_neutral(
         self, tmp_path
@@ -177,7 +180,10 @@ class TestTrustSigningPreimageRejectsNanInf:
         from kailash.trust.pact.stores.sqlite import SqliteAuditLog
 
         store = SqliteAuditLog(str(tmp_path / "audit.db"))
-        store.append("test-action", {"cost": 2.0})  # finite: must not raise
+        try:
+            store.append("test-action", {"cost": 2.0})  # finite: must not raise
+        finally:
+            store.close()
 
     # FAMILY ORIGIN — the selective-disclosure WITNESS export is the family the
     # whole sweep started from (commit f888ee65e). The producer (export_for_witness)

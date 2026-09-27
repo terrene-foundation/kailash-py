@@ -1,0 +1,61 @@
+{
+  "ran": true,
+  "status": "completed owned trees drained after their work landed in dev; promotion still pending",
+  "dev": "c8ce102b8025e0b69bb744cbe636cd3aecb080e8",
+  "worktrees": [
+    {
+      "worktree": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-cycle-final-adversarial",
+      "removed": true,
+      "branch_deleted": null,
+      "backup": "/tmp/csq15-owned-tree-final-backups/csq14-cycle-final-adversarial",
+      "files_preserved": 21
+    },
+    {
+      "worktree": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-final3-correctness",
+      "removed": true,
+      "branch_deleted": null,
+      "backup": "/tmp/csq15-owned-tree-final-backups/csq14-final3-correctness",
+      "files_preserved": 9
+    },
+    {
+      "worktree": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-final3-coverage",
+      "removed": true,
+      "branch_deleted": null,
+      "backup": "/tmp/csq15-owned-tree-final-backups/csq14-final3-coverage",
+      "files_preserved": 1
+    },
+    {
+      "worktree": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-final3-security",
+      "removed": true,
+      "branch_deleted": null,
+      "backup": "/tmp/csq15-owned-tree-final-backups/csq14-final3-security",
+      "files_preserved": 16
+    },
+    {
+      "worktree": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-nexus-dns-binding",
+      "removed": true,
+      "branch_deleted": "fix/csq14-nexus-dns-binding",
+      "backup": "/tmp/csq15-owned-tree-final-backups/csq14-nexus-dns-binding",
+      "files_preserved": 19
+    },
+    {
+      "worktree": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-webhook-safe-delivery",
+      "removed": true,
+      "branch_deleted": "fix/csq14-webhook-safe-delivery",
+      "backup": "/tmp/csq15-owned-tree-final-backups/csq14-webhook-safe-delivery",
+      "files_preserved": 7
+    },
+    {
+      "worktree": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq15-sqlite-nested-owner",
+      "removed": true,
+      "branch_deleted": "fix/csq15-sqlite-nested-owner",
+      "backup": "/tmp/csq15-owned-tree-final-backups/csq15-sqlite-nested-owner",
+      "files_preserved": 4
+    }
+  ],
+  "preserved_historical_refs": 52,
+  "preserved_ordered_stashes": 5,
+  "refs_and_stashes_exact": true,
+  "backup_root": "/tmp/csq15-owned-tree-final-backups",
+  "method": "Verified cp backups, reversed only owned tracked patches, moved untracked files and environment symlink into backup, verified clean target trees, removed without force, deleted ancestor branches with -d."
+}

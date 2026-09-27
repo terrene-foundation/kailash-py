@@ -58,7 +58,11 @@ class ConnectionManager:
         pool_size_override: Optional[int] = None,
     ):
         self.dataflow = dataflow_instance
-        self._url_override = url_override
+        from kailash.utils.sqlite_url import sqlite_owner_url
+
+        self._url_override = (
+            sqlite_owner_url(url_override) if url_override else url_override
+        )
         self._pool_size_override = pool_size_override
         self._initialized = False
 
@@ -75,6 +79,12 @@ class ConnectionManager:
         """Resolve the effective database URL."""
         if self._url_override:
             return self._url_override
+        memory_uri = vars(self.dataflow).get("_memory_db_uri")
+        if memory_uri is not None:
+            return memory_uri
+        owner_url = vars(self.dataflow).get("_sqlite_database_url")
+        if owner_url is not None:
+            return owner_url
         config = self.dataflow.config
         url = config.database.get_connection_url(config.environment)
         if not isinstance(url, str):

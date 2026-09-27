@@ -1,7 +1,8 @@
 """Unit tests for TODO-026: MCP Executor with real circuit breaker."""
 
+import asyncio
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -146,24 +147,21 @@ class TestEnterpriseMLCPExecutorNode:
     @patch("kailash.nodes.enterprise.mcp_executor._execute_mcp_tool")
     def test_successful_execution(self, mock_execute):
         """Successful MCP tool call records success in circuit breaker."""
-        import asyncio
-
         mock_execute.return_value = {"data": {"answer": 42}, "is_error": False}
 
         node = EnterpriseMLCPExecutorNode()
 
-        # Patch asyncio.run to return our mock result
-        with patch(
-            "asyncio.run", return_value={"data": {"answer": 42}, "is_error": False}
-        ):
-            result = node.run(
-                tool_request={
-                    "tool": "analytics",
-                    "parameters": {"query": "test"},
-                    "server_id": "http://mcp-server:8080",
-                },
-                circuit_breaker_enabled=True,
-            )
+        result = node.run(
+            tool_request={
+                "tool": "analytics",
+                "parameters": {"query": "test"},
+                "server_id": "http://mcp-server:8080",
+            },
+            circuit_breaker_enabled=True,
+        )
+        mock_execute.assert_awaited_once_with(
+            "http://mcp-server:8080", "analytics", {"query": "test"}
+        )
 
         assert result["success"] is True
         assert result["data"] == {"answer": 42}
@@ -180,16 +178,16 @@ class TestEnterpriseMLCPExecutorNode:
 
         node = EnterpriseMLCPExecutorNode()
 
-        with patch("asyncio.run", side_effect=NodeExecutionError("connection refused")):
-            with pytest.raises(NodeExecutionError):
-                node.run(
-                    tool_request={
-                        "tool": "test",
-                        "parameters": {},
-                        "server_id": "bad-server",
-                    },
-                    circuit_breaker_enabled=True,
-                )
+        with pytest.raises(NodeExecutionError, match="connection refused"):
+            node.run(
+                tool_request={
+                    "tool": "test",
+                    "parameters": {},
+                    "server_id": "bad-server",
+                },
+                circuit_breaker_enabled=True,
+            )
+        mock_execute.assert_awaited_once_with("bad-server", "test", {})
 
         # Verify failure was recorded
         cb = _get_circuit_breaker("bad-server")
@@ -199,7 +197,10 @@ class TestEnterpriseMLCPExecutorNode:
         """When circuit breaker is disabled, no CB logic executes."""
         node = EnterpriseMLCPExecutorNode()
 
-        with patch("asyncio.run", return_value={"data": "ok", "is_error": False}):
+        with patch(
+            "kailash.nodes.enterprise.mcp_executor._execute_mcp_tool",
+            return_value={"data": "ok", "is_error": False},
+        ) as execute:
             result = node.run(
                 tool_request={"tool": "test", "parameters": {}, "server_id": "srv"},
                 circuit_breaker_enabled=False,
@@ -207,11 +208,15 @@ class TestEnterpriseMLCPExecutorNode:
 
         assert result["success"] is True
         assert result["circuit_state"] == CircuitState.CLOSED
+        execute.assert_awaited_once_with("srv", "test", {})
 
     def test_audit_info_present(self):
         node = EnterpriseMLCPExecutorNode()
 
-        with patch("asyncio.run", return_value={"data": {}, "is_error": False}):
+        with patch(
+            "kailash.nodes.enterprise.mcp_executor._execute_mcp_tool",
+            return_value={"data": {}, "is_error": False},
+        ) as execute:
             result = node.run(
                 tool_request={"tool": "t", "parameters": {}, "server_id": "s"},
             )
@@ -219,3 +224,58 @@ class TestEnterpriseMLCPExecutorNode:
         assert "execution_id" in result["audit_info"]
         assert "timestamp" in result["audit_info"]
         assert result["audit_info"]["compliance_checked"] is True
+        execute.assert_awaited_once_with("s", "t", {})
+
+    @pytest.mark.parametrize("running_loop", [False, True])
+    @pytest.mark.parametrize("failure", [False, True])
+    def test_bridge_awaits_once_and_closes_owned_loop(self, running_loop, failure):
+        """A tool RuntimeError is a failure, never a reason to repeat its effects."""
+        consumed_loops = []
+
+        async def execute_tool(*args):
+            consumed_loops.append(asyncio.get_running_loop())
+            await asyncio.sleep(0)
+            if failure:
+                raise RuntimeError("tool failed after side effect")
+            return {"data": "completed", "is_error": False}
+
+        node = EnterpriseMLCPExecutorNode()
+
+        def run():
+            return node.run(
+                tool_request={"tool": "t", "parameters": {}, "server_id": "s"},
+                circuit_breaker_enabled=False,
+            )
+
+        async def run_inside_loop():
+            caller = asyncio.get_running_loop()
+            result = run()
+            assert not caller.is_closed()
+            assert asyncio.get_running_loop() is caller
+            assert consumed_loops[0] is not caller
+            return result
+
+        # The dormant loop is caller-owned: the sync bridge must neither use
+        # nor close it. This also reproduces the old RuntimeError retry route.
+        caller_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(caller_loop)
+        try:
+            with patch(
+                "kailash.nodes.enterprise.mcp_executor._execute_mcp_tool",
+                side_effect=execute_tool,
+            ) as execute:
+                result = asyncio.run(run_inside_loop()) if running_loop else run()
+            execute.assert_awaited_once_with("s", "t", {})
+            assert len(consumed_loops) == 1
+            assert consumed_loops[0].is_closed()
+            assert not caller_loop.is_closed()
+            if not running_loop:
+                assert asyncio.get_event_loop() is caller_loop
+            assert result["success"] is not failure
+            if failure:
+                assert result["error"] == "tool failed after side effect"
+            else:
+                assert result["data"] == "completed"
+        finally:
+            caller_loop.close()
+            asyncio.set_event_loop(None)

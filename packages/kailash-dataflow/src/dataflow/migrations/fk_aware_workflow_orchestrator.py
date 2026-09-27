@@ -40,8 +40,10 @@ import asyncpg
 
 # DataFlow core imports
 from dataflow.core.engine import DataFlow
-from dataflow.migrations.schema_state_manager import ChangeType
-from dataflow.migrations.schema_state_manager import MigrationOperation as SchemaChange
+from dataflow.migrations.schema_state_manager import (
+    ChangeType,
+    MigrationOperation as SchemaChange,
+)
 
 from .dependency_analyzer import DependencyAnalyzer
 from .fk_safe_migration_executor import (

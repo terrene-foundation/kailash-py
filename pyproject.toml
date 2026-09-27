@@ -35,9 +35,10 @@ dependencies = [
     # `filelock` inside `kailash.trust._locking.file_lock()`. The delegate
     # path now reaches `_locking` for `validate_id` only — no eager filelock.
     # `filelock` lives in the `[trust]` extra (pyproject.toml § trust below).
-    # Every dep below has at least one module-scope import in the slim-core
-    # closure.
+    # Trust metadata also requires a real HTML sanitizer; it is never an
+    # optional protection that silently disappears from an installation.
     # ─────────────────────────────────────────────────────────────
+    "nh3>=0.3.7",     # trust/security.py (metadata HTML sanitization)
     "jsonschema>=4.24.0",   # workflow/contracts.py:21 (Draft7Validator)
     "pydantic>=2.6",        # nodes/base.py:37, workflow/graph.py:12 (BaseModel)
     "pyyaml>=6.0",          # workflow/graph.py:11 (workflow serialization)
@@ -62,6 +63,8 @@ server = [
     "fastapi>=0.115.12",
     "uvicorn[standard]>=0.31.0",
     "httpx>=0.25.0",
+    "httpcore>=0.18.0",  # public async network backend for DNS pinning
+    "anyio>=4.1",        # cancellable bounded DNS admission
     "aiofiles>=24.1.0",
     "bcrypt>=4.3.0",          # nodes/admin/user_management.py:28
     "PyJWT>=2.8",             # middleware/auth/jwt_auth.py
@@ -74,10 +77,17 @@ server = [
 http-client = [
     "requests>=2.32.3",
     "httpx>=0.25.0",
+    "httpcore>=0.18.0",  # public async network backend for DNS pinning
+    "anyio>=4.1",        # cancellable bounded DNS admission
 ]
 
 # Database extras — install ONLY the driver(s) your app uses.
-db-postgres = ["sqlalchemy>=2.0.0", "asyncpg>=0.30.0"]
+db-postgres = [
+    "sqlalchemy>=2.0.0",
+    "asyncpg>=0.30.0",
+    "psycopg2-binary>=2.9",  # SQLAlchemy 2.0 default sync driver
+    "psycopg[binary]>=3.2",  # SQLAlchemy 2.1 default sync driver
+]
 db-mysql    = ["sqlalchemy>=2.0.0", "aiomysql>=0.2.0"]
 db-sqlite   = ["sqlalchemy>=2.0.0", "aiosqlite>=0.19.0"]
 
@@ -192,6 +202,8 @@ dev = [
     "build>=1.2.2.post1",
     "detect-secrets>=1.5.0",
     "faker>=37.4.0",
+    # Starlette TestClient uses httpx2; its legacy httpx fallback is deprecated.
+    "httpx2>=2.13.1",
     "isort>=6.0.1",
     "mypy>=0.9",
     "pre-commit>=4.2.0",
@@ -317,7 +329,9 @@ known-first-party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", 
 
 [tool.isort]
 profile = "black"
-known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact", "kailash_mcp"]
+# Keep aliased imports compatible with Black, including narrow inline pragmas.
+combine_as_imports = true
+known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact", "kailash_mcp", "kailash_ml", "kailash_align"]
 # Scaffold templates are NOT valid Python — they carry `{Placeholder}` substitution tokens
 # (e.g. `class Test{AgentName}Initialization:`), so every formatter fails to parse them.
 # Excluded at CONFIG level, not in the pre-commit hook alone, so a direct `isort .` /

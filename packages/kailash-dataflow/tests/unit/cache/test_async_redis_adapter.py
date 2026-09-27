@@ -376,8 +376,14 @@ class TestAsyncRedisCacheAdapterCleanup:
         mock_manager = MagicMock()
         adapter = AsyncRedisCacheAdapter(mock_manager)
 
-        with pytest.warns(ResourceWarning, match="AsyncRedisCacheAdapter not closed"):
-            adapter.__del__()
+        try:
+            with pytest.warns(
+                ResourceWarning, match="Unclosed AsyncRedisCacheAdapter"
+            ) as recorded:
+                adapter.__del__()
+            assert len(recorded) == 1
+        finally:
+            adapter.close()
 
     @pytest.mark.unit
     def test_del_after_close_async_is_silent(self):
@@ -393,29 +399,27 @@ class TestAsyncRedisCacheAdapterCleanup:
             adapter.__del__()  # MUST be silent — no executor, no warn
 
     @pytest.mark.unit
-    def test_del_signals_executor_drain_for_clean_shutdown(self):
-        """``__del__`` MUST signal ``executor.shutdown(wait=False)``.
+    def test_del_leaves_executor_usable_until_explicit_close(self):
+        """Finalization only warns; explicit close releases worker threads.
 
-        Issue #1000 root cause was ``__del__`` calling ``logger.debug(...)``
-        — a log emission from inside the GC finalizer that deadlocks
-        against the root logging lock. The fix removes the log call but
-        KEEPS the synchronous ``executor.shutdown(wait=False)`` drain —
-        otherwise non-daemon worker threads keep the process alive past
-        pytest summary, blocking ``_Py_Finalize`` and causing CI hangs.
-
-        See ``rules/patterns.md`` § Async Resource Cleanup: the rule
-        bans logging/close/cleanup paths from ``__del__``; pure-sync
-        thread-pool drains are allowed because they don't touch logging.
+        Issue #2107: even shutdown(wait=False) acquires the executor's
+        non-reentrant lock, which the finalizing thread may already hold.
         """
         mock_manager = MagicMock()
         adapter = AsyncRedisCacheAdapter(mock_manager)
         executor = adapter._executor
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", ResourceWarning)
-            adapter.__del__()
+        try:
+            with pytest.warns(ResourceWarning, match="Unclosed AsyncRedisCacheAdapter"):
+                adapter.__del__()
+            assert (
+                executor.submit(lambda: "still open").result(timeout=5) == "still open"
+            )
+            assert adapter._closed is False
+        finally:
+            adapter.close()
 
-        # Executor MUST refuse new submissions — drain signaled by __del__.
+        # The same probe must fail after deterministic cleanup.
         with pytest.raises(RuntimeError):
             executor.submit(lambda: None)
 

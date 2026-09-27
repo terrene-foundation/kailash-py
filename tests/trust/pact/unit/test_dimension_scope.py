@@ -248,7 +248,7 @@ class TestIntersectEnvelopesDimensionScope:
         # All dimensions intersected
         assert result.financial.max_spend_usd == 500.0
         assert sorted(result.operational.allowed_actions) == ["read", "write"]
-        assert result.data_access.read_paths == ["/data/public"]
+        assert result.data_access.read_paths == ("/data/public",)
         assert sorted(result.communication.allowed_channels) == ["email", "internal"]
 
     def test_financial_only_scope(self) -> None:
@@ -320,7 +320,7 @@ class TestIntersectEnvelopesDimensionScope:
         assert sorted(result.operational.allowed_actions) == ["read", "write"]
 
         # Data access: intersected
-        assert result.data_access.read_paths == ["/data/public"]
+        assert result.data_access.read_paths == ("/data/public",)
 
     def test_all_dimensions_scope_matches_no_scope(self) -> None:
         """Passing ALL_DIMENSIONS as scope should match no-scope behavior."""
@@ -370,7 +370,7 @@ class TestIntersectEnvelopesDimensionScope:
         # Financial preserved from parent
         assert result.financial.max_spend_usd == 5000.0
         # Communication intersected
-        assert result.communication.allowed_channels == ["internal"]
+        assert result.communication.allowed_channels == ("internal",)
 
     def test_temporal_scope(self) -> None:
         """Temporal-only scope intersects only temporal dimension."""

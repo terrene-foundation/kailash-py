@@ -35,6 +35,7 @@ import numpy as np
 import polars as pl
 import pytest
 import torch
+
 from kailash_ml._device_report import DeviceReport
 from kailash_ml.trainable import (
     HDBSCANTrainable,

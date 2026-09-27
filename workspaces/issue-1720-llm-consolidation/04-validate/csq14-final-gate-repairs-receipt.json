@@ -1,0 +1,2203 @@
+{
+  "status": "21 bounded repairs committed; webhook, HTTP diagnostic callback ownership, DNS fixture isolation and final promotion gates pending",
+  "repairs": [
+    {
+      "repair": "streaming",
+      "commit": "fc826f4842577cd86d8c63225424549ed66840bb",
+      "patch_sha256": "02288a0e00dc15167b46c8c31dcf3f4e4639c6cb980fd58eece9189aff037f42",
+      "files": {
+        "tests/unit/nodes/test_async_sql_streaming.py": "854f8ea20285f45ab793ecf5ff15769b7073997e8f637f53be0a63f06bc0e0a7"
+      },
+      "tests": [
+        {
+          "log": "/tmp/csq14-stream-fixture-tests2.log",
+          "sha256": "93ba62f786fa91b485ed297bf22f4b16b49e0c82cb4c68f22dcc81fb8e3a1b63",
+          "summary": "16 passed in 0.78s"
+        },
+        {
+          "log": "/tmp/csq14-stream-fixture-correctness-good.log",
+          "sha256": "74bc7d16569859baa30f88584b4a41bcacc6ca42df69833c9cbbc84851ac0318",
+          "summary": "16 passed in 0.96s"
+        }
+      ],
+      "review": "two scoped rounds clean; does not certify final promotion union"
+    },
+    {
+      "repair": "migration",
+      "commit": "5261bff068ef9575c03843c14ff8deaeb732bf9b",
+      "patch_sha256": "7b50bfdf53c1d7b4f715b781604c9ba36a6c96233b65b6f0641b70ad58c34079",
+      "files": {
+        "packages/kailash-dataflow/src/dataflow/migrations/batched_migration_executor.py": "90a5c7c126d546e836312f7b34d42b5143fba35348c0e52c2b9c34705e922947",
+        "packages/kailash-dataflow/tests/regression/test_batched_migration_dependency_order.py": "8c06b71cd2312a56d2331c28ad02988d922ee1b37dcfc979f44ec750639ea09c"
+      },
+      "tests": [
+        {
+          "log": "/tmp/csq14-migration-order-after.log",
+          "sha256": "50e844625ba2b75aa038152e3804054912d3c051221aabecb83cd7a2666cc43c",
+          "summary": "============================== 45 passed in 0.51s =============================="
+        },
+        {
+          "log": "/tmp/csq14-migration-security-positive.log",
+          "sha256": "87fa45658a685c71edbe81816e4cacc848380725c6f4bdbc831a389232fbd238",
+          "summary": "============================== 45 passed in 0.79s =============================="
+        }
+      ],
+      "review": "two scoped rounds clean; does not certify final promotion union",
+      "manifest": {
+        "patch_sha256": "7b50bfdf53c1d7b4f715b781604c9ba36a6c96233b65b6f0641b70ad58c34079",
+        "files": {
+          "packages/kailash-dataflow/src/dataflow/migrations/batched_migration_executor.py": "90a5c7c126d546e836312f7b34d42b5143fba35348c0e52c2b9c34705e922947",
+          "packages/kailash-dataflow/tests/regression/test_batched_migration_dependency_order.py": "8c06b71cd2312a56d2331c28ad02988d922ee1b37dcfc979f44ec750639ea09c"
+        },
+        "tests": "45 strict (24 actual SQLite permutations + explicit truecycle +20existingunit), no Pythonwarnings",
+        "red_before": "24fail1pass onoriginalsource; failures includeactualno-table/missingcolumn and falsecycle notices",
+        "specialist_consult": "archive_checkpoint confirmsdependent\u2192prerequisitegraph, indegreedirection and nonadjacent declaredprerequisitegap; fixretainsstablequeue and explicitcyclewarning/fallback"
+      }
+    },
+    {
+      "repair": "diagnostics",
+      "commit": "171079f030fbfde0166685b2deac74bebc943bc5",
+      "patch_sha256": "6f347001a1af18ba050c101eb3aa0981f9b3f337893171c015271d16b575ce29",
+      "files": {
+        "src/kailash/nodes/data/async_sql.py": "101b968fee6a61f902c61b115b45b9aff46ea45b4b420538349422328293ea53",
+        "tests/regression/test_async_sql_type_diagnostic_privacy.py": "d9d79e9b0f23ecf775c57619b7eeca938775a7864dc7a73476fc8a4c0c32ab93",
+        "tests/regression/test_issue_2104_jwt_log_injection.py": "aab8f9f08150f924a5969c7ffd10be450310168a1c984a1b6a1ddd464951c064",
+        "tests/regression/test_trust_signing_preimage_rejects_nan_inf.py": "0d8ae39b61b57a8d57ff503a8bd100e1f2a0300aecb94f4efc84a9bebdbbd3e9"
+      },
+      "tests": [
+        {
+          "log": "/tmp/csq14-parent-diagnostic-and-fixtures.log",
+          "sha256": "39369c622ce53af42d30124bd0abc31b8a946905296991de537310403e627277",
+          "summary": "171 passed in 2.42s"
+        },
+        {
+          "log": "/tmp/csq14-final-supplement-root.log",
+          "sha256": "b3dadb095bf472572a6b8ad41aec566563e6aba457d5177ae401f97bb8eb8bb9",
+          "summary": "53 passed in 1.64s"
+        }
+      ],
+      "review": "two scoped rounds clean; does not certify final promotion union",
+      "manifest": {
+        "patch_sha256": "6f347001a1af18ba050c101eb3aa0981f9b3f337893171c015271d16b575ce29",
+        "files": {
+          "src/kailash/nodes/data/async_sql.py": "101b968fee6a61f902c61b115b45b9aff46ea45b4b420538349422328293ea53",
+          "tests/regression/test_issue_2104_jwt_log_injection.py": "aab8f9f08150f924a5969c7ffd10be450310168a1c984a1b6a1ddd464951c064",
+          "tests/regression/test_trust_signing_preimage_rejects_nan_inf.py": "0d8ae39b61b57a8d57ff503a8bd100e1f2a0300aecb94f4efc84a9bebdbbd3e9",
+          "tests/regression/test_async_sql_type_diagnostic_privacy.py": "d9d79e9b0f23ecf775c57619b7eeca938775a7864dc7a73476fc8a4c0c32ab93"
+        },
+        "nonlogging_ast_identical": true,
+        "nonlogging_opposite_detected": true,
+        "raw_type_direct_logger_sites": [],
+        "fixture_original_checks_unchanged": [
+          [
+            "tests/regression/test_issue_2104_jwt_log_injection.py",
+            11
+          ],
+          [
+            "tests/regression/test_trust_signing_preimage_rejects_nan_inf.py",
+            26
+          ]
+        ]
+      }
+    },
+    {
+      "repair": "database_and_signal_fixtures",
+      "commit": "eec1fa2d307cb1fca4c9cde72d83c9e364465d2f",
+      "patch_sha256": "33a4860934808adc42bc9ac5f87d98abf52654514f22ef68578eacb4ba51dcc8",
+      "files": {
+        "packages/kailash-dataflow/tests/unit/core/test_pool_stats_provider.py": "d226e9d52a383a287919a7ce00fc73394679ef8a4357903de1edcea9023a8e40",
+        "packages/kailash-dataflow/tests/unit/features/test_read_replica.py": "d782f072880f480adddb9663d47357ce37ca88c2d36a39934b73b2ca3265f9c8",
+        "tests/regression/test_signal_wait_input_boundary.py": "51abf6c10c8a1a5329fe96c1afad4168ead8ffb08b38e29c680566885cbaa884"
+      },
+      "tests": [
+        {
+          "log": "/tmp/csq14-parent-fixtures-and-migration.log",
+          "sha256": "011180913143d998e541af979ab06c460ba0b48df918fd27ac130c06e9e07a5f",
+          "summary": "============================== 77 passed in 0.63s =============================="
+        },
+        {
+          "log": "/tmp/csq14-final-supplement-dataflow.log",
+          "sha256": "b423b4479a2ba153a74260cfc3ee9bb359d951c8836aed72291a70a80bb43e56",
+          "summary": "============================== 32 passed in 0.73s =============================="
+        }
+      ],
+      "review": "two scoped rounds clean; does not certify final promotion union",
+      "manifest": {
+        "root": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-final-gate-fixtures",
+        "head": "1f3ce4b44da8114a541161141a681e41b708f266",
+        "patch_sha256": "33a4860934808adc42bc9ac5f87d98abf52654514f22ef68578eacb4ba51dcc8",
+        "files": [
+          {
+            "path": "packages/kailash-dataflow/tests/unit/core/test_pool_stats_provider.py",
+            "sha256": "d226e9d52a383a287919a7ce00fc73394679ef8a4357903de1edcea9023a8e40",
+            "named_tests": 13,
+            "comparison": [
+              {
+                "test": "test_provider_returns_zeros_when_no_pool",
+                "original_assertions": 5,
+                "preserved_assertions": 5,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_provider_reads_asyncpg_pool",
+                "original_assertions": 4,
+                "preserved_assertions": 4,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_provider_reads_sqlalchemy_queuepool",
+                "original_assertions": 7,
+                "preserved_assertions": 7,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_provider_reads_sqlite_pool_stats",
+                "original_assertions": 4,
+                "preserved_assertions": 4,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_provider_scoped_to_database_url",
+                "original_assertions": 3,
+                "preserved_assertions": 3,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_provider_handles_exception_gracefully",
+                "original_assertions": 4,
+                "preserved_assertions": 4,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_provider_snapshots_shared_pools",
+                "original_assertions": 3,
+                "preserved_assertions": 3,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_health_check_includes_pool_stats",
+                "original_assertions": 3,
+                "preserved_assertions": 3,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_health_check_degraded_at_95_percent",
+                "original_assertions": 2,
+                "preserved_assertions": 2,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_health_check_ok_without_monitor",
+                "original_assertions": 2,
+                "preserved_assertions": 2,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_pool_stats_with_monitor",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_pool_stats_without_monitor",
+                "original_assertions": 5,
+                "preserved_assertions": 5,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_execute_raw_lightweight_not_configured",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              }
+            ]
+          },
+          {
+            "path": "packages/kailash-dataflow/tests/unit/features/test_read_replica.py",
+            "sha256": "d782f072880f480adddb9663d47357ce37ca88c2d36a39934b73b2ca3265f9c8",
+            "named_tests": 19,
+            "comparison": [
+              {
+                "test": "test_single_adapter_default",
+                "original_assertions": 3,
+                "preserved_assertions": 3,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_dual_adapter_creation",
+                "original_assertions": 4,
+                "preserved_assertions": 3,
+                "changed_assertions": [
+                  "Assert(test=Compare(left=Attribute(value=Name(id='db', ctx=Load()), attr='_read_url', ctx=Load()), ops=[Eq()], comparators=[Constant(value='sqlite:///read_replica.db')]))"
+                ]
+              },
+              {
+                "test": "test_read_routes_to_replica",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_write_routes_to_primary",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_get_connection_manager_for_primary",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_single_adapter_routing",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_connection_manager_url_override",
+                "original_assertions": 1,
+                "preserved_assertions": 0,
+                "changed_assertions": [
+                  "Assert(test=Compare(left=Attribute(value=Name(id='cm', ctx=Load()), attr='_url_override', ctx=Load()), ops=[Eq()], comparators=[Constant(value='sqlite:///override.db')]))"
+                ]
+              },
+              {
+                "test": "test_connection_manager_pool_size_override",
+                "original_assertions": 2,
+                "preserved_assertions": 2,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_read_pool_size_passed_to_read_connection_manager",
+                "original_assertions": 3,
+                "preserved_assertions": 3,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_health_check_single_adapter",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_health_check_dual_adapter",
+                "original_assertions": 2,
+                "preserved_assertions": 2,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_express_read_accepts_use_primary",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_express_list_accepts_use_primary",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_express_count_accepts_use_primary",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_express_find_one_accepts_use_primary",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_sync_express_read_accepts_use_primary",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_sync_express_list_accepts_use_primary",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_sync_express_count_accepts_use_primary",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_sync_express_find_one_accepts_use_primary",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              }
+            ]
+          },
+          {
+            "path": "tests/regression/test_signal_wait_input_boundary.py",
+            "sha256": "51abf6c10c8a1a5329fe96c1afad4168ead8ffb08b38e29c680566885cbaa884",
+            "named_tests": 9,
+            "comparison": [
+              {
+                "test": "test_source_is_pinned",
+                "original_assertions": 1,
+                "preserved_assertions": 1,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_invalid_inputs_leave_queued_signal_available",
+                "original_assertions": 4,
+                "preserved_assertions": 4,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_schema_coercion_selects_the_string_named_queue",
+                "original_assertions": 4,
+                "preserved_assertions": 4,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_missing_required_name_does_not_consume_a_signal",
+                "original_assertions": 2,
+                "preserved_assertions": 2,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_falsey_name_rejection_precedes_string_coercion",
+                "original_assertions": 3,
+                "preserved_assertions": 3,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_constructor_defaults_and_runtime_override_preserve_output",
+                "original_assertions": 4,
+                "preserved_assertions": 4,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_default_unknown_parameter_warning_is_retained",
+                "original_assertions": 3,
+                "preserved_assertions": 3,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_timeout_preserves_typed_result_and_warning",
+                "original_assertions": 4,
+                "preserved_assertions": 4,
+                "changed_assertions": []
+              },
+              {
+                "test": "test_cancellation_propagates_and_later_signal_remains_deliverable",
+                "original_assertions": 3,
+                "preserved_assertions": 3,
+                "changed_assertions": []
+              }
+            ]
+          }
+        ],
+        "semantic_changes": "Two former relative URL string assertions now require literal absolute tmp_path URL plus actual marker row and PRAGMA physical-file identity after CWD changes; all other assertions retained."
+      }
+    },
+    {
+      "repair": "workflow_fixtures",
+      "commit": "dfd71cb7f68602bd621cc1e2268b5d2ac8a8afc4",
+      "patch_sha256": "25e9d08069130870e3e9de11d8a5baeca19792b5c1da8e114bbe056efeb27bf0",
+      "files": {
+        "tests/unit/workflow/test_graph_comprehensive.py": "a7ae9652a167562c3e1d272c5158e19fed1afd359f363eb0c3fdd95ab71033f1"
+      },
+      "tests": [
+        {
+          "log": "/tmp/csq14-parent-graph-tests.log",
+          "sha256": "67b804c3b21ca0b049319e6b6b134529c78308dc4c79f6cf8da06acc3b533fb2",
+          "summary": "39 passed in 1.94s"
+        }
+      ],
+      "review": "two scoped rounds clean; does not certify final promotion union",
+      "manifest": {
+        "head": "1f3ce4b44da8114a541161141a681e41b708f266",
+        "path": "tests/unit/workflow/test_graph_comprehensive.py",
+        "source_sha256": "a7ae9652a167562c3e1d272c5158e19fed1afd359f363eb0c3fdd95ab71033f1",
+        "patch_sha256": "25e9d08069130870e3e9de11d8a5baeca19792b5c1da8e114bbe056efeb27bf0",
+        "rows": [
+          {
+            "test": "TestWorkflowNodeInstanceCreation.test_create_node_instance_with_name_parameter",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowNodeInstanceCreation.test_create_node_instance_with_id_parameter",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowNodeInstanceCreation.test_create_node_instance_fallback_pattern",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowNodeInstanceCreation.test_create_node_instance_missing_name_error",
+            "original_assertions": 0,
+            "preserved_assertions": 0,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowNodeInstanceCreation.test_create_node_instance_unexpected_parameter_error",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowNodeInstanceCreation.test_create_node_instance_generic_error",
+            "original_assertions": 0,
+            "preserved_assertions": 0,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowConnections.test_connect_basic",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowConnections.test_connect_nonexistent_source_node",
+            "original_assertions": 0,
+            "preserved_assertions": 0,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowConnections.test_connect_nonexistent_target_node",
+            "original_assertions": 0,
+            "preserved_assertions": 0,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowConnections.test_connect_with_mapping",
+            "original_assertions": 1,
+            "preserved_assertions": 1,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowConnections.test_connect_multiple_connections",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowCycles.test_create_cycle_basic",
+            "original_assertions": 1,
+            "preserved_assertions": 1,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowCycles.test_create_cycle_with_metadata",
+            "original_assertions": 1,
+            "preserved_assertions": 1,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowCycles.test_separate_dag_and_cycle_edges",
+            "original_assertions": 1,
+            "preserved_assertions": 1,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowCycles.test_get_cycle_groups",
+            "original_assertions": 1,
+            "preserved_assertions": 1,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowCycles.test_has_cycles_detection",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowValidation.test_validate_cycles",
+            "original_assertions": 0,
+            "preserved_assertions": 0,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowValidation.test_validate_with_missing_required_parameters",
+            "original_assertions": 0,
+            "preserved_assertions": 0,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowValidation.test_validate_with_runtime_parameters",
+            "original_assertions": 0,
+            "preserved_assertions": 0,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowExecution.test_run_method",
+            "original_assertions": 5,
+            "preserved_assertions": 5,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowExecution.test_execute_method",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowExecution.test_execute_with_parameters",
+            "original_assertions": 1,
+            "preserved_assertions": 1,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowStateWrapper.test_create_state_wrapper",
+            "original_assertions": 4,
+            "preserved_assertions": 4,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowStateWrapper.test_execute_with_state",
+            "original_assertions": 2,
+            "preserved_assertions": 1,
+            "missing_assertions": [
+              "Assert(test=Compare(left=Name(id='results', ctx=Load()), ops=[Eq()], comparators=[Dict(keys=[Constant(value='node1')], values=[Dict(keys=[Constant(value='result')], values=[Constant(value='success')])])]))"
+            ]
+          },
+          {
+            "test": "TestWorkflowExportImport.test_to_dict",
+            "original_assertions": 8,
+            "preserved_assertions": 8,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowExportImport.test_to_json",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowExportImport.test_to_yaml",
+            "original_assertions": 3,
+            "preserved_assertions": 3,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowExportImport.test_save_json",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowExportImport.test_save_yaml",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowExportImport.test_save_invalid_format",
+            "original_assertions": 0,
+            "preserved_assertions": 0,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowExportImport.test_from_dict",
+            "original_assertions": 6,
+            "preserved_assertions": 6,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowExportImport.test_export_to_kailash",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowErrorHandling.test_workflow_creation_with_invalid_metadata",
+            "original_assertions": 2,
+            "preserved_assertions": 2,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowErrorHandling.test_get_nonexistent_node",
+            "original_assertions": 1,
+            "preserved_assertions": 1,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowErrorHandling.test_repr_and_str_methods",
+            "original_assertions": 4,
+            "preserved_assertions": 4,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowErrorHandling.test_workflow_with_complex_metadata",
+            "original_assertions": 3,
+            "preserved_assertions": 3,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowCyclicConnections.test_cyclic_connection_creation",
+            "original_assertions": 8,
+            "preserved_assertions": 8,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowCyclicConnections.test_node_instance_creation",
+            "original_assertions": 4,
+            "preserved_assertions": 4,
+            "missing_assertions": []
+          },
+          {
+            "test": "TestWorkflowCyclicConnections.test_connection_creation",
+            "original_assertions": 4,
+            "preserved_assertions": 4,
+            "missing_assertions": []
+          }
+        ],
+        "semantic_reconciliation": "One exact success-only result shape now requires success plus real state_wrapper output; counter/data changed, original immutable, StateModel and no-LocalRuntime assertions retained. Export prior file assertions retained and exact supported native CSV node/container/config/edge assertions added.",
+        "controls": {
+          "state": 1,
+          "mapping": 1,
+          "edge": 1,
+          "params": 1
+        },
+        "python_warnings": 0,
+        "warn_plus": 0,
+        "tests_passed": 39
+      }
+    },
+    {
+      "repair": "sqlite_schema_classification",
+      "commit": "9140d081ddd94b6407fa98f13461c7ccbb9e4816",
+      "files": {
+        "packages/kailash-dataflow/src/dataflow/core/engine.py": "cc8e676c33898032ced77019350fd00f8e3582e8f26bcf38b0d6058ab1956384",
+        "packages/kailash-dataflow/tests/regression/test_sqlite_schema_url_classification.py": "807d5707d7fe0bc25f33b7188fe46e2672848e3cfd999250fe595bc048b64add"
+      },
+      "tests": [
+        {
+          "path": "/tmp/csq14-parent-schema-classification-tests.log",
+          "sha256": "558622e06df3dfffac25f6abcd39e42f6962ab88bb1fce65f963b33b65bfcf45",
+          "summary": "============================== 21 passed in 3.51s =============================="
+        },
+        {
+          "path": "/tmp/csq14-schema-correctness-focused.log",
+          "sha256": "33572a1627bcc0417f53914b853bef2e08a044adc7456933ea5261e68f7d49eb",
+          "summary": "============================== 15 passed in 2.30s =============================="
+        },
+        {
+          "path": "/tmp/csq14-schema-correctness-redis.log",
+          "sha256": "0377fdbeda647620487816b2166b2ef84574ad3a3bce50e358ae554f3dada040",
+          "summary": "============================== 6 passed in 2.71s ==============================="
+        },
+        {
+          "path": "/tmp/csq14-schema-correctness-postgres.log",
+          "sha256": "91a5425370edecc26a0856576aaffc4909b3b237c454453e22f42f2cf1c00a55",
+          "summary": "============================== 1 passed in 3.32s ==============================="
+        }
+      ],
+      "review": "two scoped independent correctness rounds clean; retry additionally two adversarial security rounds clean",
+      "manifest": {
+        "root": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-sqlite-schema-classification",
+        "base": "a10fb3f1bb5c0faddc14098051d6f9a884e100b9",
+        "patch": "/tmp/csq14-schema-classification-final.patch",
+        "patch_sha256": "17f888ffbd568c80bdc306dd078bd453e3471f2e3581f89857625f70729b6c02",
+        "files": {
+          "packages/kailash-dataflow/src/dataflow/core/engine.py": "cc8e676c33898032ced77019350fd00f8e3582e8f26bcf38b0d6058ab1956384",
+          "packages/kailash-dataflow/tests/regression/test_sqlite_schema_url_classification.py": "807d5707d7fe0bc25f33b7188fe46e2672848e3cfd999250fe595bc048b64add"
+        },
+        "changed_production_methods": [
+          "_validate_database_connection",
+          "_initialize_migration_system",
+          "_initialize_audit_backend",
+          "ensure_table_exists",
+          "_verify_table_physically_exists_detailed",
+          "_reconcile_columns_async",
+          "_inspect_database_schema_real",
+          "_get_database_connection",
+          "_execute_multi_statement_ddl",
+          "_trigger_universal_schema_management",
+          "_convert_fields_to_columns",
+          "_auto_detect_relationships",
+          "_auto_detect_relationships_async"
+        ],
+        "invariants": [
+          "SQLite URL classification precedes other-engine filename substrings",
+          "Native SQLite relationship detection keeps existing SQLite skip behavior",
+          "Real file discovery returns actual schema; explicit memory inspection remains unsupported",
+          "Connections/resources are unchanged and test-owned handles close; nonSQLite dispatch preserved"
+        ],
+        "budget": "44 added/51 removed production lines, one production file, 4 invariants, max3 caller hops",
+        "tests": {
+          "focused": 15,
+          "real_redis": 6,
+          "real_postgres": 1
+        },
+        "warnings": {
+          "focused": "2 ERROR events only from explicit unsupported-memory rejection tests;13positive cases assert zeroWARN+",
+          "real_redis": 0,
+          "real_postgres": "2 auto-detected test-mode notices",
+          "python": 0
+        },
+        "remaining_lexical_matches": {
+          "postgres_or_mysql_substring": "All URL dispatch predicates now reject canonical SQLite first; PostgreSQL prefix-only allocator does not confuse filenames",
+          "audit_startswith_sqlite": "Derives existing separate audit SQLite filename after backend selection; storage policy unchanged",
+          "sqlite_autoindex": "SQLite catalog index filtering, not database address detection",
+          "connection_type_contains_sqlite": "Classifies a live connection object in PG migration compatibility, not a URL",
+          "bare_path_suffixes": "Existing bare-file compatibility branches after canonical is_sqlite_url",
+          "_get_async_sql_connection": "Memory URI priority then canonical is_sqlite_url already correct",
+          "_acquire_async_database_connection": "Actual PostgreSQL prefix test then canonical SQLite, ownership unchanged"
+        }
+      }
+    },
+    {
+      "repair": "retry_attempt_and_observer_ownership",
+      "commit": "467bda0188c2bdb8d5c26cd990eec74a44adec1c",
+      "files": {
+        "src/kailash/runtime/local.py": "2825809c6f75cfe7e60880fc237793ca760fc2d393876ece9e89902c110aa174",
+        "src/kailash/runtime/async_local.py": "14f5e667324e0f7acf2a9e6f9730a8ab3b549bd854fe55de628fd70d5e86c44d",
+        "src/kailash/runtime/hierarchical_switch_executor.py": "8a6f01d6105c0c8691e81efd099d8376586bc47b2c6892bd03ba92ccfc150d3d",
+        "src/kailash/runtime/resource_manager.py": "442fe4d1fb29f2a763782ceeb7d8e8ef94584341b8c57c80165cddcdd8a236a2",
+        "tests/regression/test_retry_policy_attempt_ownership.py": "071a9ebf15544894447773071f533016ca309b08979b83b0a46747a12aa4fb7d"
+      },
+      "tests": [
+        {
+          "path": "/tmp/csq14-parent-retry-launch-tests.log",
+          "sha256": "3da7f8711e3dd96f58732bafb6f2456b0bf892277199c86a56303994bb7c62ea",
+          "summary": "404 passed in 5.41s"
+        },
+        {
+          "path": "/tmp/csq14-retry-correctness-launch-tests.log",
+          "sha256": "a9d5614ae4c177418f9e77de02daad1cb70d8313c95634d552fe671f6c33d42d",
+          "summary": "404 passed in 11.82s"
+        },
+        {
+          "path": "/tmp/csq14-retry-security-launch-final.log",
+          "sha256": "098a8c131c652897978c7767ba45f6daff1d6235e7a38ae128f2b0e4ac8f5670",
+          "summary": "404 passed in 21.01s"
+        }
+      ],
+      "review": "two scoped independent correctness rounds clean; retry additionally two adversarial security rounds clean",
+      "manifest": {
+        "src/kailash/runtime/local.py": "2825809c6f75cfe7e60880fc237793ca760fc2d393876ece9e89902c110aa174",
+        "src/kailash/runtime/async_local.py": "14f5e667324e0f7acf2a9e6f9730a8ab3b549bd854fe55de628fd70d5e86c44d",
+        "src/kailash/runtime/hierarchical_switch_executor.py": "8a6f01d6105c0c8691e81efd099d8376586bc47b2c6892bd03ba92ccfc150d3d",
+        "src/kailash/runtime/resource_manager.py": "442fe4d1fb29f2a763782ceeb7d8e8ef94584341b8c57c80165cddcdd8a236a2",
+        "tests/regression/test_retry_policy_attempt_ownership.py": "071a9ebf15544894447773071f533016ca309b08979b83b0a46747a12aa4fb7d"
+      }
+    },
+    {
+      "repair": "acyclic_execution_and_cycle_diagnostic_privacy",
+      "commit": "b134a95181a1e01f1af7fad432993d8d5ac283ea",
+      "files": {
+        "src/kailash/workflow/cyclic_runner.py": "e95c1efb95b9175a221dd5c6eb5d079d4d88b5b362c28ddb431dc20e6843457e",
+        "tests/regression/test_cyclic_executor_acyclic_dispatch.py": "16cc9534b2f6ff65178e9dd4d8ee576f03df698859e338ad7645b5d2786a2890"
+      },
+      "manifest": {
+        "root": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-cycle-dag-dispatch",
+        "head": "a10fb3f1bb5c0faddc14098051d6f9a884e100b9",
+        "patch_sha256": "ed475e3889c832ce9cfa449074736acf6f347766f1afa26d79011d8c6aaa8d5e",
+        "delta_sha256": "f636c51dad263ceaf6babf5e62c9237dc122c3f9941a3b7520986f2768c273f3",
+        "files": {
+          "src/kailash/workflow/cyclic_runner.py": "e95c1efb95b9175a221dd5c6eb5d079d4d88b5b362c28ddb431dc20e6843457e",
+          "tests/regression/test_cyclic_executor_acyclic_dispatch.py": "16cc9534b2f6ff65178e9dd4d8ee576f03df698859e338ad7645b5d2786a2890"
+        },
+        "evidence": [
+          {
+            "path": "/tmp/csq14-cycle-dag-final3-tests.log",
+            "sha256": "191d9ad4f6a471901dc8f6a8d415475a1b3356cfbc5b033973abdb18445bb1ee",
+            "results": [
+              "............................                                             [100%]PYTHON_WARNINGS [] WARN_PLUS 19 REACHED_OLD 0",
+              "28 passed in 3.01s"
+            ]
+          },
+          {
+            "path": "/tmp/csq14-cycle-final3-control-keys.log",
+            "sha256": "851abd817daa3b21600e6c094942a3529f1035ff6cb96441387b92c6a7a04711",
+            "results": [
+              "1 failed, 2 passed, 11 deselected in 8.08s",
+              "REACHED keys 5 EXIT 1"
+            ]
+          },
+          {
+            "path": "/tmp/csq14-cycle-final3-control-edges.log",
+            "sha256": "19db6eecda3c889b9731f00c7fa77887e22d844589f5377d2290ba6268dfb7ae",
+            "results": [
+              "1 failed, 2 passed, 11 deselected in 8.08s",
+              "REACHED edges 3 EXIT 1"
+            ]
+          }
+        ],
+        "scope": "DAG through existing plan; all observed result values/keys/convergence config/termination payload/error diagnostics become count/presence or safe exception frames. Declared graph identities remain metadata scope. Public results/error/task payload unchanged.",
+        "production_numstat": "46\t38\tsrc/kailash/workflow/cyclic_runner.py",
+        "pending_fixture": "archive repairs separate comprehensive unitfixture; not in this twofilepatch; broad93 must rerun after that"
+      },
+      "tests": [
+        {
+          "path": "/tmp/csq14-parent-cycle-broad-tests.log",
+          "sha256": "05dbf88bd8c2748b295e5668db39bd2dcf943566bf24d1cbf00f228e65575498",
+          "summary": "95 passed in 5.47s"
+        },
+        {
+          "path": "/tmp/csq14-cycle-correctness-final3-tests.log",
+          "sha256": "9042feda1eecae20afde14dad098a8a463a74e79a987de60f4a5fcf872cf9e72",
+          "summary": "28 passed in 2.33s"
+        }
+      ],
+      "review": "two independent correctness and two adversarial security scoped rounds clean; final union open"
+    },
+    {
+      "repair": "cyclic_execution_fixtures",
+      "commit": "1dcc5f486002e113fb5f37b21f036b40b28f9105",
+      "files": {
+        "tests/tier2_integration/workflows/test_unit_cyclic_runner_comprehensive.py": "11e5129e22087ef593762d756805a258f5d30f9d4d67ad011af319cfc4d2c0fb"
+      },
+      "manifest": {
+        "base": "1f3ce4b44da8114a541161141a681e41b708f266",
+        "owned_files": {
+          "tests/tier2_integration/workflows/test_unit_cyclic_runner_comprehensive.py": "11e5129e22087ef593762d756805a258f5d30f9d4d67ad011af319cfc4d2c0fb"
+        },
+        "borrowed_production": {
+          "src/kailash/workflow/cyclic_runner.py": "e95c1efb95b9175a221dd5c6eb5d079d4d88b5b362c28ddb431dc20e6843457e"
+        },
+        "patch_sha256": "5e7bb7f58b74a01ba762749d177fae5b83416104f0ee3329ae00fb6985e1adfd",
+        "original_named_tests": 43,
+        "original_checks": 95,
+        "retained_checks": 91,
+        "changed_checks_by_test": {
+          "TestCyclicWorkflowExecutorBasic.test_execute_no_cycles_delegates_to_dag_runner": 2,
+          "TestCyclicWorkflowExecutorInternalMethods.test_execute_with_cycles_with_summaries": 2
+        },
+        "semantic_rows": [
+          {
+            "test": "TestCyclicWorkflowExecutorBasic.test_execute_no_cycles_delegates_to_dag_runner",
+            "change": "Real public DAG delivery replaces invalid WorkflowRunner delegation expectation; preserves non-null run ID and checks UUID, both outputs, once-only execution and actual edge input."
+          },
+          {
+            "test": "TestCyclicWorkflowExecutorInternalMethods.test_execute_with_cycles_with_summaries",
+            "change": "Two raw dictionary logger checks replaced with exactly one iterations=5 event and one iterations=3 event, retained successful return, and absent private payload in both formatted and raw records."
+          }
+        ],
+        "unchanged_node_execution_assertions": 15,
+        "opposite_assertion_removal_rejected": true,
+        "tests": "81 strict passed; complete fixture43 + existing methods14 + cycle mixin24",
+        "warnings": "0 Python warnings; 4 declared failure diagnostics attributed in /tmp/csq14-cyclic-fixture-warnings.json",
+        "controls": {
+          "old_protocol": [
+            8,
+            8
+          ],
+          "old_delegate_test": [
+            1,
+            1
+          ],
+          "old_summary_test": [
+            1,
+            1
+          ],
+          "raw_summary_producer": [
+            1,
+            1
+          ],
+          "wrong_delivery_producer": [
+            2,
+            1
+          ]
+        },
+        "semantic_named_test_rows": 2,
+        "replaced_check_expressions": 4
+      },
+      "tests": [
+        {
+          "path": "/tmp/csq14-cyclic-fixture-correctness-tests.log",
+          "sha256": "38b55ac77485f6c874adad708f0d58e2d11b8362dbb8ff38b7508a947f27a61b",
+          "summary": "81 passed in 6.13s"
+        }
+      ],
+      "review": "two independent correctness scoped rounds clean; final union open"
+    },
+    {
+      "repair": "explicit_worker_and_schema_fixtures",
+      "commit": "95a25a506425aaf7841a2ab3045e277a75b68703",
+      "manifest": {
+        "base": "0a01bfe29503c30cec484d4fc374390afc67cc90",
+        "files": [
+          {
+            "path": "tests/regression/test_issue_941_retry_classification_unwrap.py",
+            "sha256": "c181ffa0fcd65abed23dbcb4dded96bcdd42c96468f049b15ea4a1e366c1cd1d",
+            "original_tests": 7,
+            "original_checks_all_retained": 11
+          },
+          {
+            "path": "packages/kailash-dataflow/tests/unit/package/test_package_installation_unit.py",
+            "sha256": "86ad2b5a044f6926569245f1e48c3f8b2da31a34d85e138ea631185f12c66180",
+            "original_tests": 14,
+            "original_checks_all_retained": 36
+          }
+        ],
+        "patch_sha256": "5c7d605dbe9322294005c78a310061c6110ccd174ad652b8e763ec23dd2e5262",
+        "scope": "test-only: explicit memory-limit optout only for two real Worker/PythonCode executions, with copied config restored; standardized file DataFlow fixture with real DDL/catalog for mocked CRUD API composition",
+        "tests": {
+          "core": 43,
+          "dataflow": 14,
+          "python_warnings": 0
+        },
+        "warnings": {
+          "core": 35,
+          "core_disposition": "2 expected leaf-failure logs;33 explicit security path/resource negative controls, including unsupported limit warning still asserted",
+          "dataflow": 50,
+          "dataflow_disposition": "16 existing memory test-use notices +17 auto-test-mode notices +17 pool-cleanup notices; no schema ERROR"
+        },
+        "controls": {
+          "restored_memory_limit": {
+            "reached": 1,
+            "failure": "fixture warning assertion fails at teardown"
+          },
+          "restored_memory_fixture": {
+            "reached": 1,
+            "failure": "real table creation assertion fails"
+          },
+          "omitted_ddl": {
+            "reached": 1,
+            "failure": "actual catalog has no posts table"
+          },
+          "configuration_restore": {
+            "positive": "CONFIG_RESTORED True;2 real worker cases passed",
+            "opposite": "omit restoration1hit CONFIG_RESTORED False",
+            "logs": [
+              "/tmp/csq14-final-warning-fixtures-restore-positive.log",
+              "/tmp/csq14-final-warning-fixtures-restore-omit.log"
+            ]
+          }
+        },
+        "production_changed": false
+      },
+      "independent_receipt": {
+        "verdict": "two independent scoped correctness rounds clean",
+        "patch_sha256": "5c7d605dbe9322294005c78a310061c6110ccd174ad652b8e763ec23dd2e5262",
+        "round1": "43Core+14DF strict passed,0Pythonwarnings; whole-file21named/47checksretained; dropped-assert opposite rejected",
+        "round2": "actual omittedDDL1hit->missingposts failure; restoredmemorylimit1hit->teardownrejects reached unsupported-memorywarning; omittedrestore1hit->CONFIG_RESTORED False; normal2workers->True",
+        "warning_inventory": "35Core declared2leaferrors+33securitynegatives;50DF declaredmemory/testmode/cleanupnotices; no positive schemaERROR",
+        "scope": "two fixturefiles only; no complete promotion verdict",
+        "logs": {
+          "/tmp/csq14-warning-fixtures-parent-root.log": "979b34bc79df18d9b9865038496d09493298441fa2ae8d535bdca17b2572fe5d",
+          "/tmp/csq14-warning-fixtures-parent-dataflow.log": "5c6fd430aaa0623d8fefee8c7b1723ed948559b7a39a9b463a02188b03dfa066",
+          "/tmp/csq14-warning-fixtures-parent-control-limit.log": "42a262cff1c43837a5570bb66115c970ae7041af302c260659f38727b2dd1f7a",
+          "/tmp/csq14-warning-fixtures-parent-control-restore.log": "e97158c0870aa909715e3fe6fabd601ae1294f5b9b16ac89cb7b607b998cb00b",
+          "/tmp/csq14-warning-fixtures-parent-control-ddl.log": "999b1ab59650946264b437773f77a2a03451ac6443ca2c8f6bbb499c96ac3f5f",
+          "/tmp/csq14-warning-fixtures-parent-control-normal_restore.log": "362a1dc4386f5f7bf7fe675ceff859ba3b0ef994171b22f20a2416203532e292"
+        }
+      },
+      "review": "two scoped rounds clean; whole promotion union still open"
+    },
+    {
+      "repair": "sqlite_optional_connection_and_type_narrowing",
+      "commit": "7814db7a1d0ecddd555286faa2f285b298f6e7e7",
+      "manifest": {
+        "base": "0a01bfe29503c30cec484d4fc374390afc67cc90",
+        "patch_sha256": "b127e3ea04be863607709bc5d4aae04a9a2e82a1221abd728ad2bc0984a6ef87",
+        "files": {
+          "packages/kailash-dataflow/src/dataflow/core/engine.py": "cf67fc195ee0f525e6010b965378975fa38816156b0cc47a9cb72a07248c6990",
+          "packages/kailash-dataflow/tests/regression/test_sqlite_optional_verification_connection.py": "0efb3579b6834fbe01665f5635cd036da971a25bcb8b9913bc932ee61acac052"
+        },
+        "production_numstat": "15\t12\tpackages/kailash-dataflow/src/dataflow/core/engine.py",
+        "tests": "83 strict passed,0Pythonwarnings;23 inventoried declarednegative/advisory diagnostics",
+        "pyright": "pinned1.1.371:0errors0warnings0informations; vendorupdate notice retained because gate intentionally pins calibrated analyzer",
+        "review": "pending independent2rounds",
+        "scope": "Stable string snapshots; None connection structural verdict and canonical anonymous SQLite URL aliases; no casts/ignores/threshold changes"
+      },
+      "independent_receipt": {
+        "patch_sha256": "b127e3ea04be863607709bc5d4aae04a9a2e82a1221abd728ad2bc0984a6ef87",
+        "verdict": "two scoped independent correctness/ownership rounds clean",
+        "files": {
+          "packages/kailash-dataflow/src/dataflow/core/engine.py": "cf67fc195ee0f525e6010b965378975fa38816156b0cc47a9cb72a07248c6990",
+          "packages/kailash-dataflow/tests/regression/test_sqlite_optional_verification_connection.py": "0efb3579b6834fbe01665f5635cd036da971a25bcb8b9913bc932ee61acac052"
+        },
+        "round1": "83 strict passed4.29s; Pythonwarnings0;23 declared negative/advisory records",
+        "round2": "12 strict including all4 pinned pyright gates +8 verification cases passed4.87s;Pythonwarnings0;5declared notices",
+        "pyright": "1.1.371;0errors0warnings0informations; vendor-update notice retained for deliberately pinned calibrated gate",
+        "absolute_opener_calls": [
+          {
+            "caller": "__init__",
+            "line": 928
+          },
+          {
+            "caller": "_verify_table_physically_exists_detailed",
+            "line": 2951
+          },
+          {
+            "caller": "_get_live_table_columns",
+            "line": 3253
+          },
+          {
+            "caller": "_apply_alter_add_statements",
+            "line": 3301
+          }
+        ],
+        "ownership": "constructor retains shared anchor for close/close_async; remaining3callers return structuralNone before operations and close actual handles in finally",
+        "real_probe": "4 actual opens exactlyonce each,allclosed;18Nonealias calls; nativecommitted rowandALTER retained",
+        "cache_probe": "3URL/componentcases accessurlonce,nonSQLiteURLandstructuredfallback retained,componentidentitiesdistinct; oldsnapshot1hit rejected",
+        "controls": {
+          "oldguard": [
+            12,
+            2
+          ],
+          "oldopener": [
+            25,
+            1
+          ],
+          "oldcache": [
+            1,
+            1
+          ]
+        },
+        "unchanged": [
+          "pinned pyright gate/version ceilings",
+          "generic cache key encoder"
+        ],
+        "limits": "bounded engine type narrowing/SQLite optional-handle ownership; no wholeunion/cycle privacy verdict, no additional livePG/MySQL claim"
+      },
+      "review": "two scoped rounds clean; whole promotion union still open"
+    },
+    {
+      "repair": "nexus_auth_diagnostic_privacy",
+      "commit": "3b431811578d9bae3d073bb80f61c3393d6696b7",
+      "manifest": {
+        "head": "0a01bfe29503c30cec484d4fc374390afc67cc90",
+        "patch_sha256": "e7b4fd76a5a33b160884ee729dd70b5fa50d9b7b77a9239e728959aa465e4ea1",
+        "files": {
+          "packages/kailash-nexus/src/nexus/auth/jwt.py": "8600d4e3a33c17e3582de3875084eb4c21dffc1ddc647ae9613635320877d622",
+          "packages/kailash-nexus/tests/unit/auth/test_jwt_diagnostic_privacy.py": "963cf2bdecc3d546593b70231ecac59f40d0c420127c9597bfec53de68f888d2",
+          "packages/kailash-nexus/tests/integration/auth/test_jwt_integration.py": "161924ed8886c0e0a719b102f489b7bc98c6f3b5186e6d548e734bed350e21a0"
+        }
+      },
+      "independent_receipt": {
+        "verdict": "TWO_SCOPED_SECURITY_ROUNDS_CLEAN",
+        "base": "0a01bfe29503c30cec484d4fc374390afc67cc90",
+        "patch_sha256": "e7b4fd76a5a33b160884ee729dd70b5fa50d9b7b77a9239e728959aa465e4ea1",
+        "round1": {
+          "passed": 114,
+          "python_warnings": 0,
+          "warn_records": 82,
+          "log": "/tmp/csq14-nexus-independent-tests.log",
+          "whole_module_nonlogging_ast": "exact",
+          "original_integration_checks": 37
+        },
+        "round2": {
+          "passed": 17,
+          "python_warnings": 0,
+          "warn_records": 45,
+          "log": "/tmp/csq14-nexus-independent-round2.log",
+          "offpath_probe": "/tmp/csq14-nexus-independent-context-probe.log",
+          "offpath_result": "signed tenant/actor preserved despite caller spoof; success and route-error reset context; hostile __str__ uncalled; self cause bounded; owner refcount0"
+        },
+        "controls": {
+          "old_dispatch": {
+            "hits": 10,
+            "test_call_failures": 10,
+            "additional_teardown_errors": 6
+          },
+          "extra_only_payload": {
+            "hits": 10,
+            "failures": 10
+          },
+          "owner_close_positive": [
+            0,
+            0
+          ],
+          "omitted_owner_close": [
+            2,
+            2
+          ],
+          "changed_status_ast": "rejected"
+        },
+        "scope": "Four automatic JWT/API-key/callback exception diagnostics, auth transport/context behavior, fixture owner cleanup; fixed event and canonical bounded safe type/frame identifiers. No universal Nexus or whole-union privacy claim; cycle A/B outside review. Official MCP fallback exercised list/call42, independent fastmcp absence expected. No live remote identity provider or external MCP service claimed.",
+        "evidence_prefix": "/tmp/csq14-nexus-independent",
+        "frozen_files_unchanged": true
+      },
+      "review": "two scoped rounds clean; whole promotion union still open"
+    },
+    {
+      "repair": "durable_request_automatic_failure_privacy",
+      "commit": "5ec8e125c5e85644b21cf6ffbaef7b437a5c280a",
+      "manifest": {
+        "base": "3b431811578d9bae3d073bb80f61c3393d6696b7",
+        "files": {
+          "src/kailash/middleware/gateway/durable_request.py": "f30c39f8ce13069268d297858502d02d3ef9433dd88529c44f14bbb6850d44a9",
+          "tests/regression/test_durable_request_diagnostic_privacy.py": "f93943de15e0b6fa9acfeb1a3ba532594e36f29e87b3cee4ff942fda369f6571"
+        },
+        "patch_sha256": "99af561c1e15986a8af249bcf8c9e9858f3ecffb27dcc30a877b2420c12f6003",
+        "scope": "One automatic ERROR event; all nonlogging AST identical, public exception identity/failure state/journal/checkpoint contents preserved. Four real public validation failures across execute/resume; no runtime constructed. Caller-provided request IDs, checkpoint names and journal data outside this diagnostic-body repair."
+      },
+      "independent_receipt": {
+        "verdict": "CLEAN: two scoped rounds",
+        "scope": "Only DurableRequest automatic failure diagnostic producer; public journal/checkpoint payload deliberately preserved, other callers/configured identifiers not privacy-certified",
+        "round1": {
+          "test": "20 passed strict",
+          "python_warnings": 0,
+          "intentional_error_logs": 7,
+          "nonlogging_ast": "exact; state mutation rejected",
+          "absolute_log_sites": 3,
+          "handling_callers": [
+            "execute",
+            "resume"
+          ]
+        },
+        "round2": {
+          "hostile_exception_class_self_cause": "passed strict",
+          "state_exception_journal_checkpoint": "exact preserved",
+          "raw_logrecord_and_stream": "private sentinel absent",
+          "controls": {
+            "old_producer": {
+              "hits": 7,
+              "failures": 4
+            },
+            "private_extra": {
+              "hits": 7,
+              "failures": 4
+            }
+          }
+        },
+        "manifest": "/tmp/csq14-request-diagnostic-final-manifest.json",
+        "receipts": [
+          "/tmp/csq14-request-independent-good-receipt.json",
+          "/tmp/csq14-request-independent-old-receipt.json",
+          "/tmp/csq14-request-independent-extra-receipt.json",
+          "/tmp/csq14-request-independent-hostile-receipt.json"
+        ]
+      },
+      "parent": "20 strict,0Python,7expectedfailureevents; old+extra controls each7hits4fails",
+      "review": "two independent scoped rounds clean; final union pending"
+    },
+    {
+      "repair": "checkpoint_lock_fixture_ownership",
+      "commit": "e2aeb3fd33aa394e10391e3c1f206156745f9411",
+      "manifest": {
+        "files": {
+          "tests/unit/runtime/test_durable_helpers.py": "86e648368785fca856ddee3f0ea0420b5ecf6ef0999d65311af53c7c778fc53f"
+        },
+        "patch_sha256": "73c12eba838d949037d53d42474ab1635d4341e6c3b42f7d28d8d6adcd10213b",
+        "assertions_retained": 57
+      },
+      "independent_receipt": {
+        "scope": "two finally-close fixtures; source unchanged",
+        "file": "tests/unit/runtime/test_durable_helpers.py",
+        "sha256": "86e648368785fca856ddee3f0ea0420b5ecf6ef0999d65311af53c7c778fc53f",
+        "strict_passed": 27,
+        "original_checks_retained": 57,
+        "removal_opposite_rejected": true,
+        "owner_positive": "2passed,observed0",
+        "owner_omit_control": "2reached,2failed OWNED_RUNTIME_STILL_LIVE [1], retained owners reclaimed",
+        "combined_final2": "78passed,0Python,18intentional runtime records",
+        "verdict": "two scoped parent rounds clean"
+      },
+      "review": "two scoped independent rounds clean; final whole-promotion validation pending"
+    },
+    {
+      "repair": "convergence_diagnostic_privacy",
+      "commit": "2545588b099d1f74ea193dc7e6fb6f7b697b3895",
+      "manifest": {
+        "root": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-convergence-diagnostics",
+        "base": "3b431811578d9bae3d073bb80f61c3393d6696b7",
+        "patch_sha256": "0c51c6b875bdfd3a34add222bd71f4969464e8ffc235227d5b0aee685c3315db",
+        "files": {
+          "src/kailash/workflow/convergence.py": "413bc5d836711d3b352b2893bf5c933bbc7e1410651af8e590b44b0e7d5716c6",
+          "tests/regression/test_convergence_diagnostic_privacy.py": "922bf43c553924dfbe5a2528182beae9a10f7e4ce9b46e6b9a828be28270c492"
+        },
+        "borrowed_cycle_source": "/tmp/csq14-cycle-ab-final2-manifest.json",
+        "strict_selection": "23 passed; Python warnings0; 7 expected convergence-negative warning records",
+        "test_log": "/tmp/csq14-convergence-diagnostics-final-tests.log",
+        "scope": "Automatic diagnostics only; expression evaluation/describe/returnTrue unchanged. No evaluator-security claim. Public real Local/Async cycles plus dependency-free condition tests.",
+        "fixture_assertion_parity": null
+      },
+      "independent_receipt": {
+        "verdict": "CLEAN two consecutive independent scoped rounds",
+        "base": "3b431811578d9bae3d073bb80f61c3393d6696b7 plus exact A+Bfinal2/request diagnostic overlays",
+        "manifests": {
+          "diagnostics": {
+            "src/kailash/workflow/convergence.py": "413bc5d836711d3b352b2893bf5c933bbc7e1410651af8e590b44b0e7d5716c6",
+            "tests/regression/test_convergence_diagnostic_privacy.py": "922bf43c553924dfbe5a2528182beae9a10f7e4ce9b46e6b9a828be28270c492"
+          },
+          "fixtures": {
+            "tests/integration/workflows/test_convergence_basic.py": "fabd39c87d50d668397368dcd7f71a1a15909f969575de5ce698dc309f837399",
+            "tests/integration/workflows/test_convergence_safety.py": "c1a190a992e77c91363a6f80b785fb8f04a2c7f3c7edd9ff62753112dbfb2d8c"
+          }
+        },
+        "round1": {
+          "strict": "23 passed",
+          "python_warnings": 0,
+          "intentional_warning_records": 7,
+          "nonlogging_whole_module_ast": "identical",
+          "opposite_true_to_false": "rejected",
+          "original_tests": 12,
+          "original_assertions_exact": 27,
+          "absolute_logs": [
+            {
+              "line": 98,
+              "level": "debug"
+            },
+            {
+              "line": 99,
+              "level": "debug"
+            },
+            {
+              "line": 102,
+              "level": "debug"
+            },
+            {
+              "line": 107,
+              "level": "debug"
+            },
+            {
+              "line": 112,
+              "level": "warning"
+            },
+            {
+              "line": 149,
+              "level": "warning"
+            }
+          ],
+          "absolute_callers_reviewed": [
+            "cyclic_runner factory+evaluate",
+            "factory string/callable/dict",
+            "CompoundCondition children",
+            "AdaptiveCondition selected child"
+          ]
+        },
+        "round2": {
+          "own_live_probe": "/tmp/csq14-convergence-independent-probe-receipt.json",
+          "semantic_cases": [
+            "KeyError and SyntaxError terminate True",
+            "self-cause callback invoked once with same inputs/state",
+            "opaque expression result preserves two bool calls, omits formatting",
+            "callback result identity exact",
+            "raw LogRecord/StreamHandler private sentinel absent"
+          ],
+          "opposite_controls": {
+            "silent_events": {
+              "hits": 30,
+              "failed_tests": 9
+            },
+            "private_extra": {
+              "hits": 6,
+              "failed_tests": 6
+            },
+            "owners": {
+              "positive_refcounts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "omitted_refcounts": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "omission_rejected": true,
+              "all_retained_owners_reclaimed": true
+            },
+            "config": {
+              "positive_identity_restored": true,
+              "omitted_restore_hits": 1,
+              "omitted_identity_restored": false,
+              "finally_restored": true
+            }
+          },
+          "own_fixture_scope": "both actual generator fixtures copy config object, set only copy.memory_limit=None, preserve original value and restore original identity",
+          "unsupported_guard": "actual Mac guard still emits Memory limit is NOT enforced when explicitly exercised"
+        },
+        "scope_limits": [
+          "Automatic convergence diagnostics only; no evaluator security claim",
+          "Public descriptions/expression evaluation/callback results retained",
+          "Fixture config affects only separate code memory guard; runtime cycle safety limits source unchanged",
+          "Not whole promotion evidence"
+        ],
+        "evidence_prefix": "/tmp/csq14-convergence-independent-"
+      },
+      "review": "two scoped independent rounds clean; final whole-promotion validation pending"
+    },
+    {
+      "repair": "convergence_fixture_ownership_and_configuration",
+      "commit": "8c68472080dc269fb3142d97e9b4f3c418dae23f",
+      "manifest": {
+        "root": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-convergence-diagnostics",
+        "base": "3b431811578d9bae3d073bb80f61c3393d6696b7",
+        "patch_sha256": "72b19aace9f020532e1577ab8f24d19e04d8383c2a9f34ba7bb092421ba1d3a7",
+        "files": {
+          "tests/integration/workflows/test_convergence_basic.py": "fabd39c87d50d668397368dcd7f71a1a15909f969575de5ce698dc309f837399",
+          "tests/integration/workflows/test_convergence_safety.py": "c1a190a992e77c91363a6f80b785fb8f04a2c7f3c7edd9ff62753112dbfb2d8c"
+        },
+        "borrowed_cycle_source": "/tmp/csq14-cycle-ab-final2-manifest.json",
+        "strict_selection": "23 passed; Python warnings0; 7 expected convergence-negative warning records",
+        "test_log": "/tmp/csq14-convergence-diagnostics-final-tests.log",
+        "scope": "12 real PythonCode cycle fixtures own LocalRuntime context and scoped copied code memory config restored; separate runtime cycle safety limits unchanged.",
+        "fixture_assertion_parity": [
+          {
+            "file": "tests/integration/workflows/test_convergence_basic.py",
+            "original_tests": 5,
+            "all_original_assertions": 15
+          },
+          {
+            "file": "tests/integration/workflows/test_convergence_safety.py",
+            "original_tests": 7,
+            "all_original_assertions": 12
+          }
+        ]
+      },
+      "independent_receipt": {
+        "verdict": "CLEAN two consecutive independent scoped rounds",
+        "base": "3b431811578d9bae3d073bb80f61c3393d6696b7 plus exact A+Bfinal2/request diagnostic overlays",
+        "manifests": {
+          "diagnostics": {
+            "src/kailash/workflow/convergence.py": "413bc5d836711d3b352b2893bf5c933bbc7e1410651af8e590b44b0e7d5716c6",
+            "tests/regression/test_convergence_diagnostic_privacy.py": "922bf43c553924dfbe5a2528182beae9a10f7e4ce9b46e6b9a828be28270c492"
+          },
+          "fixtures": {
+            "tests/integration/workflows/test_convergence_basic.py": "fabd39c87d50d668397368dcd7f71a1a15909f969575de5ce698dc309f837399",
+            "tests/integration/workflows/test_convergence_safety.py": "c1a190a992e77c91363a6f80b785fb8f04a2c7f3c7edd9ff62753112dbfb2d8c"
+          }
+        },
+        "round1": {
+          "strict": "23 passed",
+          "python_warnings": 0,
+          "intentional_warning_records": 7,
+          "nonlogging_whole_module_ast": "identical",
+          "opposite_true_to_false": "rejected",
+          "original_tests": 12,
+          "original_assertions_exact": 27,
+          "absolute_logs": [
+            {
+              "line": 98,
+              "level": "debug"
+            },
+            {
+              "line": 99,
+              "level": "debug"
+            },
+            {
+              "line": 102,
+              "level": "debug"
+            },
+            {
+              "line": 107,
+              "level": "debug"
+            },
+            {
+              "line": 112,
+              "level": "warning"
+            },
+            {
+              "line": 149,
+              "level": "warning"
+            }
+          ],
+          "absolute_callers_reviewed": [
+            "cyclic_runner factory+evaluate",
+            "factory string/callable/dict",
+            "CompoundCondition children",
+            "AdaptiveCondition selected child"
+          ]
+        },
+        "round2": {
+          "own_live_probe": "/tmp/csq14-convergence-independent-probe-receipt.json",
+          "semantic_cases": [
+            "KeyError and SyntaxError terminate True",
+            "self-cause callback invoked once with same inputs/state",
+            "opaque expression result preserves two bool calls, omits formatting",
+            "callback result identity exact",
+            "raw LogRecord/StreamHandler private sentinel absent"
+          ],
+          "opposite_controls": {
+            "silent_events": {
+              "hits": 30,
+              "failed_tests": 9
+            },
+            "private_extra": {
+              "hits": 6,
+              "failed_tests": 6
+            },
+            "owners": {
+              "positive_refcounts": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "omitted_refcounts": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "omission_rejected": true,
+              "all_retained_owners_reclaimed": true
+            },
+            "config": {
+              "positive_identity_restored": true,
+              "omitted_restore_hits": 1,
+              "omitted_identity_restored": false,
+              "finally_restored": true
+            }
+          },
+          "own_fixture_scope": "both actual generator fixtures copy config object, set only copy.memory_limit=None, preserve original value and restore original identity",
+          "unsupported_guard": "actual Mac guard still emits Memory limit is NOT enforced when explicitly exercised"
+        },
+        "scope_limits": [
+          "Automatic convergence diagnostics only; no evaluator security claim",
+          "Public descriptions/expression evaluation/callback results retained",
+          "Fixture config affects only separate code memory guard; runtime cycle safety limits source unchanged",
+          "Not whole promotion evidence"
+        ],
+        "evidence_prefix": "/tmp/csq14-convergence-independent-"
+      },
+      "review": "two scoped independent rounds clean; final whole-promotion validation pending"
+    },
+    {
+      "repair": "kaizen_provider_diagnostic_privacy",
+      "commit": "4d2a1dbbc9d5871646fa6cb6370f25daf704b699",
+      "manifest": {
+        "root": "/Users/esperie/repos/kailash/build/kailash-py",
+        "base": "e2aeb3fd33aa394e10391e3c1f206156745f9411",
+        "patch_sha256": "92be5fe1d4868d0cbbc439642d64be3f026b2e3af022a4f373cec6549c23a7c6",
+        "files": {
+          "packages/kailash-kaizen/src/kaizen/nodes/base.py": "8158364ee7098cd0f4487bcd685d16905d29a9d70a12151804b5aee85a5b58a4",
+          "packages/kailash-kaizen/src/kaizen/nodes/auth/directory_integration.py": "8f24324cc005599609dad7b391daf3890c5b293b69ca4b56f413b724592edbef",
+          "packages/kailash-kaizen/tests/regression/test_auth_node_log_injection.py": "6e97111bba73108dddb96aa45dc97cfdb474cbe12d1c9c0ddcc61e8e8ecc7242",
+          "packages/kailash-kaizen/tests/regression/test_issue_1970_provider_error_sanitize_sweep.py": "3d8b0247caf0f59577ee3bb8b44490c998e326ac7a496aaa4e733453f48a7e65",
+          "packages/kailash-kaizen/src/kaizen/nodes/auth/sso.py": "cd8ea4e4c81383d60a4fbb4e20b5c2ec81f61f0ed1d38dc06b505e7bc1860487"
+        },
+        "tests": {
+          "strict_passed": 67,
+          "python_warnings": 0,
+          "intentional_warn_error_records": 29,
+          "log": "/tmp/csq14-kaizen-parent-final2-tests.log",
+          "original_named_tests": 30,
+          "original_assert_and_check_calls": 58,
+          "retained_assert_and_check_calls": 51,
+          "changed_check_rows": [
+            {
+              "file": "packages/kailash-kaizen/tests/regression/test_auth_node_log_injection.py",
+              "test": "test_directory_search_query_cannot_forge_a_record",
+              "removed": [
+                "assert 'find developers' in message",
+                "assert 'users=True' in message"
+              ],
+              "added": [
+                "assert message == 'AI search analysis completed'",
+                "assert intent == {'search_users': True, 'search_groups': False, 'search_attributes': ['cn']}",
+                "assert record.search_users is True and record.search_groups is False",
+                "assert record.attribute_count == 1",
+                "assert 'find developers' + FORGED in node.llm_agent.calls[0]['messages'][0]['content']",
+                "assert 'find developers' not in repr(vars(record))"
+              ]
+            },
+            {
+              "file": "packages/kailash-kaizen/tests/regression/test_auth_node_log_injection.py",
+              "test": "test_directory_search_query_cannot_forge_on_the_failure_path",
+              "removed": [
+                "assert 'find developers' in message"
+              ],
+              "added": [
+                "assert message == 'AI search analysis failed, falling back to default'",
+                "assert intent == {'search_users': True, 'search_groups': False, 'search_attributes': ['cn', 'mail', 'uid'], 'filters': {}, 'reasoning': 'Using default search configuration due to AI failure'}",
+                "assert 'find developers' not in repr(vars(_records(caplog, DIR_LOGGER)[0]))"
+              ]
+            },
+            {
+              "file": "packages/kailash-kaizen/tests/regression/test_auth_node_log_injection.py",
+              "test": "test_prompt_cannot_forge_a_record",
+              "removed": [
+                "assert 'summarize this' in message"
+              ],
+              "added": [
+                "assert message == 'Prompt received'",
+                "assert 'summarize this' not in repr(vars(prompt_records[0]))"
+              ]
+            },
+            {
+              "file": "packages/kailash-kaizen/tests/regression/test_auth_node_log_injection.py",
+              "test": "test_prompt_bound_is_retained_alongside_the_flatten",
+              "removed": [
+                "assert message.endswith('...')"
+              ],
+              "added": [
+                "assert message == 'Prompt received'",
+                "assert 'A' * 100 not in repr(vars(prompt_records[0]))"
+              ]
+            },
+            {
+              "file": "packages/kailash-kaizen/tests/regression/test_issue_1970_provider_error_sanitize_sweep.py",
+              "test": "test_execute_error_log_is_sanitized",
+              "removed": [
+                "assert_scrubbed(records, raw_secret=FAKE_OPENAI_KEY, label='KaizenNode.execute -> ERROR log record')"
+              ],
+              "added": [
+                "assert len(records) == 1",
+                "assert record.getMessage() == 'Node execution failed'",
+                "assert record.error_type == 'RuntimeError'",
+                "assert record.error_frames",
+                "assert record.exc_info is None",
+                "assert FAKE_OPENAI_KEY not in repr(vars(record))",
+                "assert RAW_PROVIDER_ERROR not in repr(vars(record))"
+              ]
+            },
+            {
+              "file": "packages/kailash-kaizen/tests/regression/test_issue_1970_provider_error_sanitize_sweep.py",
+              "test": "test_base_kaizen_node_run_error_log_is_sanitized",
+              "removed": [
+                "assert_scrubbed(records, raw_secret=FAKE_OPENAI_KEY, label='KaizenNode.run -> ERROR log record')"
+              ],
+              "added": [
+                "assert len(records) == 1",
+                "assert record.getMessage() == 'KaizenNode execution failed'",
+                "assert record.error_type == 'RuntimeError'",
+                "assert record.error_frames",
+                "assert record.exc_info is None",
+                "assert FAKE_OPENAI_KEY not in repr(vars(record))",
+                "assert RAW_PROVIDER_ERROR not in repr(vars(record))"
+              ]
+            }
+          ],
+          "selector_only_semantic_rows": [
+            "test_prompt_carriage_return_cannot_rewrite_the_line",
+            "test_generated_response_cannot_forge_a_record"
+          ]
+        },
+        "nonlogging_parity": "/tmp/csq14-kaizen-diagnostics-parity.log",
+        "scope": "13 automatic log sites across base, directory and SSO; provider/model config metadata preserved; role list/string results unchanged while event carries role_count only for actual list; SSO errors safe frames. No inherited base provider execution changes.",
+        "invariants": [
+          "No automatic prompt/query/response/error body in records/stream",
+          "fixed diagnostic events retained",
+          "safe bounded error type/frames",
+          "provider calls and prompt unchanged",
+          "public results/errors/identity unchanged",
+          "all existing fallback bodies unchanged"
+        ],
+        "format_checks": [
+          "black",
+          "isort",
+          "ruff",
+          "git diff --check"
+        ],
+        "controls": {
+          "old_base": {
+            "hits": 21,
+            "failures": 10
+          },
+          "old_directory": {
+            "hits": 18,
+            "failures": 13
+          },
+          "extra_only_private_payload": {
+            "hits": 15,
+            "failures": 12
+          },
+          "silenced_events": {
+            "hits": 49,
+            "failures": 25
+          },
+          "changed_business_return": "rejected by whole-module AST comparison"
+        },
+        "supersedes": "0fc79053f7d02bd43f0f61733eafa3ca2a3847dd2bdb5f2b68e7144231074b2c",
+        "role_revision": {
+          "new_parameterized_cases": 6,
+          "helper_reconciliation": "_assert_email_independent_role_event replaces raw roles message,args with fixed event,empty args and only role_count extra; all five principals and result equality retained. Existing public list/string role shapes preserved.",
+          "probe": "/tmp/csq14-kaizen-correctness-sso-probe2.log",
+          "nonlogging_ast": "all3modules exact with business return mutation rejected"
+        }
+      },
+      "independent_receipt": {
+        "subject": "92be5fe1d4868d0cbbc439642d64be3f026b2e3af022a4f373cec6549c23a7c6",
+        "head": "3b431811578d9bae3d073bb80f61c3393d6696b7",
+        "files": {
+          "packages/kailash-kaizen/src/kaizen/nodes/base.py": "8158364ee7098cd0f4487bcd685d16905d29a9d70a12151804b5aee85a5b58a4",
+          "packages/kailash-kaizen/src/kaizen/nodes/auth/directory_integration.py": "8f24324cc005599609dad7b391daf3890c5b293b69ca4b56f413b724592edbef",
+          "packages/kailash-kaizen/tests/regression/test_auth_node_log_injection.py": "6e97111bba73108dddb96aa45dc97cfdb474cbe12d1c9c0ddcc61e8e8ecc7242",
+          "packages/kailash-kaizen/tests/regression/test_issue_1970_provider_error_sanitize_sweep.py": "3d8b0247caf0f59577ee3bb8b44490c998e326ac7a496aaa4e733453f48a7e65",
+          "packages/kailash-kaizen/src/kaizen/nodes/auth/sso.py": "cd8ea4e4c81383d60a4fbb4e20b5c2ec81f61f0ed1d38dc06b505e7bc1860487"
+        },
+        "round1": {
+          "verdict": "CLEAN scoped correctness",
+          "ran": "67 strict tests,0Pythonwarnings,29explicit negative-path diagnostics; whole3module nonloggingASTidentical and changed-return controls rejected;17absolute logger sites examined",
+          "evidence": [
+            "/tmp/csq14-kaizen-correctness-final2-tests.log",
+            "/tmp/csq14-kaizen-correctness-final2-ast.log",
+            "/tmp/csq14-kaizen-correctness-assertions.json"
+          ]
+        },
+        "round2": {
+          "verdict": "CLEAN scoped adversarial/correctness",
+          "ran": "Actual directory role and4SSO positive/failure cases no private rawrecord/stream; actualconstructed Kaizen subclass3providercalls preserve args/results/original exceptionidentity;10records3error events privatefree. Hiddenextra andsilencedchangedsite controls31hits23failures each;rawexceptionhelper3hits1precise rawrecordfailure. Oldleakprobes previouslyprivateTrue nowFalse.",
+          "evidence": [
+            "/tmp/csq14-kaizen-correctness-final2-sso.log",
+            "/tmp/csq14-kaizen-correctness-final2-dir.log",
+            "/tmp/csq14-kaizen-correctness-final2-public.log",
+            "/tmp/csq14-kaizen-correctness-final2-extra-all.log",
+            "/tmp/csq14-kaizen-correctness-final2-silence-all.log",
+            "/tmp/csq14-kaizen-correctness-final2-public-control.log"
+          ]
+        },
+        "exclusions": [
+          "No liveLLM/networkclaim: Tier1 controlledproviderdependencies.",
+          "Declaredmodel/providerconfigurationidentifiers remainmetadata.",
+          "Public return/error bodies intentionallyunchanged; inheritedcannedbaseexecution userdecision separate.",
+          "No wholepromotionsecurity/convergence claim."
+        ],
+        "source_unchanged_after_checks": true
+      },
+      "review": "two scoped independent rounds clean; final whole-promotion validation pending"
+    },
+    {
+      "repair": "cycle_attempt_controls_policy",
+      "commit": "1ea7f5dd70cdd3a18f5d31744591481f480d6f1c",
+      "conservative_added_production_line_ceiling": 294,
+      "invariants": 10,
+      "validation": "cycle_abc_final_validation below; two independent scoped correctness and adversarial clean rounds, not whole-promotion approval"
+    },
+    {
+      "repair": "cycle_iteration_checkpoint_replay",
+      "commit": "ef2f89ccef988ba0a2276dcf87712a1557412409",
+      "conservative_added_production_line_ceiling": 131,
+      "invariants": 8,
+      "validation": "cycle_abc_final_validation below; two independent scoped correctness and adversarial clean rounds, not whole-promotion approval"
+    },
+    {
+      "repair": "persistent_loop_admission_and_trust_before_replay",
+      "commit": "ea4f09514b2aa6b6287fddaad3a961578b2a793c",
+      "conservative_added_production_line_ceiling": 100,
+      "invariants": 5,
+      "validation": "cycle_abc_final_validation below; two independent scoped correctness and adversarial clean rounds, not whole-promotion approval"
+    },
+    {
+      "repair": "validated DNS connection binding and coherent checkout dependency resolution",
+      "commit": "b05f02798da5c43a126e51ff371d3eaf3cff7dd9",
+      "files": {
+        "packages/kailash-kaizen/pyproject.toml": "9ab78629830755be89bbcf1ffd341c70be331ffb1d5ecf96abbfbf82bc7b4bfa",
+        "packages/kailash-kaizen/src/kaizen/llm/http_client.py": "2da1e1fe1e1d153dc2e1be78575c0a2b8509c5ed69bcab54f2d61bebc7e83a6d",
+        "packages/kailash-kaizen/src/kaizen/llm/url_safety.py": "37e0b892070f2494cab7fb3aeabd99a47949343683c5419c3663d30b5942ec99",
+        "packages/kailash-kaizen/tests/integration/llm/test_llmhttpclient_wiring.py": "b8729472ac8ef2fbcf4f1834df3fbadaf12fcd48b191648dff0f9cfab51185c3",
+        "packages/kailash-kaizen/tests/unit/llm/test_wire_timeout_reaches_transport.py": "c3f46620b7eddae998016b1d88ee7eb10210ce668f2c971afec9825b9a2fcda9",
+        "packages/kailash-nexus/pyproject.toml": "c0779556c84e9da582270f412bac662bd9e6206e429ece2c1e31ff30b6b345ff",
+        "packages/kailash-nexus/src/nexus/http_client.py": "867cdc12f9d6182d6ef2a5e21c738f9b36b7ff49be128428ff1bec7ca77a9d16",
+        "pyproject.toml": "1b2515db758705ddb871d788ea96a7e7558e21d222d8f07b31cdb56130cace43",
+        "specs/kaizen-providers-provider-system.md": "7cada0e51af006434bd14323d97918152eab69e11250f6f5699cefc51b2ab680",
+        "specs/nexus-services.md": "7fd548cb32a0915c169385b975d5968776eb1144d4c8258a39164e1a964f002a",
+        "src/kailash/utils/http_transport.py": "90248812a0fd563f0140b2add2f2b14a6cadfa5c2114fc1f0386fa29f43fa1b9",
+        "src/kailash/utils/network_guard.py": "87d700e283fc96399790334a4151bb92b98c4a9e2ec5d6a208dad5c164aacda5",
+        "tests/regression/test_http_dns_connection_binding.py": "d95143ef43a2fa505886fe9ef6231a03c1aebd007eb42afa8f4bbcf4ced365f1",
+        "uv.lock": "8f44979174cf84dcfd754979249c1140a5c0b8da15e9340532f8848a01523bb7",
+        "packages/kailash-kaizen/uv.lock": "041c569f859799f0edd69605ba7688deb4c4a8006c71dc9f46fb803833fd707c"
+      },
+      "review": "Independent correctness and security each two scoped clean rounds; fixture isolation follow-up remains open",
+      "evidence": "csq14-http-repair-receipt.json"
+    }
+  ],
+  "retry_status": "Committed467bda018; independent correctness and security each two clean scoped rounds. Full union remains open.",
+  "pools_decision": "User explicitly chose Record separately; finish promotion (Recommended). See csq14-dataflow-pools-design-task.md.",
+  "controls": "Reached opposite results recorded in /tmp/csq14-parent-graph-control-*.log, parent-diagnostic-control-*.log, parent-fixtures-control-*.log, migration-security-{indegree,adjacent,round2}.log and stream-fixture-control.log. No failed control run is counted as positive suite pass.",
+  "final_hook_obligation": "Interim SKIP=pytest-check documented in each commit. Run all configured all-files hooks including pytest-check on final clean candidate before push.",
+  "drained_completed_sources": [
+    {
+      "worktree": "csq14-final-diagnostic-sinks",
+      "backup": "/tmp/csq14-drained-csq14-final-diagnostic-sinks",
+      "parity_commit": "171079f03"
+    },
+    {
+      "worktree": "csq14-sqlite-address-parity",
+      "backup": "/tmp/csq14-drained-csq14-sqlite-address-parity",
+      "parity_commit": "c7078698f"
+    },
+    {
+      "worktree": "csq14-sqlite-schema-classification",
+      "backup": "/tmp/csq14-drained-csq14-sqlite-schema-classification",
+      "parity_commit": "9140d081d"
+    },
+    {
+      "worktree": "csq14-retry-policy-ownership",
+      "backup": "/tmp/csq14-drained-csq14-retry-policy-ownership",
+      "parity_commit": "467bda018"
+    },
+    {
+      "worktree": "csq14-cycle-dag-dispatch",
+      "backup": "/tmp/csq14-final-overlay-backup-csq14-cycle-dag-dispatch",
+      "parity_commit": "1dcc5f486002e113fb5f37b21f036b40b28f9105"
+    },
+    {
+      "worktree": "csq14-final-gate-fixtures",
+      "backup": "/tmp/csq14-final-overlay-backup-csq14-final-gate-fixtures",
+      "parity_commit": "1dcc5f486002e113fb5f37b21f036b40b28f9105"
+    },
+    {
+      "worktree": "csq14-final-warning-fixtures",
+      "parity_commit": "95a25a506",
+      "backup": "/tmp/csq14-final-overlay-backup-csq14-final-warning-fixtures"
+    },
+    {
+      "worktree": "csq14-dataflow-engine-types",
+      "parity_commit": "7814db7a1",
+      "backup": "/tmp/csq14-final-overlay-backup-csq14-dataflow-engine-types"
+    },
+    {
+      "worktree": "csq14-nexus-auth-diagnostics",
+      "parity_commit": "3b4318115",
+      "backup": "/tmp/csq14-final-overlay-backup-csq14-nexus-auth-diagnostics"
+    },
+    {
+      "worktree": "csq14-cycle-runtime-contract",
+      "parity_commit": "ea4f09514b2aa6b6287fddaad3a961578b2a793c",
+      "backup": "/tmp/csq14-final-overlay-backup-csq14-cycle-runtime-contract-cycle-final6"
+    },
+    {
+      "worktree": "csq14-convergence-diagnostics",
+      "parity_commit": "ea4f09514b2aa6b6287fddaad3a961578b2a793c",
+      "backup": "/tmp/csq14-final-overlay-backup-csq14-convergence-diagnostics-cycle-final6"
+    }
+  ],
+  "cycle_security_evidence": {
+    "tests": {
+      "path": "/tmp/csq14-cycle-security-final3-positive.log",
+      "sha256": "d2dbc403e19c5c2293a33f51a06c6dc9f5d05896bf8edcbf96582d325d1f7317",
+      "summary": "28 passed in 1.08s"
+    },
+    "rounds": 2,
+    "controls": "old dispatch14hits8fails; raw helper18hits4fails; old keys5hits1fail; old convergence3hits1fail",
+    "limits": "actual DAG/cycle execution and automatic diagnostics; declared graph IDs and public result/error/task payload retained"
+  },
+  "cycle_fixture_independent_receipt": {
+    "verdict": "two scoped correctness rounds CLEAN",
+    "root": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-final3-correctness",
+    "head": "1f3ce4b44da8114a541161141a681e41b708f266",
+    "fixture_patch_sha": "5e7bb7f58b74a01ba762749d177fae5b83416104f0ee3329ae00fb6985e1adfd",
+    "source_hashes": {
+      "tests/tier2_integration/workflows/test_unit_cyclic_runner_comprehensive.py": "11e5129e22087ef593762d756805a258f5d30f9d4d67ad011af319cfc4d2c0fb",
+      "src/kailash/workflow/cyclic_runner.py": "e95c1efb95b9175a221dd5c6eb5d079d4d88b5b362c28ddb431dc20e6843457e"
+    },
+    "round1": {
+      "strict_passed": 81,
+      "python_warnings": [],
+      "warn_plus": 4,
+      "warning_scope": "Four intentional negative workflow/node error test diagnostics; all records inspected",
+      "ast": "43 named original tests;95 old checks;91 identical;4 replacements across2 tests;15 node execution checks and full bodies preserved;only additional method change setup;dropped-assertion opposite rejected"
+    },
+    "round2": {
+      "controls": {
+        "missing_mock_protocol": {
+          "hits": 8,
+          "failures": 8,
+          "failure": "TypeError: 'Mock' object is not iterable"
+        },
+        "wrong_actual_connection_input": {
+          "hits": 1,
+          "failures": 1,
+          "failure": "wrong-bound-input != dag_success"
+        },
+        "private_raw_field_same_summary_counts": {
+          "hits": 1,
+          "failures": 1,
+          "failure": "raw-record private absence assertion; both summary count events unchanged"
+        }
+      },
+      "source_hashes_unchanged": true
+    },
+    "artifacts": [
+      "/tmp/csq14-cyclic-fixture-correctness-tests.log",
+      "/tmp/csq14-cyclic-fixture-correctness-warnings.json",
+      "/tmp/csq14-cyclic-fixture-correctness-ast.log",
+      "/tmp/csq14-cyclic-fixture-correctness-control-mapping.log",
+      "/tmp/csq14-cyclic-fixture-correctness-control-protocol.log",
+      "/tmp/csq14-cyclic-fixture-correctness-control-hidden_summary.log"
+    ],
+    "limitations": "Fixture correction only against exact frozen e95 cycle producer; not whole-union or independent security convergence."
+  },
+  "combined_cycle_warnings": {
+    "python": [],
+    "intentional_records": 23,
+    "inventory_sha256": "960ba9d3dd304ed4a7e36d07e95ef5f125439998e1c370f8e413a5574d22b927",
+    "scope": "19 deliberate failure/observer records in new tests and4 existing negative workflow records"
+  },
+  "cycle_abc_final_validation": {
+    "manifest": {
+      "head": "0a01bfe29503c30cec484d4fc374390afc67cc90",
+      "files": {
+        "src/kailash/runtime/async_local.py": "6a4123919d362ce0c093d7b1aa2cdc6d689ee87b0ffdf9894f7907e392c35652",
+        "src/kailash/runtime/durable.py": "e0ae4f8bc471ac600de0ffe730bd1e5a170937091ee56eadedf1727b1c0c481e",
+        "src/kailash/runtime/execution_tracker.py": "5a5f521394a1a8c53b2f75a34464dcbf8dd49fc2d9fb2aba851bfe9ccf344342",
+        "src/kailash/runtime/local.py": "90c2229776c49b35d5588e4c6dec609776fe427d2cf260741ec011bede05dfc2",
+        "src/kailash/runtime/mixins/cycle_execution.py": "343d92a898ded758afb60aef5886dc246b6cdf36e068505958a766fcb26f96e2",
+        "src/kailash/runtime/parallel_cyclic.py": "800d7bfee23291a1d247a78213a96b216e1dcf58dcca4887239de342a22059df",
+        "src/kailash/workflow/cyclic_runner.py": "d6f593e6070de9f54acb69ab8706b516323865e4216ff8cc564778873e9f052a",
+        "src/kailash/workflow/safety.py": "6d39a4c904ac27dc8000ccc773eec68b508936350ba0979c40ae1af1cf65f0fe",
+        "tests/regression/test_cycle_checkpoint_publication.py": "162d16f3629b16770f8b08320aa72d6fe3f02de50b3274ad7fc60703765c5ec5",
+        "tests/regression/test_cycle_runtime_contract.py": "6a6041e0709af9c337753bcea0bdb1d067d7e78f9d68a3e82b067815a1a94a5a",
+        "tests/regression/test_runtime_persistent_loop_admission.py": "906a50af49dd76628fd797416952d269f85c00eac13d6c31820f775a80179095"
+      },
+      "artifacts": {
+        "abc-final6": "9c6976b9f7e80ace0477fce7b74eddb17231fb12a5094efdc10a9b70c899f680",
+        "abc-final5-to-final6": "a8b924edccf36fff0a1d036216c0b6f60f58c79979628c040df9528c268578ef"
+      },
+      "tests": "475 strict passed, Python0; final6 tests2 log only; initial broad replacement assertion failed without editing source, its old-source run is not final6 evidence",
+      "new_cases": 91,
+      "warning_records": 378,
+      "warning_scope": "21 A intentional control/safety records;6 C deliberate error/denial;0 B;remaining333 compatibility negative records including known DurableRequest record separately repaired by root5ec8e125c",
+      "controls": {
+        "old_policy": [
+          5,
+          4
+        ],
+        "missing_consume": [
+          4,
+          1
+        ],
+        "missing_restore": [
+          1,
+          1
+        ],
+        "missing_workflow_trust": [
+          6,
+          6
+        ],
+        "native_old_order": [
+          8,
+          6
+        ],
+        "preparation_boundary": [
+          3,
+          3
+        ],
+        "old_admission": [
+          10,
+          5
+        ],
+        "native_late_policy_capture": [
+          8,
+          4
+        ],
+        "disabled_deadline": [
+          3,
+          3
+        ],
+        "pre_dispatch_deadline": [
+          3,
+          0
+        ]
+      },
+      "boundaries": "A revised policy, B unchanged semantic delta, C separate canonical synchronous-loop admission and once-per-attempt workflow trust verification. No global borrowed field mutation. Standalone executor API remains standalone. No new claim about arbitrary safety subclass mutable fields.",
+      "warnings_scope": "371 deliberate negative-path records, old baseline DurableRequest diagnostic root separately fixed; complete records in final4-warnings.json"
+    },
+    "correctness": {
+      "verdict": "TWO_SCOPED_CORRECTNESS_ROUNDS_CLEAN",
+      "review_root": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-final3-correctness",
+      "review_head": "3b431811578d9bae3d073bb80f61c3393d6696b7",
+      "final_manifest": "/tmp/csq14-cycle-abc-final6-manifest.json",
+      "final_full_patch_sha256": "9c6976b9f7e80ace0477fce7b74eddb17231fb12a5094efdc10a9b70c899f680",
+      "files": {
+        "src/kailash/runtime/async_local.py": "6a4123919d362ce0c093d7b1aa2cdc6d689ee87b0ffdf9894f7907e392c35652",
+        "src/kailash/runtime/durable.py": "e0ae4f8bc471ac600de0ffe730bd1e5a170937091ee56eadedf1727b1c0c481e",
+        "src/kailash/runtime/execution_tracker.py": "5a5f521394a1a8c53b2f75a34464dcbf8dd49fc2d9fb2aba851bfe9ccf344342",
+        "src/kailash/runtime/local.py": "90c2229776c49b35d5588e4c6dec609776fe427d2cf260741ec011bede05dfc2",
+        "src/kailash/runtime/mixins/cycle_execution.py": "343d92a898ded758afb60aef5886dc246b6cdf36e068505958a766fcb26f96e2",
+        "src/kailash/runtime/parallel_cyclic.py": "800d7bfee23291a1d247a78213a96b216e1dcf58dcca4887239de342a22059df",
+        "src/kailash/workflow/cyclic_runner.py": "d6f593e6070de9f54acb69ab8706b516323865e4216ff8cc564778873e9f052a",
+        "src/kailash/workflow/safety.py": "6d39a4c904ac27dc8000ccc773eec68b508936350ba0979c40ae1af1cf65f0fe",
+        "tests/regression/test_cycle_checkpoint_publication.py": "162d16f3629b16770f8b08320aa72d6fe3f02de50b3274ad7fc60703765c5ec5",
+        "tests/regression/test_cycle_runtime_contract.py": "6a6041e0709af9c337753bcea0bdb1d067d7e78f9d68a3e82b067815a1a94a5a",
+        "tests/regression/test_runtime_persistent_loop_admission.py": "906a50af49dd76628fd797416952d269f85c00eac13d6c31820f775a80179095"
+      },
+      "rounds": [
+        {
+          "round": 1,
+          "production_snapshot": "FINAL5 byte-identical to FINAL6",
+          "passed": 318,
+          "python_warnings": [],
+          "runtime_records": 101,
+          "warning_by_test_file": {
+            "tests/regression/test_cycle_runtime_contract.py": 28,
+            "tests/regression/test_runtime_persistent_loop_admission.py": 11,
+            "tests/unit/runtime/test_execution_tracker.py": 2,
+            "tests/unit/runtime/test_durable_helpers.py": 5,
+            "tests/regression/test_conditional_checkpoint_publication.py": 28,
+            "tests/regression/test_cyclic_executor_acyclic_dispatch.py": 19,
+            "tests/tier2_integration/workflows/test_unit_cyclic_runner_comprehensive.py": 2,
+            "tests/regression/test_runtime_control_contract.py": 6
+          },
+          "log": "/tmp/csq14-cycle-correctness9-round1.log"
+        },
+        {
+          "round": 2,
+          "production_snapshot": "FINAL5 byte-identical to FINAL6",
+          "passed": 218,
+          "python_warnings": [],
+          "runtime_records": 47,
+          "warning_by_test_file": {
+            "tests/regression/test_cycle_runtime_contract.py": 28,
+            "tests/regression/test_runtime_persistent_loop_admission.py": 11,
+            "tests/tier2_integration/runtime/mixins/test_cycle_execution_mixin.py": 2,
+            "tests/regression/test_runtime_control_contract.py": 6
+          },
+          "log": "/tmp/csq14-cycle-correctness9-round2.log"
+        }
+      ],
+      "final6_fixture_delta": {
+        "production_byte_identical": true,
+        "focused_passed": 11,
+        "focused_deselected": 44,
+        "python_warnings": 0,
+        "intentional_runtime_records": 8,
+        "forced_pre_dispatch_cases_passed": 3,
+        "forced_rows": [
+          {
+            "calls": 0,
+            "closed": false
+          },
+          {
+            "calls": 0,
+            "closed": false
+          },
+          {
+            "calls": 0,
+            "closed": false
+          }
+        ],
+        "disabled_timer_control": {
+          "hits": 3,
+          "assertion_failures": 3
+        },
+        "semantic_reconciliation": "One named test: two assertions replaced by four exact assertions. SoftTimeLimitExceeded/no consumer retained; admitted zero or one dispatch must correlate exactly with closed state and completion node IDs. Deterministic in-node interruption cases unchanged. No timeout increase."
+      },
+      "reached_opposites": {
+        "late_native_capture": [
+          8,
+          4
+        ],
+        "preparation_wrapper": [
+          3,
+          3
+        ],
+        "native_checkpoint_order_only": [
+          6,
+          6
+        ],
+        "wrapper_policy": [
+          5,
+          4
+        ],
+        "missing_consume": [
+          4,
+          1
+        ],
+        "missing_context_restore": [
+          1,
+          1
+        ],
+        "persistent_loop_admission": [
+          10,
+          5
+        ],
+        "missing_workflow_verification": [
+          6,
+          6
+        ],
+        "disabled_deadline": [
+          3,
+          3
+        ]
+      },
+      "independent_public_and_actual_db_probes": [
+        "/tmp/csq14-cycle-correctness9-foreign.log",
+        "/tmp/csq14-cycle-correctness9-trust-order.log",
+        "/tmp/csq14-cycle-correctness9-cached-trust.log",
+        "/tmp/csq14-cycle-correctness9-prep-identity.log",
+        "/tmp/csq14-cycle-correctness9-offpath.log"
+      ],
+      "absolute_state_receipt": "/tmp/csq14-cycle-correctness9-absolute-review.json",
+      "closed_findings": [
+        "Parallel policy honoring",
+        "borrowed disabled owner per-attempt mode without mutation",
+        "native trust before checkpoint loading",
+        "original preparation error taxonomy/identity",
+        "native capture before same-task verifier delegation",
+        "valid predispatch deadline fixture timing"
+      ],
+      "scope_limits": [
+        "Scoped ABC correctness and final fixture review, not whole-promotion convergence or independent security verdict",
+        "Actual SQLite tenant A/B/A replay and checkpoint-byte redaction tested; no PostgreSQL/MySQL claim",
+        "Standalone executor remains standalone, no arbitrary safety subclass state isolation guarantee",
+        "44 focused deselections are explicitly selection omissions, not counted as passing; broad selections cover their production snapshot",
+        "Nexus HttpClient DNS rebinding is separate confirmed promotion finding, not waived by this clean ABC receipt"
+      ],
+      "source_changes": "Only authorized immutable overlays; no implementation edits/commits"
+    },
+    "security": {
+      "verdict": "CLEAN in bounded A+B+C runtime correctness/adversarial scope; two consecutive clean scoped rounds",
+      "head": "3b431811578d9bae3d073bb80f61c3393d6696b7",
+      "worktree": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-cycle-final-adversarial",
+      "final_patch_sha256": "9c6976b9f7e80ace0477fce7b74eddb17231fb12a5094efdc10a9b70c899f680",
+      "files": {
+        "src/kailash/runtime/async_local.py": "6a4123919d362ce0c093d7b1aa2cdc6d689ee87b0ffdf9894f7907e392c35652",
+        "src/kailash/runtime/durable.py": "e0ae4f8bc471ac600de0ffe730bd1e5a170937091ee56eadedf1727b1c0c481e",
+        "src/kailash/runtime/execution_tracker.py": "5a5f521394a1a8c53b2f75a34464dcbf8dd49fc2d9fb2aba851bfe9ccf344342",
+        "src/kailash/runtime/local.py": "90c2229776c49b35d5588e4c6dec609776fe427d2cf260741ec011bede05dfc2",
+        "src/kailash/runtime/mixins/cycle_execution.py": "343d92a898ded758afb60aef5886dc246b6cdf36e068505958a766fcb26f96e2",
+        "src/kailash/runtime/parallel_cyclic.py": "800d7bfee23291a1d247a78213a96b216e1dcf58dcca4887239de342a22059df",
+        "src/kailash/workflow/cyclic_runner.py": "d6f593e6070de9f54acb69ab8706b516323865e4216ff8cc564778873e9f052a",
+        "src/kailash/workflow/safety.py": "6d39a4c904ac27dc8000ccc773eec68b508936350ba0979c40ae1af1cf65f0fe",
+        "tests/regression/test_cycle_checkpoint_publication.py": "162d16f3629b16770f8b08320aa72d6fe3f02de50b3274ad7fc60703765c5ec5",
+        "tests/regression/test_cycle_runtime_contract.py": "6a6041e0709af9c337753bcea0bdb1d067d7e78f9d68a3e82b067815a1a94a5a",
+        "tests/regression/test_runtime_persistent_loop_admission.py": "906a50af49dd76628fd797416952d269f85c00eac13d6c31820f775a80179095"
+      },
+      "production_equal_final5": true,
+      "round1": {
+        "independent_strict_processes": 14,
+        "native_cached_trust_sqlite_cases": 16,
+        "native_policy_prelude_cases": 3,
+        "local_trust_cases": 12,
+        "wrapper_policy_modes": 7,
+        "contended_trust_modes": 3,
+        "retained_real_sqlite_pool_ownership": true
+      },
+      "round2": {
+        "pytest_cases": 194,
+        "python_warnings": 0,
+        "intentional_warn_error_records": 45,
+        "evidence": "/tmp/csq14-cycle-final5-independent-suite-receipt.json"
+      },
+      "additional_independent_checks": {
+        "A": 10,
+        "B_real_sqlite_tenant_redaction_with_opposite": 4,
+        "replay_content_detection": 4,
+        "cancel_return_publication": true,
+        "cross_iteration_cancel_summary": true
+      },
+      "final6_fixture_only": {
+        "normal_cases_passed": 3,
+        "forced_pre_dispatch_hits": 3,
+        "forced_pre_dispatch_passed": 3,
+        "forced_pre_dispatch_state": "calls=0 closed=False events=[]",
+        "disabled_timer_hits": 3,
+        "disabled_timer_expected_failures": 3,
+        "production_hashes_unchanged": true
+      },
+      "controls": {
+        "old_native_checkpoint_order": {
+          "cases": 16,
+          "failures": 12,
+          "restored_denied_load_was_reached": true
+        },
+        "old_native_policy_same_foreign": {
+          "none_outer": 1,
+          "foreign_outer": 2,
+          "same_outer": 2,
+          "same_inner": 1
+        },
+        "checkpoint_prep_guard_removed": {
+          "hits": 2,
+          "failures": 2
+        },
+        "inherited_reached_controls": [
+          "persistent admission removed",
+          "canonical trust gate disabled",
+          "consume-once cleared state removed",
+          "runtime-address selection removed",
+          "unscoped bridge pool cleanup",
+          "checkpoint redaction recursion removed",
+          "cancellation registration race",
+          "post-result publication stop/yield restored",
+          "cross-iteration summary removed"
+        ]
+      },
+      "absolute_inventory": "/tmp/csq14-cycle-final5-absolute-inventory.json",
+      "scope_exclusions": [
+        "arbitrary private runtime method overrides",
+        "remote verifier backend/signature or cryptographic verification",
+        "stronger atomic checkpoint-on-native-cancel guarantees than canonical awaited save boundary",
+        "full promotion union and gates"
+      ],
+      "production_findings_open": [],
+      "source_edits": "only root-authorized frozen patches applied; no authored implementation, commits or pushes"
+    },
+    "author_strict_passed": 475,
+    "author_python_warnings": 0,
+    "author_log": {
+      "path": "/tmp/csq14-cycle-abc-final6-tests2.log",
+      "sha256": "e74a91e4a8b90de6c26b913f7b4978c5c37de4cab7f7c9d90e69a8869b5251c0"
+    },
+    "parent_strict_passed": 194,
+    "parent_scope": "FINAL5 production byte-identical FINAL6; fixture-only FINAL6 checked by both independent reviewers with forced predispatch and disabled-timer controls",
+    "parent_python_warnings": 0,
+    "parent_intentional_negative_logs": 45,
+    "parent_log": {
+      "path": "/tmp/csq14-cycle-parent-final5-tests.log",
+      "sha256": "b502e95e1dbbdd42dcf05fc68f5f7e818c2dfd2fdccfe89eaa7ec02d282f3ada"
+    },
+    "stage_receipt": {
+      "path": "/tmp/csq14-cycle-stage-final6-trio-receipt.json",
+      "sha256": "e9bd23d191cff0dffde77173c282610587163e7059dcafbfa56fd47638aade7c"
+    },
+    "intermediate_formatting": {
+      "file": "tests/regression/test_cycle_runtime_contract.py",
+      "before": "99e4d1045c5c0d882c0363e03adcdfff5673e62dd9f7ed52bb10db31765459b3",
+      "after": "96fd918378cd37b6b5910a34ff19ea349853aa17c44a27ab5c6325bf21b94515",
+      "ast_equal": true,
+      "reason": "Removing C-dependent test for intermediate A left an extra blank line; configured hook requires its removal. Final source unchanged."
+    },
+    "committed_final11_hashes_match": true
+  },
+  "confirmed_dns_connection_finding": {
+    "baseline": "4d2a1dbbc9d5871646fa6cb6370f25daf704b699",
+    "nexus_probe": {
+      "path": "/tmp/csq14-promotion-http-dns-probe.json",
+      "sha256": "0a282e61650e74dfc030b08f09c70de5377c5d73595e717e80f79dc27ab3e224"
+    },
+    "kaizen_probe": {
+      "path": "/tmp/csq14-kaizen-dns-baseline.log",
+      "sha256": "faeedae0fa9306f1cf2bc08faf2a425acf785cce7d0cb8571121727e6aa2d974"
+    },
+    "disposition": "Shared Core pinned transport repair in isolated csq14-nexus-dns-binding; independent correctness/security reviews active. No waiver."
+  },
+  "kaizen_base_execution_decision": {
+    "approved": true,
+    "user_decision": "Record separately; finish promotion (Recommended)",
+    "date": "2026-09-26",
+    "task": "csq14-kaizen-base-execution-design-task.md",
+    "scope": "Bounded Rule2 exception for documented inherited canned execution only"
+  }
+}

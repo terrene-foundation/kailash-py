@@ -724,7 +724,7 @@ class TestLinkedHashChainInsertionDetected:
             chain.add_hash(f"agent-{i}", h)
 
         # Verify initial integrity
-        is_valid, break_idx = chain.verify_integrity()
+        is_valid, break_idx = chain.verify_chain()
         assert is_valid, "Initial chain should be valid"
 
         # Attempt to insert in the middle
@@ -745,7 +745,7 @@ class TestLinkedHashChainInsertionDetected:
 
         # Now verify - should detect break
         # The forged entry's hash won't properly link
-        is_valid, break_idx = chain.verify_integrity()
+        is_valid, break_idx = chain.verify_chain()
 
         # The chain structure is broken
         # Verify using original hashes reveals the break

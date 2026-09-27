@@ -37,28 +37,34 @@ async def test_workflow_api_drives_router_on_startup():
     # gate (#2072). Stated explicitly so the unauthenticated app is a
     # deliberate test condition rather than an inherited default.
     api = WorkflowAPI(builder.build(), require_auth=False)
-    app: FastAPI = api.app
+    runtime = api.runtime
+    try:
+        app: FastAPI = api.app
 
-    fired: list[int] = []
+        fired: list[int] = []
 
-    async def my_startup() -> None:
-        fired.append(1)
+        async def my_startup() -> None:
+            fired.append(1)
 
-    async def my_shutdown() -> None:
-        fired.append(-1)
+        async def my_shutdown() -> None:
+            fired.append(-1)
 
-    app.router.add_event_handler("startup", my_startup)
-    app.router.add_event_handler("shutdown", my_shutdown)
+        app.router.add_event_handler("startup", my_startup)
+        app.router.add_event_handler("shutdown", my_shutdown)
 
-    # Drive lifespan via Starlette's public lifespan_context (same as uvicorn)
-    async with app.router.lifespan_context(app):
-        pass
+        # Drive lifespan via Starlette's public lifespan_context (same as uvicorn)
+        async with app.router.lifespan_context(app):
+            pass
 
-    assert fired == [1, -1], (
-        f"WorkflowAPI router-iteration broken: hooks did not fire (got {fired}). "
-        f"Pre-S2 the custom _lifespan replaced Starlette's _DefaultLifespan "
-        f"and silently dropped every router.on_startup/on_shutdown handler."
-    )
+        assert fired == [1, -1], (
+            f"WorkflowAPI router-iteration broken: hooks did not fire (got {fired}). "
+            f"Pre-S2 the custom _lifespan replaced Starlette's _DefaultLifespan "
+            f"and silently dropped every router.on_startup/on_shutdown handler."
+        )
+
+    finally:
+        api.close()
+        assert runtime.ref_count == 0
 
 
 @pytest.mark.regression
@@ -94,18 +100,16 @@ async def test_workflow_api_gateway_drives_router_on_startup():
 
 @pytest.mark.regression
 @pytest.mark.asyncio
-async def test_kailash_api_gateway_drives_router_on_startup():
+async def test_kailash_api_gateway_drives_router_on_startup(monkeypatch):
     """APIGateway (middleware) lifespan iterates router.on_startup."""
-    pytest.importorskip("kailash.middleware.communication.api_gateway")
+    import secrets
 
     from fastapi import FastAPI
 
     from kailash.middleware.communication.api_gateway import APIGateway
 
-    try:
-        gateway = APIGateway()
-    except Exception as e:
-        pytest.skip(f"APIGateway construction requires deps: {e}")
+    monkeypatch.setenv("KAILASH_API_GATEWAY_SECRET", secrets.token_urlsafe(32))
+    gateway = APIGateway()
     app: FastAPI = gateway.app
 
     fired: list[int] = []

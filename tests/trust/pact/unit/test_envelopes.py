@@ -208,7 +208,7 @@ class TestIntersectEnvelopesOperational:
         a = _make_envelope(allowed_actions=[])
         b = _make_envelope(allowed_actions=["read", "write"])
         result = intersect_envelopes(a, b)
-        assert result.operational.allowed_actions == []
+        assert result.operational.allowed_actions == ()
 
     def test_reasoning_required_union(self) -> None:
         a_op = OperationalConstraintConfig(allowed_actions=[], reasoning_required=True)

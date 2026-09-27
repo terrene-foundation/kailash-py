@@ -132,6 +132,17 @@ DataFlow accepts standard database connection URLs:
 | SQLite (memory)    | `sqlite:///:memory:`                              | `sqlite:///:memory:`                             |
 | MongoDB            | `mongodb://user:pass@host:port/dbname`            | `mongodb://localhost:27017/myapp`                |
 
+SQLite file URLs use three slashes for relative paths and four for absolute paths;
+two-slash relative URLs remain accepted. File targets are pinned at DataFlow owner
+creation, so later working-directory changes do not redirect connections or cache
+identity. Native `file:` options retain their meaning; duplicate semantic option
+names, malformed UTF-8 filenames, decoded NUL bytes, literal TAB/CR/LF, and explicit `uri=false` native targets are
+rejected before connection. DataFlow requires native memory databases to be shared
+across connections (named `mode=memory&cache=shared`, or an absolute `vfs=memdb`
+name); private and empty native targets must use managed `:memory:` instead.
+Source: `src/kailash/utils/sqlite_url.py:48-198` and
+`packages/kailash-dataflow/src/dataflow/core/engine.py:606-642`.
+
 **Database type detection** is performed by `ConnectionParser.detect_database_type()` using scheme prefix matching. SQLAlchemy-style driver suffixes (e.g., `+asyncpg`, `+pymysql`) are supported.
 
 **Special characters in passwords** (such as `#`, `$`, `@`, `:`) are automatically URL-encoded via the shared `preencode_password_special_chars` helper before parsing. Credential decoding routes through `decode_userinfo_or_raise` which rejects null bytes after percent-decoding (prevents MySQL auth-bypass via `%00`).
@@ -140,7 +151,12 @@ DataFlow accepts standard database connection URLs:
 
 ### 1.4 Lazy Connection
 
-DataFlow uses lazy connection initialization. The constructor (`__init__`) stores configuration only -- no pool probe, no migration, no database connection. The first database-touching operation triggers `_ensure_connected()`, which:
+DataFlow defers file and network database work until first use. Shared SQLite
+memory databases are the exception: the constructor opens an owned anchor
+connection to keep their contents alive between operations; `close()` /
+`close_async()` releases it. Source:
+`packages/kailash-dataflow/src/dataflow/core/engine.py:903-926`.
+The first database-touching operation triggers `_ensure_connected()`, which:
 
 1. Creates the connection pool
 2. Validates pool configuration and reachability
@@ -161,7 +177,7 @@ DataFlow uses lazy connection initialization. The constructor (`__init__`) store
 | `db.execute_lightweight_query()`                  | YES                             | Lightweight queries (e.g., health probes) trigger connection.                                                                                                        |
 | `db.audit_query()`                                | YES                             | Audit queries require an active connection.                                                                                                                          |
 
-**Design rationale:** Lazy connection means `DataFlow("sqlite:///app.db")` returns instantly with zero I/O. This allows `@db.model` decorators to register models at import time without blocking module loading. Connection is deferred until the application actually needs the database, which also means misconfigured connection URLs fail at first use, not at import time.
+**Design rationale:** Lazy connection means `DataFlow("sqlite:///app.db")` returns instantly with zero I/O. This allows `@db.model` decorators to register models at import time without blocking module loading. Connection failures are reported at first use; invalid SQLite URI components are rejected during owner construction before resources are allocated. Source: `src/kailash/utils/sqlite_url.py:21-106` and `packages/kailash-dataflow/src/dataflow/core/engine.py:606-642`.
 
 **DDL connection lifecycle (issue #714):** `db.create_tables()` / `await db.create_tables_async()` no longer construct one `AsyncSQLDatabaseNode` per CREATE TABLE / index statement. The entire DDL batch runs on a single sync connection acquired via `SyncDDLExecutor.execute_ddl_batch_per_statement` (sync path direct, async path via `asyncio.to_thread`). See §1.6.5 for the connection-reuse contract and the cross-reference to `dataflow.migrations.sync_ddl_executor`.
 
@@ -191,6 +207,8 @@ Origin: GitHub issue #713 (2026-04-30). Pre-#713 DataFlow bound a single runtime
 #### Subsystem-capture pattern
 
 Subsystems (`DataFlowExpress`, `DataFlowExpressSync`, `BulkOperations`, `TransactionManager`, `_DataFlowAuditQueryProxy`, `_DataFlowAuditExportProxy`) MUST hold a back-reference to the DataFlow parent (`self._dataflow = dataflow`) and read `self._dataflow.runtime` lazily on each operation — NOT capture the runtime at subsystem `__init__` time. Captured runtimes do NOT follow setter overrides, do NOT survive a `db.runtime = X` mutation, and miss the per-event-loop cache. Per the lazy-resolution contract, `runtime` is per-access; subsystems that snapshot it ship the same #713 footgun at a different layer.
+
+The model registry captures this runtime once per operation. Its synchronous SQL workflows use the captured `AsyncLocalRuntime` through the public inherited `LocalRuntime.execute` engine under a temporary acquired reference. Acquisition rejects an already closed or cleaned-up runtime and retains its owner until dispatch completes, preserving configuration and trust context without moving native loop-owned resources to the worker loop. DataFlow marks its cached async runtimes externally managed and closes all cached runtimes at shutdown. This is limited to registry-owned synchronous SQL workflows; native async workflows retain their original loop-ownership guard. Sources: `packages/kailash-dataflow/src/dataflow/core/model_registry.py:268-294`, `packages/kailash-dataflow/src/dataflow/core/engine.py:1135-1162`, `packages/kailash-dataflow/src/dataflow/core/engine.py:12277-12303`, `src/kailash/runtime/local.py:2186-2208`.
 
 #### Pickle / deepcopy round-trip
 
@@ -540,6 +558,8 @@ db = DataFlow(
 | `"disabled"`   | No trust checks (default)                             |
 | `"permissive"` | Trust checks run but failures are logged, not blocked |
 | `"enforcing"`  | Trust checks run and failures block the operation     |
+
+Automatic trust diagnostics sanitize model, operation, agent, and denial metadata; backend exception text remains available through public errors but automatic records use safe frame metadata, including when Core verification results are cached. Table-access helpers honor the same mode contract as Express: disabled bypasses verification, permissive allows a denied decision after logging, and enforcing raises `PermissionError`. Source: `packages/kailash-dataflow/src/dataflow/trust/query_wrapper.py:559-701`, `1103-1296`, `1363-1406`.
 
 ### 21.2 Trust Components
 

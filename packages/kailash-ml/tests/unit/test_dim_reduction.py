@@ -6,13 +6,14 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 import pytest
+from sklearn.datasets import make_classification
+
 from kailash_ml.engines.dim_reduction import (
     DimReductionEngine,
     DimReductionResult,
     _detect_elbow,
     _sanitize_float,
 )
-from sklearn.datasets import make_classification
 
 # ---------------------------------------------------------------------------
 # Fixtures

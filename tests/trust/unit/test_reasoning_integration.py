@@ -1128,8 +1128,7 @@ class TestReasoningBackwardCompat:
 # ===========================================================================
 
 try:
-    from hypothesis import given, settings
-    from hypothesis import strategies as st
+    from hypothesis import given, settings, strategies as st
 
     HYPOTHESIS_AVAILABLE = True
 except ImportError:

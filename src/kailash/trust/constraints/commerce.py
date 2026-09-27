@@ -146,9 +146,9 @@ class CommerceConstraint(ConstraintDimension):
         if parsed.get("attribution_required"):
             attribution_chain = context.get("attribution_chain", [])
             if not attribution_chain and beneficiary:
-                logger.info(
-                    f"Attribution required but no chain provided for beneficiary {beneficiary}"
-                )
+                # Keep this benign diagnostic at DEBUG and omit the financial
+                # counterparty identifier, even when verbose logging is enabled.
+                logger.debug("Attribution required but no chain provided")
 
         return ConstraintCheckResult(
             satisfied=True,

@@ -1,0 +1,9 @@
+{
+  "ran": true,
+  "source_commit": "e4a789e73337c4dd8dfd18238f2ad1e44db19881",
+  "approved_rows": 173,
+  "current_rows": 173,
+  "exact_multiset_equal": true,
+  "opposite": "Adding one unapproved warning fails the same Counter comparison",
+  "scope": "Full human-format specification check only; no test, scanner or source-security waiver."
+}

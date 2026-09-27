@@ -25,6 +25,8 @@ import threading
 from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional
 
+from kailash.utils.finalizer import warn_unclosed
+
 logger = logging.getLogger(__name__)
 
 __all__ = ["SqliteEventStoreBackend"]
@@ -336,8 +338,19 @@ class SqliteEventStoreBackend:
             if hasattr(self, "_conn") and self._conn is not None:
                 try:
                     self._conn.close()
-                except Exception:
-                    pass
+                except sqlite3.Error as exc:
+                    # Narrowed from a blanket swallow (issue #2107, Rule 3):
+                    # sqlite3 raises here for an in-flight transaction or an
+                    # already-closed handle. Neither is recoverable at
+                    # shutdown and neither should abort the caller's teardown,
+                    # so we drop the reference regardless — but the failure is
+                    # now diagnosable instead of silent. Unlike __del__, this
+                    # is ordinary code, so logging is safe here.
+                    logger.warning(
+                        "SqliteEventStoreBackend close failed for %s: %s",
+                        self.db_path,
+                        exc,
+                    )
                 self._conn = None
 
         logger.debug("SqliteEventStoreBackend closed: %s", self.db_path)
@@ -363,14 +376,28 @@ class SqliteEventStoreBackend:
         await self.close()
         return False
 
-    def __del__(self) -> None:
-        try:
-            with self._lock:
-                if hasattr(self, "_conn") and self._conn is not None:
-                    self._conn.close()
-                    self._conn = None
-        except Exception:
-            pass
+    def __del__(self, _warn=warn_unclosed) -> None:
+        # Warn and RETURN. This finalizer performs no cleanup, deliberately.
+        #
+        # The previous body took ``self._lock`` — a non-reentrant
+        # ``threading.Lock`` — from inside a finalizer. A finalizer fires at an
+        # arbitrary bytecode boundary on whichever thread happens to drop the
+        # last reference, including a thread already inside one of this class's
+        # own ``with self._lock:`` blocks. Re-acquiring it there deadlocks the
+        # process permanently, and the enclosing swallow-and-continue guard
+        # could not help: a deadlock is not an exception, so nothing is ever
+        # raised for it to catch. See ``rules/patterns.md`` § "Async Resource
+        # Cleanup" and issue #2107.
+        #
+        # Dropping the explicit close does NOT leak the file descriptor:
+        # ``sqlite3.Connection`` closes its database handle from its own
+        # C-level deallocator once ``self._conn`` becomes unreachable, which is
+        # finalizer-safe in a way this Python-level path can never be.
+        if getattr(self, "_conn", None) is not None:
+            _warn(
+                self,
+                "Await close() or use 'async with' to release the SQLite connection.",
+            )
 
 
 # ------------------------------------------------------------------

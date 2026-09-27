@@ -1,0 +1,551 @@
+{
+  "reviewed_at_utc": "2026-09-26T10:26:41.964448+00:00",
+  "review_tree": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-final3-correctness",
+  "review_head": "3b431811578d9bae3d073bb80f61c3393d6696b7",
+  "baseline_head": "a10fb3f1bb5c0faddc14098051d6f9a884e100b9",
+  "baseline_sources": {
+    "/tmp/csq14-preserved-state-pre-final.json": "2e7ad50bd8347da094e142c56fafb17a303bf2c643164339ef5a712d3b0644af",
+    "/tmp/csq14-preserved-archive-refs-pre-final.json": "4f0d97b68b6d286ba0bd23b326d05c5b18beafe0e8676bac749e6ae61d388bc3",
+    "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-final3-correctness/workspaces/issue-1720-llm-consolidation/04-validate/csq13-ref-adjudication.json": "cd944fae61dbebfbef08d8be25760465cdfcf96717dd4bab2e8293e83677c8ef"
+  },
+  "archive_rows": [
+    {
+      "ref": "refs/archive/2026-08-21/audit/w5-a-core-spec-audit",
+      "expected_pre_final_tip": "68cb2cc3d69a98a633534fca559eb5a9d86c359c",
+      "actual_tip": "68cb2cc3d69a98a633534fca559eb5a9d86c359c",
+      "exact_match": true,
+      "older_recorded_tip": "68cb2cc3d69a98a633534fca559eb5a9d86c359c",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/audit/w5-b-dataflow-spec-audit",
+      "expected_pre_final_tip": "a96169277196846b42b1d28efc804fe1f901b9bc",
+      "actual_tip": "a96169277196846b42b1d28efc804fe1f901b9bc",
+      "exact_match": true,
+      "older_recorded_tip": "a96169277196846b42b1d28efc804fe1f901b9bc",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/audit/w5-c-nexus-spec-audit",
+      "expected_pre_final_tip": "16187704f5608944819e18470ab94b31443a72e8",
+      "actual_tip": "16187704f5608944819e18470ab94b31443a72e8",
+      "exact_match": true,
+      "older_recorded_tip": "16187704f5608944819e18470ab94b31443a72e8",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/audit/w5-d-kaizen-spec-audit",
+      "expected_pre_final_tip": "ef83d5df5251cc2d66190248b3a6ea5ee89f0fef",
+      "actual_tip": "ef83d5df5251cc2d66190248b3a6ea5ee89f0fef",
+      "exact_match": true,
+      "older_recorded_tip": "ef83d5df5251cc2d66190248b3a6ea5ee89f0fef",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/audit/w5-e1-ml-core-spec-audit",
+      "expected_pre_final_tip": "4494c2bc1d0d8cedfccbe2e29029f9251aa7ba90",
+      "actual_tip": "4494c2bc1d0d8cedfccbe2e29029f9251aa7ba90",
+      "exact_match": true,
+      "older_recorded_tip": "4494c2bc1d0d8cedfccbe2e29029f9251aa7ba90",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/audit/w5-e2-ml-extras-align-spec-audit",
+      "expected_pre_final_tip": "e20392a7d255b6511a111880a6ff4ba9da8a9a43",
+      "actual_tip": "e20392a7d255b6511a111880a6ff4ba9da8a9a43",
+      "exact_match": true,
+      "older_recorded_tip": "e20392a7d255b6511a111880a6ff4ba9da8a9a43",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/audit/w5-f-trust-pact-sec-spec-audit",
+      "expected_pre_final_tip": "dc24a1cad5c7d92bd882dcff3d7b54507e9a329c",
+      "actual_tip": "dc24a1cad5c7d92bd882dcff3d7b54507e9a329c",
+      "exact_match": true,
+      "older_recorded_tip": "dc24a1cad5c7d92bd882dcff3d7b54507e9a329c",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/debug/issue-1010-phase-a-diagnostics",
+      "expected_pre_final_tip": "2aa62651ba2a9b59d2d1e86687f23f84fd483bda",
+      "actual_tip": "2aa62651ba2a9b59d2d1e86687f23f84fd483bda",
+      "exact_match": true,
+      "older_recorded_tip": "2aa62651ba2a9b59d2d1e86687f23f84fd483bda",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/debug/issue-1010-phase-a-prime-linux",
+      "expected_pre_final_tip": "cface915007d3a8d631671cbfa561cb8708cf47c",
+      "actual_tip": "cface915007d3a8d631671cbfa561cb8708cf47c",
+      "exact_match": true,
+      "older_recorded_tip": "cface915007d3a8d631671cbfa561cb8708cf47c",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/dev",
+      "expected_pre_final_tip": "c6596582bb7c81330bc17be14e6bb5906b0de5a6",
+      "actual_tip": "c6596582bb7c81330bc17be14e6bb5906b0de5a6",
+      "exact_match": true,
+      "older_recorded_tip": null,
+      "provenance": "first_pinned_in_pre_final_baseline",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/docs/mcp-gateway-integration",
+      "expected_pre_final_tip": "f7ac1505b4913b8ee66118df45ecbfe510dfd08a",
+      "actual_tip": "f7ac1505b4913b8ee66118df45ecbfe510dfd08a",
+      "exact_match": true,
+      "older_recorded_tip": null,
+      "provenance": "first_pinned_in_pre_final_baseline",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/docs/notes-cont18-execution",
+      "expected_pre_final_tip": "d1e4d8d63061fa24edaf1e15d9dc68f6f94772e2",
+      "actual_tip": "d1e4d8d63061fa24edaf1e15d9dc68f6f94772e2",
+      "exact_match": true,
+      "older_recorded_tip": null,
+      "provenance": "first_pinned_in_pre_final_baseline",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/docs/update-iterative-llm-agent-v0.9.9",
+      "expected_pre_final_tip": "a3b6f8cc81a67809b9fb8e3bc5494a2cd095b219",
+      "actual_tip": "a3b6f8cc81a67809b9fb8e3bc5494a2cd095b219",
+      "exact_match": true,
+      "older_recorded_tip": null,
+      "provenance": "first_pinned_in_pre_final_baseline",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/docs/update-v0.8.6-documentation",
+      "expected_pre_final_tip": "91187aeb112cba2bf3176594d011dd01f3bf99b7",
+      "actual_tip": "91187aeb112cba2bf3176594d011dd01f3bf99b7",
+      "exact_match": true,
+      "older_recorded_tip": null,
+      "provenance": "first_pinned_in_pre_final_baseline",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/feat/dataflow-dynamic-model-registration",
+      "expected_pre_final_tip": "bc4f229523c8496f532524a5a286a4517948a93f",
+      "actual_tip": "bc4f229523c8496f532524a5a286a4517948a93f",
+      "exact_match": true,
+      "older_recorded_tip": "bc4f229523c8496f532524a5a286a4517948a93f",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/feat/fabric-consumer-adapters",
+      "expected_pre_final_tip": "a9977f9da462fde7e727e8241ccecea98db4a637",
+      "actual_tip": "a9977f9da462fde7e727e8241ccecea98db4a637",
+      "exact_match": true,
+      "older_recorded_tip": "a9977f9da462fde7e727e8241ccecea98db4a637",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/feat/outstanding-issues-consolidation",
+      "expected_pre_final_tip": "bc2f685dbcdcffd184fb1f2ad691c781427ade36",
+      "actual_tip": "bc2f685dbcdcffd184fb1f2ad691c781427ade36",
+      "exact_match": true,
+      "older_recorded_tip": "bc2f685dbcdcffd184fb1f2ad691c781427ade36",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/feat/studio-app-session",
+      "expected_pre_final_tip": "4c3eb694c6dbeef8b09428db67f706466818437c",
+      "actual_tip": "4c3eb694c6dbeef8b09428db67f706466818437c",
+      "exact_match": true,
+      "older_recorded_tip": "4c3eb694c6dbeef8b09428db67f706466818437c",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/feat/w6-010-nexus-package-name-canonical",
+      "expected_pre_final_tip": "9212cbe9378d8823be43fc6fc739c5d25e5bd3d3",
+      "actual_tip": "9212cbe9378d8823be43fc6fc739c5d25e5bd3d3",
+      "exact_match": true,
+      "older_recorded_tip": "9212cbe9378d8823be43fc6fc739c5d25e5bd3d3",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/feat/w6-023-strip-w31-31b-import-error",
+      "expected_pre_final_tip": "82ac634f822a6805b8597804ffc18f93c4f15d98",
+      "actual_tip": "82ac634f822a6805b8597804ffc18f93c4f15d98",
+      "exact_match": true,
+      "older_recorded_tip": "82ac634f822a6805b8597804ffc18f93c4f15d98",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/feature/kaizen-agent-development",
+      "expected_pre_final_tip": "d0c1daa5a38fa31cccd4188c2ef806ffe9b35c4e",
+      "actual_tip": "d0c1daa5a38fa31cccd4188c2ef806ffe9b35c4e",
+      "exact_match": true,
+      "older_recorded_tip": "d0c1daa5a38fa31cccd4188c2ef806ffe9b35c4e",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/feature/kaizen-developer-experience-improvements",
+      "expected_pre_final_tip": "0292389bdd6d7ed6caad60f2e4e86a5039f4bbd0",
+      "actual_tip": "0292389bdd6d7ed6caad60f2e4e86a5039f4bbd0",
+      "exact_match": true,
+      "older_recorded_tip": "0292389bdd6d7ed6caad60f2e4e86a5039f4bbd0",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/2070-logging-hook-redaction-defeat",
+      "expected_pre_final_tip": "cbb64f8fca867b60de412c1454a8a471c0d9bf14",
+      "actual_tip": "cbb64f8fca867b60de412c1454a8a471c0d9bf14",
+      "exact_match": true,
+      "older_recorded_tip": "cbb64f8fca867b60de412c1454a8a471c0d9bf14",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/async-runtime-tier1-tests",
+      "expected_pre_final_tip": "f890f14c49f20864a2d90122e3f6d25ab7e71b55",
+      "actual_tip": "f890f14c49f20864a2d90122e3f6d25ab7e71b55",
+      "exact_match": true,
+      "older_recorded_tip": "f890f14c49f20864a2d90122e3f6d25ab7e71b55",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/bug-report-issues",
+      "expected_pre_final_tip": "f723e0ab05427d765c8aaba07dfb3ac9746f4b98",
+      "actual_tip": "f723e0ab05427d765c8aaba07dfb3ac9746f4b98",
+      "exact_match": true,
+      "older_recorded_tip": "f723e0ab05427d765c8aaba07dfb3ac9746f4b98",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/ci-green-v5",
+      "expected_pre_final_tip": "dcf64b6bc7ed0795d1e888a83e739fa25bc6773f",
+      "actual_tip": "dcf64b6bc7ed0795d1e888a83e739fa25bc6773f",
+      "exact_match": true,
+      "older_recorded_tip": "dcf64b6bc7ed0795d1e888a83e739fa25bc6773f",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/dataflow-connection-parsing-bug",
+      "expected_pre_final_tip": "b31fe462154869bfcf90a146f169ab902abe3530",
+      "actual_tip": "b31fe462154869bfcf90a146f169ab902abe3530",
+      "exact_match": true,
+      "older_recorded_tip": "b31fe462154869bfcf90a146f169ab902abe3530",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/docs-deploy-gtar-missing",
+      "expected_pre_final_tip": "afde98c0481c9a9cedd2e8678253ef7f62cabce8",
+      "actual_tip": "afde98c0481c9a9cedd2e8678253ef7f62cabce8",
+      "exact_match": true,
+      "older_recorded_tip": "afde98c0481c9a9cedd2e8678253ef7f62cabce8",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/github-actions-branch-patterns",
+      "expected_pre_final_tip": "3ebf7eb14c5a9a4bdb78b60574ecbed11acebc59",
+      "actual_tip": "3ebf7eb14c5a9a4bdb78b60574ecbed11acebc59",
+      "exact_match": true,
+      "older_recorded_tip": "3ebf7eb14c5a9a4bdb78b60574ecbed11acebc59",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/iterative-llm-agent-fallback-bug",
+      "expected_pre_final_tip": "b20cdcc1e246c14a787d9f79cd9353cbab37c739",
+      "actual_tip": "b20cdcc1e246c14a787d9f79cd9353cbab37c739",
+      "exact_match": true,
+      "older_recorded_tip": "b20cdcc1e246c14a787d9f79cd9353cbab37c739",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/mcp-openai-pydantic-v2",
+      "expected_pre_final_tip": "a0106d1e719e8e26824f63871f8fa8e5f07f711b",
+      "actual_tip": "a0106d1e719e8e26824f63871f8fa8e5f07f711b",
+      "exact_match": true,
+      "older_recorded_tip": "a0106d1e719e8e26824f63871f8fa8e5f07f711b",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/remove-iterative-llm-mock-mode",
+      "expected_pre_final_tip": "b12346453ee933b69ce8398e9d83f30ec33c2483",
+      "actual_tip": "b12346453ee933b69ce8398e9d83f30ec33c2483",
+      "exact_match": true,
+      "older_recorded_tip": "b12346453ee933b69ce8398e9d83f30ec33c2483",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/runtime-leak-lifecycle-71",
+      "expected_pre_final_tip": "246631f030552afda1f6d2c6184902ce7e2e86c2",
+      "actual_tip": "246631f030552afda1f6d2c6184902ce7e2e86c2",
+      "exact_match": true,
+      "older_recorded_tip": "246631f030552afda1f6d2c6184902ce7e2e86c2",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/kaizen",
+      "expected_pre_final_tip": "230e29ee236ee13330a621c627a2e362cad9f78d",
+      "actual_tip": "230e29ee236ee13330a621c627a2e362cad9f78d",
+      "exact_match": true,
+      "older_recorded_tip": "230e29ee236ee13330a621c627a2e362cad9f78d",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/license-update-v0.9.10",
+      "expected_pre_final_tip": "ac914c9959e2ffe3e1406d4f041fd00afda6a11c",
+      "actual_tip": "ac914c9959e2ffe3e1406d4f041fd00afda6a11c",
+      "exact_match": true,
+      "older_recorded_tip": null,
+      "provenance": "first_pinned_in_pre_final_baseline",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.12.5",
+      "expected_pre_final_tip": "fc054c73eeea5daa9dbd2329a348ccf4ed7eebf4",
+      "actual_tip": "fc054c73eeea5daa9dbd2329a348ccf4ed7eebf4",
+      "exact_match": true,
+      "older_recorded_tip": null,
+      "provenance": "first_pinned_in_pre_final_baseline",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.4.1",
+      "expected_pre_final_tip": "de158198fdca7d4a9c4d79047993911b0cc11ec0",
+      "actual_tip": "de158198fdca7d4a9c4d79047993911b0cc11ec0",
+      "exact_match": true,
+      "older_recorded_tip": null,
+      "provenance": "first_pinned_in_pre_final_baseline",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.8.5",
+      "expected_pre_final_tip": "e935f137fa9f5228b7ce8b8925eccca1b0910954",
+      "actual_tip": "e935f137fa9f5228b7ce8b8925eccca1b0910954",
+      "exact_match": true,
+      "older_recorded_tip": null,
+      "provenance": "first_pinned_in_pre_final_baseline",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.11-final",
+      "expected_pre_final_tip": "f56816d720d377d37d0eedb7a09a592fc02ecc05",
+      "actual_tip": "f56816d720d377d37d0eedb7a09a592fc02ecc05",
+      "exact_match": true,
+      "older_recorded_tip": null,
+      "provenance": "first_pinned_in_pre_final_baseline",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.16-version-bump",
+      "expected_pre_final_tip": "d8db843e6e42f42eb51d72aa1e1ee89cb44537e3",
+      "actual_tip": "d8db843e6e42f42eb51d72aa1e1ee89cb44537e3",
+      "exact_match": true,
+      "older_recorded_tip": null,
+      "provenance": "first_pinned_in_pre_final_baseline",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.17-final",
+      "expected_pre_final_tip": "666d0c3d1d195c7d5a5e8a46db9f6b9b3cae4c5a",
+      "actual_tip": "666d0c3d1d195c7d5a5e8a46db9f6b9b3cae4c5a",
+      "exact_match": true,
+      "older_recorded_tip": null,
+      "provenance": "first_pinned_in_pre_final_baseline",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.17-update",
+      "expected_pre_final_tip": "c4b3ba40c009b9855fcf8aa18aad1089b9304780",
+      "actual_tip": "c4b3ba40c009b9855fcf8aa18aad1089b9304780",
+      "exact_match": true,
+      "older_recorded_tip": null,
+      "provenance": "first_pinned_in_pre_final_baseline",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.17-version-update",
+      "expected_pre_final_tip": "32e35ba67d9b4c979a08cc2d61b1b00493f1ebdd",
+      "actual_tip": "32e35ba67d9b4c979a08cc2d61b1b00493f1ebdd",
+      "exact_match": true,
+      "older_recorded_tip": null,
+      "provenance": "first_pinned_in_pre_final_baseline",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.4",
+      "expected_pre_final_tip": "459722e450b1d695a21e9d92f2ad902bdd39a8c9",
+      "actual_tip": "459722e450b1d695a21e9d92f2ad902bdd39a8c9",
+      "exact_match": true,
+      "older_recorded_tip": null,
+      "provenance": "first_pinned_in_pre_final_baseline",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.7",
+      "expected_pre_final_tip": "25f9e3d70e4e3ae7be740f53bbf7b04a62606ea9",
+      "actual_tip": "25f9e3d70e4e3ae7be740f53bbf7b04a62606ea9",
+      "exact_match": true,
+      "older_recorded_tip": null,
+      "provenance": "first_pinned_in_pre_final_baseline",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.9",
+      "expected_pre_final_tip": "0b58129039ada2f93089b09d383883aa8d21792e",
+      "actual_tip": "0b58129039ada2f93089b09d383883aa8d21792e",
+      "exact_match": true,
+      "older_recorded_tip": null,
+      "provenance": "first_pinned_in_pre_final_baseline",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/scrap/pre-triage-snapshot-2026-04-08",
+      "expected_pre_final_tip": "4cd5ef5124e8360c47784c786bf554130e830942",
+      "actual_tip": "4cd5ef5124e8360c47784c786bf554130e830942",
+      "exact_match": true,
+      "older_recorded_tip": "4cd5ef5124e8360c47784c786bf554130e830942",
+      "provenance": "original_tip_known",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/sync/main-with-dataflow-v0.4.3-release",
+      "expected_pre_final_tip": "6cdf0ada0d54915423fb7d6c54c9de8780e22f75",
+      "actual_tip": "6cdf0ada0d54915423fb7d6c54c9de8780e22f75",
+      "exact_match": true,
+      "older_recorded_tip": null,
+      "provenance": "first_pinned_in_pre_final_baseline",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/test/ci-verification",
+      "expected_pre_final_tip": "3e332b5ad088cb6f1570bab7f4e85b1767f6285d",
+      "actual_tip": "3e332b5ad088cb6f1570bab7f4e85b1767f6285d",
+      "exact_match": true,
+      "older_recorded_tip": null,
+      "provenance": "first_pinned_in_pre_final_baseline",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/test/ci-verification-v2",
+      "expected_pre_final_tip": "6b16ed192f44488f6d88d42a33592589fdb8ac5c",
+      "actual_tip": "6b16ed192f44488f6d88d42a33592589fdb8ac5c",
+      "exact_match": true,
+      "older_recorded_tip": null,
+      "provenance": "first_pinned_in_pre_final_baseline",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/todo-096-parameter-injection-testing",
+      "expected_pre_final_tip": "82055a2525d56772ce709f5d3f4a083eb7706bd6",
+      "actual_tip": "82055a2525d56772ce709f5d3f4a083eb7706bd6",
+      "exact_match": true,
+      "older_recorded_tip": null,
+      "provenance": "first_pinned_in_pre_final_baseline",
+      "object_type": "commit"
+    },
+    {
+      "ref": "refs/original/refs/heads/feat/1125-from-brief-analyze",
+      "expected_pre_final_tip": "62eb198e362498f4beb7dba404b3505742279f84",
+      "actual_tip": "62eb198e362498f4beb7dba404b3505742279f84",
+      "exact_match": true,
+      "older_recorded_tip": null,
+      "provenance": "first_pinned_in_pre_final_baseline",
+      "object_type": "commit"
+    }
+  ],
+  "archive_exact_matches": 52,
+  "archive_namespace_exact_set": true,
+  "original_tip_known": 30,
+  "only_pre_final_baseline_tip_known": 22,
+  "stash_exact_ordered_match": true,
+  "stash_rows": [
+    {
+      "index": 0,
+      "expected": "ca0138b48e54ba7197133e33a6b0bc0207b50b34",
+      "actual": "ca0138b48e54ba7197133e33a6b0bc0207b50b34",
+      "exact_match": true,
+      "object_type": "commit",
+      "tree_and_parents": "4587d1c27e56b86e650505b9ee95a17cd2bf4023 b0568adc0079f36fd1aa6b0c5372135898eb8263 341fb66727a3f456c1130fa4f1040859de3c9d4e"
+    },
+    {
+      "index": 1,
+      "expected": "de08a30d84a93b6b70cdd75b7277c6bdc8d996fe",
+      "actual": "de08a30d84a93b6b70cdd75b7277c6bdc8d996fe",
+      "exact_match": true,
+      "object_type": "commit",
+      "tree_and_parents": "da1380f8732917dd944d0a1999354fb07bb68e90 4c47eb45753ffc655f47d20e915dc662f86483c6 d89a98998280917e880c2a83060dbff03a08925e cbdd4d0c56a54d9ab63ea0df9a3feb97ffe6a8e2"
+    },
+    {
+      "index": 2,
+      "expected": "201a0cab11df924d91b3e46ba0aa3540ab6bd6b2",
+      "actual": "201a0cab11df924d91b3e46ba0aa3540ab6bd6b2",
+      "exact_match": true,
+      "object_type": "commit",
+      "tree_and_parents": "449aaf6dbd9327a33b358ffef1e84d940acf0dd1 d7aff8ee34eb41c72ef3bc9a5f2e6fb5c4a3f6d1 65fa763612c090ba6d5a8284b3be94f17d550ffd"
+    },
+    {
+      "index": 3,
+      "expected": "924c8f6a0a624fcc4a4508fc677c8045c9dad0a7",
+      "actual": "924c8f6a0a624fcc4a4508fc677c8045c9dad0a7",
+      "exact_match": true,
+      "object_type": "commit",
+      "tree_and_parents": "e47c3ab321d20d2f1f259b91b90e33772017e90c d7aff8ee34eb41c72ef3bc9a5f2e6fb5c4a3f6d1 d91dd4f844defd19d49b2937a3e63959b436216d"
+    },
+    {
+      "index": 4,
+      "expected": "d5f9a37d0c2e3f4864e6cf0c56205eb5d3e54cdf",
+      "actual": "d5f9a37d0c2e3f4864e6cf0c56205eb5d3e54cdf",
+      "exact_match": true,
+      "object_type": "commit",
+      "tree_and_parents": "85ff756923345562b4716de8fa8f70631583fd81 4b050d039a070df13b77ba79f0a3e81e5377395d c03b24714076a8166a0bd17c4044c51905ba5294"
+    }
+  ],
+  "discriminating_controls": {
+    "changed_ref_rejected": true,
+    "missing_ref_rejected": true,
+    "reordered_stashes_rejected": true
+  },
+  "scope": "Exact object retention only. No archive behavioral equivalence, historical adjudication upgrade, or whole-union convergence claim. The 22 refs lacking original recorded tips are verified only against the pre-final session baseline. Active branch/worktree inventory is observational and may change through parent-authorized integration. No repository source, ref, stash or worktree mutations performed.",
+  "full_unfiltered_inventory": {
+    "local_path": "/tmp/csq14-preserved-state-final-review.json",
+    "sha256": "ca09cfcca525c7114bd8c50e5394ef59248c45841b7c1192b6e7c1229a7ca874",
+    "note": "Contains unfiltered ref, local branch and worktree lists; this durable receipt retains each protected archive and stash comparison row."
+  },
+  "parent_after_cycle_commits": {
+    "head": "ea4f09514b2aa6b6287fddaad3a961578b2a793c",
+    "at_utc": "2026-09-26T11:14:12.758941+00:00",
+    "exact_scope": "51 refs/archive/ plus1 refs/original/",
+    "all_52_exact_namespace_and_tips": true,
+    "five_ordered_stash_ids_exact": true,
+    "opposite_controls": [
+      "changed tip rejected",
+      "reordered stash list rejected"
+    ],
+    "instrument_correction": "Initial refs/archive/-only query omitted the preserved refs/original/ row and was not banked. Corrected query explicitly includes both namespaces."
+  }
+}

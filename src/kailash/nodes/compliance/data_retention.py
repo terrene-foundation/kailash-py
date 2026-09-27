@@ -171,8 +171,12 @@ class DataRetentionPolicyNode(SecurityMixin, PerformanceMixin, LoggingMixin, Nod
         self.policies = self._parse_policies(policies or {})
 
         # Initialize audit logging and security events
-        self.audit_log_node = AuditLogNode(name=f"{name}_audit_log")
-        self.security_event_node = SecurityEventNode(name=f"{name}_security_events")
+        self.audit_log_node = AuditLogNode(
+            name=f"{name}_audit_log", log_name_parts=(name, "_audit_log")
+        )
+        self.security_event_node = SecurityEventNode(
+            name=f"{name}_security_events", log_name_parts=(name, "_security_events")
+        )
 
         # Data tracking
         self.data_records: Dict[str, DataRecord] = {}

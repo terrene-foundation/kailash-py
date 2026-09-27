@@ -262,8 +262,8 @@ providers (Stripe, GitHub, Slack — each ships as a user-defined class).
 **Outbound features:**
 
 - Retry with exponential backoff (capped at `max_delay`).
-- DNS pinning to prevent DNS rebinding attacks.
-- SSRF prevention: rejects URLs resolving to private/internal IP ranges (RFC 1918, IPv4-mapped IPv6, loopback).
+- DNS pinning uses the shared Core destination policy. Registration may defer unavailable DNS; delivery requires a nonempty validated address set before invoking any sender. Private/internal ranges (including RFC 1918, IPv4-mapped IPv6 and loopback) are rejected (`packages/kailash-nexus/src/nexus/transports/webhook.py:212-222`, `packages/kailash-nexus/src/nexus/transports/webhook.py:766-770`).
+- The default owned Nexus `HttpClient` sends to the original hostname with connect-time DNS binding, preserving Host and TLS certificate identity, and does not follow redirects. Custom `send_func(url, body, headers)` callbacks retain the numeric pinned URL and original Host header contract (`packages/kailash-nexus/src/nexus/transports/webhook.py:788-813`, `packages/kailash-nexus/src/nexus/transports/webhook.py:948-959`).
 - Pluggable signature on outbound payloads when `secret` is set (default HMAC-SHA256; Twilio / custom signers compose the same way).
 - 2xx = success. 4xx (except 429) = permanent failure (no retry). 429 and 5xx trigger retries.
 

@@ -29,6 +29,12 @@ Public surface:
 """
 from __future__ import annotations
 
+# Re-export the stock sklearn primitives that tests and users routinely
+# compose with registered custom estimators. Importing from kailash_ml
+# gives a single canonical name — users don't have to remember that
+# ``StandardScaler`` is sklearn-native.
+from sklearn.preprocessing import StandardScaler
+
 from kailash_ml.estimators.column_transformer import ColumnTransformer
 from kailash_ml.estimators.feature_union import FeatureUnion
 from kailash_ml.estimators.pipeline import Pipeline
@@ -38,12 +44,6 @@ from kailash_ml.estimators.registry import (
     registered_estimators,
     unregister_estimator,
 )
-
-# Re-export the stock sklearn primitives that tests and users routinely
-# compose with registered custom estimators. Importing from kailash_ml
-# gives a single canonical name — users don't have to remember that
-# ``StandardScaler`` is sklearn-native.
-from sklearn.preprocessing import StandardScaler
 
 __all__ = [
     "ColumnTransformer",

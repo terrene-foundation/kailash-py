@@ -255,8 +255,11 @@ class TestLocalRuntimeNodeTrustEnforcing:
         )
         workflow = builder.build()
 
-        with pytest.raises(
-            Exception, match="Trust verification denied execution of node"
+        with (
+            runtime,
+            pytest.raises(
+                Exception, match="Trust verification denied execution of node"
+            ),
         ):
             runtime.execute(workflow)
 
@@ -291,7 +294,8 @@ class TestLocalRuntimeNodeTrustEnforcing:
         )
         workflow = builder.build()
 
-        results, run_id = runtime.execute(workflow)
+        with runtime:
+            results, run_id = runtime.execute(workflow)
         assert "code_node" in results
         assert results["code_node"]["result"] == 42
 
@@ -329,7 +333,7 @@ class TestLocalRuntimeNodeTrustPermissive:
         )
         workflow = builder.build()
 
-        with caplog.at_level(logging.WARNING):
+        with runtime, caplog.at_level(logging.WARNING):
             results, run_id = runtime.execute(workflow)
 
         assert "code_node" in results
@@ -354,7 +358,8 @@ class TestLocalRuntimeNodeTrustDisabled:
         )
         workflow = builder.build()
 
-        results, run_id = runtime.execute(workflow)
+        with runtime:
+            results, run_id = runtime.execute(workflow)
         assert "code_node" in results
         assert results["code_node"]["result"] == 42
 
@@ -398,7 +403,7 @@ class TestLocalRuntimeNodeTrustMultipleNodes:
         builder.connect("node_a", "node_b")
         workflow = builder.build()
 
-        with pytest.raises(Exception, match="Trust verification denied"):
+        with runtime, pytest.raises(Exception, match="Trust verification denied"):
             runtime.execute(workflow)
 
 
@@ -552,7 +557,8 @@ class TestNodeTrustBackwardCompatibility:
         )
         workflow = builder.build()
 
-        results, run_id = runtime.execute(workflow)
+        with runtime:
+            results, run_id = runtime.execute(workflow)
         assert results["code_node"]["result"] == "hello"
 
     # NOTE: test_default_async_runtime_no_trust_overhead moved to

@@ -15,9 +15,29 @@ File References:
 - /packages/kailash-kaizen/src/kaizen/agent_config.py:253-257 (__post_init__ auto-detection)
 """
 
+import importlib
 import inspect
+import re
+import sys
 
 import pytest
+
+
+@pytest.fixture(scope="module", autouse=True)
+def legacy_agent_import():
+    """Assert the migration warning once while keeping the legacy API tested."""
+    if "kaizen.agent" in sys.modules:
+        return
+    message = (
+        "kaizen.agent.Agent is deprecated. Use 'from kaizen_agents import Agent' "
+        "(async-first) or 'from kaizen import Agent' (auto-resolves). "
+        "This module will be removed in kailash-kaizen 3.0.0."
+    )
+    with pytest.warns(DeprecationWarning, match=re.escape(message)) as recorded:
+        importlib.import_module("kaizen.agent")
+    assert [(warning.category, str(warning.message)) for warning in recorded] == [
+        (DeprecationWarning, message)
+    ]
 
 
 class TestAgentLLMProviderParameter:
@@ -238,22 +258,40 @@ class TestAgentLLMProviderAutoDetection:
             config = AgentConfig(model=model)
             assert config.llm_provider == "openai", f"{model} should detect as openai"
 
-    def test_auto_detect_davinci_as_openai(self, monkeypatch):
-        """Davinci resolves as openai via the ENV fallback, not a prefix row.
+    def test_davinci_no_longer_resolves_via_the_env_fallback(self, monkeypatch):
+        """#2220 REVERSED this assertion deliberately; it pinned the defect.
 
-        #2069 changed the mechanism. Detection used to substring-match
-        "davinci"; it now delegates to the shared resolver, whose prefix table
-        is derived from the provider registry and has no davinci row. So the
-        model falls through to the env fallback, which answers openai when an
-        OpenAI credential is present — the correct answer, reached honestly.
-        With no credential it raises rather than guessing, which is the point
-        of the issue.
+        This test used to assert ``davinci-002`` resolves to ``"openai"`` when
+        an OpenAI credential is present, and called that "the correct answer,
+        reached honestly". It was neither. ``davinci-002`` carries no
+        registered prefix, so the answer came from the env fallback — which
+        reports which credential exists, not which vendor serves the model.
+        The answer was right only because this particular model happens to be
+        OpenAI's. The identical path sent ``llama-3.1`` to OpenAI.
+
+        Kept as a ``davinci`` test rather than deleted, because the
+        sympathetic case is the one worth pinning: the resolver must refuse
+        even when refusing costs a correct-by-luck answer, since it has no way
+        to tell this model from a local one.
         """
         from kaizen.agent_config import AgentConfig
+        from kaizen.config.providers import ConfigurationError
 
-        monkeypatch.setenv("OPENAI_API_KEY", "sk-2069-placeholder-not-sent")
-        config = AgentConfig(model="davinci-002")
-        assert config.llm_provider == "openai"
+        # The kaizen harness sets this; under it an unregistered model
+        # resolves to "mock". Cleared so this observes the REAL-caller path.
+        monkeypatch.delenv("KAIZEN_ALLOW_KEYLESS_MOCK", raising=False)
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-2220-placeholder-not-sent")
+
+        with pytest.raises(ConfigurationError) as caught:
+            AgentConfig(model="davinci-002")
+        assert "davinci-002" in str(caught.value)
+        assert "llm_provider=" in str(caught.value)
+
+        # The migration the error prescribes.
+        assert (
+            AgentConfig(model="davinci-002", llm_provider="openai").llm_provider
+            == "openai"
+        )
 
     def test_auto_detect_claude_as_anthropic(self):
         """Claude models should auto-detect as anthropic."""

@@ -327,28 +327,24 @@ class EnhancedDurableAPIGateway(DurableAPIGateway):
 
     async def shutdown(self):
         """Shutdown the gateway and cleanup resources."""
-        # Cancel all cleanup tasks
-        for task in self._cleanup_tasks:
-            if not task.done():
-                task.cancel()
+        await self.close()
 
-        # Wait for all tasks to complete
-        if self._cleanup_tasks:
-            await asyncio.gather(*self._cleanup_tasks, return_exceptions=True)
-
-        # Clear the task list
-        self._cleanup_tasks.clear()
-
-        # Clear active requests
-        self._active_requests.clear()
-
-        # Cleanup runtime if it has a cleanup method
-        if hasattr(self._runtime, "cleanup"):
-            await self._runtime.cleanup()
-
-        # Call parent's close method to cleanup middleware components
-        if hasattr(super(), "close"):
-            await super().close()
+    async def close(self, shutdown_timeout: float = 30.0):
+        """Release enhanced and inherited owners through the public close API."""
+        try:
+            # Cancellation while draining requests must still release owners.
+            for task in self._cleanup_tasks:
+                if not task.done():
+                    task.cancel()
+            if self._cleanup_tasks:
+                await asyncio.gather(*self._cleanup_tasks, return_exceptions=True)
+        finally:
+            self._cleanup_tasks.clear()
+            self._active_requests.clear()
+            try:
+                await self._runtime.aclose()
+            finally:
+                await super().close(shutdown_timeout=shutdown_timeout)
 
     async def health_check(self) -> Dict[str, Any]:
         """Perform health check on gateway and resources."""

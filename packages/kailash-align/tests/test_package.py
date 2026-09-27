@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -29,33 +31,34 @@ class TestVersion:
 
 class TestLazyImports:
     def test_import_does_not_load_torch(self):
-        """Importing kailash_align should NOT load torch."""
-        # If torch was already loaded by another test, skip this test
-        if "torch" in sys.modules:
-            pytest.skip("torch already loaded by another test in this process")
+        """Check this checkout in a fresh interpreter, regardless of test order."""
+        package_init = (
+            Path(__file__).resolve().parents[1] / "src/kailash_align/__init__.py"
+        )
+        probe = """
+import importlib.util
+from pathlib import Path
+import sys
 
-        # Save and remove kailash_align modules to test fresh import
-        saved_modules = {
-            k: sys.modules[k]
-            for k in list(sys.modules)
-            if k.startswith("kailash_align")
-        }
-        for mod in saved_modules:
-            del sys.modules[mod]
-
-        try:
-            import kailash_align  # noqa: F401
-
-            # torch should NOT be in sys.modules from just importing kailash_align
-            assert (
-                "torch" not in sys.modules
-            ), "Importing kailash_align loaded torch -- lazy imports broken"
-        finally:
-            # Restore original modules to prevent contamination
-            for mod in list(sys.modules):
-                if mod.startswith("kailash_align"):
-                    del sys.modules[mod]
-            sys.modules.update(saved_modules)
+package_init = Path(sys.argv[1]).resolve()
+spec = importlib.util.spec_from_file_location(
+    "kailash_align", package_init,
+    submodule_search_locations=[str(package_init.parent)],
+)
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+assert Path(module.__file__).resolve() == package_init
+assert "torch" not in sys.modules, "Importing kailash_align loaded torch -- lazy imports broken"
+"""
+        result = subprocess.run(
+            [sys.executable, "-I", "-c", probe, str(package_init)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
 
     def test_lazy_getattr_raises_for_unknown(self):
         import kailash_align

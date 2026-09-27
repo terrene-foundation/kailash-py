@@ -62,7 +62,9 @@ class LightweightPool:
         pool_size: int = _LIGHTWEIGHT_POOL_SIZE,
         credential_provider: Optional[Callable[[], str]] = None,
     ):
-        self._database_url = database_url
+        from kailash.utils.sqlite_url import sqlite_owner_url
+
+        self._database_url = sqlite_owner_url(database_url)
         self._pool_size = pool_size
         self.credential_provider = credential_provider
         self._pool: Any = None
@@ -83,11 +85,9 @@ class LightweightPool:
 
     def _extract_sqlite_path(self) -> str:
         """Extract the file path from a SQLite URL."""
-        url = self._database_url
-        # Handle sqlite:///path, sqlite+aiosqlite:///path, etc.
-        if ":///" in url:
-            return url.split("///", 1)[1] or ":memory:"
-        return ":memory:"
+        from kailash.utils.sqlite_url import sqlite_connection_target
+
+        return sqlite_connection_target(self._database_url)[0]
 
     async def initialize(self) -> None:
         """Create the lightweight connection pool."""
@@ -102,7 +102,10 @@ class LightweightPool:
                 try:
                     import aiosqlite
 
-                    self._pool = await aiosqlite.connect(self._extract_sqlite_path())
+                    from kailash.utils.sqlite_url import sqlite_connection_target
+
+                    target, options = sqlite_connection_target(self._database_url)
+                    self._pool = await aiosqlite.connect(target, **options)
                     self._initialized = True
                     self._init_pid = os.getpid()
                     logger.debug("Lightweight pool initialized (SQLite, 1 connection)")

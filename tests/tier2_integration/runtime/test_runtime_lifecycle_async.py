@@ -56,8 +56,16 @@ class TestAsyncClose:
         rt.close()
         assert rt._persistent_loop is None
 
-    def test_del_forces_cleanup(self):
-        """AsyncLocalRuntime __del__ emits ResourceWarning and forces cleanup."""
+    def test_del_warns_and_performs_no_cleanup(self):
+        """AsyncLocalRuntime.__del__ WARNS and returns; it cleans up nothing.
+
+        Renamed from ``test_del_forces_cleanup`` (issue #2107) -- see the sibling
+        in ``test_runtime_lifecycle.py`` for the full deadlock rationale. The
+        ``len(...) == 1`` assertion carries extra weight here: both this
+        finalizer and ``LocalRuntime.__del__`` are now warn-only with the same
+        ``_ref_count > 0`` predicate, so this would become 2 if the
+        ``super().__del__()`` chain were ever restored.
+        """
         import warnings
 
         rt = AsyncLocalRuntime()
@@ -65,17 +73,26 @@ class TestAsyncClose:
         assert rt._persistent_loop is not None
         assert rt.ref_count == 1
 
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            rt.__del__()
+        try:
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                rt.__del__()
 
-        resource_warnings = [x for x in w if issubclass(x.category, ResourceWarning)]
-        assert len(resource_warnings) == 1
-        assert "Unclosed AsyncLocalRuntime" in str(resource_warnings[0].message)
+            resource_warnings = [
+                x for x in w if issubclass(x.category, ResourceWarning)
+            ]
+            assert len(resource_warnings) == 1
+            assert "Unclosed AsyncLocalRuntime" in str(resource_warnings[0].message)
 
-        # Verify cleanup happened
-        assert rt._persistent_loop is None
-        assert rt.ref_count == 0
+            # Nothing cleaned up -- that is the fix.
+            assert (
+                rt._persistent_loop is not None
+            ), "__del__ must not tear down the event loop (issue #2107)."
+            assert (
+                rt.ref_count == 1
+            ), "__del__ must not decrement the ref count (issue #2107)."
+        finally:
+            rt.close()
 
     def test_inherits_acquire_release(self):
         """AsyncLocalRuntime inherits acquire/release from LocalRuntime."""

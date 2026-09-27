@@ -1,0 +1,411 @@
+{
+  "recovery_validation": {
+    "head": "709759a385ae5950fdeab2eda739718dddfb75e3",
+    "verdict": "Pass",
+    "verified": "Recomputed all selected paths using archived source and Git-enumerated historical blobs; reproduced the prior JSON exactly. Same-path ancestor receipt checked for each matching row. Literal-change and whitespace controls executed.",
+    "scope": "Forty-eight previously selected Python paths only; not the entire mixed archive. Git rev-list --objects supplies candidate versions; absence of a match is not proof of missing implementation.",
+    "limitation": "Whole AST equality excludes comments, whitespace and external dependency/runtime behavior. Import-normalized and import-removed equality are candidate matching only: binding order and module side effects are not proved. No behavioral equivalence, whole-archive closure or ref deletion follows."
+  },
+  "source_report_sha256": "7ac192108d36d1928ea5ff5f88ba3723fff437351b4acdba4b684351b5791982",
+  "prior_session_report": {
+    "head": "709759a385ae5950fdeab2eda739718dddfb75e3",
+    "archive_ref": "refs/archive/2026-08-21/scrap/pre-triage-snapshot-2026-04-08",
+    "scope": "Non-import Python AST candidate search ONLY. Imports removed, so no implementation-retention verdict for unmatched import bindings or pure-import barrels. Manual diff review mandatory; no current conformance claim.",
+    "negative_control": "changed literal x=1 to x=2 rejected; whitespace equivalent accepted",
+    "files": [
+      {
+        "path": "packages/kailash-kaizen/src/kaizen/core/base_agent.py",
+        "historical_versions": 42,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-nonimport-AST-match"
+      },
+      {
+        "path": "packages/kailash-kaizen/src/kaizen/nodes/ai/ai_providers.py",
+        "historical_versions": 8,
+        "exact_ast_matching_blobs": [
+          "735be83829c6fb2cb2ce821f7cb5d6c854634f46"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "626b008b47cf18b4796303542b6952247c9db340"
+      },
+      {
+        "path": "packages/kailash-kaizen/src/kaizen/nodes/ai/unified_azure_provider.py",
+        "historical_versions": 3,
+        "exact_ast_matching_blobs": [
+          "6ebe969c5a1d8c038bdfd4626842aea6307b27d0",
+          "ca750f1d15dea0d204f7f4048f8a161f81c6324b"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "626b008b47cf18b4796303542b6952247c9db340"
+      },
+      {
+        "path": "packages/kailash-kaizen/src/kaizen/providers/__init__.py",
+        "historical_versions": 8,
+        "exact_ast_matching_blobs": [
+          "8a1d342e89dfceba09ec6ca0fb4a3a2079342ada"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "626b008b47cf18b4796303542b6952247c9db340"
+      },
+      {
+        "path": "packages/kailash-kaizen/src/kaizen/providers/embedding/huggingface.py",
+        "historical_versions": 4,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-nonimport-AST-match"
+      },
+      {
+        "path": "packages/kailash-kaizen/src/kaizen/providers/llm/google.py",
+        "historical_versions": 4,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-nonimport-AST-match"
+      },
+      {
+        "path": "packages/kailash-kaizen/tests/unit/core/test_base_agent_slimming.py",
+        "historical_versions": 9,
+        "exact_ast_matching_blobs": [
+          "72bfc895cf3baaaec670e7fb88a50e140abdd481"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "626b008b47cf18b4796303542b6952247c9db340"
+      },
+      {
+        "path": "packages/kailash-mcp/src/kailash_mcp/__init__.py",
+        "historical_versions": 30,
+        "exact_ast_matching_blobs": [
+          "2d26f14eb6bf39a1d00bef4a886420f22131d3f2"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "cdc75a81bae83eb9013d90224810287e2b16029f"
+      },
+      {
+        "path": "packages/kailash-mcp/src/kailash_mcp/advanced/features.py",
+        "historical_versions": 12,
+        "exact_ast_matching_blobs": [
+          "ef94be1170587142f3b58b5d4ded97c39675ec33"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "cdc75a81bae83eb9013d90224810287e2b16029f"
+      },
+      {
+        "path": "packages/kailash-mcp/src/kailash_mcp/advanced/subscriptions.py",
+        "historical_versions": 6,
+        "exact_ast_matching_blobs": [
+          "55016838175ada3675565b962eeff4b018e06a96"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "cdc75a81bae83eb9013d90224810287e2b16029f"
+      },
+      {
+        "path": "packages/kailash-mcp/src/kailash_mcp/auth/oauth.py",
+        "historical_versions": 11,
+        "exact_ast_matching_blobs": [
+          "3677ae9663f8ed728c11472b61a6a9dfd59d9e58"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "cdc75a81bae83eb9013d90224810287e2b16029f"
+      },
+      {
+        "path": "packages/kailash-mcp/src/kailash_mcp/client.py",
+        "historical_versions": 7,
+        "exact_ast_matching_blobs": [
+          "04c498daa9f9b132f395ca7c84edea083bce593f"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "cdc75a81bae83eb9013d90224810287e2b16029f"
+      },
+      {
+        "path": "packages/kailash-mcp/src/kailash_mcp/contrib/core.py",
+        "historical_versions": 1,
+        "exact_ast_matching_blobs": [
+          "ff4a51f53085eab2788f5529d6b3dcdf38c5b6ed"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "cdc75a81bae83eb9013d90224810287e2b16029f"
+      },
+      {
+        "path": "packages/kailash-mcp/src/kailash_mcp/contrib/kaizen.py",
+        "historical_versions": 1,
+        "exact_ast_matching_blobs": [
+          "7ef1bfae7e0f27154ab66a30a2210dacf2749531"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "cdc75a81bae83eb9013d90224810287e2b16029f"
+      },
+      {
+        "path": "packages/kailash-mcp/src/kailash_mcp/contrib/nexus.py",
+        "historical_versions": 1,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-nonimport-AST-match"
+      },
+      {
+        "path": "packages/kailash-mcp/src/kailash_mcp/contrib/pact.py",
+        "historical_versions": 1,
+        "exact_ast_matching_blobs": [
+          "babe062dfa47b58dd86183bd245f136f526c75c7"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "cdc75a81bae83eb9013d90224810287e2b16029f"
+      },
+      {
+        "path": "packages/kailash-mcp/src/kailash_mcp/contrib/trust.py",
+        "historical_versions": 1,
+        "exact_ast_matching_blobs": [
+          "8c49426560ef2ed72bd76e57d0b921ac6170b060"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "cdc75a81bae83eb9013d90224810287e2b16029f"
+      },
+      {
+        "path": "packages/kailash-nexus/src/nexus/auth/dependencies.py",
+        "historical_versions": 2,
+        "exact_ast_matching_blobs": [
+          "9fdcb33faae4773557bc6463d7e4f915b6d24b5c"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "0447b938905e7b8047ec01ee1ed5882e8f73ce26"
+      },
+      {
+        "path": "packages/kailash-nexus/src/nexus/auth/exceptions.py",
+        "historical_versions": 2,
+        "exact_ast_matching_blobs": [
+          "f540f4162d0149ffeaa9e2381c46081d5b7309b2"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "0447b938905e7b8047ec01ee1ed5882e8f73ce26"
+      },
+      {
+        "path": "packages/kailash-nexus/src/nexus/auth/jwt.py",
+        "historical_versions": 8,
+        "exact_ast_matching_blobs": [
+          "649326b2123e3d227d6de01550946b7c967b9934"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "0447b938905e7b8047ec01ee1ed5882e8f73ce26"
+      },
+      {
+        "path": "packages/kailash-nexus/src/nexus/auth/plugin.py",
+        "historical_versions": 3,
+        "exact_ast_matching_blobs": [
+          "8d1e656b0c75676f32cad77894b4a0c1e513eb55"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "0447b938905e7b8047ec01ee1ed5882e8f73ce26"
+      },
+      {
+        "path": "packages/kailash-nexus/src/nexus/auth/rate_limit/decorators.py",
+        "historical_versions": 4,
+        "exact_ast_matching_blobs": [
+          "2ea1bbf5edb6f0ed5a3455f327f7456e1ff33e68",
+          "3526cc5055a9e2e04a8da46499bc804db32bf8e5"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "0447b938905e7b8047ec01ee1ed5882e8f73ce26"
+      },
+      {
+        "path": "packages/kailash-nexus/src/nexus/auth/rate_limit/middleware.py",
+        "historical_versions": 7,
+        "exact_ast_matching_blobs": [
+          "fd07795ea51f8fdb82df1d8fb38562c926c88d22",
+          "ad1e8b146f5da1de2d214c2ee787f49fccde413b"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "0447b938905e7b8047ec01ee1ed5882e8f73ce26"
+      },
+      {
+        "path": "packages/kailash-nexus/src/nexus/auth/rbac.py",
+        "historical_versions": 2,
+        "exact_ast_matching_blobs": [
+          "0ae8f9bd046f554c3658047845462e5548c6fd74"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "0447b938905e7b8047ec01ee1ed5882e8f73ce26"
+      },
+      {
+        "path": "packages/kailash-nexus/src/nexus/auth/tenant/middleware.py",
+        "historical_versions": 3,
+        "exact_ast_matching_blobs": [
+          "33e96d5208751251463bcfb4cc9e8f051c9882e6",
+          "97009ee26ae4c0155f08a208caf05bfe269615cd",
+          "5e6b0ce181dafc2a6f26cb42b06b56bacac743f1"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "c29a1fbce52cedae2e6c06946433f03a39f7bb23"
+      },
+      {
+        "path": "packages/kailash-nexus/src/nexus/auth/tenant/resolver.py",
+        "historical_versions": 3,
+        "exact_ast_matching_blobs": [
+          "e9af291464d85e430890ac59948a27fbed4e848b",
+          "bd80b20f5936a8d72591b210803cafec39b679bf"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "0447b938905e7b8047ec01ee1ed5882e8f73ce26"
+      },
+      {
+        "path": "packages/kaizen-agents/src/kaizen_agents/delegate/delegate.py",
+        "historical_versions": 12,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-nonimport-AST-match"
+      },
+      {
+        "path": "packages/kaizen-agents/src/kaizen_agents/governed_agent.py",
+        "historical_versions": 6,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-nonimport-AST-match"
+      },
+      {
+        "path": "packages/kaizen-agents/src/kaizen_agents/monitored_agent.py",
+        "historical_versions": 1,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-nonimport-AST-match"
+      },
+      {
+        "path": "packages/kaizen-agents/src/kaizen_agents/streaming_agent.py",
+        "historical_versions": 7,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-nonimport-AST-match"
+      },
+      {
+        "path": "packages/kaizen-agents/src/kaizen_agents/wrapper_base.py",
+        "historical_versions": 3,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-nonimport-AST-match"
+      },
+      {
+        "path": "scripts/convergence-verify.py",
+        "historical_versions": 2,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-nonimport-AST-match"
+      },
+      {
+        "path": "src/kailash/runtime/validation/__init__.py",
+        "historical_versions": 5,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-nonimport-AST-match"
+      },
+      {
+        "path": "src/kailash/trust/__init__.py",
+        "historical_versions": 13,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-nonimport-AST-match"
+      },
+      {
+        "path": "src/kailash/trust/auth/__init__.py",
+        "historical_versions": 1,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-nonimport-AST-match"
+      },
+      {
+        "path": "src/kailash/trust/auth/chain.py",
+        "historical_versions": 1,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-nonimport-AST-match"
+      },
+      {
+        "path": "src/kailash/trust/auth/jwt.py",
+        "historical_versions": 7,
+        "exact_ast_matching_blobs": [
+          "cd50ac1f84f51aa992d219b9ed636174faf5ea1b"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "0447b938905e7b8047ec01ee1ed5882e8f73ce26"
+      },
+      {
+        "path": "src/kailash/trust/auth/sso/__init__.py",
+        "historical_versions": 1,
+        "exact_ast_matching_blobs": [
+          "ed2d29f8c32522f01059c765f674289c49587cd9"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "0447b938905e7b8047ec01ee1ed5882e8f73ce26"
+      },
+      {
+        "path": "src/kailash/trust/auth/sso/apple.py",
+        "historical_versions": 3,
+        "exact_ast_matching_blobs": [
+          "9d63befd10407b6d8a8ccdaf7f48958d35d5fb6a"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "0447b938905e7b8047ec01ee1ed5882e8f73ce26"
+      },
+      {
+        "path": "src/kailash/trust/auth/sso/azure.py",
+        "historical_versions": 3,
+        "exact_ast_matching_blobs": [
+          "2ad2425323e1af07f5e24e5aa5057f244656601f"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "0447b938905e7b8047ec01ee1ed5882e8f73ce26"
+      },
+      {
+        "path": "src/kailash/trust/auth/sso/google.py",
+        "historical_versions": 3,
+        "exact_ast_matching_blobs": [
+          "b14ded19f6265becc86b0f33336cde2362346999"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "0447b938905e7b8047ec01ee1ed5882e8f73ce26"
+      },
+      {
+        "path": "src/kailash/trust/envelope.py",
+        "historical_versions": 13,
+        "exact_ast_matching_blobs": [
+          "868ac1df0a3f7938c7fc856a8be7bcd3b6943e0a"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "c695004e4231d65b3e9de0c19f0f1939c68d4c5b"
+      },
+      {
+        "path": "src/kailash/trust/rate_limit/backends/memory.py",
+        "historical_versions": 1,
+        "exact_ast_matching_blobs": [
+          "f826b806eb423b3519b89d27fe3935bcbd113b2a"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "0447b938905e7b8047ec01ee1ed5882e8f73ce26"
+      },
+      {
+        "path": "src/kailash/trust/rate_limit/backends/redis.py",
+        "historical_versions": 3,
+        "exact_ast_matching_blobs": [],
+        "status": "unresolved-no-nonimport-AST-match"
+      },
+      {
+        "path": "tests/trust/unit/test_audit_event.py",
+        "historical_versions": 1,
+        "exact_ast_matching_blobs": [
+          "88869c4912a3812a86f1e9293e3677d94045de8e"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "32d947e2d20625231d8e90fb00fd45922f58827a"
+      },
+      {
+        "path": "tests/trust/unit/test_canonical_envelope.py",
+        "historical_versions": 3,
+        "exact_ast_matching_blobs": [
+          "6453af50d999407ef4c41246c4f59c96616c967d"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "c695004e4231d65b3e9de0c19f0f1939c68d4c5b"
+      },
+      {
+        "path": "tests/trust/unit/test_in_memory_audit_store.py",
+        "historical_versions": 3,
+        "exact_ast_matching_blobs": [
+          "6104d15149b26870ee541725fa785685608ffb9e"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "32d947e2d20625231d8e90fb00fd45922f58827a"
+      },
+      {
+        "path": "tests/trust/unit/test_sqlite_audit_store.py",
+        "historical_versions": 6,
+        "exact_ast_matching_blobs": [
+          "daf1b94a2848727a70b49c0ea8083377387d3fbd"
+        ],
+        "status": "historical-nonimport-AST-match-needs-import-review",
+        "ancestor_receipt": "32d947e2d20625231d8e90fb00fd45922f58827a"
+      }
+    ]
+  }
+}

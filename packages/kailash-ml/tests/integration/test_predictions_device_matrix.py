@@ -25,6 +25,7 @@ import numpy as np
 import polars as pl
 import pytest
 import torch
+
 from kailash_ml._device_report import DeviceReport
 from kailash_ml.trainable import (
     HDBSCANTrainable,
@@ -231,6 +232,7 @@ def test_lightning_predict_carries_fit_device_report(
 ) -> None:
     """LightningTrainable.predict() Predictions.device is the fit-time DeviceReport."""
     import pytorch_lightning as pl_trainer
+
     from kailash_ml.trainable import LightningTrainable
 
     class _LitModel(pl_trainer.LightningModule):

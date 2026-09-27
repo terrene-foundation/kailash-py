@@ -234,7 +234,7 @@ class ParallelRuntime:
         finally:
             # Always release timer tasks even on the no-limit path.
             if cancellable is not None:
-                cancellable.disarm()
+                await cancellable.disarm_async()
 
     async def _execute_workflow_parallel(
         self,
@@ -557,7 +557,7 @@ class ParallelRuntime:
         inputs = {}
 
         # Start with node configuration
-        inputs.update(node_instance.config)
+        inputs.update(node_instance._get_execution_config())
 
         # Add connected inputs from other nodes
         for edge in workflow.graph.in_edges(node_id, data=True):

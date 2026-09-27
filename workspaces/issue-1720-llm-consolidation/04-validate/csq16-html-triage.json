@@ -1,0 +1,45 @@
+{
+  "ran": true,
+  "scope": "Read-only source/spec/caller review and real producer probes for alerts5149/129; no HTML browser/rendering sink claim.",
+  "source_hashes": {
+    "src/kailash/trust/security.py": "ab15759be33213ec6e5f5b4fa4943805230baa7557d8505dadda368399f31d75",
+    "src/kailash/nodes/data/readers.py": "e988612e40bb41e64fe7e1089ca0a43f53e5df1b7c608fcb3d778445f822a2e6"
+  },
+  "evidence": "/tmp/csq16-bad-tag-probe.json",
+  "decoded_probe": "<script>alert(1)</script >",
+  "probe_hex": "3c7363726970743e616c6572742831293c2f736372697074203e",
+  "5149": {
+    "classification": "Actual metadata sanitizer contract failure",
+    "observation": "Ordinary script close control stripped; legal close whitespace variant retained byte-identically in direct string and nested list/dict output.",
+    "spec": [
+      "specs/security-threats.md:144",
+      "specs/security-data.md:302-309"
+    ],
+    "source": [
+      "src/kailash/trust/security.py:213-218",
+      "src/kailash/trust/security.py:316-371"
+    ],
+    "callers": [
+      "packages/kailash-kaizen/src/kaizen/trust/__init__.py:327 (public reexport)",
+      "packages/kailash-kaizen/examples/trust/security_hardening_example.py:81",
+      "sanitize_metadata recursive local methods"
+    ],
+    "limitation": "No downstream HTML-rendering exploit demonstrated; public sanitizer itself makes security claim."
+  },
+  "129": {
+    "classification": "XSS not reproduced at text producer; actual extraction correctness bug",
+    "observation": "DocumentProcessorNode.execute returns alert(1), no raw HTML tags, for closing-space script; returns empty for ordinary control. Style close-space similarly leaves non-visible CSS in extracted text.",
+    "spec": "specs/node-catalog.md:57-62 (content extraction)",
+    "source": [
+      "src/kailash/nodes/data/readers.py:1106-1155",
+      "src/kailash/nodes/data/readers.py:1297-1338"
+    ],
+    "limitation": "Final tag stripping and heading regex constrain tested output; metadata file paths and arbitrary downstream rendering are outside this finding. Do not generalize to universal HTML sanitizer security."
+  },
+  "proposal": [
+    "Document extraction: parser-based script/style exclusion with preserved heading/text outputs, malformed/unclosed and closing-whitespace tests.",
+    "Trust metadata: decide and document rendering contract before adopting broad escaping/markup deletion; use parser-aware sanitization or text-only escaped output, preserve benign data/containers and assert keys+values recursion.",
+    "Do not claim adding whitespace to current regex establishes complete HTML safety; unclosed script/source markup and nested deletion fusion require explicit tests."
+  ],
+  "no_changes": true
+}

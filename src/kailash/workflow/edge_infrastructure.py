@@ -351,19 +351,20 @@ class EdgeInfrastructure:
             return health
 
     async def cleanup(self):
-        """Clean up all resources asynchronously."""
+        """Clean up current-loop resources while retaining reusable pool identities."""
         logger.info("Cleaning up EdgeInfrastructure resources")
 
-        # Clean up connection pools
-        cleanup_tasks = []
-        for location_id, pool in self._connection_pools.items():
-            cleanup_tasks.append(pool.cleanup_all())
+        # Pools contain independent owner-loop states. Snapshot under the lock:
+        # another thread may register a location while cleanup awaits. Retain
+        # identities so foreign-loop leases remain reachable and share the cap.
+        with self._lock:
+            pools = tuple(self._connection_pools.values())
+        cleanup_tasks = [pool.cleanup_all() for pool in pools]
 
         if cleanup_tasks:
             await asyncio.gather(*cleanup_tasks, return_exceptions=True)
 
         with self._lock:
-            self._connection_pools.clear()
             self._discovery = None
             self._compliance_router = None
             self._edge_nodes.clear()

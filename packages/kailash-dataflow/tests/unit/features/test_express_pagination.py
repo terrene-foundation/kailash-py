@@ -6,7 +6,8 @@ Tier 1 unit tests for Express list() order_by parameter (GH #228 cross-SDK align
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -21,7 +22,7 @@ class TestExpressListOrderBy:
         integration added in Phase 5.11 short-circuits — otherwise the
         ambient ``MagicMock`` attribute would be truthy and the read
         path would try to ``await`` a MagicMock, which is not awaitable.
-        ``_classification_enabled`` is similarly cleared so the
+        ``_classification_policy`` is similarly cleared so the
         Phase 5.10 redaction path stays out of the unit test scope.
         """
         from dataflow.features.express import DataFlowExpress
@@ -29,6 +30,7 @@ class TestExpressListOrderBy:
         db = MagicMock()
         db._nodes = {}
         db._cache = None
+        db.config = SimpleNamespace(database=SimpleNamespace(url="sqlite:///:memory:"))
         # Disable Phase 5.10 / 5.11 wiring for the unit-level test —
         # the classification policy and trust executor are real-infra
         # concerns covered by their own integration suites. Without
@@ -36,11 +38,7 @@ class TestExpressListOrderBy:
         # truthy MagicMock that the read path tries to await.
         db._trust_executor = None
         db._classification_policy = None
-        express = DataFlowExpress.__new__(DataFlowExpress)
-        express._db = db
-        express._default_cache_ttl = None
-        express._timings = {}
-        return express
+        return DataFlowExpress(db, cache_enabled=False)
 
     @pytest.mark.asyncio
     async def test_list_accepts_order_by_parameter(self):
@@ -66,7 +64,8 @@ class TestExpressListOrderBy:
         assert result == [{"id": 1, "name": "Alice"}]
 
     @pytest.mark.asyncio
-    async def test_list_passes_order_by_in_params(self):
+    @pytest.mark.parametrize("order_by", ["created_at", "-created_at"])
+    async def test_list_passes_order_by_in_params(self, order_by):
         """order_by is included in the params passed to the node."""
         express = self._make_express()
 
@@ -87,10 +86,12 @@ class TestExpressListOrderBy:
         express._cache_set = AsyncMock()
         express._execute_with_timing = fake_execute
 
-        await express.list("User", order_by="created_at")
+        await express.list("User", order_by=order_by)
 
         assert "order_by" in captured_params
-        assert captured_params["order_by"] == "created_at"
+        assert captured_params["order_by"] == order_by
+        assert captured_params["enable_cache"] is False
+        assert captured_params["cache_ttl"] == 300
 
     @pytest.mark.asyncio
     async def test_list_omits_order_by_when_none(self):
@@ -170,7 +171,7 @@ class TestExpressListOrderBy:
 
         import asyncio
 
-        sync._run_sync = lambda coro: asyncio.get_event_loop().run_until_complete(coro)
+        sync._run_sync = asyncio.run
 
         sync.list("User", order_by="updated_at")
 

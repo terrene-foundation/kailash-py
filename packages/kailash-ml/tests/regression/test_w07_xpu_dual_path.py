@@ -24,6 +24,7 @@ from typing import Optional
 from unittest.mock import MagicMock
 
 import pytest
+
 from kailash_ml._device import _probe_xpu
 
 

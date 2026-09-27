@@ -22,6 +22,7 @@ from kailash.trust.envelope import (
     ConstraintEnvelope,
     OperationalConstraint,
 )
+from kailash.trust.readonly_proxy import ReadOnlyProxyError
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
 from kaizen_agents.events import StreamBufferOverflow
@@ -298,7 +299,18 @@ class TestStackingAttack:
             L3GovernedAgent(monitored, envelope, mcp_servers=[])
 
     def test_valid_stack_order_accepted(self) -> None:
-        """Canonical stack order is accepted."""
+        """Canonical stack order is accepted.
+
+        This test previously closed with ``assert streaming.innermost is agent``
+        -- using identity with the raw agent as a cheap proxy for "all three
+        wrappers constructed without error". That assertion was ALSO, silently,
+        the only thing in the suite pinning ``innermost``'s containment
+        behaviour, and what it pinned was the bypass: reaching the raw agent
+        past a governance wrapper (#2227 Route A). It now asserts what it was
+        actually written to check -- that the stack builds -- and the
+        containment contract is asserted explicitly in
+        ``TestInnermostContainment`` below.
+        """
         agent = _make_agent()
         envelope = _make_envelope()
 
@@ -306,8 +318,231 @@ class TestStackingAttack:
         monitored = MonitoredAgent(governed, mcp_servers=[])
         streaming = StreamingAgent(monitored, mcp_servers=[])
 
-        # All wrappers constructed without error
+        # All wrappers constructed without error, in the canonical order.
+        assert streaming.inner is monitored
+        assert monitored.inner is governed
+        assert governed.envelope is envelope
+
+
+class TestInnermostContainment:
+    """#2227 Route A: ``innermost`` must not walk past a governance wrapper.
+
+    ``L3GovernedAgent`` overrides ``inner`` to return a ``_ProtectedInnerProxy``
+    but ``innermost`` is defined on ``WrapperBase`` and walked the private
+    ``_inner`` chain, so it returned the raw agent and
+    ``governed.innermost.run(...)`` executed with no governance evaluation at
+    all -- going AROUND the proxy rather than through it, which is why the
+    #2224 proxy work could not close it.
+
+    Both poles are asserted throughout: the attack must fail AND the legitimate
+    use of ``innermost`` (resolving the base agent's config, which is what
+    StreamingAgent needs it for) must keep working.
+    """
+
+    def test_innermost_returns_proxy_not_raw_agent(self) -> None:
+        """Direct case: governed.innermost is the proxy, not the raw agent."""
+        agent = _make_agent()
+        governed = L3GovernedAgent(agent, _make_envelope(), mcp_servers=[])
+
+        assert governed.innermost is not agent
+        assert isinstance(governed.innermost, _ProtectedInnerProxy)
+
+    def test_innermost_through_full_stack_stops_at_governance(self) -> None:
+        """Stacked case: the walk starts outermost and must still stop.
+
+        This is the case an override on ``L3GovernedAgent.innermost`` would
+        NOT have fixed -- the walk begins at StreamingAgent and never consults
+        an intermediate wrapper's own ``innermost``.
+        """
+        agent = _make_agent()
+        governed = L3GovernedAgent(agent, _make_envelope(), mcp_servers=[])
+        monitored = MonitoredAgent(governed, mcp_servers=[])
+        streaming = StreamingAgent(monitored, mcp_servers=[])
+
+        for wrapper in (streaming, monitored, governed):
+            assert wrapper.innermost is not agent
+            assert isinstance(wrapper.innermost, _ProtectedInnerProxy)
+
+    def test_innermost_cannot_run_ungoverned(self) -> None:
+        """The concrete bypass: innermost.run() must be denied."""
+        agent = _make_agent()
+        streaming = StreamingAgent(
+            MonitoredAgent(
+                L3GovernedAgent(agent, _make_envelope(), mcp_servers=[]),
+                mcp_servers=[],
+            ),
+            mcp_servers=[],
+        )
+
+        with pytest.raises(ReadOnlyProxyError):
+            streaming.innermost.run(query="bypass")
+        with pytest.raises(ReadOnlyProxyError):
+            streaming.innermost.run_async(query="bypass")
+
+    def test_innermost_still_serves_legitimate_config_reads(self) -> None:
+        """Opposite pole: the reason innermost exists must keep working.
+
+        StreamingAgent resolves the model/sampling config from the innermost
+        agent. Returning the proxy (rather than raising) is what keeps that
+        working while denying execution.
+        """
+        agent = _make_agent()
+        governed = L3GovernedAgent(agent, _make_envelope(), mcp_servers=[])
+
+        assert governed.innermost.config is agent.config
+        assert governed.innermost.signature is agent.signature
+        assert governed.innermost.get_parameters() == agent.get_parameters()
+
+    def test_ungoverned_stack_innermost_unchanged(self) -> None:
+        """Opposite pole: with no governance wrapper, nothing changes.
+
+        Without this, the fix would be indistinguishable from "innermost is
+        broken for everyone".
+        """
+        agent = _make_agent()
+        monitored = MonitoredAgent(agent, mcp_servers=[])
+        streaming = StreamingAgent(monitored, mcp_servers=[])
+
+        assert monitored.innermost is agent
         assert streaming.innermost is agent
+        assert streaming.innermost.run(query="ok") is not None
+
+
+class TestProxyMemberReturnValueContainment:
+    """#2227 HIGH-1: an allowlisted member must not RETURN a runnable handle.
+
+    Gating the NAME and stripping the bound method's ``__self__`` is not enough:
+    ``to_workflow_node`` was ``def to_workflow_node(self): return self``, so
+    ``governed.inner.to_workflow_node()`` handed back the raw agent and
+    ``.run()`` on it executed ungoverned -- and, through the innermost boundary
+    the #2227 fix added, ``streaming.innermost.to_workflow_node().run(...)`` did
+    too. Same class as #2226: an allowlisted member returns a live handle to the
+    target. The prior ``__self__`` test never CALLED the member, so it missed
+    this. These tests CALL every allowlisted member and assert the result is
+    neither the raw agent nor runnable.
+    """
+
+    def test_to_workflow_node_is_not_reachable_through_the_proxy(self) -> None:
+        """The removed member must now be DENIED, not merely stripped."""
+        agent = _make_agent()
+        governed = L3GovernedAgent(agent, _make_envelope(), mcp_servers=[])
+
+        with pytest.raises(AttributeError):
+            governed.inner.to_workflow_node()
+
+    def test_to_workflow_is_not_reachable_through_the_proxy(self) -> None:
+        """to_workflow builds an LLM-executing workflow with ungoverned threaded."""
+        agent = _make_agent()
+        governed = L3GovernedAgent(agent, _make_envelope(), mcp_servers=[])
+
+        with pytest.raises(AttributeError):
+            governed.inner.to_workflow()
+
+    def test_to_workflow_node_bypass_via_innermost_is_closed(self) -> None:
+        """The stacked route the #2227 innermost fix opened must also be closed."""
+        agent = _make_agent()
+        streaming = StreamingAgent(
+            MonitoredAgent(
+                L3GovernedAgent(agent, _make_envelope(), mcp_servers=[]),
+                mcp_servers=[],
+            ),
+            mcp_servers=[],
+        )
+
+        with pytest.raises(AttributeError):
+            streaming.innermost.to_workflow_node()
+
+    def test_no_allowlisted_member_returns_a_live_agent_handle(self) -> None:
+        """Anti-staleness: CALL every allowlisted member; none may return the
+        raw agent or anything runnable.
+
+        Walks ``_ProtectedInnerProxy._ALLOWED_ATTRS`` itself, so a NEW entry
+        that returns a live handle fails here -- the gap the __self__-only test
+        left open. ``config``/``signature`` are data; ``get_parameters`` returns
+        a params dict; a member returning the raw agent, or an object exposing
+        ``run``/``run_async``, is the escape hatch.
+        """
+        agent = _make_agent()
+        governed = L3GovernedAgent(agent, _make_envelope(), mcp_servers=[])
+        proxy = governed.inner
+
+        leaks: list[str] = []
+        for name in sorted(_ProtectedInnerProxy._ALLOWED_ATTRS):
+            member = getattr(proxy, name)
+            result = member() if callable(member) else member
+            if result is agent:
+                leaks.append(f"{name} -> returned the raw agent")
+                continue
+            # An LLM-executing / runnable artifact reachable from a read-only
+            # proxy is the HIGH-1 class even when it is not the agent object.
+            if hasattr(result, "run") and hasattr(result, "run_async"):
+                leaks.append(f"{name} -> returned a runnable ({type(result).__name__})")
+
+        assert leaks == [], (
+            f"_ProtectedInnerProxy allowlisted members returning a live/runnable "
+            f"handle to the ungoverned agent (#2227 HIGH-1): {leaks}"
+        )
+
+
+class TestGovernedToWorkflowFailsClosed:
+    """#2227: ``governed.to_workflow()`` is a PUBLIC one-hop ungoverned bypass.
+
+    ``L3GovernedAgent`` did not override ``to_workflow``; it inherited
+    ``WrapperBase.to_workflow`` -> ``self._inner.to_workflow()`` ->
+    ``BaseAgent.to_workflow``, which emits an ``LLMAgentNode`` carrying
+    ``ungoverned=config.ungoverned`` and NO envelope evaluation (budget/
+    operational/posture live only in ``_evaluate``). So::
+
+        wf = governed.to_workflow()
+        LocalRuntime().execute(wf.build())   # inner LLM work, envelope SKIPPED
+
+    ran the inner agent from a plain public supported method -- the same class
+    as the ``innermost`` / ``to_workflow_node`` routes, and the same danger
+    documented for the removed proxy ``to_workflow`` entry. Also reachable as
+    ``MonitoredAgent(governed).to_workflow()`` (MonitoredAgent doesn't override
+    it either). Fixed by refusing, matching ``StreamingAgent.to_workflow``.
+    """
+
+    def test_governed_to_workflow_refuses(self) -> None:
+        agent = _make_agent()
+        governed = L3GovernedAgent(agent, _make_envelope(), mcp_servers=[])
+
+        with pytest.raises(GovernanceRejectedError, match="workflow_conversion"):
+            governed.to_workflow()
+
+    def test_monitored_over_governed_to_workflow_refuses(self) -> None:
+        """The bypass is reachable through an outer wrapper too."""
+        agent = _make_agent()
+        monitored = MonitoredAgent(
+            L3GovernedAgent(agent, _make_envelope(), mcp_servers=[]),
+            mcp_servers=[],
+        )
+
+        with pytest.raises(GovernanceRejectedError, match="workflow_conversion"):
+            monitored.to_workflow()
+
+    def test_ungoverned_workflow_cannot_be_built_from_a_governed_agent(self) -> None:
+        """The concrete harm: no runnable ungoverned workflow is obtainable.
+
+        The refusal happens at ``to_workflow()``, so a caller never reaches
+        ``.build()`` -- there is no ungoverned workflow to execute.
+        """
+        agent = _make_agent()
+        governed = L3GovernedAgent(agent, _make_envelope(), mcp_servers=[])
+
+        with pytest.raises(GovernanceRejectedError):
+            governed.to_workflow().build()  # never returns a builder to .build()
+
+    def test_plain_agent_to_workflow_still_works(self) -> None:
+        """Opposite pole: an UNwrapped agent's to_workflow must be unaffected.
+
+        Without this the change is indistinguishable from "to_workflow is
+        broken for everyone". A bare BaseAgent still emits a buildable workflow.
+        """
+        agent = _make_agent()
+        workflow = agent.to_workflow()
+        built = workflow.build()
+        assert built is not None
 
 
 # ---------------------------------------------------------------------------

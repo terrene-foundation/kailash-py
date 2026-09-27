@@ -9,9 +9,11 @@ import inspect
 import logging
 import os
 import re
+import sys
 import threading
 import time
 import warnings
+from contextlib import asynccontextmanager
 from copy import deepcopy
 from datetime import datetime
 from typing import (
@@ -27,6 +29,7 @@ from typing import (
     Type,
     Union,
 )
+from uuid import uuid4
 
 if TYPE_CHECKING:
     from .audit_integration import AuditIntegration
@@ -47,11 +50,9 @@ FailedDDLRecord = _namedtuple(
 # __init__ rather than silently degrading to fail-fast.
 _AUTO_MIGRATE_WARN = "warn"
 
-from kailash.db.dialect import (
-    DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
-    _validate_identifier,
-)
+from kailash.db.dialect import _validate_identifier
 from kailash.runtime import AsyncLocalRuntime, LocalRuntime
+from kailash.utils.sqlite_url import is_sqlite_url
 
 # Conservative SQL type allowlist for dynamic ALTER TABLE ... TYPE statements
 # (rules/dataflow-identifier-safety.md). The MODIFY_COLUMN path takes a
@@ -169,6 +170,55 @@ except ImportError:
 ErrorEnhancer = PlatformErrorEnhancer
 
 logger = logging.getLogger(__name__)
+
+
+class _TableVerificationInconclusive(RuntimeError):
+    """Issue #2206 — internal marker: the committed-state existence check for a
+    table could not be COMPLETED, on a path where schema management had already
+    reported SUCCESS.
+
+    Residual of #1548. That fix made ``ensure_table_exists`` verify physical
+    existence on a fresh committed-state connection, but treated an
+    INCONCLUSIVE verdict (``None``) exactly like a confirmed one: it fell
+    through to ``mark_table_ensured()`` and returned ``True``. The check goes
+    inconclusive when the fresh verify connect is REFUSED or TIMES OUT — i.e.
+    under the connection-pool exhaustion / process-state accumulation that
+    #1548 was filed for — so the guard failed OPEN precisely in the condition it
+    exists to catch, and ``mark_table_ensured()`` then CACHED that fail-open, so
+    every later access short-circuited at the schema-cache fast path and never
+    re-verified.
+
+    SCOPE, MEASURED (issue #2206 re-derivation, 2026-09-12). This closes a real
+    fail-open, but it is NOT the window that produced #2206's reported symptom,
+    and it must not be cited as such. On DataFlow's DEFAULT path the EAGER SYNC
+    creation path (``_create_tables_batch`` / ``_create_table_sync``) marks the
+    table ensured with NO physical verification, and every later
+    ``ensure_table_exists`` then short-circuits at the schema-cache fast path.
+    So the #1548 verify — and therefore this #2206 handling — NEVER EXECUTES
+    there. Measured: 0 verify invocations across 500 harness iterations (250 on
+    this code, 250 on its parent) AND across
+    ``test_issue_1249_tenant_isolation_leak_postgres.py`` itself, which marked
+    ensured from ``_create_tables_batch`` and then took 13 consecutive cache
+    hits. The reported ~1/137 non-durable-write signature reproduced at 2/250
+    (0.80%) WITH this code applied. #1548's guard is unreachable on the default
+    path — a REACHABILITY gap, not a logic gap — which is why #1548's fix is in
+    the tree while its symptom still reproduces. Closing that gap (verifying on
+    the sync path too) is a separate, unshipped decision: it would add a fresh
+    connect per model at startup, which ADR-001 performance constrains.
+
+    Raised ONLY for the ERROR-class inconclusive (transient, retryable). The
+    STRUCTURAL-class inconclusive — an unknown backend with no SQL table
+    concept, or bare in-memory SQLite with no shared URI — is NOT raised for:
+    re-checking can never make it conclusive, so blocking on it would break
+    legitimate flows with no durability benefit.
+
+    Handled by a dedicated ``except`` clause in ``ensure_table_exists`` that
+    converts it to ``DDLFailedError`` (the only type ``nodes.py`` propagates
+    rather than log-and-continue) WITHOUT recording failed-DDL state: the
+    condition is transient, and the #696 circuit breaker has no TTL, so
+    recording it would permanently brick the model on this instance instead of
+    letting the next access self-heal.
+    """
 
 
 class DataFlow(DataFlowEventMixin):
@@ -553,6 +603,37 @@ class DataFlow(DataFlowEventMixin):
             warnings.warn(warning_msg, UserWarning, stacklevel=2)
             logger.warning(warning_msg)
 
+        from kailash.utils.sqlite_url import (
+            is_sqlite_url,
+            sqlite_memory_uri_kind,
+            sqlite_owner_url,
+            sqlite_sqlalchemy_url,
+        )
+
+        self._sqlite_database_url = (
+            sqlite_owner_url(self.config.database.url)
+            if isinstance(self.config.database.url, str)
+            and is_sqlite_url(self.config.database.url)
+            else None
+        )
+        for is_replica, candidate_url in (
+            (False, self.config.database.url),
+            (True, read_url),
+        ):
+            candidate_kind = sqlite_memory_uri_kind(candidate_url or "")
+            if candidate_kind == "private" or (
+                is_replica and candidate_kind == "anonymous"
+            ):
+                from dataflow.exceptions import DataFlowConfigurationError
+
+                raise DataFlowConfigurationError(
+                    "DataFlow requires a memory database shared across its connections; "
+                    "use managed :memory: or a named file: URI with mode=memory&cache=shared "
+                    "(memdb VFS requires an absolute name)."
+                )
+        _memory_database_url = self.config.database.url or ""
+        _memory_kind = sqlite_memory_uri_kind(_memory_database_url)
+
         self._models = {}
         self._registered_models = {}  # Track registered models for compatibility
         self._model_fields = {}  # Store model field information
@@ -583,6 +664,13 @@ class DataFlow(DataFlowEventMixin):
         # See: ROOT_CAUSE_ANALYSIS.md in reports/issues/database-url-inheritance/
         # Format: {database_type: (node, event_loop_id)} for event loop tracking (v0.10.6+)
         self._async_sql_node_cache = {}  # Keyed by database_type
+        # Issue #2211: nodes evicted from the cache by an event-loop change
+        # whose pool is bound to a loop that is STILL ALIVE, so releasing it
+        # here would abort connections underneath a concurrent caller. Drained
+        # by close()/close_async(). The far more common dead-loop case is
+        # released immediately and never reaches this list — see
+        # _release_displaced_async_sql_node.
+        self._displaced_async_sql_nodes: list = []
 
         # Store migration control parameters
         # auto_migrate enum (issue #696):
@@ -718,7 +806,7 @@ class DataFlow(DataFlowEventMixin):
         self._connection_manager = ConnectionManager(self)
 
         # TSG-105: Dual-adapter read replica support
-        self._read_url = read_url
+        self._read_url = sqlite_owner_url(read_url) if read_url else read_url
         self._read_pool_size = read_pool_size
         self._read_connection_manager: Optional[ConnectionManager] = None
         if read_url:
@@ -728,6 +816,18 @@ class DataFlow(DataFlowEventMixin):
 
         # TSG-201: Initialize event bus for write-event emission
         self._init_events()
+
+        # Establish the real memory-database identity before cache consumers.
+        # A fresh nonce prevents stale shared-cache entries surviving id() reuse.
+        self._memory_db_uri: Optional[str] = None
+        if _memory_kind == "anonymous":
+            self._memory_db_uri = f"file:df_mem_{uuid4().hex}?mode=memory&cache=shared"
+        elif _memory_kind == "shared":
+            # Retain a native URI, including explicit driver options, for all
+            # producers. The anchor below owns its lifetime across DDL steps.
+            self._memory_db_uri = sqlite_sqlalchemy_url(_memory_database_url)[
+                len("sqlite:///") :
+            ]
 
         # TSG-104: Wire cache configuration into Express
         _express_cache_ttl = getattr(self.config, "cache_ttl", 300)
@@ -822,18 +922,10 @@ class DataFlow(DataFlowEventMixin):
         # instance — a shared-cache memory DB is destroyed the moment its last
         # connection closes, so without the anchor the schema would vanish
         # between operations. The anchor never runs queries.
-        self._memory_db_uri: Optional[str] = None
-        if self.config.database.url in (
-            ":memory:",
-            "sqlite:///:memory:",
-            "sqlite://:memory:",
-        ):
+        if self._memory_db_uri is not None:
             import sqlite3
 
-            self._memory_db_uri = f"file:df_mem_{id(self):x}?mode=memory&cache=shared"
-            self._memory_connection = sqlite3.connect(
-                self._memory_db_uri, uri=True, check_same_thread=False
-            )
+            self._memory_connection = self._open_sqlite_connection(self._memory_db_uri)
 
         # Multi-tenant manager (lightweight — no DB connection)
         if self.config.security.multi_tenant:
@@ -977,9 +1069,11 @@ class DataFlow(DataFlowEventMixin):
         # DDL retry — allowing operators who fix the root cause to retry
         # without restarting the application (though restart is the
         # canonical recovery path documented on DDLFailedError).
-        from .exceptions import DDLFailedError as _DDLFailedError
-        from .exceptions import MigrationNotAppliedError as _MigrationNotAppliedError
-        from .exceptions import sanitize_db_error as _sanitize_db_error
+        from .exceptions import (
+            DDLFailedError as _DDLFailedError,
+            MigrationNotAppliedError as _MigrationNotAppliedError,
+            sanitize_db_error as _sanitize_db_error,
+        )
 
         self._DDLFailedError = _DDLFailedError  # cached symbol for hot path
         # Issue #1548: typed "migration completed but did not apply" error
@@ -995,6 +1089,10 @@ class DataFlow(DataFlowEventMixin):
     # ------------------------------------------------------------------
     # Issue #713: Lazy per-event-loop runtime resolution
     # ------------------------------------------------------------------
+
+    def _effective_database_url(self) -> Optional[str]:
+        """Return the pinned SQLite target; retain other engine URL behavior."""
+        return vars(self).get("_sqlite_database_url") or self.config.database.url
 
     @property
     def runtime(self) -> Any:
@@ -1044,7 +1142,10 @@ class DataFlow(DataFlowEventMixin):
             cached = self._loop_runtime_cache.get(loop_id)
             if cached is not None:
                 return cached
+            # DataFlow closes every cached runtime at shutdown, just as it
+            # owns the sync singleton below. Declare that ownership to Core.
             runtime = AsyncLocalRuntime()
+            runtime.mark_externally_managed()
             self._loop_runtime_cache[loop_id] = runtime
             logger.debug(
                 "engine.lazy_async_runtime_allocated",
@@ -1134,6 +1235,8 @@ class DataFlow(DataFlowEventMixin):
         "_loop_runtime_cache",
         "_sync_runtime_singleton",
         "_async_sql_node_cache",
+        # Issue #2211: holds live nodes bound to loops in THIS process.
+        "_displaced_async_sql_nodes",
         # ErrorEnhancer holds a functools.lru_cache wrapper.
         "error_enhancer",
         # Subsystems that hold thread.Lock or RLock instances. These
@@ -1222,6 +1325,7 @@ class DataFlow(DataFlowEventMixin):
         self._loop_runtime_cache = {}
         self._sync_runtime_singleton = None
         self._async_sql_node_cache = {}
+        self._displaced_async_sql_nodes = []
         # Lazily recreate ErrorEnhancer if available.
         self.error_enhancer = (
             CoreErrorEnhancer() if CoreErrorEnhancer is not None else None
@@ -1344,7 +1448,7 @@ class DataFlow(DataFlowEventMixin):
                         from dataflow.core.pool_validator import validate_pool_config
 
                         result = validate_pool_config(
-                            database_url=self.config.database.url
+                            database_url=DataFlow._effective_database_url(self)
                             or self.config.database.database_url,
                             pool_size=resolved_pool_size,
                             max_overflow=resolved_max_overflow,
@@ -1423,7 +1527,10 @@ class DataFlow(DataFlowEventMixin):
                         )
 
                 # RS-6: Lightweight pool for health checks (separate from main pool)
-                db_url = self.config.database.url or self.config.database.database_url
+                db_url = (
+                    DataFlow._effective_database_url(self)
+                    or self.config.database.database_url
+                )
                 if db_url:
                     try:
                         from dataflow.core.pool_lightweight import LightweightPool
@@ -1568,23 +1675,26 @@ class DataFlow(DataFlowEventMixin):
         """
         try:
             # Check if this is PostgreSQL which requires async connections
-            database_url = self.config.database.url
-            is_postgresql = database_url and (
-                "postgresql" in database_url.lower()
-                or "postgres" in database_url.lower()
+            database_url = DataFlow._effective_database_url(self)
+            is_postgresql = (
+                database_url
+                and not is_sqlite_url(database_url)
+                and (
+                    "postgresql" in database_url.lower()
+                    or "postgres" in database_url.lower()
+                )
             )
 
             if is_postgresql:
                 # Use async connection for PostgreSQL
                 try:
-                    connection = await self._get_async_database_connection()
-                    if connection is None:
-                        # In existing_schema_mode, be more lenient
-                        return self._existing_schema_mode
+                    async with self._async_database_connection_scope() as connection:
+                        if connection is None:
+                            # In existing_schema_mode, be more lenient.
+                            return self._existing_schema_mode
 
-                    # For async connections, try a simple validation
-                    # The connection manager handles the actual validation
-                    return True
+                        # Successful acquisition validates the connection.
+                        return True
                 except Exception as async_error:
                     logger.debug(
                         f"PostgreSQL async connection test failed: {async_error}"
@@ -1683,8 +1793,21 @@ class DataFlow(DataFlowEventMixin):
             # construction; a URL set on the config after construction does
             # not retroactively change it (DataFlow URLs are set at init).
             db_conf = getattr(self.config, "database", None)
+            db_url = getattr(db_conf, "url", None)
+            from kailash.utils.sqlite_url import sqlite_cache_identity_url
+
             db_res = resolve_db_identity(
-                url=getattr(db_conf, "url", None),
+                url=(
+                    sqlite_cache_identity_url(self._memory_db_uri)
+                    if self._memory_db_uri is not None
+                    else (
+                        sqlite_cache_identity_url(
+                            vars(self).get("_sqlite_database_url") or db_url
+                        )
+                        if isinstance(db_url, str)
+                        else db_url
+                    )
+                ),
                 host=getattr(db_conf, "host", None),
                 port=getattr(db_conf, "port", None),
                 dbname=getattr(db_conf, "database", None),
@@ -1749,12 +1872,14 @@ class DataFlow(DataFlowEventMixin):
             connection = self._get_async_sql_connection()
 
             # Determine database dialect from connection URL
-            database_url = self.config.database.url or ":memory:"
-            if "postgresql" in database_url or "postgres" in database_url:
+            database_url = DataFlow._effective_database_url(self) or ":memory:"
+            if not is_sqlite_url(database_url) and (
+                "postgresql" in database_url or "postgres" in database_url
+            ):
                 dialect = "postgresql"
-            elif "mysql" in database_url:
+            elif not is_sqlite_url(database_url) and "mysql" in database_url:
                 dialect = "mysql"
-            elif "sqlite" in database_url or database_url == ":memory:":
+            elif is_sqlite_url(database_url):
                 dialect = "sqlite"
                 # SQLite is fully supported for production with enterprise adapter
             else:
@@ -1790,7 +1915,10 @@ class DataFlow(DataFlowEventMixin):
                 # Issue #1502: bare ``:memory:`` uses the per-instance shared-cache
                 # URI so migrations land in the SAME DB as CRUD; None otherwise.
                 connection_string=self._memory_db_uri
-                or self.config.database.get_connection_url(self.config.environment),
+                or (
+                    DataFlow._effective_database_url(self)
+                    or self.config.database.get_connection_url(self.config.environment)
+                ),
                 dialect=dialect,
                 migrations_dir=migrations_dir,
                 dataflow_instance=self,
@@ -1901,10 +2029,10 @@ class DataFlow(DataFlowEventMixin):
         database URL, creates the table/indexes, and wires the backend
         into the existing AuditIntegration instance.
         """
-        database_url = self.config.database.url or ":memory:"
+        database_url = DataFlow._effective_database_url(self) or ":memory:"
 
         try:
-            if (
+            if not is_sqlite_url(database_url) and (
                 "postgresql" in database_url.lower()
                 or "postgres" in database_url.lower()
             ):
@@ -1922,7 +2050,7 @@ class DataFlow(DataFlowEventMixin):
                 # Default to SQLite for sqlite URLs and :memory:
                 from dataflow.core.event_stores.sqlite import SQLiteEventStore
 
-                if database_url == ":memory:" or "sqlite" in database_url.lower():
+                if is_sqlite_url(database_url):
                     # For in-memory or SQLite URLs, derive a file path
                     if database_url == ":memory:":
                         db_path = ":memory:"
@@ -2327,7 +2455,9 @@ class DataFlow(DataFlowEventMixin):
             # migration paths use — NOT the pluralized class-name default, which
             # points at a nonexistent table for a custom-``__tablename__`` model.
             table_name = self._get_table_name(cls.__name__)
-            return create_query_builder(table_name, self.config.database.url)
+            return create_query_builder(
+                table_name, DataFlow._effective_database_url(self)
+            )
 
         # Bind the method as a classmethod
         cls.query_builder = classmethod(query_builder)
@@ -2392,7 +2522,7 @@ class DataFlow(DataFlowEventMixin):
         self._check_failed_ddl(model_name)
 
         # ADR-001: Check schema cache first
-        database_url = self.config.database.url or ":memory:"
+        database_url = DataFlow._effective_database_url(self) or ":memory:"
 
         # Calculate schema checksum if validation enabled
         schema_checksum = None
@@ -2450,7 +2580,9 @@ class DataFlow(DataFlowEventMixin):
             await self._reconcile_columns_async(model_name, fields, database_url)
 
             # Detect database type and route appropriately
-            if "postgresql" in database_url or "postgres" in database_url:
+            if not is_sqlite_url(database_url) and (
+                "postgresql" in database_url or "postgres" in database_url
+            ):
                 logger.debug(
                     "engine.ensuring_postgresql_table_for_model",
                     extra={"model_name": model_name},
@@ -2458,11 +2590,7 @@ class DataFlow(DataFlowEventMixin):
                 await self._execute_postgresql_schema_management_async(
                     model_name, fields
                 )
-            elif (
-                "sqlite" in database_url
-                or database_url == ":memory:"
-                or database_url.endswith(".db")
-            ):
+            elif is_sqlite_url(database_url) or database_url.endswith(".db"):
                 logger.debug(
                     "engine.ensuring_sqlite_table_for_model",
                     extra={"model_name": model_name},
@@ -2495,11 +2623,22 @@ class DataFlow(DataFlowEventMixin):
             # per actual ensure-miss (the schema-cache HIT fast path returned
             # early above, so ADR-001 performance is untouched). A DEFINITIVE
             # "table absent" raises below so the caller sees a loud failure and
-            # the next access self-heals; an INCONCLUSIVE check (verification
-            # could not run) logs WARN and does not block — the primary
-            # durability guarantee is the un-swallowed migration path above.
-            physically_exists = await self._verify_table_physically_exists(
-                model_name, database_url
+            # the next access self-heals.
+            #
+            # Issue #2206 (residual of #1548): an INCONCLUSIVE verdict used to
+            # fall through to mark_table_ensured() + return True, i.e. it was
+            # treated exactly like a CONFIRMED one. The check goes inconclusive
+            # when the fresh verify connect is refused or times out — under the
+            # very pool exhaustion #1548 was filed for — so the guard failed
+            # OPEN precisely when it was needed, and marking the cache ensured
+            # then CACHED that fail-open: every later access short-circuited at
+            # the schema-cache fast path above and never re-verified, so one
+            # transient blip blinded the instance to a missing table for its
+            # whole lifetime. The two kinds of inconclusive are now separated.
+            physically_exists, verify_reason = (
+                await self._verify_table_physically_exists_detailed(
+                    model_name, database_url
+                )
             )
             if physically_exists is False:
                 # DEFINITIVE absent despite a "success" return — the exact
@@ -2512,6 +2651,46 @@ class DataFlow(DataFlowEventMixin):
                     "fresh committed-state existence check returned absent"
                 )
 
+            if physically_exists is None and verify_reason == "check-error":
+                # Issue #2206: TRANSIENT inconclusive. Retry ONCE — a refused /
+                # timed-out connect under momentary saturation usually clears,
+                # and a retry that comes back conclusive costs one short sleep
+                # on the already-slow ensure-MISS path while sparing callers a
+                # spurious hard failure.
+                await asyncio.sleep(self._VERIFY_RETRY_DELAY_SECONDS)
+                physically_exists, verify_reason = (
+                    await self._verify_table_physically_exists_detailed(
+                        model_name, database_url
+                    )
+                )
+                if physically_exists is False:
+                    raise RuntimeError(
+                        "schema management reported success but the table does "
+                        "not physically exist (issue #1548 silent-write-loss "
+                        "guard); fresh committed-state existence check returned "
+                        "absent on retry"
+                    )
+                if physically_exists is None and verify_reason == "check-error":
+                    # Still could not reach committed state. Durability is
+                    # UNCONFIRMED, and on this path the verify is the ONLY
+                    # evidence the table is durable (schema management already
+                    # claimed success, so the un-swallowed migration path has
+                    # nothing left to say). Refuse to cache it and refuse to
+                    # report success — a loud failure the next access can
+                    # self-heal from, rather than a silent write into a table
+                    # that may not exist.
+                    raise _TableVerificationInconclusive(
+                        "schema management reported success but committed-state "
+                        "verification could not be completed after a retry "
+                        "(issue #2206); durability is unconfirmed, so the table "
+                        "was NOT marked ensured"
+                    )
+
+            # STRUCTURAL inconclusive ("unverifiable-backend": unknown backend,
+            # bare in-memory SQLite) still proceeds — re-checking can never make
+            # it conclusive, so blocking buys no durability and only breaks
+            # legitimate flows. Unchanged from #1548.
+
             # ADR-001: Mark as successfully ensured in cache
             self._schema_cache.mark_table_ensured(
                 model_name, database_url, schema_checksum
@@ -2522,6 +2701,40 @@ class DataFlow(DataFlowEventMixin):
                 extra={"model_name": model_name},
             )
             return True
+
+        except _TableVerificationInconclusive as e:
+            # Issue #2206. Deliberately handled BEFORE the generic handler and
+            # with DIFFERENT bookkeeping, because this is not a DDL failure —
+            # it is an UNKNOWN outcome under a TRANSIENT condition.
+            #
+            # NOT done here, on purpose:
+            #   * mark_table_ensured — caching an unverified success is the
+            #     fail-open this issue exists to close.
+            #   * mark_table_failed / _record_failed_ddl — the #696 circuit
+            #     breaker has NO TTL (_check_failed_ddl raises until something
+            #     calls _clear_failed_ddl), so recording a momentary connect
+            #     refusal would permanently brick this model on this instance.
+            #     Leaving both cache and breaker untouched is what lets the very
+            #     next access re-run the ensure and self-heal.
+            logger.error(
+                "engine.table_verification_inconclusive",
+                extra={
+                    "model_name": model_name,
+                    "error": self._sanitize_db_error(str(e)),
+                },
+            )
+            if self._auto_migrate_warn:
+                # Legacy log-and-continue escape hatch, consistent with the
+                # generic handler below.
+                return False
+            # DDLFailedError is the ONLY exception type nodes.py re-raises
+            # rather than logging and continuing into the CRUD call, so it is
+            # the type that actually stops a write into an unverified table.
+            raise self._DDLFailedError(
+                model_name=model_name,
+                original_error=RuntimeError(self._sanitize_db_error(str(e))),
+                statement_preview="",
+            ) from e
 
         except Exception as e:
             logger.error(
@@ -2601,11 +2814,24 @@ class DataFlow(DataFlowEventMixin):
 
             return False
 
+    # Issue #2206: delay between the first ERROR-class inconclusive verify and
+    # its single retry. A refused/timed-out fresh connect under pool saturation
+    # usually clears within a moment; retrying once keeps a transient blip from
+    # surfacing as a hard failure, while bounding the added latency on what is
+    # already the slow ensure-MISS path (the cache-HIT fast path never gets
+    # here, so ADR-001 performance is untouched).
+    _VERIFY_RETRY_DELAY_SECONDS = 0.25
+
     async def _verify_table_physically_exists(
         self, model_name: str, database_url: str
     ) -> Optional[bool]:
         """Issue #1548: verify a table PHYSICALLY exists using a fresh
         connection that reflects COMMITTED state.
+
+        Thin delegate over :meth:`_verify_table_physically_exists_detailed`,
+        which carries the WHY of an inconclusive verdict (issue #2206). Kept as
+        the stable three-state entry point for callers that only need the
+        verdict.
 
         The async lazy-DDL path can (under fault injection or a genuinely
         false-success migration) report success without the table existing.
@@ -2619,9 +2845,13 @@ class DataFlow(DataFlowEventMixin):
                     DDLFailedError; the silent-write-loss guard).
             None  — the check could not run conclusively (e.g. bare in-memory
                     SQLite with no shared URI, or a verification-time
-                    connection error). Logged at WARN; caller does NOT block,
-                    because the primary durability guarantee is the
-                    un-swallowed migration path, not this secondary check.
+                    connection error). Logged at WARN. Issue #2206: what a
+                    caller may do with this is NOT uniform — see
+                    :meth:`_verify_table_physically_exists_detailed` for the
+                    reason code that separates the STRUCTURAL kind (proceed;
+                    a retry can never help) from the TRANSIENT kind (retry,
+                    then refuse to report success — it is the pool-exhaustion
+                    signature, so it must not be read as a confirmation).
 
         The identifier is DataFlow-internally generated (model → table name)
         and is passed as a BOUND parameter to the existence query — never
@@ -2642,11 +2872,44 @@ class DataFlow(DataFlowEventMixin):
         search_path`` on pooled connections (NOT the DSN) are unsupported by the
         creation path itself and out of scope here.
         """
+        verdict, _reason = await self._verify_table_physically_exists_detailed(
+            model_name, database_url
+        )
+        return verdict
+
+    async def _verify_table_physically_exists_detailed(
+        self, model_name: str, database_url: str
+    ) -> Tuple[Optional[bool], str]:
+        """Issue #2206: :meth:`_verify_table_physically_exists` plus the REASON
+        an inconclusive verdict was inconclusive.
+
+        #1548 collapsed both kinds of ``None`` into one "do not block" outcome.
+        They are not the same, and the difference decides whether re-checking
+        can ever help:
+
+        Returns ``(verdict, reason)`` where ``reason`` is one of:
+
+        ``"verified"``
+            The verdict is conclusive (``True`` or ``False``).
+        ``"unverifiable-backend"``
+            STRUCTURAL inconclusive — an unknown backend with no SQL table
+            concept, or bare in-memory SQLite with no shared URI. Deterministic:
+            a retry returns the identical verdict, so callers proceed (blocking
+            buys no durability, only broken flows).
+        ``"check-error"``
+            TRANSIENT inconclusive — the check itself raised (fresh connect
+            REFUSED, timed out, DSN rebuild failed). This is the signature of
+            the connection-pool exhaustion #1548 was filed for, so it is exactly
+            when a missing table is MOST likely; callers must NOT treat it as a
+            confirmation. See :class:`_TableVerificationInconclusive`.
+        """
         table_name = self._get_table_name(model_name)
         url_lower = database_url.lower()
 
         try:
-            if "postgresql" in url_lower or "postgres" in url_lower:
+            if not is_sqlite_url(database_url) and (
+                "postgresql" in url_lower or "postgres" in url_lower
+            ):
                 import asyncpg
 
                 from ..adapters.connection_parser import ConnectionParser
@@ -2681,48 +2944,31 @@ class DataFlow(DataFlowEventMixin):
                     # the connection search_path, matching how CRUD reaches
                     # the same table (see the schema-resolution note above).
                     reg = await conn.fetchval("SELECT to_regclass($1)", table_name)
-                    return reg is not None
+                    return (reg is not None), "verified"
                 finally:
                     await conn.close()
 
-            elif (
-                "sqlite" in url_lower
-                or database_url == ":memory:"
-                or database_url.endswith(".db")
-            ):
+            elif is_sqlite_url(database_url) or database_url.endswith(".db"):
                 import sqlite3
 
-                if self._memory_db_uri is not None:
-                    # Shared-cache in-memory DB: a fresh connection to the SAME
-                    # shared URI sees committed state. A bare ``:memory:``
-                    # connection would be a DIFFERENT empty DB and produce a
-                    # false "absent" — hence the shared URI is required here.
-                    conn = sqlite3.connect(
-                        self._memory_db_uri, uri=True, check_same_thread=False
-                    )
-                elif database_url in (":memory:", "sqlite:///:memory:"):
+                conn = self._open_sqlite_connection(database_url)
+                if conn is None:
                     # Bare in-memory with no shared URI — cannot verify against
                     # committed state without reopening a different empty DB.
                     logger.warning(
                         "engine.table_existence_check_inconclusive_memory",
                         extra={"model_name": model_name},
                     )
-                    return None
-                else:
-                    # File-based SQLite: strip the scheme prefix if present.
-                    path = database_url
-                    for prefix in ("sqlite:///", "sqlite://"):
-                        if path.startswith(prefix):
-                            path = path[len(prefix) :]
-                            break
-                    conn = sqlite3.connect(path, check_same_thread=False)
+                    # Issue #2206: STRUCTURAL — a retry reopens the same
+                    # different-empty-DB and returns the identical verdict.
+                    return None, "unverifiable-backend"
                 try:
                     cur = conn.execute(
                         "SELECT name FROM sqlite_master "
                         "WHERE type='table' AND name=?",
                         (table_name,),
                     )
-                    return cur.fetchone() is not None
+                    return (cur.fetchone() is not None), "verified"
                 finally:
                     conn.close()
 
@@ -2733,14 +2979,17 @@ class DataFlow(DataFlowEventMixin):
                     "engine.table_existence_check_inconclusive_backend",
                     extra={"model_name": model_name},
                 )
-                return None
+                # Issue #2206: STRUCTURAL — no SQL table concept to verify.
+                return None, "unverifiable-backend"
 
         except Exception as e:
             # A verification-time connection error is inconclusive, NOT a
-            # definitive "absent". Log at WARN and let the caller proceed — the
-            # primary durability guarantee is the un-swallowed migration path;
-            # a false raise here would break legitimate flows under a transient
-            # connection blip.
+            # definitive "absent" — returning False here would raise on a
+            # transient blip against a table that exists. Issue #2206: it is
+            # equally NOT a confirmation, so it is reported as the TRANSIENT
+            # "check-error" kind and the caller decides (ensure_table_exists
+            # retries once, then fails loud rather than caching an unverified
+            # success).
             # Red-team #5: log the exception TYPE + a masked DB URL only. The raw
             # exception message is NOT logged — ConnectionParser errors can echo
             # DSN/URL fragments (credentials), and mask_url canonicalizes the URL
@@ -2753,7 +3002,10 @@ class DataFlow(DataFlowEventMixin):
                     "database": mask_url(database_url),
                 },
             )
-            return None
+            # Issue #2206: TRANSIENT — the check could not RUN. This is the
+            # pool-exhaustion signature #1548 targets, NOT a confirmation, so
+            # the success path must not read it as one.
+            return None, "check-error"
 
     # ------------------------------------------------------------------
     # Issue #1600 — additive column reconciliation (ALTER-ADD new columns
@@ -2785,15 +3037,13 @@ class DataFlow(DataFlowEventMixin):
         from ..adapters.dialect import DialectManager
 
         url_lower = database_url.lower()
-        if "postgresql" in url_lower or "postgres" in url_lower:
-            database_type = "postgresql"
-        elif "mysql" in url_lower:
-            database_type = "mysql"
-        elif (
-            "sqlite" in url_lower
-            or database_url == ":memory:"
-            or database_url.endswith(".db")
+        if not is_sqlite_url(database_url) and (
+            "postgresql" in url_lower or "postgres" in url_lower
         ):
+            database_type = "postgresql"
+        elif not is_sqlite_url(database_url) and "mysql" in url_lower:
+            database_type = "mysql"
+        elif is_sqlite_url(database_url) or database_url.endswith(".db"):
             database_type = "sqlite"
         else:
             # Unknown backend (e.g. MongoDB) — no SQL column concept.
@@ -2959,18 +3209,18 @@ class DataFlow(DataFlowEventMixin):
         """
         import sqlite3
 
+        from kailash.utils.sqlite_url import (
+            sqlite_connection_target,
+            sqlite_memory_uri_kind,
+        )
+
         if self._memory_db_uri is not None:
-            return sqlite3.connect(
-                self._memory_db_uri, uri=True, check_same_thread=False
-            )
-        if database_url in (":memory:", "sqlite:///:memory:"):
+            database_url = self._memory_db_uri
+        elif sqlite_memory_uri_kind(database_url) == "anonymous":
             return None
-        path = database_url
-        for prefix in ("sqlite:///", "sqlite://"):
-            if path.startswith(prefix):
-                path = path[len(prefix) :]
-                break
-        return sqlite3.connect(path, check_same_thread=False)
+
+        path, options = sqlite_connection_target(database_url)
+        return sqlite3.connect(path, **{"check_same_thread": False, **options})
 
     async def _get_live_table_columns(
         self,
@@ -3182,7 +3432,7 @@ class DataFlow(DataFlowEventMixin):
         Returns:
             str: 'exists', 'needs_creation', or 'unknown'
         """
-        database_url = self.config.database.url or ":memory:"
+        database_url = DataFlow._effective_database_url(self) or ":memory:"
 
         if self._schema_cache.is_table_ensured(model_name, database_url):
             return "exists"
@@ -4518,18 +4768,14 @@ class DataFlow(DataFlowEventMixin):
         _warnings default arg so this still works if `warnings` has been
         shimmed out during interpreter shutdown.
         """
-        try:
-            if not getattr(self, "_closed", True):
-                _warnings.warn(
-                    f"Unclosed DataFlow instance {getattr(self, '_instance_id', '?')}. "
-                    "Use 'with DataFlow(...) as db:' or call db.close() "
-                    "(or `await db.close_async()` in async contexts).",
-                    ResourceWarning,
-                    source=self,
-                )
-        except Exception:
-            # Finalizers must never raise.
-            pass
+        if not getattr(self, "_closed", True):
+            _warnings.warn(
+                f"Unclosed DataFlow instance {getattr(self, '_instance_id', '?')}. "
+                "Use 'with DataFlow(...) as db:' or call db.close() "
+                "(or `await db.close_async()` in async contexts).",
+                ResourceWarning,
+                source=self,
+            )
 
     def get_connection_pool(self):
         """Return a `MockConnectionPool` reflecting the current connection-manager state.
@@ -4551,7 +4797,8 @@ class DataFlow(DataFlowEventMixin):
             Dictionary with connection details
         """
         return {
-            "database_url": self.config.database.url or "sqlite:///:memory:",
+            "database_url": DataFlow._effective_database_url(self)
+            or "sqlite:///:memory:",
             "pool_size": self.config.database.pool_size,
             "max_overflow": self.config.database.max_overflow,
             "pool_recycle": self.config.database.pool_recycle,
@@ -5073,16 +5320,14 @@ class DataFlow(DataFlowEventMixin):
             QueryError: If schema introspection queries fail
             NotImplementedError: For unsupported databases
         """
-        database_url = self.config.database.url or ":memory:"
+        database_url = DataFlow._effective_database_url(self) or ":memory:"
 
-        # Check database type and route to appropriate inspector
-        if "postgresql" in database_url or "postgres" in database_url:
+        # A native SQLite filename can contain another database's name.
+        if is_sqlite_url(database_url):
+            return await self._inspect_sqlite_schema_real(database_url)
+        elif "postgresql" in database_url or "postgres" in database_url:
             return await self._inspect_postgresql_schema_real(database_url)
-        elif (
-            "sqlite" in database_url
-            or database_url == ":memory:"
-            or database_url.endswith(".db")
-        ):
+        elif database_url.endswith(".db"):
             return await self._inspect_sqlite_schema_real(database_url)
         else:
             # Extract scheme from URL for better error message
@@ -5301,8 +5546,10 @@ class DataFlow(DataFlowEventMixin):
         Raises:
             NotImplementedError: For in-memory SQLite databases (schema discovery not supported)
         """
-        # Check if this is a memory database
-        if database_url == ":memory:" or "memory" in database_url.lower():
+        from kailash.utils.sqlite_url import sqlite_memory_uri_kind
+
+        # Classify the target, not incidental words in a physical filename.
+        if sqlite_memory_uri_kind(database_url) is not None:
             # Enhanced error with catalog-based solutions (DF-501)
             message = (
                 "Schema discovery is not supported for in-memory SQLite databases. "
@@ -5323,6 +5570,18 @@ class DataFlow(DataFlowEventMixin):
         adapter = SQLiteAdapter(database_url)
         try:
             await adapter.connect()
+
+            # Issue #1971: this method inspects a SQLite database through
+            # ``SQLiteAdapter`` — the engine every PRAGMA below reaches is
+            # SQLite, statically, so the identifier budget IS knowable here.
+            # Resolve it through the shared resolver rather than passing
+            # ``DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH``: that sentinel is
+            # numerically SQLite's own 128, so the two agree on this path, but
+            # the sentinel carries "nobody bound a dialect" and would keep
+            # warning on a path that has one.
+            from ..adapters.dialect import identifier_budget_for
+
+            _id_budget = identifier_budget_for("sqlite")
 
             schema = {}
 
@@ -5345,9 +5604,7 @@ class DataFlow(DataFlowEventMixin):
                 # one before interpolating into PRAGMA DDL so a future refactor
                 # that reads table names from a different (user-influenced)
                 # source cannot silently reopen an injection vector.
-                _validate_identifier(
-                    table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-                )
+                _validate_identifier(table_name, max_length=_id_budget)
 
                 # Get columns for this table using PRAGMA table_info
                 columns_query = f"PRAGMA table_info({table_name})"
@@ -5370,9 +5627,7 @@ class DataFlow(DataFlowEventMixin):
                 # Get foreign keys using PRAGMA foreign_key_list
                 # Defense-in-depth: table_name was validated above, but keep
                 # the call local so the audit reads linearly.
-                _validate_identifier(
-                    table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-                )
+                _validate_identifier(table_name, max_length=_id_budget)
                 fk_query = f"PRAGMA foreign_key_list({table_name})"
                 fk_result = await adapter.execute_query(fk_query)
 
@@ -5401,9 +5656,7 @@ class DataFlow(DataFlowEventMixin):
                 # Get indexes using PRAGMA index_list and index_info
                 # Defense-in-depth: table_name was validated above, but keep
                 # the call local so the audit reads linearly.
-                _validate_identifier(
-                    table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-                )
+                _validate_identifier(table_name, max_length=_id_budget)
                 indexes_query = f"PRAGMA index_list({table_name})"
                 indexes_result = await adapter.execute_query(indexes_query)
 
@@ -6846,6 +7099,18 @@ class DataFlow(DataFlowEventMixin):
         table_name = self._get_table_name(model_name)
         constraints = []
 
+        # Issue #1971: ``database_type`` names the engine this ALTER TABLE is
+        # generated FOR, so the identifier budget IS knowable here. Bind it
+        # rather than passing ``DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH`` — that
+        # sentinel is SQLite's 128, the LOOSEST budget, so on PostgreSQL a
+        # 64..128-char constraint name passes validation here and is truncated
+        # server-side at 63, colliding two FK constraints onto one identifier.
+        # An unrecognised ``database_type`` still resolves to the sentinel, so
+        # a genuinely-unknown target keeps warning exactly as before.
+        from ..adapters.dialect import identifier_budget_for
+
+        _id_budget = identifier_budget_for(database_type)
+
         # Get relationships for this model
         relationships = self.get_relationships(model_name)
         for rel_name, rel_info in relationships.items():
@@ -6870,21 +7135,11 @@ class DataFlow(DataFlowEventMixin):
                 # `foreign_key` / `target_table` / `target_key` come from
                 # model-relationship metadata which is model-registry-derived
                 # today but may be caller-influenced after a future refactor.
-                _validate_identifier(
-                    table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-                )
-                _validate_identifier(
-                    constraint_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-                )
-                _validate_identifier(
-                    foreign_key, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-                )
-                _validate_identifier(
-                    target_table, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-                )
-                _validate_identifier(
-                    target_key, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-                )
+                _validate_identifier(table_name, max_length=_id_budget)
+                _validate_identifier(constraint_name, max_length=_id_budget)
+                _validate_identifier(foreign_key, max_length=_id_budget)
+                _validate_identifier(target_table, max_length=_id_budget)
+                _validate_identifier(target_key, max_length=_id_budget)
 
                 sql = (
                     f"ALTER TABLE {table_name} "
@@ -6948,7 +7203,7 @@ class DataFlow(DataFlowEventMixin):
                     return connection
 
             # Fallback: Create direct PostgreSQL connection
-            database_url = self.config.database.url
+            database_url = DataFlow._effective_database_url(self)
             if not database_url or database_url == ":memory:":
                 # For testing, create a simple SQLite connection
                 # check_same_thread=False allows use with async_safe_run thread pool
@@ -6958,7 +7213,9 @@ class DataFlow(DataFlowEventMixin):
                 return connection
 
             # PostgreSQL connection using asyncpg (for proper async support)
-            if "postgresql" in database_url or "postgres" in database_url:
+            if not is_sqlite_url(database_url) and (
+                "postgresql" in database_url or "postgres" in database_url
+            ):
                 logger.debug(
                     "_get_database_connection() is sync but PostgreSQL requires async. Use _get_async_database_connection() instead."
                 )
@@ -7001,7 +7258,7 @@ class DataFlow(DataFlowEventMixin):
             from ..adapters.connection_parser import ConnectionParser
 
             # Early return if no database URL configured
-            database_url = self.config.database.url
+            database_url = DataFlow._effective_database_url(self)
             if database_url is None:
                 logger.debug(
                     "No database URL configured, using SQLite fallback for migration system"
@@ -7029,8 +7286,14 @@ class DataFlow(DataFlowEventMixin):
             # in-memory DB as the CRUD/registry paths (AsyncSQLDatabaseNode handles
             # the ``file:...`` URI + ``uri=True``). Bypass ConnectionParser here —
             # it is built for ``scheme://host/db`` and would mangle a ``file:`` URI.
+            from kailash.utils.sqlite_url import is_sqlite_url
+
             if self._memory_db_uri is not None:
                 safe_connection_string = self._memory_db_uri
+            elif is_sqlite_url(database_url):
+                # Network URL reconstruction loses SQLite's absolute-path slash
+                # and native URI options; the canonical adapter parses these.
+                safe_connection_string = database_url
             else:
                 # Create a safe connection string for SQL databases
                 components = ConnectionParser.parse_connection_string(database_url)
@@ -7201,10 +7464,10 @@ class DataFlow(DataFlowEventMixin):
         loop. On any failure, ROLLBACK runs on the same connection so
         the partial work is undone atomically.
         """
-        database_url = self.config.database.url
+        database_url = DataFlow._effective_database_url(self)
         if (
             database_url is None
-            or database_url == ":memory:"
+            or is_sqlite_url(database_url)
             or not (
                 "postgresql" in database_url.lower()
                 or "postgres" in database_url.lower()
@@ -7274,20 +7537,18 @@ class DataFlow(DataFlowEventMixin):
         This method detects the database type and calls the appropriate
         schema management system (PostgreSQL or SQLite).
         """
-        database_url = self.config.database.url or ":memory:"
+        database_url = DataFlow._effective_database_url(self) or ":memory:"
 
         # Detect database type and route to appropriate schema management
-        if "postgresql" in database_url or "postgres" in database_url:
+        if not is_sqlite_url(database_url) and (
+            "postgresql" in database_url or "postgres" in database_url
+        ):
             logger.debug(
                 "engine.using_postgresql_schema_management_for_model",
                 extra={"model_name": model_name},
             )
             self._trigger_postgresql_schema_management(model_name, fields)
-        elif (
-            "sqlite" in database_url
-            or database_url == ":memory:"
-            or database_url.endswith(".db")
-        ):
+        elif is_sqlite_url(database_url) or database_url.endswith(".db"):
             logger.debug(
                 "engine.using_sqlite_schema_management_for_model",
                 extra={"model_name": model_name},
@@ -7920,8 +8181,8 @@ class DataFlow(DataFlowEventMixin):
         else:
             # Integer ID models use auto-increment
             # Get database type to set appropriate defaults
-            database_url = self.config.database.url or ":memory:"
-            is_sqlite = "sqlite" in database_url.lower() or database_url == ":memory:"
+            database_url = DataFlow._effective_database_url(self) or ":memory:"
+            is_sqlite = is_sqlite_url(database_url)
 
             columns["id"] = {
                 "type": "INTEGER",  # Use INTEGER for comparison (SERIAL is CREATE TABLE syntax only)
@@ -8160,17 +8421,26 @@ class DataFlow(DataFlowEventMixin):
         # interpolation. table_name comes from the migration framework but
         # MigrationOperation.details may carry caller-influenced column names
         # and types — refuse anything that fails the allowlist.
-        _validate_identifier(
-            table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-        )
+        #
+        # Issue #1971: ``database_type`` names the engine this ALTER TABLE is
+        # generated FOR (the caller resolves it from the live connection), so
+        # the identifier budget IS knowable. Bind it rather than passing
+        # ``DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH`` — that sentinel is SQLite's
+        # 128, the LOOSEST budget, so on PostgreSQL a 64..128-char column or
+        # table name passes here and is truncated server-side at 63. An
+        # unrecognised ``database_type`` still resolves to the sentinel, so a
+        # genuinely-unknown target keeps warning exactly as before.
+        from ..adapters.dialect import identifier_budget_for
+
+        _id_budget = identifier_budget_for(database_type)
+
+        _validate_identifier(table_name, max_length=_id_budget)
 
         if operation_type == "ADD_COLUMN":
             column_name = details.get("column_name")
             if not column_name:
                 return ""
-            _validate_identifier(
-                column_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-            )
+            _validate_identifier(column_name, max_length=_id_budget)
 
             # Get the field info for this column from the model
             # issue #1573 (sibling of #1541): match the physical ``table_name``
@@ -8203,18 +8473,14 @@ class DataFlow(DataFlowEventMixin):
             column_name = details.get("column_name")
             if not column_name:
                 return ""
-            _validate_identifier(
-                column_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-            )
+            _validate_identifier(column_name, max_length=_id_budget)
             return f"ALTER TABLE {table_name} DROP COLUMN {column_name};"
 
         elif operation_type == "MODIFY_COLUMN":
             column_name = details.get("column_name")
             if not column_name:
                 return ""
-            _validate_identifier(
-                column_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-            )
+            _validate_identifier(column_name, max_length=_id_budget)
 
             # Get new type from changes or details
             changes = details.get("changes", {})
@@ -8430,9 +8696,9 @@ class DataFlow(DataFlowEventMixin):
             logger.debug("_ensure_migration_tables: Using shared runtime")
 
             # Get connection info
-            connection_string = self.config.database.get_connection_url(
-                self.config.environment
-            )
+            connection_string = DataFlow._effective_database_url(
+                self
+            ) or self.config.database.get_connection_url(self.config.environment)
 
             # Auto-detect database type if not provided
             if database_type is None:
@@ -8555,9 +8821,9 @@ class DataFlow(DataFlowEventMixin):
             logger.debug("_ensure_migration_tables_async: Using shared runtime")
 
             # Get connection info
-            connection_string = self.config.database.get_connection_url(
-                self.config.environment
-            )
+            connection_string = DataFlow._effective_database_url(
+                self
+            ) or self.config.database.get_connection_url(self.config.environment)
 
             # Auto-detect database type if not provided
             if database_type is None:
@@ -8851,7 +9117,7 @@ class DataFlow(DataFlowEventMixin):
         # clear_table_cache's ``endswith(f":{table}")`` invalidation still matches.
         import hashlib as _hashlib
 
-        db_url = self.config.database.url or ":memory:"
+        db_url = DataFlow._effective_database_url(self) or ":memory:"
         db_url_hash = _hashlib.sha256(db_url.encode("utf-8")).hexdigest()[:16]
         cache_key = f"{db_url_hash}:{table_name}"
         cached = self._column_cache.get(cache_key)
@@ -8951,7 +9217,7 @@ class DataFlow(DataFlowEventMixin):
         Returns:
             Database type (sqlite, postgresql, mysql)
         """
-        url = self.config.database.url
+        url = DataFlow._effective_database_url(self)
 
         # Handle None/missing URL - default to SQLite :memory:
         if not url:
@@ -8968,6 +9234,81 @@ class DataFlow(DataFlowEventMixin):
         from ..adapters.connection_parser import ConnectionParser
 
         return ConnectionParser.detect_database_type(url)
+
+    def _release_displaced_async_sql_node(self, node) -> None:
+        """Release a cached node that is about to be dropped from the cache.
+
+        Issue #2211. Two cases, and telling them apart is the whole point:
+
+        * The displaced node's pool is bound to a CLOSED event loop — the
+          common case, because a loop change is normally observed after the
+          previous ``asyncio.run()`` has already returned. Nothing can ever
+          await on that pool again, so the only release available is the
+          synchronous driver terminate in
+          ``AsyncSQLDatabaseNode.dispose_sync()``. Done here, eagerly, rather
+          than left to garbage collection: GC timing is not a resource
+          contract, and a node still referenced by a traceback or a test
+          fixture is never collected at all.
+
+        * The displaced node's pool is bound to a loop that is STILL ALIVE —
+          two loops in different threads sharing one DataFlow instance. Here a
+          force-close would abort connections underneath whoever is running on
+          that loop, which is precisely the "reaped a pool that was actively
+          serving queries" regression fixed in kailash 2.65.0. So the node is
+          NOT touched; it is parked on ``_displaced_async_sql_nodes`` and
+          drained by ``close()`` / ``close_async()``, which run when the owner
+          has finished with every loop.
+
+        Never raises: this runs on the CRUD hot path, and a teardown failure
+        must not fail the operation the caller actually asked for.
+        """
+        # Sweep the park first, so it cannot grow without bound. A parked
+        # node's loop was alive when it was parked; once that loop closes the
+        # node becomes releasable, and a long-lived process that creates a
+        # loop per request would otherwise accumulate one entry per request
+        # until close(). O(len(park)), and the park is empty in the common
+        # (dead-loop) case.
+        still_parked = []
+        for parked in getattr(self, "_displaced_async_sql_nodes", []):
+            try:
+                if not parked.dispose_sync():
+                    still_parked.append(parked)
+            except Exception as e:
+                logger.debug(
+                    "engine.parked_sql_node_sweep_failed",
+                    extra={"error_type": type(e).__name__},
+                )
+                still_parked.append(parked)
+        self._displaced_async_sql_nodes = still_parked
+
+        if node is None:
+            return
+        try:
+            if node.dispose_sync():
+                return
+            # False means REFUSED, not "nothing to do": the pool's loop is
+            # still usable (or the pool was injected by the caller, who owns
+            # its lifetime). Park it for close() rather than force it here.
+            self._displaced_async_sql_nodes.append(node)
+        except Exception as e:
+            logger.debug(
+                "engine.displaced_sql_node_release_failed",
+                extra={"error_type": type(e).__name__},
+            )
+            self._displaced_async_sql_nodes.append(node)
+
+    def _take_displaced_async_sql_nodes(self) -> list:
+        """Pop every node parked by :meth:`_release_displaced_async_sql_node`.
+
+        Returns the nodes and empties the park in one step, so the sync
+        ``close()`` and async ``close_async()`` paths share the bookkeeping and
+        differ only in how each drives the node's ``cleanup()`` coroutine.
+        ``getattr`` default covers a DataFlow restored from a pickle written
+        before this attribute existed.
+        """
+        nodes = list(getattr(self, "_displaced_async_sql_nodes", []))
+        self._displaced_async_sql_nodes = []
+        return nodes
 
     def _get_or_create_async_sql_node(self, database_type: str):
         """Get or create cached AsyncSQLDatabaseNode for connection pooling.
@@ -9033,6 +9374,14 @@ class DataFlow(DataFlowEventMixin):
                     f"Event loop changed for {database_type} node "
                     f"(old: {cached_loop_id}, new: {current_loop_id}). Recreating node."
                 )
+                # Issue #2211: the displaced node still owns a live connection
+                # pool. Overwriting the cache entry without releasing it left
+                # the pool, its sockets and its slot in the process-wide pool
+                # registry alive until interpreter exit — measured at twelve
+                # pools against a configured cap of five after twelve
+                # ``asyncio.run()`` calls on ONE DataFlow instance. The node is
+                # gone from the cache, so ``close()`` can never reach it either.
+                self._release_displaced_async_sql_node(node)
 
         from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
@@ -9040,7 +9389,7 @@ class DataFlow(DataFlowEventMixin):
         # per-instance shared-cache URI so this node reaches the SAME in-memory
         # DB as DDL/migration; ``_memory_db_uri`` is None for every other config.
         connection_string = (
-            self._memory_db_uri or self.config.database.url or ":memory:"
+            self._memory_db_uri or DataFlow._effective_database_url(self) or ":memory:"
         )
 
         # Create new node
@@ -9098,7 +9447,9 @@ class DataFlow(DataFlowEventMixin):
 
         from ..migrations.sync_ddl_executor import SyncDDLExecutor
 
-        database_url = self.config.database.get_connection_url(self.config.environment)
+        database_url = DataFlow._effective_database_url(
+            self
+        ) or self.config.database.get_connection_url(self.config.environment)
         # Issue #1502: for bare ``:memory:`` write DDL to the per-instance
         # shared-cache URI so tables land in the SAME DB CRUD reads from.
         executor = SyncDDLExecutor(self._memory_db_uri or database_url)
@@ -9208,7 +9559,9 @@ class DataFlow(DataFlowEventMixin):
 
         from ..migrations.sync_ddl_executor import SyncDDLExecutor
 
-        database_url = self.config.database.get_connection_url(self.config.environment)
+        database_url = DataFlow._effective_database_url(
+            self
+        ) or self.config.database.get_connection_url(self.config.environment)
         # Issue #1502: for bare ``:memory:`` write DDL to the per-instance
         # shared-cache URI so tables land in the SAME DB CRUD reads from.
         executor = SyncDDLExecutor(self._memory_db_uri or database_url)
@@ -9436,7 +9789,7 @@ class DataFlow(DataFlowEventMixin):
             from ..migrations.sync_ddl_executor import SyncDDLExecutor
 
             # Get database URL
-            database_url = self.config.database.url
+            database_url = DataFlow._effective_database_url(self)
             if not database_url:
                 logger.warning(
                     f"No database URL configured, skipping sync table creation for '{model_name}'"
@@ -9621,7 +9974,7 @@ class DataFlow(DataFlowEventMixin):
         if not model_names:
             return
 
-        database_url = self.config.database.url
+        database_url = DataFlow._effective_database_url(self)
         if not database_url:
             return
 
@@ -9793,7 +10146,7 @@ class DataFlow(DataFlowEventMixin):
             from ..migrations.sync_ddl_executor import SyncDDLExecutor
 
             # Get database URL
-            database_url = self.config.database.url
+            database_url = DataFlow._effective_database_url(self)
             if not database_url:
                 logger.warning(
                     "No database URL configured, skipping sync table creation"
@@ -10075,8 +10428,8 @@ class DataFlow(DataFlowEventMixin):
         relationship definitions based on foreign key constraints.
         """
         # Skip schema discovery for SQLite databases (not supported for in-memory)
-        database_url = self.config.database.url or ":memory:"
-        if database_url == ":memory:" or "sqlite" in database_url.lower():
+        database_url = DataFlow._effective_database_url(self) or ":memory:"
+        if is_sqlite_url(database_url):
             # For SQLite, skip relationship auto-detection
             logger.debug(
                 f"Skipping relationship auto-detection for SQLite database: {mask_url(database_url)}"
@@ -10140,10 +10493,10 @@ class DataFlow(DataFlowEventMixin):
             model_name: Name of the model to detect relationships for
             fields: Model field definitions
         """
-        database_url = self.config.database.url or ":memory:"
+        database_url = DataFlow._effective_database_url(self) or ":memory:"
 
         # Skip for SQLite (no foreign key introspection for in-memory)
-        if database_url == ":memory:" or "sqlite" in database_url.lower():
+        if is_sqlite_url(database_url):
             logger.debug(
                 f"Skipping async relationship auto-detection for SQLite database: {mask_url(database_url)}"
             )
@@ -10305,9 +10658,9 @@ class DataFlow(DataFlowEventMixin):
         from kailash.workflow.builder import WorkflowBuilder
 
         workflow = WorkflowBuilder()
-        connection_string = self.config.database.get_connection_url(
-            self.config.environment
-        )
+        connection_string = DataFlow._effective_database_url(
+            self
+        ) or self.config.database.get_connection_url(self.config.environment)
 
         # Auto-detect database type from connection string
         from ..adapters.connection_parser import ConnectionParser
@@ -10444,7 +10797,9 @@ class DataFlow(DataFlowEventMixin):
             import asyncpg
 
             # Get database URL
-            db_url = self.config.database.get_connection_url(self.config.environment)
+            db_url = DataFlow._effective_database_url(
+                self
+            ) or self.config.database.get_connection_url(self.config.environment)
 
             # Create connection
             connection = await open_credentialed_connection(
@@ -10461,6 +10816,39 @@ class DataFlow(DataFlowEventMixin):
 
         return connection_context()
 
+    @asynccontextmanager
+    async def _async_database_connection_scope(self):
+        """Release temporary connections without closing TDD-owned handles."""
+        connection, borrowed = await self._acquire_async_database_connection()
+        try:
+            yield connection
+        finally:
+            if connection is not None and not borrowed:
+                completion = asyncio.ensure_future(connection.close())
+                active_error = sys.exc_info()[1]
+                cancellation = (
+                    active_error
+                    if isinstance(active_error, asyncio.CancelledError)
+                    else None
+                )
+                while not completion.done():
+                    try:
+                        await asyncio.shield(completion)
+                    except asyncio.CancelledError as exc:
+                        # Finish owned disposal before propagating a new cancel.
+                        cancellation = exc
+                    except Exception:
+                        # Read the close failure below without losing a cancel.
+                        break
+                try:
+                    completion.result()
+                except BaseException as close_error:
+                    if cancellation is not None:
+                        raise cancellation from close_error
+                    raise
+                if cancellation is not None:
+                    raise cancellation
+
     async def _get_async_database_connection(self) -> Any:
         """Get async database connection for validation or testing.
 
@@ -10470,6 +10858,11 @@ class DataFlow(DataFlowEventMixin):
         the configured backend, e.g. asyncpg ``conn.fetch`` vs aiosqlite
         ``conn.execute``).
         """
+        connection, _ = await DataFlow._acquire_async_database_connection(self)
+        return connection
+
+    async def _acquire_async_database_connection(self) -> Tuple[Any, bool]:
+        """Return the connection and whether its lifecycle belongs to TDD."""
         # Check if we're in TDD mode and have a test context
         from ..testing.tdd_support import (
             get_database_manager,
@@ -10481,16 +10874,18 @@ class DataFlow(DataFlowEventMixin):
             test_context = get_test_context()
             if test_context and test_context.connection:
                 # Return existing test connection for isolation
-                return test_context.connection
+                return test_context.connection, True
             elif test_context:
                 # Get connection through TDD infrastructure
                 db_manager = get_database_manager()
-                return await db_manager.get_test_connection(test_context)
+                return await db_manager.get_test_connection(test_context), True
 
         # Default production behavior - create new connection
-        db_url = self.config.database.url
+        db_url = DataFlow._effective_database_url(self)
         if db_url is None:
             raise ValueError("Database URL is not configured")
+
+        from kailash.utils.sqlite_url import is_sqlite_url, sqlite_memory_uri_kind
 
         # Database-aware connection handling
         if db_url.startswith("postgresql://"):
@@ -10498,32 +10893,35 @@ class DataFlow(DataFlowEventMixin):
 
             if db_url.startswith("postgresql://"):
                 db_url = db_url.replace("postgresql://", "")
-            return await open_credentialed_connection(
+            connection = await open_credentialed_connection(
                 asyncpg,
                 f"postgresql://{db_url}",
                 credential_provider=self.config.database.credential_provider,
                 context="PostgreSQL",
             )
-        elif db_url.startswith("sqlite://") or db_url == ":memory:":
+            return connection, False
+        elif is_sqlite_url(db_url):
             import aiosqlite
 
-            if db_url == ":memory:":
-                # Use URI shared-cache so multiple connections see the same
-                # in-memory database (each aiosqlite.connect(":memory:") would
-                # create a SEPARATE database otherwise). Issue #1502: __init__
-                # sets self._memory_db_uri for every bare-:memory: instance, so
-                # this reuses that canonical name; the `is None` fallback only
-                # fires on the degraded path where __init__ did not resolve one.
+            from dataflow.adapters.sqlite import SQLiteAdapter
+
+            if sqlite_memory_uri_kind(db_url) == "anonymous":
+                # All anonymous aliases belong to this instance's shared database.
+                # Match the constructor's nonce policy on degraded init paths too.
                 if self._memory_db_uri is None:
                     self._memory_db_uri = (
-                        f"file:df_mem_{id(self):x}?mode=memory&cache=shared"
+                        f"file:df_mem_{uuid4().hex}?mode=memory&cache=shared"
                     )
-                memory_uri = self._memory_db_uri
-                return await aiosqlite.connect(memory_uri, uri=True)
-            else:
-                # Extract file path from sqlite:///path/to/file.db
-                file_path = db_url.replace("sqlite:///", "/")
-                return await aiosqlite.connect(file_path)
+            # Reuse the adapter's URL/URI contract, including relative paths and
+            # native file: options. This unconnected adapter owns no resources;
+            # the returned standalone connection remains owned by this caller.
+            adapter = SQLiteAdapter(self._memory_db_uri or db_url)
+            return (
+                await aiosqlite.connect(
+                    adapter.database_path, **adapter._connect_kwargs
+                ),
+                False,
+            )
         else:
             # Enhanced error with catalog-based solutions (DF-401)
             if ErrorEnhancer is not None:
@@ -11205,54 +11603,52 @@ class DataFlow(DataFlowEventMixin):
         logger.debug("Test table cleanup called")
 
         try:
-            # Get database connection
-            conn = await self._get_async_database_connection()
-            assert conn is not None, "could not acquire async database connection"
+            async with self._async_database_connection_scope() as conn:
+                assert conn is not None, "could not acquire async database connection"
 
-            # Clean up any tables that look like test tables
-            test_table_patterns = [
-                "connection_tests%",
-                "test_%",
-                "%_test_%",
-                "load_test%",
-                "bulk_item%",
-                "article%",
-            ]
+                # Clean up any tables that look like test tables
+                test_table_patterns = [
+                    "connection_tests%",
+                    "test_%",
+                    "%_test_%",
+                    "load_test%",
+                    "bulk_item%",
+                    "article%",
+                ]
 
-            for pattern in test_table_patterns:
-                try:
-                    # Use PostgreSQL-specific query to find and drop test tables
-                    result = await conn.fetch(
-                        """
-                        SELECT schemaname, tablename
-                        FROM pg_tables
-                        WHERE schemaname = 'public'
-                        AND tablename LIKE $1
-                    """,
-                        pattern.lower(),
-                    )
+                for pattern in test_table_patterns:
+                    try:
+                        # Use PostgreSQL-specific query to find and drop test tables
+                        result = await conn.fetch(
+                            """
+                            SELECT schemaname, tablename
+                            FROM pg_tables
+                            WHERE schemaname = 'public'
+                            AND tablename LIKE $1
+                        """,
+                            pattern.lower(),
+                        )
 
-                    for row in result:
-                        table_name = row["tablename"]
-                        if table_name:  # Ensure table_name is not None or empty
-                            try:
-                                await conn.execute(
-                                    f'DROP TABLE IF EXISTS "{table_name}" CASCADE'
-                                )
-                                logger.debug(
-                                    "engine.dropped_test_table",
-                                    extra={"table_name": table_name},
-                                )
-                            except Exception as e:
-                                logger.debug(
-                                    f"Failed to drop test table {table_name}: {e}"
-                                )
-                except Exception as e:
-                    logger.debug(
-                        f"Failed to query test tables with pattern {pattern}: {e}"
-                    )
+                        for row in result:
+                            table_name = row["tablename"]
+                            if table_name:  # Ensure table_name is not None or empty
+                                try:
+                                    await conn.execute(
+                                        f'DROP TABLE IF EXISTS "{table_name}" CASCADE'
+                                    )
+                                    logger.debug(
+                                        "engine.dropped_test_table",
+                                        extra={"table_name": table_name},
+                                    )
+                                except Exception as e:
+                                    logger.debug(
+                                        f"Failed to drop test table {table_name}: {e}"
+                                    )
+                    except Exception as e:
+                        logger.debug(
+                            f"Failed to query test tables with pattern {pattern}: {e}"
+                        )
 
-            await conn.close()
         except Exception as e:
             logger.debug("engine.test_table_cleanup_failed", extra={"error": str(e)})
             # Don't raise - cleanup failures shouldn't break tests
@@ -11287,7 +11683,11 @@ class DataFlow(DataFlowEventMixin):
         from dataflow.core.pool_monitor import pool_stats_dict
 
         # Scope to this instance's database URL
-        db_url = self.config.database.url or self.config.database.database_url or ""
+        db_url = (
+            DataFlow._effective_database_url(self)
+            or self.config.database.database_url
+            or ""
+        )
 
         def _provider() -> Dict[str, Any]:
             try:
@@ -11518,6 +11918,38 @@ class DataFlow(DataFlowEventMixin):
                     )
             self._async_sql_node_cache.clear()
 
+        # Issue #2211: nodes displaced from the cache while their pool's loop
+        # was still alive were parked rather than force-closed (closing one
+        # under a concurrent caller is the kailash 2.65.0 regression). The
+        # owner is closing now, so drain them through the same graceful
+        # teardown, then sync-dispose whatever the graceful path could not
+        # reach because its loop has since closed.
+        for node in self._take_displaced_async_sql_nodes():
+            try:
+                teardown = getattr(node, "cleanup", None)
+                if callable(teardown):
+                    async_safe_run(teardown())
+                if not node.dispose_sync():
+                    # REFUSED, not done. On this SYNC path the graceful
+                    # teardown above ran on a transient loop and its failure is
+                    # swallowed, so a refusal here can mean an open pool. Say so
+                    # — dropping the node silently is the #2211 leak again, at
+                    # the one place that exists to prevent it.
+                    logger.warning(
+                        "engine.displaced_sql_node_not_released",
+                        extra={
+                            "node_id": getattr(node, "id", "unknown"),
+                            "reason": "pool is bound to an event loop that is "
+                            "still live at close(); use close_async() from that "
+                            "loop to release it gracefully",
+                        },
+                    )
+            except Exception as e:
+                logger.debug(
+                    "engine.error_closing_displaced_sql_node",
+                    extra={"error_type": type(e).__name__},
+                )
+
         # Close the query-cache adapter's executor thread pool. When the cache
         # backend auto-detected to AsyncRedisCacheAdapter (Redis reachable), it
         # owns a ThreadPoolExecutor whose worker threads leak (ResourceWarning
@@ -11654,6 +12086,16 @@ class DataFlow(DataFlowEventMixin):
                     extra={"error": str(e)},
                 )
 
+        # Match sync close: migration adapters own runtime references too.
+        migration_system = getattr(self, "_migration_system", None)
+        if migration_system is not None:
+            try:
+                migration_system.close()
+            except Exception as exc:
+                logger.debug(
+                    "engine.error_closing_migration_system", extra={"error": str(exc)}
+                )
+
         # Issue #711 — stop the SyncTransactionManager BG event loop thread
         # BEFORE the pool/adapter teardown so any in-flight sync transactions
         # do not strand on closed connections. Lazy attribute — only present
@@ -11736,6 +12178,32 @@ class DataFlow(DataFlowEventMixin):
                         extra={"db_type": db_type, "error": str(e)},
                     )
             self._async_sql_node_cache.clear()
+
+        # Issue #2211: drain the nodes displaced while their pool's loop was
+        # still alive. Graceful cleanup() first (this path HAS a live loop);
+        # dispose_sync() then covers any node whose own loop has since closed,
+        # which cleanup() silently cannot release.
+        for node in self._take_displaced_async_sql_nodes():
+            try:
+                teardown = getattr(node, "cleanup", None)
+                if callable(teardown):
+                    await teardown()
+                if not node.dispose_sync():
+                    # REFUSED. The graceful cleanup() above ran on a live loop
+                    # and normally leaves nothing to release, so a refusal here
+                    # means the node's pool is bound to some OTHER loop that is
+                    # still live. Do not drop it — hand it back to the park so
+                    # a later close, on that loop, can finish the job.
+                    self._displaced_async_sql_nodes.append(node)
+                    logger.debug(
+                        "engine.displaced_sql_node_reparked",
+                        extra={"node_id": getattr(node, "id", "unknown")},
+                    )
+            except Exception as e:
+                logger.debug(
+                    "engine.error_closing_displaced_sql_node",
+                    extra={"error_type": type(e).__name__},
+                )
 
         # Close the query-cache adapter's executor thread pool. When the cache
         # backend auto-detected to AsyncRedisCacheAdapter (Redis reachable), it
@@ -11883,8 +12351,8 @@ class DataFlow(DataFlowEventMixin):
             logger.warning(
                 "Using SQLite :memory: database for testing. Production requires PostgreSQL."
             )
-            # Show detailed async limitation warning if in async context
-            warn_sqlite_async_limitation(url)
+            # DataFlow rewrites this alias to one owned shared-cache URI;
+            # the raw anonymous-memory isolation advisory does not apply.
             return True
 
         # SQLite's own URI-filename form (https://sqlite.org/uri.html):
@@ -11909,8 +12377,12 @@ class DataFlow(DataFlowEventMixin):
         # while rejecting ``FILE:`` that the parser had just classified as
         # SQLite, which is the exact surface DIVERGENCE the parity note above
         # exists to prevent.
-        if url.lower().startswith("file:"):
-            warn_sqlite_async_limitation(url)
+        from kailash.utils.sqlite_url import is_sqlite_url
+
+        if is_sqlite_url(url):
+            # DataFlow gives anonymous memory a shared owner URI below; native
+            # private memory is rejected before allocation. Raw callers still
+            # receive warn_sqlite_async_limitation's advisory.
             return True
 
         # Supported database schemes. The SQLAlchemy `+asyncpg` / `+psycopg2`
@@ -12082,7 +12554,7 @@ class DataFlow(DataFlowEventMixin):
             >>> # Clear from specific database
         """
         if database_url is None:
-            database_url = self.config.database.url or ":memory:"
+            database_url = DataFlow._effective_database_url(self) or ":memory:"
         # Issue #1545: invalidate the model's cached unique-index column-sets so
         # the next MySQL upsert re-reads information_schema. The index cache is
         # keyed by DB table name (``f"{db_url}:{table}"``), so resolve the model's
@@ -12116,9 +12588,31 @@ class DataFlow(DataFlowEventMixin):
             >>> db.clear_async_sql_node_cache()
             >>> # Next CRUD operation will create a new AsyncSQLDatabaseNode
 
+        Issue #2211: each evicted node is released on the way out. A bare
+        ``.clear()`` dropped the last reference to a node that still owned a
+        live connection pool, which is the same never-closed-on-eviction bug
+        the loop-change branch of ``_get_or_create_async_sql_node`` had — a
+        node whose pool's loop is dead is force-released here, and one whose
+        loop is still alive is parked for ``close()``.
+
         See Also:
             - _get_or_create_async_sql_node() for event loop tracking details
+            - _release_displaced_async_sql_node() for the dead/live loop split
         """
+        for _db_type, entry in list(self._async_sql_node_cache.items()):
+            try:
+                node = entry[0]
+            except (TypeError, IndexError):
+                # A malformed entry is dropped by the clear() below WITHOUT
+                # release, which is the leak class this whole path exists to
+                # close — so it gets a breadcrumb rather than a silent skip
+                # (zero-tolerance Rule 3, observability Rule 5).
+                logger.debug(
+                    "engine.malformed_sql_node_cache_entry_skipped",
+                    extra={"db_type": _db_type, "entry_type": type(entry).__name__},
+                )
+                continue
+            self._release_displaced_async_sql_node(node)
         self._async_sql_node_cache.clear()
         logger.debug("AsyncSQLDatabaseNode cache cleared")
 

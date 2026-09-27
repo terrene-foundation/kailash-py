@@ -43,8 +43,10 @@ from typing import Any, Optional
 from kailash.utils.url_credentials import fingerprint_secret
 
 try:
-    from google.auth import default as _google_auth_default
-    from google.auth import load_credentials_from_dict as _google_load_creds_from_dict
+    from google.auth import (
+        default as _google_auth_default,
+        load_credentials_from_dict as _google_load_creds_from_dict,
+    )
     from google.auth.transport.requests import Request as _GoogleAuthRequest
     from google.oauth2 import service_account as _google_service_account
 except ImportError:  # pragma: no cover - optional-extra guard
@@ -398,8 +400,20 @@ class GcpOauth:
     def _read_credentials_file(self, path: str) -> dict:
         """Read + JSON-parse a credentials file, failing with a typed error.
 
-        The raw path is NEVER echoed -- only a fingerprint -- so a
-        misconfigured path cannot leak a filesystem layout into a log line.
+        The raw path is NEVER echoed -- only a fingerprint. Note what that
+        does and does not buy (#2171): the tag is an UNKEYED 32-bit digest
+        and a filesystem path is enumerable, so it does not make the path
+        SECRET from someone holding both the message and a list of candidate
+        paths -- they can hash candidates until one matches. What it does buy
+        is that the layout is not published VERBATIM into a log aggregator,
+        exception tracker or bug report, where it would otherwise be readable
+        by everyone with access and indexed for search. The tag also
+        correlates repeat failures on one path.
+
+        That is the right trade here rather than a keyed derivation, because
+        this string reaches the CALLER as an AuthError -- the caller
+        configured the path and already knows it -- and because keying would
+        break correlation across processes, which is the tag's only job.
         """
         try:
             with open(path, "r", encoding="utf-8") as fh:

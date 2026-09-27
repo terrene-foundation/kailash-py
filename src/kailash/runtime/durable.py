@@ -676,9 +676,25 @@ def redacted_tracker_state_for_checkpoint(
     # tracker dict is never mutated even on the no-op path.
     new_state: Dict[str, Any] = {}
     for key, value in tracker_state.items():
-        if key == "node_outputs":
+        if key in ("node_outputs", "cycle_iterations"):
             continue  # populated below
         new_state[key] = value
+
+    if "cycle_iterations" in tracker_state:
+        new_state["cycle_iterations"] = {
+            cycle_id: {
+                iteration: redacted_tracker_state_for_checkpoint(
+                    state,
+                    classification_policy=classification_policy,
+                    workflow_id=workflow_id,
+                    workflow_fingerprint=workflow_fingerprint,
+                    tenant_id=tenant_id,
+                    idempotency_key=idempotency_key,
+                )
+                for iteration, state in iterations.items()
+            }
+            for cycle_id, iterations in tracker_state["cycle_iterations"].items()
+        }
 
     raw_outputs_map = tracker_state.get("node_outputs", {})
     if not isinstance(raw_outputs_map, Mapping):
@@ -1048,6 +1064,12 @@ def decode_checkpoint_payload(blob: bytes) -> Dict[str, Any]:
     return payload
 
 
+def _validate_force_resume_with_drift(value: bool) -> None:
+    """A drift bypass requires an explicit boolean, never truthy coercion."""
+    if value is not True and value is not False:
+        raise TypeError("force_resume_with_drift must be a bool (False or True)")
+
+
 def check_shape_drift_or_raise(
     *,
     idempotency_key: str,
@@ -1059,6 +1081,7 @@ def check_shape_drift_or_raise(
 
     See :class:`WorkflowShapeDriftError` for semantics.
     """
+    _validate_force_resume_with_drift(force_resume_with_drift)
     stored_fp = stored_payload.get("workflow_fingerprint", "")
     if stored_fp == current_fingerprint:
         return
@@ -1451,6 +1474,7 @@ class DurableExecutionEngine:
           eliminate the race entirely.
         """
         # #912 Shard 1: validate typed time-limit kwargs at the entry point.
+        _validate_force_resume_with_drift(force_resume_with_drift)
         _validate_limits(soft_time_limit, time_limit)
 
         effective_inputs: Dict[str, Any] = (

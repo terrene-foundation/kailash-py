@@ -29,6 +29,26 @@ import pytest
 
 from kailash.workflow.builder import WorkflowBuilder
 
+
+@pytest.fixture
+def own_runtime(request):
+    """Close the actual test-created channel/transport and its runtime."""
+    from kailash.runtime.async_local import AsyncLocalRuntime
+
+    def bind(owner, attribute):
+        runtime = AsyncLocalRuntime()
+        setattr(owner, attribute, runtime)
+
+        def close():
+            owner.close()
+            assert getattr(owner, attribute) is None
+            assert runtime.ref_count == 0
+
+        request.addfinalizer(close)
+
+    return bind
+
+
 # One workflow source for every channel, reading its argument BOTH ways so a
 # channel binding only one shape fails loudly rather than passing on the shape
 # it happens to support.
@@ -99,16 +119,15 @@ def test_binder_does_not_mutate_caller_mapping():
 
 @pytest.mark.regression
 @pytest.mark.asyncio
-async def test_mcp_channel_tools_call_binds_envelope():
+async def test_mcp_channel_tools_call_binds_envelope(own_runtime):
     """``MCPChannel`` tools/call MUST run a convention workflow.
 
     Falsifying result: before the fix this raised NameError on `parameters`.
     """
     from kailash.channels.mcp_channel import MCPChannel
-    from kailash.runtime.async_local import AsyncLocalRuntime
 
     channel = MCPChannel.__new__(MCPChannel)
-    channel.runtime = AsyncLocalRuntime()
+    own_runtime(channel, "runtime")
     channel._workflow_registry = {"parity": _parity_workflow()}
 
     class _Reg:
@@ -133,7 +152,7 @@ async def test_mcp_channel_tools_call_binds_envelope():
 
 @pytest.mark.regression
 @pytest.mark.asyncio
-async def test_mcp_channel_execute_workflow_binds_envelope():
+async def test_mcp_channel_execute_workflow_binds_envelope(own_runtime):
     """The SECOND mcp_channel execution path -- found by the derived scan.
 
     Neither the review nor the hand-written list named this one; the AST
@@ -141,10 +160,9 @@ async def test_mcp_channel_execute_workflow_binds_envelope():
     must share the binding.
     """
     from kailash.channels.mcp_channel import MCPChannel
-    from kailash.runtime.async_local import AsyncLocalRuntime
 
     channel = MCPChannel.__new__(MCPChannel)
-    channel.runtime = AsyncLocalRuntime()
+    own_runtime(channel, "runtime")
     channel._workflow_registry = {"parity": _parity_workflow()}
 
     response = await channel._handle_execute_workflow(
@@ -203,7 +221,7 @@ async def test_api_channel_handle_request_binds_envelope():
 
 @pytest.mark.regression
 @pytest.mark.asyncio
-async def test_cli_channel_execute_workflow_command_binds_envelope():
+async def test_cli_channel_execute_workflow_command_binds_envelope(own_runtime):
     """The CLI channel's ``run <workflow> --input '{...}'`` path.
 
     Falsifying result: the same two NameErrors as above -- the CLI's
@@ -211,10 +229,9 @@ async def test_cli_channel_execute_workflow_command_binds_envelope():
     exactly what every other channel binds.
     """
     from kailash.channels.cli_channel import CLIChannel
-    from kailash.runtime.async_local import AsyncLocalRuntime
 
     channel = CLIChannel.__new__(CLIChannel)
-    channel.runtime = AsyncLocalRuntime()
+    own_runtime(channel, "runtime")
     channel.workflow_server = None
     channel._registered_workflows = {"parity": _parity_workflow()}
 
@@ -237,7 +254,7 @@ async def test_cli_channel_execute_workflow_command_binds_envelope():
 
 @pytest.mark.regression
 @pytest.mark.asyncio
-async def test_nexus_mcp_transport_workflow_tool_binds_envelope():
+async def test_nexus_mcp_transport_workflow_tool_binds_envelope(own_runtime):
     """``transports/mcp.py::workflow_tool`` MUST run a convention workflow.
 
     Falsifying result: this is the site whose revert to ``{"parameters":
@@ -246,7 +263,6 @@ async def test_nexus_mcp_transport_workflow_tool_binds_envelope():
     with ``NameError: name 'parameters' is not defined``.
     """
     pytest.importorskip("nexus", reason="kailash-nexus is not installed")
-    from kailash.runtime.async_local import AsyncLocalRuntime
     from nexus.transports.mcp import MCPTransport
 
     registered: dict = {}
@@ -263,7 +279,7 @@ async def test_nexus_mcp_transport_workflow_tool_binds_envelope():
 
     transport = MCPTransport(namespace="nexus")
     transport._server = _CapturingServer()
-    transport._shared_runtime = AsyncLocalRuntime()
+    own_runtime(transport, "_shared_runtime")
 
     transport._register_workflow_tool("parity", _parity_workflow())
     tool_fn = registered["nexus_parity"]
@@ -275,14 +291,13 @@ async def test_nexus_mcp_transport_workflow_tool_binds_envelope():
 
 @pytest.mark.regression
 @pytest.mark.asyncio
-async def test_nexus_websocket_transport_invoke_handler_binds_envelope():
+async def test_nexus_websocket_transport_invoke_handler_binds_envelope(own_runtime):
     """``transports/websocket.py::_invoke_handler`` MUST run a convention workflow.
 
     Falsifying result: same two NameErrors. This drives the workflow-backed
     branch (``handler_def.func is None``), which is the branch that binds.
     """
     pytest.importorskip("nexus", reason="kailash-nexus is not installed")
-    from kailash.runtime.async_local import AsyncLocalRuntime
     from nexus.registry import HandlerDef, HandlerRegistry
     from nexus.transports.websocket import WebSocketTransport
 
@@ -291,7 +306,7 @@ async def test_nexus_websocket_transport_invoke_handler_binds_envelope():
 
     transport = WebSocketTransport()
     transport._registry = registry
-    transport._shared_runtime = AsyncLocalRuntime()
+    own_runtime(transport, "_shared_runtime")
 
     payload = await transport._invoke_handler(
         HandlerDef(name="parity", func=None), {"id": 7}

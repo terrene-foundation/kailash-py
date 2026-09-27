@@ -35,9 +35,29 @@ Issue #803 surfaced production drift in `MultiFactorAuthNode` response shapes:
    uses `logger.debug` per `rules/observability.md`.
 """
 
+import re
+from contextlib import contextmanager
+
 import pytest
 
 from kailash.nodes.auth.mfa import MultiFactorAuthNode
+
+
+@contextmanager
+def _legacy_mfa_warning():
+    message = (
+        "MultiFactorAuthNode: admin_override is deprecated (issue #2047) -- "
+        "it is a caller-supplied boolean, so it authorised administrative actions "
+        "on data the caller controlled. This node is in require_actor=False mode, "
+        "so it still gates the destructive actions and is still not an "
+        "authentication control. Wire actor_resolver= and require_actor=True "
+        "to replace it."
+    )
+    with pytest.warns(DeprecationWarning, match=re.escape(message)) as caught:
+        yield
+    assert [(warning.category, str(warning.message)) for warning in caught] == [
+        (DeprecationWarning, message)
+    ]
 
 
 @pytest.mark.regression
@@ -112,11 +132,12 @@ class TestIssue803MFAResponseContracts:
             method="totp",
             user_email="u@example.com",
         )
-        result = node.execute(
-            action="disable",
-            user_id="user-803",
-            admin_override=True,
-        )
+        with _legacy_mfa_warning():
+            result = node.execute(
+                action="disable",
+                user_id="user-803",
+                admin_override=True,
+            )
         assert result["success"] is True
         assert result["user_id"] == "user-803"
         assert "disabled_methods" in result
@@ -135,17 +156,18 @@ class TestIssue803MFAResponseContracts:
         )
         original_secret = first["secret"]
 
-        result = node.execute(
-            action="reset",
-            user_id="user-803",
-            method="totp",
-            user_email="u@example.com",
-            # reset destroys the existing factor and mints a new one, so it is
-            # an administrative action (issue #2026). The #803 contract below —
-            # that it clears state and returns a fresh setup payload — is
-            # unchanged.
-            admin_override=True,
-        )
+        with _legacy_mfa_warning():
+            result = node.execute(
+                action="reset",
+                user_id="user-803",
+                method="totp",
+                user_email="u@example.com",
+                # reset destroys the existing factor and mints a new one, so it is
+                # an administrative action (issue #2026). The #803 contract below —
+                # that it clears state and returns a fresh setup payload — is
+                # unchanged.
+                admin_override=True,
+            )
         assert result["success"] is True
         assert result["user_id"] == "user-803"
         assert result.get("reset") is True

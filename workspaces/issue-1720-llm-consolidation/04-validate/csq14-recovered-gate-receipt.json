@@ -1,0 +1,31 @@
+{
+  "recovered_from_session": "01a0d8a0-e67b-7dc2-8628-1e1bfbbd3eca",
+  "source_head": "709759a385ae5950fdeab2eda739718dddfb75e3",
+  "source_tree": "4593f8381a63243ad7dcbd48f39e7ea7943452ee",
+  "log_sha256": "e7f6cbaa7526d929859366322bebdee65a3328eb3f2cef43b2a6c66ddb8c3d9e",
+  "log_path": "/tmp/kailash-csq13-final-delta-gate.log",
+  "scope": "Recovered completed final gate; not a fresh run. Skipped/deselected/xfail/xpass outcomes do not certify those paths. ML gate failed and must be repaired before promotion.",
+  "markers": [
+    "FINAL_DELTA_SOURCE original_head=709759a385ae5950fdeab2eda739718dddfb75e3 tree=4593f8381a63243ad7dcbd48f39e7ea7943452ee",
+    "FINAL_DELTA_ORIGIN kailash /mnt/esperie-stage/trestle-remote-run/kailash-py-55816699a749/src/kailash/__init__.py",
+    "FINAL_DELTA_ORIGIN kaizen /mnt/esperie-stage/trestle-remote-run/kailash-py-55816699a749/packages/kailash-kaizen/src/kaizen/__init__.py",
+    "FINAL_DELTA_ORIGIN dataflow /mnt/esperie-stage/trestle-remote-run/kailash-py-55816699a749/packages/kailash-dataflow/src/dataflow/__init__.py",
+    "FINAL_DELTA_PYTHON 3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0] /mnt/esperie-stage/trestle-remote-run/kailash-py-55816699a749/.venv/bin/python",
+    "FINAL_DELTA_STEP kaizen_config exit=0",
+    "FINAL_DELTA_STEP audio_strict exit=0",
+    "FINAL_DELTA_STEP cache_strict exit=0",
+    "1 failed, 235 passed in 38.37s",
+    "FINAL_DELTA_STEP bounded_ml exit=1",
+    "FINAL_DELTA_PHASE kaizen_ml exit=1",
+    "FINAL_DELTA_ORIGIN kailash /mnt/esperie-stage/trestle-remote-run/kailash-py-55816699a749/src/kailash/__init__.py",
+    "FINAL_DELTA_ORIGIN kailash_mcp /mnt/esperie-stage/trestle-remote-run/kailash-py-55816699a749/packages/kailash-mcp/src/kailash_mcp/__init__.py",
+    "FINAL_DELTA_PYTHON 3.11.15 (main, Jun 11 2026, 04:03:40) [Clang 22.1.3 ] /mnt/esperie-stage/trestle-remote-run/kailash-py-55816699a749/.venv/bin/python",
+    "FINAL_DELTA_STEP core_config exit=0",
+    "FINAL_DELTA_STEP core_focused_strict exit=0",
+    "5371 passed, 5 skipped, 3 deselected, 6 xfailed, 5 xpassed in 56.47s",
+    "FINAL_DELTA_STEP core_tier1_exact exit=0",
+    "FINAL_DELTA_STEP full_hooks exit=0",
+    "FINAL_DELTA_PHASE core_hooks exit=0",
+    "[trestle-remote-run] exit=1 command wall=404.3s host=esperie-ai"
+  ]
+}

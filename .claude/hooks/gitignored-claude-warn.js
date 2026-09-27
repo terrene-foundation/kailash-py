@@ -80,18 +80,34 @@ function checkPath(data) {
   if (!/(?:^|\/)\.claude\//.test(norm)) return { messages: [] };
 
   // Run git check-ignore. Exit 0 means the path IS gitignored.
-  // We pass -v for verbose; we only care about the exit code.
+  //
+  // Deliberately WITHOUT `-v`. Under `-v`, git reports a NEGATION match (`!pattern`) as a match
+  // and exits 0 — so exit 0 stops meaning "ignored" and starts meaning "some pattern mentioned
+  // this path, in either direction". Measured on git 2.50.1, with a genuinely-ignored control:
+  //
+  //   path                                     -v     no -v
+  //   .claude/settings.local.json (ignored)     0       0
+  //   untracked file under `!.claude/...`       0  <--  1   (NOT ignored; -v gets it backwards)
+  //   tracked, not ignored                      1       1
+  //
+  // This repo un-ignores `.claude/audit-fixtures/**` with exactly such a negation, so every new
+  // UNTRACKED fixture — i.e. every hook test on the day it is written — was warned as "transient,
+  // will not be tracked" when it was in fact perfectly trackable. A false alarm that tells an
+  // author to relocate a correctly-placed test is worse than silence: acted on, it moves the file;
+  // dismissed, it teaches the operator to skim this hook's output. Only the exit code is read here
+  // (stdio is ignored), so `-v` bought nothing and cost the discrimination.
   const cwd = data.cwd || process.cwd();
   let ignored = false;
   try {
-    execFileSync("git", ["check-ignore", "-v", norm], {
+    execFileSync("git", ["check-ignore", norm], {
       cwd,
       stdio: ["ignore", "ignore", "ignore"],
       timeout: 2000,
     });
     ignored = true; // exit 0 — path is ignored
   } catch (e) {
-    // exit 1 — not ignored, OR exit 128 — not in a git repo. Both → silent.
+    // exit 1 — not ignored (including a negation match), OR exit 128 — not in a git repo.
+    // Both → silent.
     ignored = false;
   }
 

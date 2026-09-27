@@ -359,8 +359,17 @@ class TestPublicValueSanitizer:
         from kailash.middleware.core.agent_ui import AgentUIMiddleware
 
         middleware = AgentUIMiddleware(max_sessions=8)
-        with caplog.at_level(logging.INFO, logger="kailash.middleware.core.agent_ui"):
-            asyncio.run(middleware.create_session(user_id=INJECTION + CONTROL_CHARS))
+        runtime = middleware.runtime
+        try:
+            with caplog.at_level(
+                logging.INFO, logger="kailash.middleware.core.agent_ui"
+            ):
+                asyncio.run(
+                    middleware.create_session(user_id=INJECTION + CONTROL_CHARS)
+                )
+        finally:
+            middleware.close()
+        assert runtime._ref_count == 0
 
         session_records = [
             r for r in caplog.records if "session" in r.getMessage().lower()

@@ -1,0 +1,228 @@
+{
+  "ran": true,
+  "task": "Read-only source triage before assigned repairs",
+  "api_snapshot": "/tmp/csq16-security-current-alert-index.json",
+  "scanner_merge_sha": "1e4d91f55a4baa94fd5989e0d51884acd155a9cb",
+  "scanner_pr_head": "68d4dbd4185435a03cd43604c12966558c9c934e",
+  "raw_alerts": [
+    {
+      "number": 11530,
+      "state": "open",
+      "rule": "py/clear-text-logging-sensitive-data",
+      "severity": "high",
+      "commit_sha": "1e4d91f55a4baa94fd5989e0d51884acd155a9cb",
+      "path": "src/kailash/nodes/auth/mfa.py",
+      "start_line": 94,
+      "end_line": 94,
+      "message": "This expression logs sensitive data (password) as clear text.\nThis expression logs sensitive data (password) as clear text.\nThis expression logs sensitive data (password) as clear text.\nThis expression logs sensitive data (password) as clear text.",
+      "present_in_exact_main_sarif": true,
+      "absent_main_open": false,
+      "dismissed_reason": null
+    },
+    {
+      "number": 11505,
+      "state": "open",
+      "rule": "py/clear-text-logging-sensitive-data",
+      "severity": "high",
+      "commit_sha": "1e4d91f55a4baa94fd5989e0d51884acd155a9cb",
+      "path": "src/kailash/nodes/security/audit_log.py",
+      "start_line": 145,
+      "end_line": 145,
+      "message": "This expression logs sensitive data (secret) as clear text.\nThis expression logs sensitive data (secret) as clear text.\nThis expression logs sensitive data (private) as clear text.\nThis expression logs sensitive data (private) as clear text.\nThis expression logs sensitive data (secret) as clear text.\nThis expression logs sensitive data (secret) as clear text.\nThis expression logs sensitive data (secret) as clear text.\nThis expression logs sensitive data (password) as clear text.\nThis expression logs sensitive data (password) as clear text.\nThis expression logs sensitive data (password) as clear text.\nThis expression logs sensitive data (password) as clear text.\nThis expression logs sensitive data (password) as clear text.",
+      "present_in_exact_main_sarif": true,
+      "absent_main_open": false,
+      "dismissed_reason": null
+    },
+    {
+      "number": 11504,
+      "state": "open",
+      "rule": "py/clear-text-logging-sensitive-data",
+      "severity": "high",
+      "commit_sha": "1e4d91f55a4baa94fd5989e0d51884acd155a9cb",
+      "path": "src/kailash/nodes/security/audit_log.py",
+      "start_line": 143,
+      "end_line": 143,
+      "message": "This expression logs sensitive data (secret) as clear text.\nThis expression logs sensitive data (secret) as clear text.\nThis expression logs sensitive data (private) as clear text.\nThis expression logs sensitive data (private) as clear text.\nThis expression logs sensitive data (secret) as clear text.\nThis expression logs sensitive data (secret) as clear text.\nThis expression logs sensitive data (secret) as clear text.\nThis expression logs sensitive data (password) as clear text.\nThis expression logs sensitive data (password) as clear text.\nThis expression logs sensitive data (password) as clear text.\nThis expression logs sensitive data (password) as clear text.\nThis expression logs sensitive data (password) as clear text.",
+      "present_in_exact_main_sarif": true,
+      "absent_main_open": false,
+      "dismissed_reason": null
+    },
+    {
+      "number": 11503,
+      "state": "open",
+      "rule": "py/clear-text-logging-sensitive-data",
+      "severity": "high",
+      "commit_sha": "1e4d91f55a4baa94fd5989e0d51884acd155a9cb",
+      "path": "src/kailash/nodes/security/audit_log.py",
+      "start_line": 141,
+      "end_line": 141,
+      "message": "This expression logs sensitive data (secret) as clear text.\nThis expression logs sensitive data (secret) as clear text.\nThis expression logs sensitive data (private) as clear text.\nThis expression logs sensitive data (private) as clear text.\nThis expression logs sensitive data (secret) as clear text.\nThis expression logs sensitive data (secret) as clear text.\nThis expression logs sensitive data (secret) as clear text.\nThis expression logs sensitive data (password) as clear text.\nThis expression logs sensitive data (password) as clear text.\nThis expression logs sensitive data (password) as clear text.\nThis expression logs sensitive data (password) as clear text.\nThis expression logs sensitive data (password) as clear text.",
+      "present_in_exact_main_sarif": true,
+      "absent_main_open": false,
+      "dismissed_reason": null
+    },
+    {
+      "number": 5144,
+      "state": "open",
+      "rule": "py/clear-text-logging-sensitive-data",
+      "severity": "high",
+      "commit_sha": "1e4d91f55a4baa94fd5989e0d51884acd155a9cb",
+      "path": "src/kailash/trust/enforce/selective_disclosure.py",
+      "start_line": 211,
+      "end_line": 212,
+      "message": "This expression logs sensitive data (secret) as clear text.",
+      "present_in_exact_main_sarif": true,
+      "absent_main_open": false,
+      "dismissed_reason": null
+    },
+    {
+      "number": 5122,
+      "state": "open",
+      "rule": "py/clear-text-logging-sensitive-data",
+      "severity": "high",
+      "commit_sha": "1e4d91f55a4baa94fd5989e0d51884acd155a9cb",
+      "path": "packages/kailash-dataflow/src/dataflow/core/pool_utils.py",
+      "start_line": 153,
+      "end_line": 153,
+      "message": "This expression logs sensitive data (password) as clear text.",
+      "present_in_exact_main_sarif": true,
+      "absent_main_open": false,
+      "dismissed_reason": null
+    },
+    {
+      "number": 5112,
+      "state": "open",
+      "rule": "py/weak-sensitive-data-hashing",
+      "severity": "high",
+      "commit_sha": "1e4d91f55a4baa94fd5989e0d51884acd155a9cb",
+      "path": "packages/kailash-kaizen/src/kaizen/nodes/ai/client_cache.py",
+      "start_line": 67,
+      "end_line": 67,
+      "message": "Sensitive data (password) is used in a hashing algorithm (SHA256) that is insecure for password hashing, since it is not a computationally expensive hash function.\nSensitive data (password) is used in a hashing algorithm (SHA256) that is insecure for password hashing, since it is not a computationally expensive hash function.",
+      "present_in_exact_main_sarif": true,
+      "absent_main_open": false,
+      "dismissed_reason": null
+    },
+    {
+      "number": 153,
+      "state": "open",
+      "rule": "py/overly-permissive-file",
+      "severity": "high",
+      "commit_sha": "1e4d91f55a4baa94fd5989e0d51884acd155a9cb",
+      "path": "src/kailash/runtime/docker.py",
+      "start_line": 249,
+      "end_line": 249,
+      "message": "Overly permissive mask in chmod sets file to world readable.",
+      "present_in_exact_main_sarif": true,
+      "absent_main_open": false,
+      "dismissed_reason": null
+    }
+  ],
+  "source_manifest_before_repairs": {
+    "src/kailash/nodes/auth/mfa.py": "f7fda632eb29c6e9a590945c0961f59b533dd3853b9283b55e1c252e0de58400",
+    "src/kailash/nodes/security/audit_log.py": "c9da6fac9bb82087a7fe80fd43972a910d02c86293d24c35a9d007415a693a9f",
+    "src/kailash/trust/enforce/selective_disclosure.py": "1a5c98d553d6b62fc893aede81d98d46aa71d3fa71da6ec192747b8d8a36571f",
+    "packages/kailash-dataflow/src/dataflow/core/pool_utils.py": "9f8b3405337334bdff2fc741c9bc1af17565c734d6273e6e4c76a2c8db158d2c",
+    "packages/kailash-kaizen/src/kaizen/nodes/ai/client_cache.py": "98198a923b9be859ff5578806386a1340b80883d8895c018bdcb777a4a819dcb",
+    "src/kailash/runtime/docker.py": "ba2da3c65fa86fe8906314abe8622a9b4e7bba159319d039c2e8c9457fbab699"
+  },
+  "probes": "/tmp/csq16-remaining-high-probes.json",
+  "payloads": [
+    {
+      "text": "triage-canary-936184",
+      "utf8hex": "7472696167652d63616e6172792d393336313834"
+    },
+    {
+      "text": "https://user:triage-canary-936184@host.invalid/?token=triage-canary-936184",
+      "utf8hex": "68747470733a2f2f757365723a7472696167652d63616e6172792d39333631383440686f73742e696e76616c69642f3f746f6b656e3d7472696167652d63616e6172792d393336313834"
+    },
+    {
+      "text": "{\"password\":\"triage-canary-936184\"}",
+      "utf8hex": "7b2270617373776f7264223a227472696167652d63616e6172792d393336313834227d"
+    },
+    {
+      "text": "https://user:triage-canary-936184@host.invalid/?token=triage-canary-936184\nFORGED",
+      "utf8hex": "68747470733a2f2f757365723a7472696167652d63616e6172792d39333631383440686f73742e696e76616c69642f3f746f6b656e3d7472696167652d63616e6172792d3933363138340a464f52474544"
+    }
+  ],
+  "dispositions": [
+    {
+      "ids": [
+        11530
+      ],
+      "status": "Confirmed metadata credential leak",
+      "evidence": "MFA disabled-actor warning interpolates caller node_name containing recognized URL credentials. %r escapes newline, so no literal newline injection is claimed for this sink.",
+      "action": "Assigned this agent metadata formatting repair; authorization and warning remain."
+    },
+    {
+      "ids": [
+        11503,
+        11504,
+        11505
+      ],
+      "status": "Sensitive-key paths protected, but concrete sibling metadata/bytes-leaf leakage at same3 sinks",
+      "evidence": "All3 levels x2 output formats: string password/private_key and nested string URL redacted; opposite removesredact_mapping and exactsame password leaks. message/user_id recognized credential strings and bytes URL under neutral event_data key leak.",
+      "action": "Assigned this agent log-only copies preserving public return contracts; also SecurityEvent sibling reached."
+    },
+    {
+      "ids": [
+        5144
+      ],
+      "status": "Confirmed invalid classification credential/control-byte leak",
+      "evidence": "_should_keep_reasoning_trace returnedFalse but WARN includes fullURL+literal newlineFORGED. Valid secret classification remains redacted and silent.",
+      "action": "Assigned this agent safe_log_field without changing classification/hash policy."
+    },
+    {
+      "ids": [
+        5122
+      ],
+      "status": "Confirmed scheme metadata and sibling raw traceback leakage",
+      "evidence": "scheme={\"password\":\"triage-canary-936184\"} emitsverbatim. Real psycopg2 invalid-port and urllib MySQLparse error messages expose canary via exc_info=True. No live database services called.",
+      "action": "Parent assigned separate DataFlow repair owner."
+    },
+    {
+      "ids": [
+        5112
+      ],
+      "status": "Specific weak-password-hash query is false-positive candidate; separate actual public cache identity defect requires repair",
+      "evidence": "SHA256 output only indexes in-memory opaque client cache; no password verifier or persistence. Distinct credentials/baseURL pairs with pipe delimiters collide and returnfirstclient; distinct noncollision control createsnewclient. Source/spec show zero production callsites, so deployed tenant bypass not claimed.",
+      "action": "Parent assigned separate Kaizen cache repair. No dismissal performed."
+    },
+    {
+      "ids": [
+        153
+      ],
+      "status": "Scoped false-positive candidate: generated public executable",
+      "evidence": {
+        "hashes": [
+          "50066f854557aeee46bb94fb418034e6afe517074aef5f1a39c0259e4f3e20ba",
+          "50066f854557aeee46bb94fb418034e6afe517074aef5f1a39c0259e4f3e20ba"
+        ],
+        "modes": [
+          "0o755",
+          "0o755"
+        ],
+        "static_across_node_config": true,
+        "no_canary_in_entrypoint": true,
+        "opposite_secret_append_detected": true
+      },
+      "source_contract": "DockerNodeWrapper.prepare_dockerfile writes fixedliteral Python entrypoint thenchmod0755; nodespecific metadata is separate node.json, never interpolated intoentrypoint. Dockerfile ENTRYPOINT executes it. Actual2 differentnodes/configs generate identicalSHA256 and contain no credentialcanary. Appending secret asopposite triggers detector.",
+      "action": "Reviewable dismissal candidate only for flaggedchmod; no dismissal. Does not certify Docker runner logging, workdir trust, unrelated file permissions, container isolation or runtime services."
+    }
+  ],
+  "spec_quotes": {
+    "security-threats.md:29-35": "Auth events are logged per the observability rules: ... Token creation with user_id (no token content). Token verification failures with error classification.",
+    "trust-crypto.md:323": "An agent's clearance level must meet or exceed the trace's classification level to read the trace content.",
+    "kaizen-providers-provider-system.md:176": "BYOKClientCache has zero production call sites \u2014 a generic bounded cache over an opaque caller-supplied factory; if a future PR wires a real provider-client factory through it, that factory's construction site is the gate point, not the cache."
+  },
+  "gate_scope": "18openhighs in saved exactanalysis index; this bounded8-ID triage does not equate branch-only58 or changedfile439 with GitHub427 PRnewness. That aggregation remains unresolved.",
+  "profiles_read": [
+    "pattern-expert Read/Bash",
+    "nexus-specialist Read/Bash",
+    "pact-specialist Read/Bash",
+    "dataflow-specialist Read/Bash",
+    "kaizen-specialist Read/Bash"
+  ],
+  "remote_writes": false,
+  "dismissals": []
+}

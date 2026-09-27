@@ -348,8 +348,7 @@ async def test_workflow_blob_size_cap_rejects_oversized() -> None:
     Why the regression: an unbounded workflow_blob OOMs every dequeueing
     worker on json.loads. The cap is the structural defense.
     """
-    from kailash.runtime import _workflow_blob as wb_mod
-    from kailash.runtime import scheduler as scheduler_mod
+    from kailash.runtime import _workflow_blob as wb_mod, scheduler as scheduler_mod
 
     # Patch the helper module — the size-cap check now lives in
     # `serialize_workflow_to_blob`, which reads its own module-scope
@@ -503,12 +502,11 @@ def test_soft_row_cap_default_is_none() -> None:
     SQLTaskQueueDispatcher(conn) pre-cap MUST continue to work
     unchanged.
     """
+    from kailash.db.connection import ConnectionManager
     from kailash.infrastructure.task_queue import SQLTaskQueueDispatcher
 
-    class _DummyConn:
-        pass
-
-    dispatcher = SQLTaskQueueDispatcher(_DummyConn())
+    # Construction resolves the actual dialect without opening a connection.
+    dispatcher = SQLTaskQueueDispatcher(ConnectionManager("sqlite:///:memory:"))
     assert dispatcher._soft_row_cap is None
 
 

@@ -886,7 +886,16 @@ class TestMultiLevelVerify:
         # VP Eng (D1-R1) blocks "deploy"
         vp_env = RoleEnvelope(
             id="re-vp",
-            defining_role_address="R1",  # Board sets VP envelope
+            # #2238: "R1" names NO node in this org (measured -- the nodes are
+            # D1, D1-R1, D1-R1-T1, D1-R1-T1-R1, D2, D2-R1; there is no board
+            # role), so it was a ghost definer that skipped monotonic
+            # tightening outright. This org has no role ABOVE the VP, so the
+            # VP envelope is genuinely a ROOT envelope: it names the VP itself,
+            # which resolves, holds no envelope yet, and therefore leaves every
+            # assertion below unchanged. ("D1" would resolve as a node but is
+            # not a grammar-valid role address -- a Department must be followed
+            # by a Role -- so it fails closed in envelope computation.)
+            defining_role_address="D1-R1",
             target_role_address="D1-R1",
             envelope=_make_envelope(
                 env_id="vp-envelope",
@@ -916,7 +925,7 @@ class TestMultiLevelVerify:
 
         vp_env = RoleEnvelope(
             id="re-vp-ok",
-            defining_role_address="R1",
+            defining_role_address="D1-R1",  # #2238: root envelope; "R1" is a ghost
             target_role_address="D1-R1",
             envelope=_make_envelope(
                 env_id="vp-ok-envelope",
@@ -953,7 +962,7 @@ class TestMultiLevelVerify:
         # VP Eng: max_spend = $100
         vp_env = RoleEnvelope(
             id="re-vp-cheap",
-            defining_role_address="R1",
+            defining_role_address="D1-R1",  # #2238: root envelope; "R1" is a ghost
             target_role_address="D1-R1",
             envelope=_make_envelope(
                 env_id="vp-cheap",

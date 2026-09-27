@@ -49,8 +49,11 @@ from .enterprise import (
 )
 
 # Multi-modal field descriptors
-from .multi_modal import AudioField, ImageField
-from .multi_modal import MultiModalSignature as MultiModalSignatureBase
+from .multi_modal import (
+    AudioField,
+    ImageField,
+    MultiModalSignature as MultiModalSignatureBase,
+)
 
 # Execution patterns
 from .patterns import (

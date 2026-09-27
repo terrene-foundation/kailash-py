@@ -10,6 +10,7 @@ desired behavior without blocking CI. Remove ``xfail`` as features are
 implemented.
 """
 
+from contextlib import ExitStack
 from typing import Any, Dict
 
 import pytest
@@ -107,6 +108,15 @@ class DataFlowNode(Node):
 class TestConnectionValidation:
     """Test suite for connection parameter validation."""
 
+    @pytest.fixture(autouse=True)
+    def _runtime_lifecycle(self):
+        with ExitStack() as stack:
+            self._runtime_stack = stack
+            yield
+
+    def _runtime(self, **kwargs):
+        return self._runtime_stack.enter_context(LocalRuntime(**kwargs))
+
     def setup_method(self):
         """Register custom nodes for testing."""
         NodeRegistry.register(MaliciousNode, alias="MaliciousNode")
@@ -124,7 +134,7 @@ class TestConnectionValidation:
         workflow = WorkflowBuilder()
         workflow.add_node("SecureNode", "secure", {})
 
-        runtime = LocalRuntime(connection_validation="strict")
+        runtime = self._runtime(connection_validation="strict")
 
         # Valid parameters should work
         results, _ = runtime.execute(
@@ -152,13 +162,15 @@ class TestConnectionValidation:
         parameters bypass validation. This should FAIL after the fix.
         """
         workflow = WorkflowBuilder()
-        workflow.add_node(MaliciousNode, "malicious", {})
-        workflow.add_node(SecureNode, "secure", {})
+        with pytest.warns(UserWarning, match="SDK node detected|CUSTOM NODE USAGE"):
+            workflow.add_node(MaliciousNode, "malicious", {})
+        with pytest.warns(UserWarning, match="SDK node detected|CUSTOM NODE USAGE"):
+            workflow.add_node(SecureNode, "secure", {})
 
         # Connect malicious output to secure input
         workflow.add_connection("malicious", "output", "secure", "")
 
-        runtime = LocalRuntime()
+        runtime = self._runtime()
 
         # Currently this executes without validation (VULNERABILITY!)
         # After fix, this should raise an error in strict mode
@@ -174,12 +186,14 @@ class TestConnectionValidation:
     def test_connection_validation_modes(self):
         """Test different validation modes after fix implementation."""
         workflow = WorkflowBuilder()
-        workflow.add_node(MaliciousNode, "malicious", {})
-        workflow.add_node(SecureNode, "secure", {})
+        with pytest.warns(UserWarning, match="SDK node detected|CUSTOM NODE USAGE"):
+            workflow.add_node(MaliciousNode, "malicious", {})
+        with pytest.warns(UserWarning, match="SDK node detected|CUSTOM NODE USAGE"):
+            workflow.add_node(SecureNode, "secure", {})
         workflow.add_connection("malicious", "output", "secure", "")
 
         # Off mode - no validation (backward compatibility)
-        runtime_off = LocalRuntime(connection_validation="off")
+        runtime_off = self._runtime(connection_validation="off")
         try:
             results, _ = runtime_off.execute(workflow.build(), {})
             # May still fail due to missing required params, but not due to validation
@@ -188,12 +202,12 @@ class TestConnectionValidation:
             pass
 
         # Warn mode - log warnings but continue
-        runtime_warn = LocalRuntime(connection_validation="warn")
+        runtime_warn = self._runtime(connection_validation="warn")
         results, _ = runtime_warn.execute(workflow.build(), {})
         # Should execute with warnings
 
         # Strict mode - fail on validation errors
-        runtime_strict = LocalRuntime(connection_validation="strict")
+        runtime_strict = self._runtime(connection_validation="strict")
         with pytest.raises(Exception) as exc_info:
             runtime_strict.execute(workflow.build(), {})
         # Should fail with validation error
@@ -201,13 +215,15 @@ class TestConnectionValidation:
     def test_sql_injection_prevention(self):
         """SQL injection should be prevented at connection level."""
         workflow = WorkflowBuilder()
-        workflow.add_node(MaliciousNode, "attacker", {})
-        workflow.add_node(DataFlowNode, "database", {})
+        with pytest.warns(UserWarning, match="SDK node detected|CUSTOM NODE USAGE"):
+            workflow.add_node(MaliciousNode, "attacker", {})
+        with pytest.warns(UserWarning, match="SDK node detected|CUSTOM NODE USAGE"):
+            workflow.add_node(DataFlowNode, "database", {})
 
         # Connect malicious query to database
         workflow.add_connection("attacker", "output", "database", "")
 
-        runtime = LocalRuntime(connection_validation="strict")
+        runtime = self._runtime(connection_validation="strict")
 
         # After fix, SQL injection should be caught
         with pytest.raises(Exception) as exc_info:
@@ -234,11 +250,13 @@ class TestConnectionValidation:
                 return {"success": True}
 
         workflow = WorkflowBuilder()
-        workflow.add_node(TypeProducerNode, "producer", {})
-        workflow.add_node(TypeConsumerNode, "consumer", {})
+        with pytest.warns(UserWarning, match="SDK node detected|CUSTOM NODE USAGE"):
+            workflow.add_node(TypeProducerNode, "producer", {})
+        with pytest.warns(UserWarning, match="SDK node detected|CUSTOM NODE USAGE"):
+            workflow.add_node(TypeConsumerNode, "consumer", {})
         workflow.add_connection("producer", "", "consumer", "")
 
-        runtime = LocalRuntime(connection_validation="strict")
+        runtime = self._runtime(connection_validation="strict")
 
         # After fix with type conversion
         results, _ = runtime.execute(workflow.build(), {})
@@ -252,11 +270,13 @@ class TestConnectionValidation:
                 return {"partial": {"query": "SELECT 1"}}  # Missing 'count'
 
         workflow = WorkflowBuilder()
-        workflow.add_node(IncompleteNode, "incomplete", {})
-        workflow.add_node(SecureNode, "secure", {})
+        with pytest.warns(UserWarning, match="SDK node detected|CUSTOM NODE USAGE"):
+            workflow.add_node(IncompleteNode, "incomplete", {})
+        with pytest.warns(UserWarning, match="SDK node detected|CUSTOM NODE USAGE"):
+            workflow.add_node(SecureNode, "secure", {})
         workflow.add_connection("incomplete", "partial", "secure", "")
 
-        runtime = LocalRuntime(connection_validation="strict")
+        runtime = self._runtime(connection_validation="strict")
 
         # Should fail due to missing required parameter
         with pytest.raises(Exception) as exc_info:
@@ -294,11 +314,13 @@ class TestConnectionValidation:
                 return {"connected": True}
 
         workflow = WorkflowBuilder()
-        workflow.add_node(NestedProducerNode, "producer", {})
-        workflow.add_node(NestedConsumerNode, "consumer", {})
+        with pytest.warns(UserWarning, match="SDK node detected|CUSTOM NODE USAGE"):
+            workflow.add_node(NestedProducerNode, "producer", {})
+        with pytest.warns(UserWarning, match="SDK node detected|CUSTOM NODE USAGE"):
+            workflow.add_node(NestedConsumerNode, "consumer", {})
         workflow.add_connection("producer", "config", "consumer", "")
 
-        runtime = LocalRuntime(connection_validation="strict")
+        runtime = self._runtime(connection_validation="strict")
         results, _ = runtime.execute(workflow.build(), {})
         # Should handle nested validation
 
@@ -320,18 +342,19 @@ class TestConnectionValidation:
 
         # Chain 100 nodes
         for i in range(100):
-            workflow.add_node(DataNode, f"node_{i}", {})
+            with pytest.warns(UserWarning, match="SDK node detected|CUSTOM NODE USAGE"):
+                workflow.add_node(DataNode, f"node_{i}", {})
             if i > 0:
                 workflow.add_connection(f"node_{i - 1}", "data", f"node_{i}", "input")
 
         # Measure without validation
-        runtime_off = LocalRuntime(connection_validation="off")
+        runtime_off = self._runtime(connection_validation="off")
         start = time.time()
         runtime_off.execute(workflow.build(), {})
         time_without = time.time() - start
 
         # Measure with validation
-        runtime_strict = LocalRuntime(connection_validation="strict")
+        runtime_strict = self._runtime(connection_validation="strict")
         start = time.time()
         runtime_strict.execute(workflow.build(), {})
         time_with = time.time() - start

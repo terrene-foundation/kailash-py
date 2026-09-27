@@ -31,14 +31,67 @@ from __future__ import annotations
 import importlib
 import inspect
 import logging
+import warnings
 from typing import TYPE_CHECKING, Any, Callable, Optional
+
+try:
+    from aiohttp import web
+    from aiohttp.web_exceptions import NotAppKeyWarning
+except ImportError as exc:
+    raise ImportError(
+        "aiohttp authentication requires the server extra: "
+        "pip install 'kailash[server]'"
+    ) from exc
+
+from kailash.trust.auth.models import AuthenticatedUser
 
 if TYPE_CHECKING:  # pragma: no cover -- typing only
     from kailash.trust.auth.jwt import JWTConfig
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["build_jwt_auth_middleware", "install_aiohttp_auth_middleware"]
+__all__ = [
+    "AUTH_USER_KEY",
+    "AUTH_TOKEN_PAYLOAD_KEY",
+    "build_jwt_auth_middleware",
+    "install_aiohttp_auth_middleware",
+]
+
+# RequestKey was added after our minimum supported aiohttp release. Export
+# stable keys that handlers can use on either version without branching.
+if hasattr(web, "RequestKey"):
+    AUTH_USER_KEY = web.RequestKey("user", AuthenticatedUser)
+    AUTH_TOKEN_PAYLOAD_KEY = web.RequestKey("token_payload", dict)
+else:
+    AUTH_USER_KEY = "user"
+    AUTH_TOKEN_PAYLOAD_KEY = "token_payload"
+
+
+def _publish_auth_state(request: Any, user: AuthenticatedUser, payload: dict) -> None:
+    """Publish verified identity with the legacy string-key API preserved."""
+    request[AUTH_USER_KEY] = user
+    request[AUTH_TOKEN_PAYLOAD_KEY] = payload
+    if isinstance(AUTH_USER_KEY, str):
+        return
+
+    # Public compatibility aliases for existing request["user"] consumers.
+    # Only aiohttp's exact RequestKey recommendation is quieted, only during
+    # these two assignments. Typed writes and downstream handlers are outside
+    # this synchronous scope; all other warnings retain the caller's policy.
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=(
+                r"\AIt is recommended to use web\.RequestKey instances for keys\.\n"
+                r"https://docs\.aiohttp\.org/en/stable/web_advanced\.html"
+                r"\#request-s-storage\Z"
+            ),
+            category=NotAppKeyWarning,
+            module=r"\Akailash\.trust\.auth\.aiohttp\Z",
+        )
+        request["user"] = user
+        request["token_payload"] = payload
+
 
 #: Matches :data:`kailash.trust.auth.asgi._WWW_AUTHENTICATE` in spirit: a
 #: bearer challenge naming no realm, issuer or algorithm. An unauthenticated
@@ -301,11 +354,12 @@ def build_jwt_auth_middleware(config: "JWTConfig") -> Callable:
             if not result:
                 return _unauthorized("invalid_api_key")
             if isinstance(result, dict):
-                request["user"] = validator.create_user_from_payload(result)
-                request["token_payload"] = result
+                user = validator.create_user_from_payload(result)
+                payload = result
             else:
-                request["user"] = AuthenticatedUser(user_id="apikey", roles=["api"])
-                request["token_payload"] = {"type": "api_key"}
+                user = AuthenticatedUser(user_id="apikey", roles=["api"])
+                payload = {"type": "api_key"}
+            _publish_auth_state(request, user, payload)
             return await handler(request)
 
         try:
@@ -341,8 +395,7 @@ def build_jwt_auth_middleware(config: "JWTConfig") -> Callable:
         # aiohttp's request is a MutableMapping; this is the idiomatic place a
         # handler reads who connected, and mirrors `request.state.user` on the
         # ASGI side.
-        request["user"] = user
-        request["token_payload"] = payload
+        _publish_auth_state(request, user, payload)
 
         if config.on_token_validated:
             try:

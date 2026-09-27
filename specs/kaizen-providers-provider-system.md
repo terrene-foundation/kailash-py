@@ -176,3 +176,27 @@ No mock concept exists for any provider/backend surface above (`is_mock=False` a
 **Retired, not gated (nothing to gate):** `kaizen.nodes.ai.azure_backends` / `unified_azure_provider` do not exist — `#1820` retired the legacy unified-azure stack in favour of the four-axis path (`kaizen.llm.azure_env` module docstring). **Orphaned, not gated (no live construction):** `kaizen.nodes.ai.client_cache.BYOKClientCache` has zero production call sites — a generic bounded cache over an opaque caller-supplied `factory`; if a future PR wires a real provider-client factory through it, that factory's construction site is the gate point, not the cache.
 
 A mechanical parity sweep (`test_no_ungated_egress_construction_site_outside_known_files` in `tests/unit/llm/test_governance_required_gate.py`) greps `kaizen/` for `openai`/`anthropic`/`genai`/`httpx`/`ollama`/Azure client-construction patterns and asserts each containing file also calls `enforce_governance_posture` — or is explicitly allowlisted with a documented reason (the two retired/orphaned surfaces above, plus `kaizen/llm/**` itself, gated at its own `LlmClient` chokepoint rather than per internal call site).
+
+
+### LLM HTTP connection binding
+
+`LlmHttpClient` installs the same Core numeric-address transport as Nexus.
+`SafeDnsResolver.resolve_addresses` returns the exact candidates consumed by
+TCP admission; `check_host` retains its validation-only, `None`-return API.
+Every candidate must pass the existing private/metadata policy before a socket
+is opened, and only the `localhost` label permits loopback. Original TLS SNI,
+certificate hostname, HTTP Host and origin pooling remain unchanged. Provider
+selection, credentials and response/error bodies are outside this connection
+fix. Source: `packages/kailash-kaizen/src/kaizen/llm/http_client.py:181-280` and
+`src/kailash/utils/http_transport.py:30-141`.
+
+
+`LlmHttpClient` also uses the shared Core owned HTTP diagnostic scope. Automatic
+HTTPX/HTTPCore records omit request/response payloads, including URL queries and
+response headers, while preserving fixed events and bounded status/type metadata.
+Provider behavior, original URLs, response/error bodies and raw public callbacks
+remain unchanged. Registration chains the existing LogRecord factory; unowned
+clients and caller-authored logging remain outside this scope, as detailed in
+`nexus-services.md` under "Owned HTTP dependency diagnostics". Source:
+`packages/kailash-kaizen/src/kaizen/llm/http_client.py:333-333` and
+`src/kailash/utils/http_logging.py:1-357`.

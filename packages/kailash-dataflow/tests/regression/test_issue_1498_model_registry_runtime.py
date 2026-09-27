@@ -66,7 +66,7 @@ async def test_issue_1498_sync_safe_executor_offloads_async_runtime(sqlite_file_
         results, _run_id = registry._execute_workflow_sync_safe(wf)
         assert results is not None
     finally:
-        db.close()
+        await db.close_async()
 
 
 @pytest.mark.regression
@@ -89,37 +89,37 @@ async def test_issue_1498_captured_runtime_survives_loopless_reresolution(
     db = DataFlow(sqlite_file_url)
     try:
         registry = db._model_registry
-        async_rt = AsyncLocalRuntime()
-        sync_rt = LocalRuntime()
+        async with AsyncLocalRuntime() as async_rt:
+            with LocalRuntime() as sync_rt:
 
-        calls = {"n": 0}
+                calls = {"n": 0}
 
-        def _flaky_runtime(_self):
-            calls["n"] += 1
-            # First read (caller-frame capture) -> async; later reads -> sync.
-            return async_rt if calls["n"] == 1 else sync_rt
+                def _flaky_runtime(_self):
+                    calls["n"] += 1
+                    # First read (caller-frame capture) -> async; later reads -> sync.
+                    return async_rt if calls["n"] == 1 else sync_rt
 
-        monkeypatch.setattr(
-            type(registry), "runtime", property(_flaky_runtime), raising=True
-        )
+                monkeypatch.setattr(
+                    type(registry), "runtime", property(_flaky_runtime), raising=True
+                )
 
-        wf = WorkflowBuilder()
-        wf.add_node(
-            "SQLDatabaseNode",
-            "probe",
-            {
-                "connection_string": db.config.database.get_connection_url(
-                    db.config.environment
-                ),
-                "database_type": "sqlite",
-                "query": "SELECT 1 AS one",
-                "parameters": [],
-            },
-        )
+                wf = WorkflowBuilder()
+                wf.add_node(
+                    "SQLDatabaseNode",
+                    "probe",
+                    {
+                        "connection_string": db.config.database.get_connection_url(
+                            db.config.environment
+                        ),
+                        "database_type": "sqlite",
+                        "query": "SELECT 1 AS one",
+                        "parameters": [],
+                    },
+                )
 
-        # If the executor re-read `self.runtime` in the worker thread it would
-        # get sync_rt and AttributeError. The fix captures once -> async_rt.
-        results, _run_id = registry._execute_workflow_sync_safe(wf)
-        assert results is not None
+                # If the executor re-read `self.runtime` in the worker thread it would
+                # get sync_rt and AttributeError. The fix captures once -> async_rt.
+                results, _run_id = registry._execute_workflow_sync_safe(wf)
+                assert results is not None
     finally:
-        db.close()
+        await db.close_async()

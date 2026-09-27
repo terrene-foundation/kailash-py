@@ -428,7 +428,13 @@ def _require_env(*candidates: str) -> str:
 
 
 def _fingerprint_selector(selector: str) -> str:
-    """8-char fingerprint for log-injection-safe selector names.
+    """8-char UNKEYED tag for log-injection-safe selector names.
+
+    Correlation and log-injection safety only. A selector name comes from a
+    small published set, so the tag is trivially reversible by enumeration
+    and is not, and never was, a confidentiality control (#2170). It is here
+    so an unvalidated selector cannot inject control characters into a log
+    line, not to hide the selector.
 
     #617: migrated from SHA-256 → fingerprint_secret (BLAKE2b) to close
     CodeQL py/weak-sensitive-data-hashing consistently across kaizen/llm.

@@ -8,12 +8,17 @@ and migration system for all database operations.
 
 import asyncio
 import logging
+import re
 import warnings
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from dataflow import DataFlow
-from dataflow.migrations.visual_migration_builder import VisualMigrationBuilder
+from dataflow.core.async_utils import async_safe_run
+from dataflow.migrations.visual_migration_builder import (
+    ColumnType,
+    VisualMigrationBuilder,
+)
 from kailash.runtime import AsyncLocalRuntime
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
@@ -208,87 +213,188 @@ class DataFlowTestUtils:
         return results["delete"]
 
     def execute_transaction(self, operations: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Execute multiple operations in a transaction using DataFlow."""
-        workflow = WorkflowBuilder()
+        """Run DataFlow node operations in order on one database transaction.
 
-        # Start transaction
-        workflow.add_node(
-            "TransactionScopeNode",
-            "begin_txn",
-            {
-                "isolation_level": "READ_COMMITTED",
-                "timeout": 30,
-                "rollback_on_error": True,
-            },
-        )
-
-        # Add operations
-        prev_node = "begin_txn"
+        Generated DataFlow nodes borrow the scope's pinned connection through
+        workflow context. The adapter owns commit/rollback, including when a
+        node raises before a commit node could run. Results are keyed by op_N.
+        """
+        workflows = []
         for idx, op in enumerate(operations):
+            workflow = WorkflowBuilder()
             node_id = f"op_{idx}"
             workflow.add_node(op["node_type"], node_id, op["parameters"])
-            workflow.add_connection(prev_node, node_id)
-            prev_node = node_id
+            built = workflow.build()
+            node = built.get_node(node_id)
+            owner = getattr(node, "dataflow_instance", None)
+            if (
+                not isinstance(owner, DataFlow)
+                or owner.config.database.url != self.database_url
+                or type(node) not in owner._nodes.values()
+                or getattr(node, "model_name", None) not in owner._models
+            ):
+                raise ValueError(
+                    "Transactions require DataFlow nodes for this database"
+                )
+            workflows.append(built)
 
-        # Commit transaction
-        workflow.add_node("TransactionCommitNode", "commit_txn", {})
-        workflow.add_connection(prev_node, "commit_txn")
+        async def execute():
+            # Finish lazy schema/registry initialization before holding a write
+            # transaction; its separate DDL connection cannot join this scope.
+            if not await self.dataflow.initialize():
+                raise RuntimeError("DataFlow initialization failed before transaction")
+            sql_node = self.dataflow._get_or_create_async_sql_node(
+                self.dataflow._detect_database_type()
+            )
+            adapter = await sql_node._get_adapter()
+            results = {}
+            async with adapter.transaction() as scope:
+                context = {
+                    "dataflow_instance": self.dataflow,
+                    "active_transaction": scope,
+                }
+                for workflow in workflows:
+                    if isinstance(self.runtime, AsyncLocalRuntime):
+                        for node_id in workflow.nodes:
+                            node = workflow.get_node(node_id)
+                            for key, value in context.items():
+                                node.set_workflow_context(key, value)
+                        result, _ = await self.runtime.execute_workflow_async(
+                            workflow, inputs={}
+                        )
+                    else:
+                        result, _ = await self.runtime.execute_async(
+                            workflow, parameters={"workflow_context": context}
+                        )
+                    results.update(result)
+            return results
 
-        # Execute workflow
-        results, _ = self.runtime.execute(workflow.build())
-        return results
+        return async_safe_run(execute())
+
+    @staticmethod
+    def _migration_column(builder, column):
+        """Configure a supported fluent column from the utility's dict API."""
+        allowed = {
+            "name",
+            "type",
+            "nullable",
+            "primary_key",
+            "default",
+            "unique",
+            "references",
+            "check",
+            "comment",
+            "auto_increment",
+        }
+        if column.keys() - allowed:
+            raise ValueError("Unsupported migration column option")
+        for option in ("nullable", "primary_key", "unique", "auto_increment"):
+            if option in column and type(column[option]) is not bool:
+                raise ValueError(
+                    f"Migration column option {option!r} must be a boolean"
+                )
+        declared = column["type"]
+        if isinstance(declared, ColumnType):
+            kind, size = declared, None
+        else:
+            match = re.fullmatch(
+                r"([A-Za-z]+)(?:\((\d+)(?:\s*,\s*(\d+))?\))?", declared
+            )
+            if match is None:
+                raise ValueError("Unsupported migration column type")
+            name, length, scale = match.groups()
+            kind = ColumnType("INTEGER" if name.upper() == "SERIAL" else name.upper())
+            size = (length, scale)
+        result = builder(column["name"], kind)
+        if size and size[0]:
+            if kind in (ColumnType.VARCHAR, ColumnType.CHAR) and size[1] is None:
+                result.length(int(size[0]))
+            elif kind == ColumnType.DECIMAL:
+                result.decimal(int(size[0]), int(size[1] or 0))
+            else:
+                raise ValueError("Column size is unsupported for this type")
+        if isinstance(declared, str) and declared.upper() == "SERIAL":
+            result.auto_increment()
+        if not column.get("nullable", True):
+            result.not_null()
+        if column.get("primary_key", False):
+            result.primary_key()
+        if "default" in column:
+            result.default_value(column["default"])
+        if column.get("unique", False):
+            result.unique()
+        if column.get("auto_increment", False):
+            result.auto_increment()
+        for key, method in (
+            ("references", result.references),
+            ("check", result.check),
+            ("comment", result.comment),
+        ):
+            if key in column:
+                method(column[key])
+        return result
 
     def run_migration(self, migration_operations: List[Dict[str, Any]]) -> None:
         """Run database migrations using DataFlow's migration system."""
         migration_name = f"test_migration_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        migration_builder = VisualMigrationBuilder(migration_name)
+        migration_builder = VisualMigrationBuilder(
+            migration_name, dialect=self.dataflow._detect_database_type()
+        )
 
+        allowed_options = {
+            "create_table": {"type", "name", "columns"},
+            "add_column": {"type", "table", "column"},
+            "drop_table": {"type", "name", "force_drop"},
+            "drop_column": {"type", "table", "column", "force_drop"},
+        }
         for op in migration_operations:
             op_type = op["type"]
+            allowed = allowed_options.get(op_type)
+            if allowed is not None and op.keys() - allowed:
+                raise ValueError("Unsupported migration operation option")
 
             if op_type == "create_table":
                 table_builder = migration_builder.create_table(op["name"])
                 for col in op["columns"]:
-                    table_builder.add_column(
-                        name=col["name"],
-                        type=col["type"],
-                        nullable=col.get("nullable", True),
-                        default=col.get("default"),
-                        primary_key=col.get("primary_key", False),
-                    )
-                table_builder.build()
+                    self._migration_column(table_builder.add_column, col)
 
             elif op_type == "drop_table":
-                migration_builder.drop_table(op["name"])
+                migration_builder.drop_table(
+                    op["name"], force_drop=op.get("force_drop", False)
+                )
 
             elif op_type == "add_column":
-                migration_builder.add_column(
-                    table_name=op["table"],
-                    column_name=op["column"]["name"],
-                    column_type=op["column"]["type"],
-                    nullable=op["column"].get("nullable", True),
+                self._migration_column(
+                    lambda name, kind: migration_builder.add_column(
+                        op["table"], name, kind
+                    ),
+                    op["column"],
                 )
 
             elif op_type == "drop_column":
-                migration_builder.drop_column(op["table"], op["column"])
+                migration_builder.drop_column(
+                    op["table"], op["column"], force_drop=op.get("force_drop", False)
+                )
+            else:
+                raise ValueError(f"Unsupported migration operation: {op_type!r}")
 
         # Apply migration
         migration = migration_builder.build()
-        for operation in migration.operations:
-            logger.info(
-                "dataflow_test_utils.running_migration",
-                extra={"description": operation.description},
-            )
-            self._execute_sql(operation.sql_up)
+        with self.dataflow.transactions_sync.begin() as transaction:
+            for operation in migration.operations:
+                transaction.execute_raw(operation.sql_up)
 
     def close(self):
-        """Release the runtime reference.
+        """Release the runtime reference and close the owned DataFlow instance.
 
         Safe to call multiple times -- subsequent calls are no-ops.
         """
         if hasattr(self, "runtime") and self.runtime is not None:
-            self.runtime.release()
-            self.runtime = None
+            try:
+                self.runtime.release()
+            finally:
+                self.runtime = None
+                self.dataflow.close()
 
     def __del__(self, _warnings=warnings):
         """Emit ResourceWarning if close() was not called explicitly.
@@ -297,14 +403,11 @@ class DataFlowTestUtils:
         MUST NOT invoke ``close()`` itself — see issue #1000.
         """
         if getattr(self, "runtime", None) is not None:
-            try:
-                _warnings.warn(
-                    f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
-                    ResourceWarning,
-                    source=self,
-                )
-            except Exception:
-                pass
+            _warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
 
     def verify_schema(self, expected_tables: List[str]) -> bool:
         """Verify that expected tables exist using DataFlow schema discovery."""

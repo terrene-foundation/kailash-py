@@ -46,6 +46,16 @@ The reference
 
 A fingerprint is not a secret and not a password hash; see that function's
 docstring for the collision-stability and reversibility caveats.
+
+Concretely (#2171): the digest is UNKEYED, so whether the ref reveals the
+command depends entirely on the COMMAND's own entropy, not on this helper. A
+routine command line -- ``python3 -m http.server 8080`` -- is enumerable and
+its ref is therefore recoverable by hashing candidates. A command line
+carrying a high-entropy credential in an argument is not, because the
+attacker would have to guess the credential to build the pre-image, at which
+point they already hold it. Use this for correlation and for keeping
+arguments out of log lines; do NOT use it to establish that a command was
+kept secret.
 """
 
 from __future__ import annotations

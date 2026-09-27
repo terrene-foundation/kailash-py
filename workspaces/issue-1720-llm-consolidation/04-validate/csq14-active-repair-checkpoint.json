@@ -1,0 +1,608 @@
+{
+  "source_head": "b05f02798da5c43a126e51ff371d3eaf3cff7dd9",
+  "promotion": {
+    "pr": 2229,
+    "remote_head": "ce4c9de676f1ab1e0a159cb8c273dcf2e47a2cb4",
+    "D1_approved": true,
+    "publishing_authorized": false
+  },
+  "pending_dismissal_approval": [],
+  "landed": {
+    "sso_privacy": {
+      "source": "9d9b00450",
+      "merge": "eae68c672",
+      "tests": "/tmp/csq14-auth-role-parent-tests.log",
+      "independent_controls": "/tmp/csq14-auth-role-parent-review.log"
+    },
+    "gateway_initial": {
+      "commit": "58c745790",
+      "strict_tests": 19,
+      "review": "two clean independent rounds"
+    },
+    "transaction_cache": {
+      "source": "f856002c2",
+      "merge": "7615b14eb",
+      "review": "two clean independent rounds"
+    },
+    "socket_ws": {
+      "source": "428304edc",
+      "merge": "21c2fc68e",
+      "strict_tests": 107,
+      "original_named_test_denominator": 68,
+      "review": "two clean independent rounds"
+    },
+    "async_owner": {
+      "source": "9e82f072f",
+      "merge": "e7c1085b0",
+      "strict_tests": 86,
+      "review": "two clean independent rounds",
+      "worktree_held_for_integration_loader": false
+    },
+    "async_content": {
+      "patch": "/tmp/csq14-async-content-final.patch",
+      "sha256": "ad304339234648ff3e5e33b33184cdf463db27f7da019e1cd7bd73edd04b9442",
+      "parent_strict_tests": 52,
+      "parent_reached_control_failures": 8,
+      "review": "two clean independent rounds; scoped evidence retained",
+      "source": "ebab03c87",
+      "merge": "a32a24d0a"
+    },
+    "dataflow_utility": {
+      "patch": "/tmp/csq14-dataflow-utils-options-final.patch",
+      "sha256": "590e7a67bdbc8c7256fbbb448018a0945f43d5b9d4c108783914a352357c739b",
+      "combined_tests": 83,
+      "review": "two clean independent rounds; scoped evidence retained",
+      "source": "1a0b5d38e",
+      "merge": "51fcd96c0"
+    },
+    "logging": {
+      "source": "f87b8ba2a",
+      "patch": "/tmp/csq14-log-sinks-final.patch",
+      "sha256": "865d4f4fe5c539a5f48a794997b6a58bfe2f5c068ebf48e5ab8c073d9f25f5df",
+      "review": "two clean independent rounds; scoped evidence retained",
+      "merge": "fcee1a249"
+    },
+    "gateway_sibling": {
+      "patch": "/tmp/csq14-gateway-sibling-final.patch",
+      "sha256": "779bc1a13b885a30f42cf783d8a3b5c5d6ba9ba43c49908de9319387aa6b67cf",
+      "strict_tests": 28,
+      "review": "two clean independent rounds; scoped evidence retained",
+      "source": "ec9e5adea",
+      "merge": "ec9e5adea",
+      "merged_logging_tests": 38
+    },
+    "bridge_fixture": {
+      "patch": "/tmp/csq14-bridge-node-final.patch",
+      "sha256": "9b05a7665470c05f8816a3126f3d925935d0b5ee365379d82b6a9faef30c19c0",
+      "strict_tests": 23,
+      "existing_named_assertions_preserved": 11,
+      "control": "nonblocking run reached delays 3.0 and 5.0; two intended failures",
+      "warning_inventory": "expected watchdog records only",
+      "review": "two clean independent rounds",
+      "commit": "a2f36b2ad"
+    },
+    "runtime_controls": {
+      "branch": "fix/csq14-runtime-control-contract",
+      "strict_tests": 281,
+      "review": "two clean independent security rounds plus literal identity corrective review",
+      "source_first": "4ee0bda4c",
+      "status": "landed; source sibling drained",
+      "source_final": "a1e2124dc",
+      "merge": "71e371ce6"
+    },
+    "dataflow_log_privacy": {
+      "patch": "/tmp/csq14-dataflow-log-final.patch",
+      "sha256": "ee20155dced185591b08a3316a11d579024444982fe669d96a51307eff4a1412",
+      "strict_tests": 9,
+      "existing_credential_tests": 41,
+      "status": "landed; source sibling drained",
+      "commit": "e4eedbf73",
+      "review": "two clean independent scoped rounds"
+    },
+    "auth_configuration": {
+      "source": "1050bc1d8",
+      "patch_sha256": "f7c7e2a3c97ab377094bb2c530a325d59a676ab71fe978a8d4a5595e9def3948",
+      "strict_tests": 381,
+      "focused_tests": 26,
+      "review": "two clean independent scoped rounds",
+      "status": "landed; source sibling drained",
+      "commit": "8ed016700101794b3d43b5329a2e0496c988daf5"
+    },
+    "mfa_diagnostics": {
+      "patch": "/tmp/csq14-mfa-delivery-logs-final.patch",
+      "sha256": "f5782d731e1695b091b2cc6ed6effd1edfec33b006d0980577a4c2317ec54f35",
+      "strict_tests": 403,
+      "review": "two independent scoped clean rounds;92reviewtests and publicdelivery/actorcontrol",
+      "source": "12188f730",
+      "merge": "5b4fae098",
+      "status": "landed and clean source sibling drained"
+    },
+    "security_path": {
+      "source": "69aa36db0",
+      "merge": "fae7559cd",
+      "patch_sha256": "95cfbb7aa4ca43b9a53ce3ca50c212a2781db821c4016be2558ac46bcba7019e",
+      "strict_tests": 110,
+      "platform_skips": 10,
+      "review": "two independent scoped correctness/adversarial rounds; root110 + reachedprefixcontrol",
+      "limits": "actualmacOS; no Windows runtime or filesystem race prevention claim",
+      "status": "landed; source sibling drained"
+    },
+    "python_diagnostics": {
+      "merge": "15960d9478e327389413e3765e4284801b16fa8b",
+      "strict_tests": 42,
+      "review": "two independent scoped rounds; final fixture budget delta independently verified",
+      "scope": "four automatic exception sinks only; public exceptions and caller-authored logging unchanged",
+      "evidence": [
+        "/tmp/csq14-python-independent-tests.log",
+        "/tmp/csq14-python-diagnostics-parent-tests.log",
+        "/tmp/csq14-python-diagnostics-parent-control.log"
+      ]
+    },
+    "pact_api_ci": {
+      "commit": "33caf1bfe",
+      "status": "landed; final union gates remain open"
+    },
+    "graph_fixture": {
+      "commit": "8be44bcf5",
+      "status": "landed; final union gates remain open"
+    },
+    "signal_validation": {
+      "commit": "14e916aaf",
+      "status": "landed; final union gates remain open"
+    },
+    "dataflow_privacy_expectations": {
+      "commit": "927e8fca1",
+      "status": "landed; final union gates remain open"
+    },
+    "gateway_fixture": {
+      "commit": "b11496ad4",
+      "status": "landed; final union gates remain open"
+    },
+    "route_scanner": {
+      "commit": "d1e22be9d",
+      "status": "landed; final union gates remain open"
+    },
+    "namespace_fixture": {
+      "commit": "af4b4e506",
+      "status": "landed; final union gates remain open"
+    },
+    "runtime_diagnostics": {
+      "commit": "9279d92c3",
+      "status": "landed; final union gates remain open"
+    },
+    "validation_connection_ownership": {
+      "commit": "fb7187f36",
+      "status": "landed; final union gates remain open"
+    },
+    "tdd_fixture": {
+      "commit": "a2298eb7f",
+      "status": "landed; final union gates remain open"
+    },
+    "conditional_fallback": {
+      "commit": "74c330005",
+      "status": "landed with scoped review; final union gates open"
+    },
+    "native_planner_fixture": {
+      "commit": "cb92f3261",
+      "status": "landed with scoped review; final union gates open"
+    },
+    "memory_database_identity": {
+      "commit": "48a36aef8",
+      "status": "landed with scoped review; final union gates open"
+    },
+    "conditional_durable_state": {
+      "commit": "ec01c3b87",
+      "status": "landed with scoped review; final union gates open"
+    },
+    "conformance_log_fixture": {
+      "commit": "07ee23ffe",
+      "status": "landed with scoped review; final union gates open"
+    },
+    "diagnostic_sink_scanner": {
+      "commit": "d26e4f40a",
+      "status": "landed with scoped review; final union gates open"
+    }
+  },
+  "frozen": {
+    "runtime_forwarding": {
+      "patch": "/tmp/csq14-runtime-forwarding-final.patch",
+      "sha256": "569e68f18a0008835e6ef21bb4d6a0756d31470aac03236787a1cc09e35a05e9",
+      "strict_tests": 83,
+      "warning_inventory": "two expected forced-drift records; no unexpected WARN+",
+      "controls": [
+        "sync_forward",
+        "async_forward",
+        "unsupported_guard",
+        "idempotency",
+        "forced_drift"
+      ],
+      "review": "forwarding-only correctness passed; security/whole-union NOT CLEAN: canonical timer and strict-boolean gaps",
+      "status": "superseded by full runtime-control candidate"
+    }
+  },
+  "active": [
+    "ml_correctness_review: required cycle-runtime shardA control/content/context handoff then shardB iteration-aware durable replay in csq14-cycle-runtime-contract",
+    "ml_gate_recovery: public Nexus auth diagnostic privacy + owned fixture cleanup in csq14-nexus-auth-diagnostics",
+    "archive_checkpoint: independent2round review root engine type/optional-connection patch b127e3 in final3-coverage",
+    "root: independent review warningfixturepatch5c7 appliedprimary; enginepatch83strict+pinnedpyright0warnings, awaitingreview"
+  ],
+  "final_obligations": [
+    "full integrated root regression",
+    "DataFlow unit/regression after utility/cache fixes",
+    "all configured all-files hooks including pytest-check",
+    "whole merged-union holistic correctness/security reviews",
+    "consolidated push",
+    "exact final head all required and test checks success",
+    "separate approved promotion merge",
+    "drain landed clean siblings and update authorized vault",
+    "three post-main union/tree-parity reviewer receipts after promotion merge"
+  ],
+  "limits": [
+    "five inherited stashes held",
+    "uncertain historical refs retained",
+    "no whole-forest completion or owner-acceptance claim",
+    "CodeQL 265 exact membership not reconstructed"
+  ],
+  "worktrees_drained": [
+    "csq14-async-content",
+    "csq14-async-node-owner",
+    "csq14-holistic-coverage",
+    "csq14-holistic-security",
+    "csq14-runtime-controls",
+    "csq14-auth-configuration",
+    "csq14-mfa-delivery-logs",
+    "csq14-final-correctness",
+    "csq14-final-security",
+    "csq14-final-coverage",
+    "csq14-runtime-forwarding",
+    "csq14-privacy-review",
+    "csq14-mfa-review",
+    "csq14-security-path",
+    "csq14-python-exception-diagnostics",
+    "csq14-security-path-review",
+    "csq14-memory-cache-identity",
+    "csq14-final2-correctness",
+    "csq14-final2-security",
+    "csq14-final2-coverage"
+  ],
+  "review_worktrees": [
+    "csq14-sqlite-address-parity",
+    "csq14-final3-correctness",
+    "csq14-final3-security",
+    "csq14-final3-coverage"
+  ],
+  "open_findings": [
+    "Migration dependent/prerequisite degree and nonadjacent declared edge defect: rootpatch7b50 underreview;24actualSQLite permutationsnowpass",
+    "Retry engine exhaustion adds unconfigured directattempt before existing ownerfallback: specialistrepairactive",
+    "Fullgate testfixtures old relativeURL/proxyprotocol/loglevel and securityrawtypename sinks: patchesprepared/applied, independentreviewsactive",
+    "Graph positivefixture state/export warnings: separatetestonlyrepairactive",
+    "User decision on unused undefined documented pools kwarg remains pending",
+    "Final full gates and whole-union reviews remain open"
+  ],
+  "holistic_attempt": {
+    "source": "51fcd96c0 plus forwarding569e68 overlay",
+    "root_passed": 696,
+    "dataflow_passed": 279,
+    "dataflow_live_postgres_deselected": 1,
+    "converged": false,
+    "warnings": "intentional records inventoried; nonintentional findings routed, not ignored"
+  },
+  "merged_interaction_tests": {
+    "core": 269,
+    "dataflow": 9,
+    "source": "8ed016700",
+    "logs": [
+      "/tmp/csq14-merged-config-runtime-privacy-tests.log",
+      "/tmp/csq14-merged-dataflow-privacy-tests.log"
+    ]
+  },
+  "review_overlay_backups": "/tmp/csq14-drained-review-overlays",
+  "last_full_gates": {
+    "source": "1f3ce4b44da8114a541161141a681e41b708f266",
+    "root": {
+      "failed": 2,
+      "passed": 3554,
+      "skipped": 3,
+      "deselected": 24
+    },
+    "dataflow_unit": {
+      "failed": 3,
+      "passed": 3501,
+      "skipped": 31
+    },
+    "all_files_hooks": {
+      "pytest_failed": 1,
+      "pytest_passed": 2620,
+      "pytest_skipped": 2,
+      "pytest_deselected": 3
+    },
+    "status": "NOT CLEAN; failures routed to bounded repairs; DataFlow regression did not run after failed unit gate",
+    "logs": [
+      "/tmp/csq14-final-union-ci-gates.log",
+      "/tmp/csq14-final-union-hooks.log"
+    ]
+  },
+  "codeql_dismissals": {
+    "approved_ids": [
+      11595,
+      11596,
+      11466,
+      11467,
+      10866,
+      5153,
+      131,
+      133,
+      6082
+    ],
+    "state": "all dismissed as false positive; independent API reads confirmed",
+    "receipt": "workspaces/issue-1720-llm-consolidation/04-validate/csq14-codeql-disposition-receipt.json",
+    "required_checks_waived": false
+  },
+  "current_frozen_repairs": {
+    "memory": {
+      "patch": "/tmp/csq14-memory-cache-identity-final.patch",
+      "sha256": "39ce246143512b484364ba813b041d5b379f10ec9dad6bb69b9d1fedac3f2562",
+      "status": "landed48a36aef8"
+    },
+    "conditional_state": {
+      "patch": "/tmp/csq14-conditional-state-complete.patch",
+      "sha256": "31f904ee8f7156012dd03c118abbdb72623b50f204c373020b6f96a3bd03b15c",
+      "status": "landedec01c3b87"
+    },
+    "sqlite_candidate": {
+      "patch": "/tmp/csq14-sqlite-address-parity-refined4.patch",
+      "sha256": "f54fc4314187f2addc741031f4455acce05c49f4b6c76070461bc575a87be1e3",
+      "status": "landed c7078698fcfc02ac4316014a96762388efd97f16; two independent scoped correctness rounds and two security rounds CLEAN; final full promotion gates open",
+      "parent_focused_tests": 209,
+      "parent_core_tests": 49,
+      "parent_native_linux_probe": "/tmp/csq14-sqlite-native-independent-refined.log",
+      "parent_negative_control": "/tmp/csq14-sqlite-native-old-control.log",
+      "parent_warning_inventory": "DataFlow81 intentional records (54declaredtestmode,14memoryadvisories,5rollback,1abandonedtransaction,1rawmemoryopposite,2createfailures,4contentfailures); Core7 injected type-only close-failure diagnostics; Pythonwarnings[]",
+      "commit": "c7078698fcfc02ac4316014a96762388efd97f16",
+      "receipt": "workspaces/issue-1720-llm-consolidation/04-validate/csq14-sqlite-address-repair-receipt.json"
+    }
+  },
+  "final2_overlay_backup": "/tmp/csq14-drained-final2-overlays-33d",
+  "prepared_final3_inventory": {
+    "source": "4fe79789f5e051f313c78bbbce70602abb9bd7e1",
+    "repair_files": 127,
+    "promotion_files": 781,
+    "original_named_tests": 764,
+    "original_exact_check_retention": 745,
+    "semantic_rows": 19,
+    "runtime_verdict": "not run; pending final SQLite source",
+    "manifest": "/tmp/csq14-final3-union-test-manifest.json"
+  },
+  "ownership_fixture_correction": {
+    "patch": "/tmp/csq14-owner-fixture-backend.patch",
+    "sha256": "0b4c34f63b695104be046a66a6e776661fd15edb6bb197bfac021d8241196bb9",
+    "status": "two independent scoped rounds CLEAN;20strict and2reached ownedclose-control failures; all21asserts/32assertion-or-raises calls retained",
+    "scope": "construct requested backend before owner identity is pinned; preserve21 original assertion ASTs; bounded cancellation setup cleanup",
+    "independent_tests": "/tmp/csq14-owner-fixture-correctness-tests.log",
+    "independent_control": "/tmp/csq14-owner-fixture-correctness-control.log",
+    "commit": "ab6fd9f3a"
+  },
+  "pending_user_decision": {
+    "question": "Record unused/undefined DataFlow pools kwarg for separate design and finish promotion, or implement primary/read overrides now?",
+    "reason": "AGENTS.md zero-tolerance Rule3c requires documented kwargs consumed or forwarded; no key-shape/precedence contract exists",
+    "state": "RESOLVED: user explicitly chose Record separately; finish promotion (Recommended)",
+    "evidence": "ml_correctness_review found zero AST loads with positive-control; specs/dataflow-core.md constructor declares pools, engine signature says Per-database pool overrides; no canonical dictionary forwarding API",
+    "decision_record": "04-validate/csq14-dataflow-pools-design-task.md"
+  },
+  "lifecycle_fixture_correction": {
+    "patch": "/tmp/csq14-lifecycle-fixture.patch",
+    "sha256": "5f15b29e1a45e48564395c4e5cc5cbf219d32644575592e757a28b383f44e480",
+    "status": "landed; two independent scoped rounds clean;20 strict with no warnings; warning suppression reached2 expected assertion failures; all38 original assertions retained",
+    "scope": "Three manual finalizer tests clear only fake connection ownership in finally; all original assertions retained; no production destructor edit",
+    "log": "/tmp/csq14-lifecycle-fixture-test.log",
+    "commit": "ab6fd9f3a",
+    "independent_tests": "/tmp/csq14-lifecycle-fixture-correctness-tests.log",
+    "independent_control": "/tmp/csq14-lifecycle-fixture-correctness-control.log"
+  },
+  "parameter_fixture_correction": {
+    "commit": "4e479097e",
+    "patch_sha256": "da3f4da4217ab70282fbf68158971daf4dd01e0882d954a90b3fd85edf3b6293",
+    "review": "two scoped independent rounds CLEAN;12 strict,0warnings; all27 original assertions retained; omitted-close opposing control retained12runtimeowners and rejected all12",
+    "evidence": "/tmp/csq14-param-fixture-correctness-good.log; /tmp/csq14-param-fixture-correctness-omit.log"
+  },
+  "whole_union_attempt_1f3": {
+    "root_coverage": {
+      "passed": 1255,
+      "failed": 2,
+      "deselected": 2
+    },
+    "dataflow_coverage": {
+      "passed": 453,
+      "failed": 1,
+      "deselected": 7
+    },
+    "kaizen_coverage": {
+      "passed": 13
+    },
+    "status": "NOT CLEAN; absolute review also reproduced migration dependency misordering and unconfigured retry attempt; final holistic rerun required"
+  },
+  "implementation_worktrees": [
+    "csq14-nexus-dns-binding",
+    "csq14-webhook-safe-delivery"
+  ],
+  "current_repair_receipt": "04-validate/csq14-final-gate-repairs-receipt.json",
+  "latest_committed_head": "b05f02798da5c43a126e51ff371d3eaf3cff7dd9",
+  "current_retry_status": "Committed467bda018; independent correctness and security each two clean scoped rounds. Full union remains open.",
+  "pools_decision_resolved": "User explicitly chose Record separately; finish promotion (Recommended). See csq14-dataflow-pools-design-task.md.",
+  "current_pending_work": [
+    "independent webhook and refined logging reviews to two clean rounds",
+    "final committed-candidate Linux and Mac full gates plus three whole-promotion reviews",
+    "consolidated push, exact-head required checks, separate D1-authorized merge PR2229",
+    "post-main review, owned worktree drain, bounded vault pair update"
+  ],
+  "cycle_candidate_manifest": {
+    "head": "0a01bfe29503c30cec484d4fc374390afc67cc90",
+    "files": {
+      "src/kailash/runtime/async_local.py": "6a4123919d362ce0c093d7b1aa2cdc6d689ee87b0ffdf9894f7907e392c35652",
+      "src/kailash/runtime/durable.py": "e0ae4f8bc471ac600de0ffe730bd1e5a170937091ee56eadedf1727b1c0c481e",
+      "src/kailash/runtime/execution_tracker.py": "5a5f521394a1a8c53b2f75a34464dcbf8dd49fc2d9fb2aba851bfe9ccf344342",
+      "src/kailash/runtime/local.py": "90c2229776c49b35d5588e4c6dec609776fe427d2cf260741ec011bede05dfc2",
+      "src/kailash/runtime/mixins/cycle_execution.py": "343d92a898ded758afb60aef5886dc246b6cdf36e068505958a766fcb26f96e2",
+      "src/kailash/runtime/parallel_cyclic.py": "800d7bfee23291a1d247a78213a96b216e1dcf58dcca4887239de342a22059df",
+      "src/kailash/workflow/cyclic_runner.py": "d6f593e6070de9f54acb69ab8706b516323865e4216ff8cc564778873e9f052a",
+      "src/kailash/workflow/safety.py": "6d39a4c904ac27dc8000ccc773eec68b508936350ba0979c40ae1af1cf65f0fe",
+      "tests/regression/test_cycle_checkpoint_publication.py": "162d16f3629b16770f8b08320aa72d6fe3f02de50b3274ad7fc60703765c5ec5",
+      "tests/regression/test_cycle_runtime_contract.py": "6a6041e0709af9c337753bcea0bdb1d067d7e78f9d68a3e82b067815a1a94a5a",
+      "tests/regression/test_runtime_persistent_loop_admission.py": "906a50af49dd76628fd797416952d269f85c00eac13d6c31820f775a80179095"
+    },
+    "artifacts": {
+      "abc-final6": "9c6976b9f7e80ace0477fce7b74eddb17231fb12a5094efdc10a9b70c899f680",
+      "abc-final5-to-final6": "a8b924edccf36fff0a1d036216c0b6f60f58c79979628c040df9528c268578ef"
+    },
+    "tests": "475 strict passed, Python0; final6 tests2 log only; initial broad replacement assertion failed without editing source, its old-source run is not final6 evidence",
+    "new_cases": 91,
+    "warning_records": 378,
+    "warning_scope": "21 A intentional control/safety records;6 C deliberate error/denial;0 B;remaining333 compatibility negative records including known DurableRequest record separately repaired by root5ec8e125c",
+    "controls": {
+      "old_policy": [
+        5,
+        4
+      ],
+      "missing_consume": [
+        4,
+        1
+      ],
+      "missing_restore": [
+        1,
+        1
+      ],
+      "missing_workflow_trust": [
+        6,
+        6
+      ],
+      "native_old_order": [
+        8,
+        6
+      ],
+      "preparation_boundary": [
+        3,
+        3
+      ],
+      "old_admission": [
+        10,
+        5
+      ],
+      "native_late_policy_capture": [
+        8,
+        4
+      ],
+      "disabled_deadline": [
+        3,
+        3
+      ],
+      "pre_dispatch_deadline": [
+        3,
+        0
+      ]
+    },
+    "boundaries": "A revised policy, B unchanged semantic delta, C separate canonical synchronous-loop admission and once-per-attempt workflow trust verification. No global borrowed field mutation. Standalone executor API remains standalone. No new claim about arbitrary safety subclass mutable fields.",
+    "warnings_scope": "371 deliberate negative-path records, old baseline DurableRequest diagnostic root separately fixed; complete records in final4-warnings.json"
+  },
+  "cycle_status": "FINAL6 all11 hashes committed across A/B/C; independent correctness and adversarial each two clean scoped rounds",
+  "final_review_overlays": "Review trees pinned at ea4 with exact reviewed DNS, checkout, webhook and initial logging overlays; refined callback logging and fixture corrections pending; no final promotion convergence.",
+  "whole_union_attempt_0a01": {
+    "commit": "0a01bfe29503c30cec484d4fc374390afc67cc90",
+    "tree": "f681128ea721970621ed2a6409148df40d1cfc76",
+    "status": "NOT CLEAN: public cyclic-runtime handoff, Nexus auth diagnostic privacy, four DataFlow engine type warnings and two fixture warning causes found",
+    "root_linux": {
+      "passed": 3687,
+      "skipped": 3,
+      "deselected": 24
+    },
+    "dataflow_regression": {
+      "failed": 1,
+      "passed": 1029,
+      "skipped": 6,
+      "deselected": 187
+    },
+    "mac_hooks": "all passed; verbose pytest audit5153passed15skipped3deselected; no Python warning summary",
+    "selected_coverage": "1477root+513DataFlow+13Kaizen+9integration passed; no skips or Python warnings; runtime log warnings audited separately",
+    "logs": {
+      "/tmp/csq14-final-union-ci-gates.log": "31b18ffb363fdfc3601c27e54ab3bcf208fb5dd5040840dfe09bff6cf6f00aaa",
+      "/tmp/csq14-final-union-hooks.log": "4c8c29617cadd5cf147601c3123f0c9c7b1337b75508051e52c28df64d4b9ffe",
+      "/tmp/csq14-final-hook-warning-audit.log": "991915df9672c926b8075bcb567143c4691929861570a8f3515cc0900aa49041"
+    },
+    "dataflow_unit": {
+      "passed": 3504,
+      "skipped": 31
+    }
+  },
+  "pending_kaizen_base_decision": {
+    "resolved": true,
+    "user_decision": "Record separately; finish promotion (Recommended)",
+    "date": "2026-09-26",
+    "task": "csq14-kaizen-base-execution-design-task.md",
+    "scope": "Inherited KaizenNode._execute_ai_model canned-response behavior only; no other gate waived"
+  },
+  "newly_committed_repairs": {
+    "request_diagnostic": "5ec8e125c",
+    "durable_helper_fixtures": "e2aeb3fd3",
+    "convergence_diagnostic": "2545588b0",
+    "convergence_fixtures": "8c6847208",
+    "kaizen_diagnostic": "4d2a1dbbc",
+    "http_dns_and_checkout": "b05f02798da5c43a126e51ff371d3eaf3cff7dd9"
+  },
+  "review_failure_receipt": "ml_gate_recovery errored twice (one allowed recovery exhausted); zero review evidence credited. Replacement cycle_final_review delivered actual ran/evidence receipts.",
+  "cycle_scheduling_and_trust": {
+    "status": "COMPLETE in committed FINAL6; retained evidence below is historical",
+    "evidence": [
+      "/tmp/csq14-parallel-policy-baseline-concurrent.log",
+      "/tmp/csq14-parallel-policy-original-wrapper-concurrent.log",
+      "/tmp/csq14-sync-trust-independent.json",
+      "/tmp/csq14-c-direct-trust-probe.log"
+    ],
+    "observations": "Concurrent sync wrappers now collided on persistent loop; original wrapper control succeeds. Existing running-loop bridge and direct Local async omit workflow-specific trust verification under configured denial. No claim about cryptographic verification beyond workflow-gate dispatch.",
+    "planned_fix": "Nonblocking persistent-loop admission uses existing owned bridge for overlap; canonical _execute_async verifies effective workflow trust exactly once before dispatch; native Async gate unchanged. No borrowed flag/engine mutation."
+  },
+  "cycle_adversarial_final_receipt": "/tmp/csq14-cycle-adversarial-abc-final-receipt.json",
+  "cycle_parent_final_tests": {
+    "passed": 98,
+    "python_warnings": 0,
+    "intentional_negative_warning_records": 31,
+    "log": "/tmp/csq14-cycle-parent-abc-tests.log"
+  },
+  "cycle_native_trust_order_finding": {
+    "evidence": "/tmp/csq14-cycle-correctness6-trust-order.log",
+    "local_events": [
+      "deny"
+    ],
+    "native_events": [
+      "load",
+      "deny"
+    ],
+    "node_calls": 0,
+    "disposition": "fixed and independently verified in committed FINAL6",
+    "prior_abc_reviews": "historical scoped positives, not final convergence"
+  },
+  "cycle_native_policy_finding": {
+    "evidence": "/tmp/csq14-native-foreign-public-independent-receipt.json",
+    "surface": "ParallelCyclicRuntime borrowed AsyncLocalRuntime with configured verifier awaiting foreign runtime",
+    "observed_owner_iterations": 2,
+    "expected_owner_iterations": 1,
+    "disposition": "fixed by native canonical capture, committed FINAL6 with reached old-producer controls"
+  },
+  "cycle_parent_final4_tests": {
+    "passed": 126,
+    "python_warnings": 0,
+    "intentional_negative_logs": 17,
+    "log": "/tmp/csq14-cycle-parent-final4-tests.log"
+  },
+  "active_http_dns_repair": {
+    "worktree": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq14-nexus-dns-binding",
+    "branch": "fix/csq14-nexus-dns-binding",
+    "owner": "ml_correctness_review as Nexus specialist",
+    "base": "4d2a1dbbc9d5871646fa6cb6370f25daf704b699",
+    "reviewers": [
+      "archive_checkpoint",
+      "cycle_final_review"
+    ],
+    "status": "DNS production committed; author currently repairs separate HTTP logging callback scope and DNS test fixture isolation"
+  },
+  "current_http_receipt": "04-validate/csq14-http-repair-receipt.json",
+  "continuation": "csq15-resume-checkpoint.json supersedes current HTTP repair status; historical findings/evidence retained"
+}

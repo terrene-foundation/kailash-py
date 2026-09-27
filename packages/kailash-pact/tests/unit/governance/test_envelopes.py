@@ -208,7 +208,9 @@ class TestIntersectEnvelopesOperational:
         a = _make_envelope(allowed_actions=[])
         b = _make_envelope(allowed_actions=["read", "write"])
         result = intersect_envelopes(a, b)
-        assert result.operational.allowed_actions == []
+        # tuple, not list: the envelope dimensions are immutable value objects
+        # (#2226) -- a mutable allowed_actions was a live handle on the verdict.
+        assert result.operational.allowed_actions == ()
 
     def test_reasoning_required_union(self) -> None:
         a_op = OperationalConstraintConfig(allowed_actions=[], reasoning_required=True)

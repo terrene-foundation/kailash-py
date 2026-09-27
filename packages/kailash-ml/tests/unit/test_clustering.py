@@ -6,6 +6,8 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 import pytest
+from sklearn.datasets import make_blobs
+
 from kailash_ml.engines.clustering import (
     ClusteringEngine,
     ClusterResult,
@@ -14,7 +16,6 @@ from kailash_ml.engines.clustering import (
     _sanitize_float,
     _to_numpy,
 )
-from sklearn.datasets import make_blobs
 
 # ---------------------------------------------------------------------------
 # Fixtures

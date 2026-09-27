@@ -69,6 +69,25 @@ def _make_compiled_org(org_id: str = "test-org") -> CompiledOrg:
         node_id="backend-lead",
         parent_address="D1-R1-T1",
     )
+    # A REAL foreign unit. "D2" / "D2-R1" are the defaults in _make_ksp and
+    # _make_bridge, and the foreign-unit cases below (a KSP spanning D2 -> D1,
+    # an item owned by D2) were written against an org that never contained
+    # them: create_ksp accepted a unit address that resolves to no node, so
+    # nothing noticed. create_ksp now refuses that (issue #2238), so the
+    # builder has to provide the unit the fixtures always assumed.
+    org.nodes["D2"] = OrgNode(
+        address="D2",
+        node_type=NodeType.DEPARTMENT,
+        name="Finance",
+        node_id="fin",
+    )
+    org.nodes["D2-R1"] = OrgNode(
+        address="D2-R1",
+        node_type=NodeType.ROLE,
+        name="CFO",
+        node_id="cfo",
+        parent_address="D2",
+    )
     return org
 
 

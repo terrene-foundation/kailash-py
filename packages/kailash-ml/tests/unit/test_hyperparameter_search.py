@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+
 from kailash_ml.engines.hyperparameter_search import (
     HyperparameterSearch,
     ParamDistribution,

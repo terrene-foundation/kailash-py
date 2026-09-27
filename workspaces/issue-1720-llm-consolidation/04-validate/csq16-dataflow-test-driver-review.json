@@ -1,0 +1,34 @@
+{
+  "ran": true,
+  "question": "Can required DataFlow unit install execute the new real-driver parser tests without unrelated extras?",
+  "before": {
+    "install": "uv pip install -e . -e packages/kailash-dataflow[dev] in a freshPython3.11venv",
+    "driver_find_spec": {
+      "psycopg2": false,
+      "pymysql": false
+    },
+    "tests": "6failed8passed; ModuleNotFoundError for eachdriver and absent-driver branchinstead of parserbranch"
+  },
+  "change": {
+    "dev_only": [
+      "psycopg2-binary>=2.9",
+      "PyMySQL>=1.0"
+    ],
+    "rationale": "Tests directlyimport bothsyncdrivers, match existingpostgres-sync andaiomysqlfloor; productionoptionalextrasscopeunchanged",
+    "lock": "2newrequires-dist devmetadata rows, noresolvedversionchange; uvlockoffline288packagesresolved"
+  },
+  "after": {
+    "same_install_command": true,
+    "tests": [
+      "14passed5.93s",
+      "14passed1.02s"
+    ],
+    "strict": "-Werror; noPythonwarnings/skips",
+    "dependency_check": "uvpipcheck80packages: All installed packages are compatible"
+  },
+  "scope": "LocalMacPython3.11 cleanexactCIdependencyselection; LinuxfinalCIparity remainsrequired",
+  "source_hashes": {
+    "packages/kailash-dataflow/pyproject.toml": "def2da94fa9a6ce8cf77be3abf11341fb14b999bf4ccb4ab734e6bf6ac1d4679",
+    "uv.lock": "df0c1ede6d7b7f7954973d25ee6b3ce509cdd2cd561a9d8e0b33a7025282bd52"
+  }
+}

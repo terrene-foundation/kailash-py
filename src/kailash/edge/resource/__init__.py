@@ -1,8 +1,13 @@
 """Edge resource management components."""
 
-from .cloud_integration import CloudInstance, CloudIntegration, CloudMetrics
-from .cloud_integration import CloudProvider as CloudProviderType
-from .cloud_integration import InstanceSpec, InstanceState
+from .cloud_integration import (
+    CloudInstance,
+    CloudIntegration,
+    CloudMetrics,
+    CloudProvider as CloudProviderType,
+    InstanceSpec,
+    InstanceState,
+)
 from .cost_optimizer import (
     CloudProvider,
     CostMetric,
@@ -34,9 +39,9 @@ from .platform_integration import (
     PlatformIntegration,
     PlatformType,
     ResourceAllocation,
+    ResourceRequest as PlatformResourceRequest,
+    ResourceScope,
 )
-from .platform_integration import ResourceRequest as PlatformResourceRequest
-from .platform_integration import ResourceScope
 from .predictive_scaler import (
     PredictionHorizon,
     PredictiveScaler,

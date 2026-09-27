@@ -25,7 +25,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.credentials import get_credential_store
-from kaizen.core._provider_env import detect_provider_from_env
+from kaizen.core._provider_env import resolve_node_provider
 from kaizen.core.config import BaseAgentConfig
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 from kaizen.signatures import Signature
@@ -158,15 +158,26 @@ class WorkflowGenerator:
             if hasattr(self.config, "llm_provider")
             else self.config.get("llm_provider")
         )
-        # #1948: when no provider is explicitly configured, resolve it from the
-        # environment (openai -> anthropic -> mock) instead of hardcoding
-        # "openai". An agent with only ANTHROPIC_API_KEY set would otherwise be
-        # dispatched to OpenAI and fail with an auth error.
-        resolved_provider = llm_provider or detect_provider_from_env()
         model = (
             getattr(self.config, "model", None)
             if hasattr(self.config, "model")
             else self.config.get("model")
+        )
+        # #1948: when no provider is explicitly configured, do not hardcode
+        # "openai" — an agent with only ANTHROPIC_API_KEY set would be
+        # dispatched to OpenAI and fail with an auth error.
+        #
+        # #2220 residual: resolution is the shared model-keyed predicate, NOT
+        # `detect_provider_from_env()`. That helper answers "which credentials
+        # exist", and its answer was written into the same node config as
+        # `model` below — so an unregistered model (every locally-served one)
+        # was dispatched to whichever vendor happened to hold a key. `model`
+        # is therefore read FIRST here: the model is the only thing entitled
+        # to answer the vendor question.
+        resolved_provider = resolve_node_provider(
+            model,
+            explicit=llm_provider,
+            component="WorkflowGenerator._build_llm_node_config",
         )
         provider_config = (
             getattr(self.config, "provider_config", None)
@@ -426,7 +437,11 @@ class WorkflowGenerator:
         # #1948: resolve the provider from the environment when unset instead of
         # hardcoding "openai" (see _build_llm_node_config above for rationale).
         node_config = {
-            "provider": self.config.llm_provider or detect_provider_from_env(),
+            "provider": resolve_node_provider(
+                self.config.model or os.environ.get("DEFAULT_LLM_MODEL"),
+                explicit=self.config.llm_provider,
+                component="WorkflowGenerator.generate_fallback_workflow",
+            ),
             "model": self.config.model or os.environ.get("DEFAULT_LLM_MODEL"),
             "generation_config": generation_config,
         }

@@ -127,13 +127,16 @@ def get_class_annotations(cls: Type[Any]) -> Dict[str, Any]:
         return {}
 
 
-def get_resolved_type_hints(cls: Type[Any]) -> Dict[str, Any]:
+def get_resolved_type_hints(
+    cls: Type[Any], *, include_extras: bool = False
+) -> Dict[str, Any]:
     """Return ``cls`` annotations with forward references resolved to types.
 
     Use this when the caller actually needs the resolved Python type (e.g.
     DataFlow ``@db.model`` registration, which maps each field type to a
     SQL column type).  For callers that only need the raw annotation dict,
-    prefer :func:`get_class_annotations`.
+    prefer :func:`get_class_annotations`. ``include_extras=True`` preserves
+    wrappers such as Required and NotRequired for structural contracts.
 
     On Python 3.14, falls back to ``annotationlib.get_annotations`` with the
     ``FORWARDREF`` format and raises a clear, per-field error when an
@@ -146,7 +149,7 @@ def get_resolved_type_hints(cls: Type[Any]) -> Dict[str, Any]:
             forward-referenced name so the caller can fix the import.
     """
     try:
-        return typing.get_type_hints(cls) or {}
+        return typing.get_type_hints(cls, include_extras=include_extras) or {}
     except NameError:
         if sys.version_info < (3, 14) or _annotationlib is None:
             raise

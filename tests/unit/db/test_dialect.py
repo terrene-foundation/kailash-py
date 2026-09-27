@@ -29,6 +29,20 @@ from kailash.db.dialect import (
 )
 
 
+@pytest.mark.parametrize("dialect_type", [PostgresDialect, MySQLDialect, SQLiteDialect])
+@pytest.mark.parametrize("name", ["table\n", "table\r\n", "table\x00"])
+def test_identifier_validation_rejects_entire_invalid_suffix(dialect_type, name):
+    from kailash.db.dialect import IdentifierError
+
+    dialect = dialect_type()
+    dialect._validate_identifier("table_1")
+    assert "table_1" in dialect.quote_identifier("table_1")
+    with pytest.raises(IdentifierError):
+        dialect._validate_identifier(name)
+    with pytest.raises(IdentifierError):
+        dialect.quote_identifier(name)
+
+
 # ---------------------------------------------------------------------------
 # DatabaseType enum
 # ---------------------------------------------------------------------------

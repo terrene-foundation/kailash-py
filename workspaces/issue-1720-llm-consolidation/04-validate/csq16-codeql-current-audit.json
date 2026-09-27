@@ -1,0 +1,495 @@
+{
+  "ran": true,
+  "verdict": "OPEN: aggregate CodeQL failure confirmed; one actual two-sink log-injection finding reproduced; additional scanner rows require scoped review",
+  "at": "2026-09-27T13:30:30.173166+00:00",
+  "head": "68d4dbd4185435a03cd43604c12966558c9c934e",
+  "local_head": "daa960ed90678564f148f08b5dabf6e5e013f9ae",
+  "local_source_specs_tests_configs_equal_to_head": true,
+  "current_analysis": {
+    "id": 1847134979,
+    "merge_commit": "1e4d91f55a4baa94fd5989e0d51884acd155a9cb",
+    "created_at": "2026-09-27T13:23:02Z",
+    "results": 2240
+  },
+  "main_analysis": {
+    "id": 1846628535,
+    "head": "50f98afe403a468bb478462182b73ebc4e0287d1",
+    "created_at": "2026-09-27T09:02:16Z",
+    "results": 2315,
+    "rules": 172,
+    "error": "",
+    "warning": ""
+  },
+  "checks": {
+    "Analyze Python": "SUCCESS",
+    "CodeQL": "FAILURE",
+    "aggregate_check_id": 108628061845,
+    "reported_new_alerts": 427,
+    "reported_categories": {
+      "high": 8,
+      "medium": 32,
+      "error": 7,
+      "warning": 53,
+      "note": 327
+    }
+  },
+  "baseline_comparison": {
+    "method": [
+      "GitHub alertNumber",
+      "correlationGuid",
+      "ruleId+partialFingerprints"
+    ],
+    "all_agree": true,
+    "open_absent_main": 58,
+    "categories": {
+      "high": 0,
+      "medium": 2,
+      "error": 1,
+      "warning": 2,
+      "note": 53
+    },
+    "discriminating_control_shared_alert_removed_from_baseline": 26,
+    "limitation": "Absence from exact-main SARIF is a separate proposition from GitHub aggregate PR-newness; aggregate427 identities cannot be fully reconstructed from100 annotation cap. Do not relabel all current branch60security alerts as aggregate40. Query pr=2229 returns2208branch rows and does not discriminate PR-newness. No baseline finding waived."
+  },
+  "priority_absent_main_rows": [
+    {
+      "number": 11649,
+      "state": "open",
+      "rule": "py/hash-unhashable-value",
+      "severity": "error",
+      "commit_sha": "1e4d91f55a4baa94fd5989e0d51884acd155a9cb",
+      "path": "src/kailash/security.py",
+      "start_line": 1409,
+      "end_line": 1409,
+      "message": "This instance of dict is unhashable.\nThis instance of list is unhashable.",
+      "present_in_exact_main_sarif": false,
+      "absent_main_open": true,
+      "dismissed_reason": null
+    },
+    {
+      "number": 11635,
+      "state": "open",
+      "rule": "py/multiple-definition",
+      "severity": "warning",
+      "commit_sha": "1e4d91f55a4baa94fd5989e0d51884acd155a9cb",
+      "path": "src/kailash/runtime/resource_manager.py",
+      "start_line": 2814,
+      "end_line": 2814,
+      "message": "This assignment to 'attempt_time' is unnecessary as it is redefined before this value is used.\nThis assignment to 'attempt_time' is unnecessary as it is redefined before this value is used.",
+      "present_in_exact_main_sarif": false,
+      "absent_main_open": true,
+      "dismissed_reason": null
+    },
+    {
+      "number": 11634,
+      "state": "open",
+      "rule": "py/multiple-definition",
+      "severity": "warning",
+      "commit_sha": "1e4d91f55a4baa94fd5989e0d51884acd155a9cb",
+      "path": "src/kailash/runtime/resource_manager.py",
+      "start_line": 2813,
+      "end_line": 2813,
+      "message": "This assignment to 'attempt_start' is unnecessary as it is redefined before this value is used.",
+      "present_in_exact_main_sarif": false,
+      "absent_main_open": true,
+      "dismissed_reason": null
+    },
+    {
+      "number": 11630,
+      "state": "open",
+      "rule": "py/log-injection",
+      "severity": "medium",
+      "commit_sha": "1e4d91f55a4baa94fd5989e0d51884acd155a9cb",
+      "path": "src/kailash/runtime/base.py",
+      "start_line": 518,
+      "end_line": 518,
+      "message": "This log entry depends on a user-provided value.",
+      "present_in_exact_main_sarif": false,
+      "absent_main_open": true,
+      "dismissed_reason": null
+    },
+    {
+      "number": 11629,
+      "state": "open",
+      "rule": "py/log-injection",
+      "severity": "medium",
+      "commit_sha": "1e4d91f55a4baa94fd5989e0d51884acd155a9cb",
+      "path": "src/kailash/runtime/base.py",
+      "start_line": 509,
+      "end_line": 509,
+      "message": "This log entry depends on a user-provided value.",
+      "present_in_exact_main_sarif": false,
+      "absent_main_open": true,
+      "dismissed_reason": null
+    }
+  ],
+  "all_alert_identities": "/tmp/csq16-security-current-alert-index.json",
+  "authorized_dismissals": [
+    {
+      "number": 11595,
+      "state": "dismissed",
+      "reason": "false positive"
+    },
+    {
+      "number": 11596,
+      "state": "dismissed",
+      "reason": "false positive"
+    },
+    {
+      "number": 11466,
+      "state": "dismissed",
+      "reason": "false positive"
+    },
+    {
+      "number": 11467,
+      "state": "dismissed",
+      "reason": "false positive"
+    },
+    {
+      "number": 10866,
+      "state": "dismissed",
+      "reason": "false positive"
+    },
+    {
+      "number": 5153,
+      "state": "dismissed",
+      "reason": "false positive"
+    },
+    {
+      "number": 131,
+      "state": "dismissed",
+      "reason": "false positive"
+    },
+    {
+      "number": 133,
+      "state": "dismissed",
+      "reason": "false positive"
+    },
+    {
+      "number": 6082,
+      "state": "dismissed",
+      "reason": "false positive"
+    }
+  ],
+  "fixed_since_prior": [
+    {
+      "number": 11624,
+      "rule": "py/regex/duplicate-in-character-class",
+      "path": "packages/kailash-kaizen/src/kaizen/utils/credential_scrub.py",
+      "start_line": 1095
+    },
+    {
+      "number": 11619,
+      "rule": "py/unused-import",
+      "path": "src/kailash/runtime/local.py",
+      "start_line": 45
+    },
+    {
+      "number": 11608,
+      "rule": "py/unused-import",
+      "path": "src/kailash/runtime/async_local.py",
+      "start_line": 60
+    },
+    {
+      "number": 11601,
+      "rule": "py/unused-global-variable",
+      "path": "packages/kailash-kaizen/src/kaizen/utils/credential_scrub.py",
+      "start_line": 1094
+    },
+    {
+      "number": 11597,
+      "rule": "py/clear-text-logging-sensitive-data",
+      "path": "src/kailash/trust/constraints/commerce.py",
+      "start_line": 156
+    },
+    {
+      "number": 11589,
+      "rule": "py/empty-except",
+      "path": "src/kailash/security.py",
+      "start_line": 1188
+    },
+    {
+      "number": 11502,
+      "rule": "py/log-injection",
+      "path": "src/kailash/api/gateway.py",
+      "start_line": 634
+    },
+    {
+      "number": 11474,
+      "rule": "py/weak-sensitive-data-hashing",
+      "path": "src/kailash/utils/url_credentials.py",
+      "start_line": 939
+    },
+    {
+      "number": 11313,
+      "rule": "py/cyclic-import",
+      "path": "src/kailash/runtime/async_local.py",
+      "start_line": 51
+    },
+    {
+      "number": 11272,
+      "rule": "py/log-injection",
+      "path": "src/kailash/middleware/gateway/event_store.py",
+      "start_line": 464
+    },
+    {
+      "number": 11271,
+      "rule": "py/log-injection",
+      "path": "src/kailash/middleware/gateway/event_store.py",
+      "start_line": 232
+    },
+    {
+      "number": 11270,
+      "rule": "py/log-injection",
+      "path": "src/kailash/middleware/gateway/durable_request.py",
+      "start_line": 708
+    },
+    {
+      "number": 11267,
+      "rule": "py/log-injection",
+      "path": "src/kailash/workflow/cyclic_runner.py",
+      "start_line": 197
+    },
+    {
+      "number": 11266,
+      "rule": "py/log-injection",
+      "path": "src/kailash/workflow/cyclic_runner.py",
+      "start_line": 183
+    },
+    {
+      "number": 11233,
+      "rule": "py/repeated-import",
+      "path": "packages/kailash-dataflow/src/dataflow/migrations/migration_connection_manager.py",
+      "start_line": 376
+    },
+    {
+      "number": 11019,
+      "rule": "py/empty-except",
+      "path": "src/kailash/runtime/async_local.py",
+      "start_line": 2050
+    },
+    {
+      "number": 11018,
+      "rule": "py/empty-except",
+      "path": "src/kailash/runtime/local.py",
+      "start_line": 2444
+    },
+    {
+      "number": 10985,
+      "rule": "py/multiple-definition",
+      "path": "src/kailash/runtime/local.py",
+      "start_line": 1261
+    },
+    {
+      "number": 10978,
+      "rule": "py/cyclic-import",
+      "path": "src/kailash/runtime/async_local.py",
+      "start_line": 39
+    },
+    {
+      "number": 10679,
+      "rule": "py/unused-local-variable",
+      "path": "packages/kailash-nexus/src/nexus/http_client.py",
+      "start_line": 222
+    },
+    {
+      "number": 10062,
+      "rule": "py/unused-import",
+      "path": "packages/kailash-dataflow/src/dataflow/core/engine.py",
+      "start_line": 8
+    },
+    {
+      "number": 8969,
+      "rule": "py/multiple-definition",
+      "path": "src/kailash/runtime/local.py",
+      "start_line": 4464
+    },
+    {
+      "number": 8946,
+      "rule": "py/log-injection",
+      "path": "src/kailash/api/gateway.py",
+      "start_line": 568
+    },
+    {
+      "number": 8495,
+      "rule": "py/empty-except",
+      "path": "src/kailash/middleware/gateway/durable_gateway.py",
+      "start_line": 581
+    },
+    {
+      "number": 7027,
+      "rule": "py/unused-local-variable",
+      "path": "src/kailash/nodes/logic/signal_wait.py",
+      "start_line": 174
+    },
+    {
+      "number": 6797,
+      "rule": "py/unused-local-variable",
+      "path": "packages/kailash-dataflow/src/dataflow/features/bulk.py",
+      "start_line": 684
+    },
+    {
+      "number": 6776,
+      "rule": "py/unused-local-variable",
+      "path": "src/kailash/nodes/base_async.py",
+      "start_line": 136
+    },
+    {
+      "number": 6182,
+      "rule": "py/call/wrong-arguments",
+      "path": "packages/kailash-dataflow/src/dataflow/testing/dataflow_test_utils.py",
+      "start_line": 235
+    },
+    {
+      "number": 6174,
+      "rule": "py/unused-local-variable",
+      "path": "src/kailash/runtime/local.py",
+      "start_line": 5328
+    },
+    {
+      "number": 5150,
+      "rule": "py/log-injection",
+      "path": "packages/kailash-pact/src/pact/governance/api/events.py",
+      "start_line": 253
+    },
+    {
+      "number": 1917,
+      "rule": "py/unused-import",
+      "path": "src/kailash/middleware/gateway/durable_request.py",
+      "start_line": 39
+    },
+    {
+      "number": 1725,
+      "rule": "py/unused-import",
+      "path": "src/kailash/runtime/mixins/conditional_execution.py",
+      "start_line": 42
+    },
+    {
+      "number": 1457,
+      "rule": "py/unused-import",
+      "path": "packages/kailash-dataflow/src/dataflow/migrations/visual_migration_builder.py",
+      "start_line": 20
+    },
+    {
+      "number": 1297,
+      "rule": "py/repeated-import",
+      "path": "src/kailash/runtime/local.py",
+      "start_line": 4460
+    },
+    {
+      "number": 1269,
+      "rule": "py/repeated-import",
+      "path": "src/kailash/nodes/base_async.py",
+      "start_line": 170
+    },
+    {
+      "number": 1268,
+      "rule": "py/repeated-import",
+      "path": "src/kailash/nodes/base_async.py",
+      "start_line": 150
+    },
+    {
+      "number": 1267,
+      "rule": "py/repeated-import",
+      "path": "src/kailash/nodes/base_async.py",
+      "start_line": 118
+    },
+    {
+      "number": 566,
+      "rule": "py/call/wrong-arguments",
+      "path": "packages/kailash-dataflow/src/dataflow/testing/dataflow_test_utils.py",
+      "start_line": 230
+    },
+    {
+      "number": 549,
+      "rule": "py/hash-unhashable-value",
+      "path": "src/kailash/security.py",
+      "start_line": 1388
+    },
+    {
+      "number": 450,
+      "rule": "py/call/wrong-named-argument",
+      "path": "packages/kailash-dataflow/src/dataflow/testing/dataflow_test_utils.py",
+      "start_line": 265
+    },
+    {
+      "number": 449,
+      "rule": "py/call/wrong-named-argument",
+      "path": "packages/kailash-dataflow/src/dataflow/testing/dataflow_test_utils.py",
+      "start_line": 252
+    }
+  ],
+  "actual_finding": {
+    "ran": true,
+    "producer": "BaseRuntime._verify_workflow_trust",
+    "payload_utf8_hex": "776f726b666c6f770a4552524f5220666f7267656420617564697420617070726f76616c",
+    "payload_decoded": "workflow\nERROR forged audit approval",
+    "records": [
+      {
+        "name": "kailash.runtime.base",
+        "message": "ENFORCING: Trust verification denied workflow 'workflow\nERROR forged audit approval' for agent 'unknown': denied",
+        "level": "ERROR"
+      },
+      {
+        "name": "kailash.runtime.base",
+        "message": "PERMISSIVE: Trust verification denied workflow 'workflow\nERROR forged audit approval' for agent 'unknown': denied",
+        "level": "WARNING"
+      }
+    ],
+    "observed": "Both actual logger records preserve embedded LF, enabling forged display line for plain text handlers; trust deny/allow decisions remain as configured.",
+    "scope": "Real unbound method on minimal subject, real logging handler; no public HTTP ingress proof."
+  },
+  "bounded_repair_clusters": [
+    {
+      "ids": [
+        11629,
+        11630
+      ],
+      "surface": "runtime/base.py workflow/node trust logging",
+      "finding": "actual embeddedLF retained by both reached workflow denial sinks; sanitize all caller-controlled metadata without changing decisions; sweep sibling node verification",
+      "status": "reproduced sink issue; author needed"
+    },
+    {
+      "ids": [
+        11649
+      ],
+      "surface": "security.py validate_node_parameters/sanitize_input",
+      "finding": "CodeQL union return dict/list as sanitized key. Real plain str keys return str; dict/list keys not legal dict keys. Need guard/path feasibility review before code change or FP request; no dismissal authorized.",
+      "status": "unresolved scanner interpretation"
+    },
+    {
+      "ids": [
+        11634,
+        11635
+      ],
+      "surface": "resource_manager.py retry attempt timing initializers",
+      "finding": "initial values assigned2813/2814 then replaced2856/2885/2888 before observeduse; root author can remove only after zeroattempt/preflightpath review",
+      "status": "source-reviewed warning, no runtime defect claimed"
+    }
+  ],
+  "tier2_logging_review": {
+    "log_lines": [
+      773,
+      775,
+      821,
+      823,
+      826
+    ],
+    "observed_failure": "assert 'connection validation error' in 'node input validation failed: %s'",
+    "production": "local.py4043\u20134045 fixed event + safe_exception_frames(e); helper excludes exception text",
+    "recommendation": "Repair fixture mock execution-config/schema and assert safe event/rendered metadata. Never restore raw enhanced error_msg/str(e) to satisfy stale assertion.",
+    "scope": "read-only source/log audit; final fixture patch not yet reviewed"
+  },
+  "snapshots": {
+    "/tmp/csq16-security-pr2229-snapshot.json": "d1e9c26dc0d2131b755af68a982ffd66e9eee656f8927900024dfa102551affb",
+    "/tmp/csq16-security-check-runs-final.json": "c669f50a6079c9e210fa55b31acb1b82f8b07074d8d877c046d0e6f3b043282e",
+    "/tmp/csq16-security-codeql-analyses-final.json": "0dc5e35e77f5c2908caae083f5536d3a92746e3adf4e54b0e0169949bb2407fc",
+    "/tmp/csq16-security-codeql-main-analyses.json": "34281050c54fccb8da9f86fef8ffc49a977f8e002d1356d1f9d598f5c3e4c4ee",
+    "/tmp/csq16-security-codeql-alerts-current.json": "dc2d4db5ac13f572a625b130ea9e052fdfbea07577cfd1b9242e917f32b8abca",
+    "/tmp/csq16-security-codeql-annotations-current.json": "7e90bf8c440573a3b801ca71d63443b2dc64444bcc66479e553665e4d06f2668",
+    "/tmp/csq16-security-codeql-current.sarif.json": "8adf25a0a0594ac5c08056c40815219aedce8d3a835097bb2ce0a5b387a39f2f",
+    "/tmp/csq16-security-codeql-main.sarif.json": "00d16cf4c84b302b390b0d2eb012a020cfc7e08b62463a0a969552a72c9e9a53",
+    "/tmp/csq16-core-ci-failure.log": "cbfe54e98c57c00f58428588e925bbadba2f3c9893a721944bdd6a25a5157474"
+  },
+  "actions": "Only same-repo gh GET/read APIs and local reads/probe; no dismissal/comment/push/remote mirror/source mutation."
+}

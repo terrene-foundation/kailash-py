@@ -707,15 +707,21 @@ class TestWorkflowParameterInjector:
         assert self.injector.debug is True
         assert self.injector.logger is not None
 
-    def test_inject_parameters_placeholder(self):
-        """Test parameter injection placeholder implementation."""
+    def test_inject_parameters_leaves_regular_nodes_unchanged(self):
+        """Deferred injection must not mutate ordinary node configuration."""
         workflow_params = {
             "token_url": "https://oauth.example.com",
             "database": "test_db",
         }
 
-        # Should not raise an error (placeholder implementation)
+        original = {
+            node_id: node.config.copy()
+            for node_id, node in self.mock_workflow.nodes.items()
+        }
         self.injector.inject_parameters(workflow_params)
+        assert {
+            node_id: node.config for node_id, node in self.mock_workflow.nodes.items()
+        } == original
 
     def test_transform_workflow_parameters_empty(self):
         """Test transforming empty workflow parameters."""

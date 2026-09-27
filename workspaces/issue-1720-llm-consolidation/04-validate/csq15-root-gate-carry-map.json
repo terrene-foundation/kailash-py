@@ -1,0 +1,14 @@
+{
+  "base_tested_root_head": "a35604592eac70584f35acffd23d9ddc4ff615b3",
+  "current_head": "c8ce102b8025e0b69bb744cbe636cd3aecb080e8",
+  "changed_paths": [
+    "packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py",
+    "workspaces/issue-1720-llm-consolidation/04-validate/csq15-final-reviewed-candidate.json",
+    "workspaces/issue-1720-llm-consolidation/04-validate/csq15-resume-checkpoint.json",
+    "workspaces/issue-1720-llm-consolidation/04-validate/csq15-spec-advisory-records.json",
+    "workspaces/issue-1720-llm-consolidation/04-validate/csq15-spec-advisory-scope-decision.md"
+  ],
+  "production_root_tests_and_configs_unchanged": true,
+  "control": "production file, root regression file and dependency manifest rejected by independent allowed-path classifier",
+  "carry_scope": "3888 root regression result covers unchanged production/root tests/config; DataFlow benchmark fixture is changed and its full DataFlow rerun remains required; no fresh-root-execution claim"
+}

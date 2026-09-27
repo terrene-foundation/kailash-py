@@ -11,6 +11,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 import pytest
+
 from kailash_ml.engines._feature_sql import (
     create_feature_table,
     create_metadata_table,

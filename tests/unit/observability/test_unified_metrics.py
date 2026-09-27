@@ -14,8 +14,7 @@ from __future__ import annotations
 import pytest
 
 from kailash.monitoring.metrics import render_prometheus_exposition
-from kailash.observability import configure_observability
-from kailash.observability import otlp as _otlp
+from kailash.observability import configure_observability, otlp as _otlp
 
 
 @pytest.fixture(autouse=True)

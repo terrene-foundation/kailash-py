@@ -11,6 +11,11 @@ import uuid
 from typing import Any, Dict, Optional
 
 from kailash.nodes.base import NodeParameter, register_node
+from kailash.utils.secure_logging import (
+    safe_exception_frames,
+    safe_type_name,
+    sanitize_log_value,
+)
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
 from ..signatures import Signature
@@ -92,7 +97,7 @@ class KaizenNode(AINodeBase):
             **kwargs,
         )
 
-        logger.info(f"Initialized KaizenNode with model: {model}")
+        logger.info(f"Initialized KaizenNode with model: {sanitize_log_value(model)}")
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """
@@ -177,10 +182,10 @@ class KaizenNode(AINodeBase):
         timeout = inputs.get("timeout", self.timeout)
 
         # Log execution
-        self.logger.info(f"Executing KaizenNode with model: {model}")
-        self.logger.debug(
-            f"Prompt: {prompt[:100]}..." if len(prompt) > 100 else f"Prompt: {prompt}"
+        self.logger.info(
+            f"Executing KaizenNode with model: {sanitize_log_value(model)}"
         )
+        self.logger.debug("Prompt received")
 
         try:
             # Simulate AI model execution
@@ -210,8 +215,11 @@ class KaizenNode(AINodeBase):
             # #1970: ``_execute_ai_model`` is the provider seam — an auth /
             # rate-limit exception from it can embed the caller's API key.
             self.logger.error(
-                "KaizenNode execution failed: %s",
-                sanitize_provider_error(e, "KaizenNode"),
+                "KaizenNode execution failed",
+                extra={
+                    "error_type": safe_type_name(e),
+                    "error_frames": safe_exception_frames(e),
+                },
             )
             raise
 
@@ -239,7 +247,9 @@ class KaizenNode(AINodeBase):
 
         response = f"AI Response to: '{prompt[:50]}...' using {model}"
 
-        self.logger.debug(f"Generated response: {response}")
+        self.logger.debug(
+            "Generated response", extra={"response_length": len(response)}
+        )
         return response
 
     def execute(self, **kwargs) -> Dict[str, Any]:
@@ -261,7 +271,13 @@ class KaizenNode(AINodeBase):
             # subclass — any node whose ``run`` re-raises a provider exception
             # lands here, and this dict is returned straight to the caller.
             sanitized = sanitize_provider_error(e, type(self).__name__)
-            self.logger.error("Node execution failed: %s", sanitized)
+            self.logger.error(
+                "Node execution failed",
+                extra={
+                    "error_type": safe_type_name(e),
+                    "error_frames": safe_exception_frames(e),
+                },
+            )
             return {"error": sanitized, "status": "failed"}
 
     def pre_execution_hook(self, inputs: Dict[str, Any]) -> Dict[str, Any]:

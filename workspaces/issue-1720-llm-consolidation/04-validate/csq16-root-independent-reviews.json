@@ -1,0 +1,406 @@
+{
+  "ran": true,
+  "reviewer": "root-independent-correctness",
+  "core_logging": {
+    "manifest": "/tmp/csq16-core-log-fix-manifest.json",
+    "rounds": [
+      "117 passed in 3.58s",
+      "117 passed in 1.85s"
+    ],
+    "control": "Graph sanitizer bypass reached63calls and failed6 hostile identifier cases, ordinary case passed",
+    "inspection": "Read complete three-source diff, all52logger calls; changes confined to diagnostic arguments plus imports, diagnostic-only cycle_info removed; IDs/state retained by actual graph/registry tests. Exception objects still propagated unchanged.",
+    "open_correctness_findings": [],
+    "status": "OPEN: adversarial reviewer found recognized credential leakage; follow-up safe_log_field being authored"
+  },
+  "html": {
+    "manifest": "/tmp/csq16-html-manifest.json",
+    "rounds": [
+      "41 passed in 1.32s",
+      "41 passed in 4.12s"
+    ],
+    "control": "nh3 omission reached159calls and9tests failed;32passed",
+    "inspection": "Read full source/spec/manifest patch; required dependency and lock agree, legacy transforms precede final sanitizer, HTMLParser separates text extraction from HTML serialization; sections use original source offsets.",
+    "scope": "Actual source paths and nh3 from isolated0.3.7 environment asserted. No browser exploit or global source security claim. Independent adversarial review remains open.",
+    "open_correctness_findings": []
+  },
+  "key_lifecycle": {
+    "ran": true,
+    "lens": "independent security",
+    "manifest": "/tmp/csq16-key-lifecycle-manifest.json",
+    "rounds": [
+      "117 passed,1 Windows-only skip in2.82s",
+      "117 passed,1 Windows-only skip in4.86s"
+    ],
+    "reached_control": "Owner permission bypass21hits,11failed; checked actual mode and descriptor writes.",
+    "inspection": "Read full helper and all3producer/load diffs. Existing private read hardens fd before bytes, writes omit O_TRUNC until after permission check and regular-file validation; full write loop+fsync+finally close. Missing-public derives from real existing private, public-only/mismatched private cannot auto-rotate. Project verify reports integrity failure without exposing key bytes.",
+    "limits": [
+      "POSIX actual permissions only; Windows ACL not executed",
+      "Final-component symlink defense only; no parent-directory race proof",
+      "Not transactional crash recovery of two files"
+    ],
+    "open_findings": [],
+    "status": "OPEN: independent correctness found public FIFO acceptance/blocking; regular-file reader follow-up being authored"
+  },
+  "core_logging_v2": {
+    "ran": true,
+    "lens": "correctness",
+    "manifest": "/tmp/csq16-core-log-v2-manifest.json",
+    "rounds": [
+      "151 passed4.65s",
+      "151passed secondround JSON /tmp/csq16-root-core-v2-r2.json"
+    ],
+    "reached_control": "mask omission82calls\u21924failed; actual credentials absent on normalrun while raw IDs retained",
+    "inspection": "New shared safe_log_field composes existing masker before structural formatter, normalizes builtin str, fails closed marker on masker exception. Existing sanitize_log_value semantics unchanged, all52logger sinks use new helper/counts/frames.",
+    "status": "bounded correctness clean; independent adversarial review pending"
+  },
+  "key_lifecycle_v2": {
+    "ran": true,
+    "lens": "security",
+    "manifest": "/tmp/csq16-key-fifo-final-manifest.json",
+    "rounds": [
+      "149passed1Windows-onlyskip6.05s",
+      "149passed1Windows-onlyskip secondround JSON /tmp/csq16-root-key-v2-r2.json"
+    ],
+    "reached_control": "public regular-check omission46calls\u219213failures",
+    "inspection": "All new public reads share nonblocking fd open+regular check before read including public-only recovery and bundle export. Existing private mode-before-use and final symlink defense retained, bundle missing-public remains empty.",
+    "limits": [
+      "WindowsACLnotexecuted",
+      "parentdirectoryracesexcluded",
+      "twofileatomiccrashrecoveryexcluded"
+    ],
+    "status": "Scoped security clean; independent FIFO correctness/fd lifecycle149x2 delivered in security-key-fifo receipt"
+  },
+  "dataflow_caller": {
+    "ran": true,
+    "lens": "security/correctness",
+    "manifest": "/tmp/csq16-df-trust-manifest.json",
+    "rounds": [
+      "98passed8.33s",
+      "============================== 98 passed in 7.04s =============================="
+    ],
+    "reached_control": "provenance bypass14calls\u21925failures",
+    "inspection": "All15automaticdiagnostics use safe fields/frames, private table helper now respects disabled/permissive modes, public exceptions/audit data unchanged; actualfileExpress tests andrealCoredecision path",
+    "status": "bounded caller clean; final integrated context cache dependency gate remains pending"
+  },
+  "historical_rows_note": "Earlier rows retain history and are superseded only by matching final rows below; no claim of overall gate completion.",
+  "core_logging_final": {
+    "ran": true,
+    "scope": "Shared credential masker, all52 workflow/resource diagnostic sinks; raw identifiers/state preserved",
+    "rounds": [
+      "159 passed7.89s",
+      "159 passed9.21s"
+    ],
+    "python_warnings": 0,
+    "skips": 0,
+    "controls": {
+      "mask": "95reached,7failed4passed",
+      "opaque_render": "2reached,1failed"
+    },
+    "helper_lint_delta": "0d674cf to a748035, explanatory E721noqa placements only; full AST identical",
+    "status": "Scoped independent correctness/security clean"
+  },
+  "html_final": {
+    "ran": true,
+    "scope": "58actual repository parser/metadata tests with isolatednh3.0.3.7; per-string8192char limit and16passes, no global input complexity claim",
+    "rounds": [
+      "58passed0.93s",
+      "58passed6.84s"
+    ],
+    "controls": {
+      "size": "18reached,9failed",
+      "pass_bound": "6reached,3failed"
+    },
+    "prior_controls": "Final sanitizer omission159reached9failed; hidden document content41reached10failed",
+    "format_delta": "Two blank lines isort only; AST identical",
+    "status": "Scoped independent correctness/security clean"
+  },
+  "key_types_final": {
+    "ran": true,
+    "rounds": [
+      "26passed3.90s",
+      "26passed2.24s"
+    ],
+    "control": "18guardomissions reached,18failed SecurityError-vs-AttributeError checks",
+    "scope": "str name validation across generic/python_exec/shell_exec; actualWorkflow/CodeExecutor consumers and raw nested values",
+    "status": "Scoped independent correctness clean"
+  },
+  "trust_cache_final": {
+    "ran": true,
+    "source_sha256": "fb98faedc1a5bcc04cd5f97e855371b997f791c5ff78bc69914d62a685ee41d1",
+    "rounds": [
+      "285passed4.61s",
+      "285passed7.59s"
+    ],
+    "python_warnings": 0,
+    "skips": 0,
+    "controls": {
+      "scalar_identity": "18reached6failed",
+      "generation": "28reached28failed"
+    },
+    "independent_security_receipt": "csq16-cache-security-review.json",
+    "scope": "Exacttupleidentity, typedcontextsnapshot, generation publicationfence, mode/logprovenance; already-started decision maycomplete",
+    "status": "Scoped independent correctness/security clean"
+  },
+  "dataflow_final": {
+    "ran": true,
+    "rounds": [
+      "98passed finalr1",
+      "98passed16.68s finalr2"
+    ],
+    "scope": "Actualfinal verifier/cache dependency with DataFlow query wrapper; actualSQLiteExpress and unitrecordingbackend",
+    "prior_control": "provenance14reached5failed",
+    "status": "Scoped root independent correctness/security clean"
+  },
+  "remaining_gates": [
+    "Full committed candidate Linux root/DataFlow/Tier2 and Mac all-files hooks with SKIP unset",
+    "Consolidated push and exact-head remote checks",
+    "Separate authorized PR2229 merge",
+    "Three holistic post-main reviewers and preserved worktree drain"
+  ],
+  "pool_diagnostics_final": {
+    "ran": true,
+    "rounds": [
+      "85passed1.95s",
+      "85passed finalr2"
+    ],
+    "controls": "frames6reached6failed; independentrepair reviewer mask18reached7failed/config1reached1failed",
+    "scope": "Actualparser/driverfailurepriornetwork, automatic17sinks andconfigcaller; businessASTsame",
+    "dependency_gap": "Fresh minimal before6failed8passed; adddirectdevdrivers gives14x2; independentmanifestreview completed in csq16-dev-and-false-positive-review.json.",
+    "status": "Source boundedclean; finalcandidate CIpending"
+  },
+  "audit_diagnostics_final": {
+    "ran": true,
+    "rounds": [
+      "252passed19.90s",
+      "252passed10.45s"
+    ],
+    "controls": "mask535reached58failed1passed",
+    "scope": "Fourproductionaudit/MFA/selective sources,59newtests, originalpublicresults/auth/severity unchanged; UItestownsandclosesruntime",
+    "lint_delta": "audit1abc7510\u21922a6797e9 E721commentonly,ASTidentical",
+    "status": "Initial scope extended by final namespace repair; see audit_namespace_final and csq16-audit-namespace-review.json."
+  },
+  "byok_final": {
+    "ran": true,
+    "source_sha256": "ccfbcf267388846e9bd0f3b878ecf99c590345f84e244e8908e4fb0ac0d29710",
+    "rounds": [
+      "16passed r1",
+      "16passed r2"
+    ],
+    "control": "Restored ASCII encoding4reached2failed; prior delimiter22reached5failed andplaintext1reached1failed",
+    "independent_security": "csq16-byok-security-review.json;400Optional[str] pairs400unique twice; prior76aliases independentlydetected",
+    "scope": "Generic public cache, identity/privacy/lifetime tested; no liveprovider/network, passwordverification orscannerclosure claim",
+    "status": "Scoped correctness/security clean"
+  },
+  "audit_namespace_final": {
+    "ran": true,
+    "helper_sha256": "543fc9635b5f91014ae0fcb07a0ae12039e7e528f4a3a66a955c8842b00f23db",
+    "rounds": [
+      "321 passed in27.21s",
+      "321 passed in20.51s"
+    ],
+    "controls": {
+      "collision": "9 reached,3 failed",
+      "enterprise": "12 reached,1 failed"
+    },
+    "warnings": "113 WARN+ records in each round, normalized message sets equal; all are explicit configuration/severity/denial or injected failure cases. No Python warnings/skips.",
+    "status": "Scoped independent correctness and adversarial security clean, two final rounds each; csq16-audit-namespace-review.json",
+    "scope": "Actual nested Enterprise constructors and21 dynamic producers, component masking, publicidentity, keyed logger isolation; external identity provider/network not exercised."
+  },
+  "runtime_final": {
+    "ran": true,
+    "source_manifest": "csq16-candidate-source-manifest.json",
+    "root_rounds": [
+      "219 passed in6.55s",
+      "219 passed in7.53s"
+    ],
+    "correctness": "Independent native219x2 and5extra casesx2; Local bookkeeping/flush independentlychecked byroot/security. See csq16-runtime-audit-review.json.",
+    "controls": [
+      "cancelledrunstate6reached6failed",
+      "deferredflushwarning5reached5failed",
+      "cleanupcancellationwait2reached2failed"
+    ],
+    "scope": "Audit emission, cancellation persistence/provenance, owned loop/resource cleanup and compatibility; one live PostgreSQL case excluded. FullLinux/Mac/remoteCI stillpending."
+  },
+  "runtime_final_security": {
+    "ran": true,
+    "verdict": "CLEAN within specified runtime lifecycle, audit, cancellation persistence and deferred-flush scope",
+    "open_findings": [],
+    "workspace": "/Users/esperie/repos/kailash/build/.kailash-py-wt/csq16-promotion-verification",
+    "manifest": "/tmp/csq16-security-runtime-final-manifest.json",
+    "final_source_hashes": {
+      "src/kailash/runtime/local.py": "8c31a931391e4c6197aa34c5de4f6615b2f3aef2424ef20f067bf1596df3248c",
+      "src/kailash/runtime/async_local.py": "5a5234e0b74b8246816fa0bfbec2229ed018c8cbd6d6ace76b071c93ae54ace2",
+      "specs/core-runtime.md": "66ac9bb66e8bfc07b5f57e692323d1a0465f3509bea35999509ab60674de7cf0"
+    },
+    "rounds": [
+      {
+        "json": "/tmp/csq16-security-runtime-canonical-r1.json",
+        "log": "/tmp/csq16-security-runtime-canonical-r1.log",
+        "passed": 248,
+        "deselected": 1,
+        "python_warnings": [],
+        "skips": [],
+        "warn_plus_records": 43
+      },
+      {
+        "json": "/tmp/csq16-security-runtime-canonical-r2.json",
+        "log": "/tmp/csq16-security-runtime-canonical-r2.log",
+        "passed": 248,
+        "deselected": 1,
+        "python_warnings": [],
+        "skips": [],
+        "warn_plus_records": 43
+      }
+    ],
+    "command": "primary .venv/bin/python -P /tmp/csq16-security-runtime-run.py canonical-rN [files from final-files.json]; pytest -q -Werror --tb=short --timeout=45 -m not integration",
+    "cohort_manifest": "/tmp/csq16-security-runtime-final-files.json",
+    "mechanical": "/tmp/csq16-security-runtime-final-mechanical.json",
+    "controls": [
+      {
+        "mode": "registry",
+        "hits": 2,
+        "exit": 1,
+        "failures": 2,
+        "log": "/tmp/csq16-security-runtime-final-control-registry.log"
+      },
+      {
+        "mode": "scope",
+        "hits": 1,
+        "exit": 1,
+        "failures": 1,
+        "log": "/tmp/csq16-security-runtime-final-control-scope.log"
+      },
+      {
+        "mode": "wait",
+        "hits": 2,
+        "exit": 1,
+        "failures": 2,
+        "log": "/tmp/csq16-security-runtime-final-control-wait.log"
+      },
+      {
+        "mode": "admission",
+        "hits": 2,
+        "exit": 1,
+        "failures": 1,
+        "log": "/tmp/csq16-security-runtime-final-control-admission.log"
+      },
+      {
+        "mode": "guard",
+        "hits": 4,
+        "exit": 1,
+        "failures": 2,
+        "log": "/tmp/csq16-security-runtime-final-control-guard.log"
+      },
+      {
+        "mode": "state",
+        "hits": 8,
+        "exit": 1,
+        "failures": 6,
+        "log": "/tmp/csq16-security-runtime-canonical-control-state.log"
+      },
+      {
+        "mode": "privacy",
+        "hits": 2,
+        "exit": 1,
+        "failures": 2,
+        "log": "/tmp/csq16-security-runtime-canonical-control-privacy.log"
+      },
+      {
+        "mode": "silence",
+        "hits": 2,
+        "exit": 1,
+        "failures": 2,
+        "log": "/tmp/csq16-security-runtime-canonical-control-silence.log"
+      },
+      {
+        "hits": 5,
+        "exit": 1,
+        "mode": "flush",
+        "failures": 5,
+        "log": "/tmp/csq16-security-runtime-canonical-control-flush.log"
+      }
+    ],
+    "doc_mapping": {
+      "tested_async": "d272d6594f02334ca4e5c0730ec89930d20156374a463d1481870fe4165a05fe",
+      "final_async": "5a5234e0b74b8246816fa0bfbec2229ed018c8cbd6d6ace76b071c93ae54ace2",
+      "proof": "Read exact one-line execute docstring diff; full AST excluding docstrings equal. No executable source delta. Spec paragraph explicitly says new running loop after previous caller loop closes. Same source citations retained.",
+      "backup": "/tmp/csq16-security-runtime-doc-final-backup"
+    },
+    "format_mapping": {
+      "local": "6f82 to 8c31 full AST equal; both final rounds used 8c31",
+      "lifecycle_test": "821d to dbff import set and all non-import AST equal; both final rounds used dbff"
+    },
+    "independent_probes": {
+      "real_tcp_lifecycle": 6,
+      "actual_race_regressions": 3,
+      "additional_ownership": 4,
+      "other_audit_cancel_progress_real_sqlite": 16,
+      "total_additional_to_219": 29
+    },
+    "closed_findings": [
+      {
+        "finding": "Native synchronous repeated execution and close lacked actual resource completion",
+        "before": "Six baseline probes failed; resource close count remained 0 at refcount 0 and sequential execution loop IDs differed.",
+        "evidence": "/tmp/csq16-security-runtime-lifecycle-six-baseline.json",
+        "after": "Six real TCP probes pass in both final rounds; same loop, no Thread.start, actual socket closure, caller-owned loop remains usable."
+      },
+      {
+        "finding": "Cancelled async context exit could outlive host loop and leave socket open",
+        "before": "CANCELLED_EXIT completed=False socket_open=True ref_count=0",
+        "after": "completed=True socket_open=False ref_count=0; repeated cancellation regression and reached wait omission fail."
+      },
+      {
+        "finding": "Overlapping native sync execution created orphan coroutine",
+        "before": "coroutine 'AsyncLocalRuntime.execute_workflow_async' was never awaited",
+        "after": "orphaned=[]; atomic admission mutation reaches and fails."
+      },
+      {
+        "finding": "Close from active foreign caller loop blocked dependent loops",
+        "before": "watchdog_rescue=True",
+        "after": "FOREIGN_ACTIVE_CALLER watchdog_rescue=False closed=True"
+      },
+      {
+        "finding": "Local asyncio cancellation lacked terminal audit/progress restoration",
+        "before": "start-only event on actual cancellation",
+        "after": "original CancelledError retained; exactly start+cancelled terminal and progress ContextVar restored."
+      },
+      {
+        "finding": "Cancellation used unsupported run state",
+        "before": "Run terminal cancelled rejected by tracking contract",
+        "after": "run failed terminal while audit remains cancelled; reached state omission 8 hits, 6 failing tests."
+      },
+      {
+        "finding": "Error-path deferred SQLite flush failures were silent",
+        "before": "Actual SQLite directory-path OperationalError with persistence_diagnostics=[]",
+        "after": "Safe WARNING recorded on all five outcomes; original public exceptions preserved; reached omission 5 hits/5 failures."
+      }
+    ],
+    "diagnostics": {
+      "reviewed_all_records": true,
+      "rounds_normalized_equal": true,
+      "python_warnings": 0,
+      "warn_plus_per_round": 43,
+      "classification": {
+        "deliberate_registry_callback_failure": 2,
+        "explicit_audit_warning_error_level_tests": 4,
+        "platform_memory_limit_disclosure": 1,
+        "deliberate_python_node_errors": 10,
+        "dependent_node_errors": 4,
+        "deliberate_timeout": 2,
+        "forced_tracking_failure": 2,
+        "real_sqlite_forced_flush_failure": 6,
+        "forced_shape_drift": 5,
+        "missing_parallel_node_negative_case": 3,
+        "progress_probe_execution_failure": 4
+      },
+      "platform_disclosure": "Memory limit is NOT enforced for in-process code execution on this platform (address-space usage is not readable). No claim of memory-limit enforcement; existing explicit platform boundary."
+    },
+    "scope_limits": [
+      "One live PostgreSQL integration case deselected; SQL cleanup verified using actual delegated clear_shared_pools owner-loop argument plus scoped #1248 cohort, not a live PostgreSQL service.",
+      "Actual macOS/Python asyncio TCP resource lifecycle and SQLite persistence failure evidence; no Windows runtime claim.",
+      "No overall promotion, unrelated HTTP/trust/key or arbitrary application resource safety claim.",
+      "Synchronous close on an active caller loop retains observed asynchronous cleanup; awaited completion guaranteed by async context exit. Resource callbacks themselves may fail and are safely logged."
+    ],
+    "initial_instrument_error": "System python3 invocation exited 139 before verification; zero evidence banked. Repeated STEP0 and every verification with project .venv/bin/python -P exited 0."
+  }
+}

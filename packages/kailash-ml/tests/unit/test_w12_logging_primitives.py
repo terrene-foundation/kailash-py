@@ -23,6 +23,7 @@ import math
 from pathlib import Path
 
 import pytest
+
 from kailash_ml._device_report import DeviceReport
 from kailash_ml._result import TrainingResult
 from kailash_ml.errors import (

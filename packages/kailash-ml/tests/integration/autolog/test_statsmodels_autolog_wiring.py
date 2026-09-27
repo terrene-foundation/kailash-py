@@ -18,6 +18,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+
 from kailash_ml.autolog import autolog
 from kailash_ml.tracking import SqliteTrackerStore, track
 

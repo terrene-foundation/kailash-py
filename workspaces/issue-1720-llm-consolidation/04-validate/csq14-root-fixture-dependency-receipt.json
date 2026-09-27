@@ -1,0 +1,49 @@
+{
+  "base": "ce4c9de676f1ab1e0a159cb8c273dcf2e47a2cb4",
+  "scope": [
+    "packages/kailash-dataflow/pyproject.toml",
+    "tests/regression/test_issue_1258_canonical_encoder_parity.py",
+    "tests/regression/test_issue_731_trace_event_timestamp_padding.py",
+    "tests/regression/test_issue_757_audit_chain_unicode_pins.py",
+    "tests/regression/test_issue_959_trust_canonical_bytes.py"
+  ],
+  "sha256": {
+    "packages/kailash-dataflow/pyproject.toml": "cf41dc8261fb2933131c74cecdd5b173eb42a69ca56c8c69b14cdfb2e8b42a38",
+    "tests/regression/test_issue_1258_canonical_encoder_parity.py": "6df9e03b980b805a437964756743795f6122253fff75741f2a265bd058fafcd9",
+    "tests/regression/test_issue_731_trace_event_timestamp_padding.py": "a1aff5aee35f87de5a3b2059589b3c16676fe8465bc7d4ae1eb1fca460897f6b",
+    "tests/regression/test_issue_757_audit_chain_unicode_pins.py": "99b76bfb8496cec2c113cb4d418bc321c2849a406b989e33853e0ef3b79b285c",
+    "tests/regression/test_issue_959_trust_canonical_bytes.py": "8b1738a26ee21ac5194c4c2947a3d5fb563f1ddd47eb5eae110b3b68bef82ff7"
+  },
+  "positive": {
+    "log": "/tmp/csq14-root-deps-gate.log",
+    "observed": [
+      "TESTCLIENT_BACKEND httpx2",
+      "74 passed in 5.65s",
+      "exit=0 command wall=48.0s host=esperie-ai"
+    ],
+    "python": "3.12.3",
+    "warnings": "error"
+  },
+  "negative": {
+    "log": "/tmp/csq14-root-deps-controls.log",
+    "observed": [
+      "blocked httpx2 import reached fallback and StarletteDeprecationWarning",
+      "removed classmethod causes named fixture test ERROR PytestRemovedIn10Warning",
+      "ROOT_DEP_FIXTURE_NEGATIVE_CONTROLS_PASS"
+    ],
+    "outer_exit": 0
+  },
+  "limits": [
+    "Narrow four-file suite, not full root regression",
+    "Dependency probe exercises current Starlette TestClient; no claim across every version"
+  ],
+  "review": {
+    "agent": "ml_correctness_review",
+    "rounds": 2,
+    "verdict": "clean",
+    "evidence": [
+      "AST full-module equivalence after undoing only classmethod adapter; mutation of fixture body rejected",
+      "TOML only dev dependency changed; actual consumer and negative-control logs inspected"
+    ]
+  }
+}

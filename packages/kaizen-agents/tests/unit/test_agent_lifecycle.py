@@ -16,14 +16,20 @@ from typing import Any
 import pytest
 
 from kaizen.l3.factory.factory import AgentFactory
-from kaizen.l3.factory.instance import AgentInstance as SdkAgentInstance
-from kaizen.l3.factory.instance import TerminationReason as SdkTerminationReason
-from kaizen.l3.factory.instance import _StateTag
+from kaizen.l3.factory.instance import (
+    AgentInstance as SdkAgentInstance,
+    TerminationReason as SdkTerminationReason,
+    _StateTag,
+)
 from kaizen.l3.factory.registry import AgentInstanceRegistry
 from kaizen.l3.factory.spec import AgentSpec as SdkAgentSpec
 from kaizen_agents._agent_lifecycle import AgentLifecycleManager
-from kaizen_agents.types import AgentSpec as LocalAgentSpec
-from kaizen_agents.types import ConstraintEnvelope, MemoryConfig, make_envelope
+from kaizen_agents.types import (
+    AgentSpec as LocalAgentSpec,
+    ConstraintEnvelope,
+    MemoryConfig,
+    make_envelope,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers

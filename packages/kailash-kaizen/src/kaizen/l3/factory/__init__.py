@@ -23,6 +23,11 @@ from kaizen.l3.factory.errors import (
     RequiredContextMissing,
     ToolNotInParent,
 )
+from kaizen.l3.factory.execution import (
+    ExecutionSnapshot,
+    OwnedExecution,
+    TerminationReport,
+)
 from kaizen.l3.factory.factory import AgentFactory
 from kaizen.l3.factory.instance import (
     AgentInstance,
@@ -41,15 +46,18 @@ __all__ = [
     "AgentLifecycleState",
     "AgentSpec",
     "EnvelopeNotTighter",
+    "ExecutionSnapshot",
     "FactoryError",
-    "InsufficientBudget",
     "InstanceNotFound",
+    "InsufficientBudget",
     "InvalidStateTransitionError",
     "MaxChildrenExceeded",
     "MaxDepthExceeded",
+    "OwnedExecution",
     "RegistryError",
     "RequiredContextMissing",
     "TerminationReason",
+    "TerminationReport",
     "ToolNotInParent",
     "WaitReason",
 ]

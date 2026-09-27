@@ -51,9 +51,11 @@ from kailash.trust.exceptions import (
     TrustError,
     VerificationFailedError,
 )
-from kailash.trust.execution_context import ExecutionContext
-from kailash.trust.execution_context import execution_context as set_execution_context
-from kailash.trust.execution_context import get_current_context
+from kailash.trust.execution_context import (
+    ExecutionContext,
+    execution_context as set_execution_context,
+    get_current_context,
+)
 from kailash.trust.operations import TrustOperations
 
 

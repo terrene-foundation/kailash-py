@@ -105,20 +105,28 @@ class TestCyclicWorkflowExecutorBasic:
         with pytest.raises(WorkflowValidationError, match="Invalid workflow"):
             self.executor.execute(self.workflow)
 
-    def test_execute_no_cycles_delegates_to_dag_runner(self):
-        """Test execute method with no cycles delegates to DAG runner."""
-        self.workflow.validate.return_value = None
-        self.workflow.has_cycles.return_value = False
+    def test_execute_no_cycles_delivers_real_dag_results(self):
+        """The public executor delivers DAG inputs and returns results/run ID."""
+        workflow = Workflow("dag_delivery", "DAG delivery")
+        first = MockNode("first", return_value={"result": "dag_success"})
+        second = MockNode("second", return_value={"result": "delivered"})
+        workflow.add_node("first", first)
+        workflow.add_node("second", second)
+        workflow.connect("first", "second", {"result": "input_data"})
 
-        with patch.object(self.executor.dag_runner, "execute") as mock_execute:
-            mock_execute.return_value = {"result": "dag_success"}
+        results, run_id = self.executor.execute(
+            workflow, parameters={"first": {"input_data": "seed"}}
+        )
 
-            results, run_id = self.executor.execute(self.workflow)
-
-            assert results == {"result": "dag_success"}
-            assert run_id is not None
-            # Should delegate to DAG runner
-            mock_execute.assert_called_once_with(self.workflow, None)
+        assert results == {
+            "first": {"result": "dag_success"},
+            "second": {"result": "delivered"},
+        }
+        assert run_id is not None
+        assert str(uuid.UUID(run_id)) == run_id
+        assert first.execution_count == second.execution_count == 1
+        assert first.last_inputs["input_data"] == "seed"
+        assert second.last_inputs["input_data"] == "dag_success"
 
     def test_execute_with_cycles_generates_run_id(self):
         """Test execute method with cycles generates run ID."""
@@ -260,7 +268,7 @@ class TestCyclicWorkflowExecutorInternalMethods:
                 mock_create_plan.assert_called_once()
                 mock_execute_plan.assert_called_once()
 
-    def test_execute_with_cycles_with_summaries(self):
+    def test_execute_with_cycles_with_summaries(self, caplog):
         """Test _execute_with_cycles logs cycle summaries."""
         # Setup mocks
         self.workflow.separate_dag_and_cycle_edges.return_value = ([], [])
@@ -268,8 +276,16 @@ class TestCyclicWorkflowExecutorInternalMethods:
 
         # Mock cycle state manager to return summaries
         mock_summaries = {
-            "cycle1": {"iterations": 5, "converged": True},
-            "cycle2": {"iterations": 3, "converged": False},
+            "cycle1": {
+                "iterations": 5,
+                "converged": True,
+                "private": "cycle-owner@example.invalid",
+            },
+            "cycle2": {
+                "iterations": 3,
+                "converged": False,
+                "private": "cycle-token-private",
+            },
         }
 
         with patch.object(
@@ -286,17 +302,25 @@ class TestCyclicWorkflowExecutorInternalMethods:
                 with patch.object(self.executor, "_execute_plan") as mock_execute_plan:
                     mock_execute_plan.return_value = {"result": "success"}
 
-                    with patch("kailash.workflow.cyclic_runner.logger") as mock_logger:
+                    with caplog.at_level(
+                        logging.INFO, logger="kailash.workflow.cyclic_runner"
+                    ):
                         result = self.executor._execute_with_cycles(
                             self.workflow, {"param": "value"}, "test_run"
                         )
 
-                        # Should log summaries
-                        mock_logger.info.assert_any_call(
-                            "Cycle cycle1 summary: {'iterations': 5, 'converged': True}"
-                        )
-                        mock_logger.info.assert_any_call(
-                            "Cycle cycle2 summary: {'iterations': 3, 'converged': False}"
+                    assert result == {"result": "success"}
+                    messages = [record.getMessage() for record in caplog.records]
+                    assert messages.count("Cycle cycle1 summary: iterations=5") == 1
+                    assert messages.count("Cycle cycle2 summary: iterations=3") == 1
+                    for private in (
+                        "cycle-owner@example.invalid",
+                        "cycle-token-private",
+                    ):
+                        assert private not in caplog.text
+                        assert all(
+                            private not in repr(record.__dict__)
+                            for record in caplog.records
                         )
 
 
@@ -665,7 +689,9 @@ class TestCyclicWorkflowExecutorNodeExecution:
 
         # Create a mock node
         self.mock_node = Mock(spec=MockNode)
-        self.mock_node.config = {"config_param": "config_value"}
+        config_node = MockNode(config_param="config_value")
+        self.mock_node.config = config_node.config
+        self.mock_node._get_execution_config = config_node._get_execution_config
         self.mock_node.execute.return_value = {"result": "success"}
         self.workflow.get_node.return_value = self.mock_node
 

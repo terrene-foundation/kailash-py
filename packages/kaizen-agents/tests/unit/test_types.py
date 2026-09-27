@@ -163,8 +163,8 @@ class TestConstraintEnvelope:
         ce = make_envelope()
         assert ce.financial is not None
         assert ce.financial.max_spend_usd == 1.0
-        assert ce.operational.allowed_actions == []
-        assert ce.operational.blocked_actions == []
+        assert ce.operational.allowed_actions == ()
+        assert ce.operational.blocked_actions == ()
 
     def test_custom_financial(self) -> None:
         ce = make_envelope(financial={"limit": 100.0})

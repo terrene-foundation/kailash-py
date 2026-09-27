@@ -30,8 +30,14 @@ from functools import wraps
 from typing import Any, Dict, List, Optional, Type
 
 try:
-    from sqlalchemy import Column, DateTime, Integer, String, Text
-    from sqlalchemy import inspect as sa_inspect
+    from sqlalchemy import (
+        Column,
+        DateTime,
+        Integer,
+        String,
+        Text,
+        inspect as sa_inspect,
+    )
     from sqlalchemy.orm import RelationshipProperty
     from sqlalchemy.sql.schema import ForeignKey
 

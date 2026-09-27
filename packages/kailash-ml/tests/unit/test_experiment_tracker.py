@@ -10,6 +10,8 @@ import asyncio
 from pathlib import Path
 
 import pytest
+
+from kailash.db.connection import ConnectionManager
 from kailash_ml.engines.experiment_tracker import (
     Experiment,
     ExperimentNotFoundError,
@@ -23,8 +25,6 @@ from kailash_ml.engines.experiment_tracker import (
     _validate_metric_value,
     _validate_status,
 )
-
-from kailash.db.connection import ConnectionManager
 
 # ---------------------------------------------------------------------------
 # Fixtures

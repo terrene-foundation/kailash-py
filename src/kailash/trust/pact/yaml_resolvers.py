@@ -120,9 +120,9 @@ def _resolve_role_address(compiled: CompiledOrg, role_id: str, *, ctx: str) -> s
     unchanged) or a config ``role_id`` (resolved via the compiled org).
     Fail-closed: an unresolvable identifier raises ConfigurationError.
     """
-    if role_id in compiled.nodes:
-        return role_id
-    node = compiled.get_node_by_role_id(role_id)
+    node = compiled.get_role_node(role_id)
+    if node is None:
+        node = compiled.get_node_by_role_id(role_id)
     if node is not None:
         return node.address
     raise ConfigurationError(

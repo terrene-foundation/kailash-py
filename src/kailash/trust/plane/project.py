@@ -40,9 +40,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from kailash.trust._locking import atomic_write as _atomic_write
-from kailash.trust._locking import file_lock as _file_lock
-from kailash.trust._locking import safe_read_json as _safe_read_json
+from kailash.trust._locking import (
+    atomic_write as _atomic_write,
+    file_lock as _file_lock,
+    safe_read_json as _safe_read_json,
+)
 from kailash.trust.authority import AuthorityPermission, OrganizationalAuthority
 from kailash.trust.chain import (
     ActionResult,
@@ -134,42 +136,12 @@ def set_private_file_permissions(path: Path) -> None:
 
 
 def _save_keys(keys_dir: Path, private_key: str, public_key: str) -> None:
-    """Persist keypair to disk with restricted permissions.
+    """Persist keypair, restricting the opened private inode before writing."""
+    from kailash.trust.plane._key_files import write_key_file
 
-    Uses os.open() with mode 0o600 to create the private key file
-    atomically with correct permissions — no world-readable window.
-    On Windows, applies ACL-based protection via set_private_file_permissions().
-    """
     keys_dir.mkdir(parents=True, exist_ok=True)
-
-    priv_path = keys_dir / "private.key"
-    pub_path = keys_dir / "public.key"
-
-    # Create private key with restricted permissions from the start.
-    # O_NOFOLLOW prevents writing through a symlink (attacker could redirect
-    # the key write to an attacker-controlled location).
-    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
-    fd = os.open(str(priv_path), flags, 0o600)
-    try:
-        os.write(fd, private_key.encode())
-    finally:
-        os.close(fd)
-
-    # Apply platform-aware permissions (Windows ACL on win32)
-    set_private_file_permissions(priv_path)
-
-    # Public key also uses O_NOFOLLOW to prevent symlink redirection.
-    # Mode 0o644 — public key is not secret but should not be world-writable.
-    pub_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-    if hasattr(os, "O_NOFOLLOW"):
-        pub_flags |= os.O_NOFOLLOW
-    pub_fd = os.open(str(pub_path), pub_flags, 0o644)
-    try:
-        os.write(pub_fd, public_key.encode())
-    finally:
-        os.close(pub_fd)
+    write_key_file(keys_dir / "private.key", private_key.encode(), private=True)
+    write_key_file(keys_dir / "public.key", public_key.encode(), private=False)
 
 
 def _safe_read_text(path: Path) -> str:
@@ -230,19 +202,9 @@ def _load_keys(keys_dir: Path) -> tuple[str, str]:
     Raises:
         FileNotFoundError: If keys haven't been persisted
     """
-    priv_path = keys_dir / "private.key"
-    pub_path = keys_dir / "public.key"
+    from kailash.trust.plane._key_files import load_signing_keypair
 
-    try:
-        private = _safe_read_text(priv_path)
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Keys not found at {keys_dir}")
-    try:
-        public = _safe_read_text(pub_path)
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Keys not found at {keys_dir}")
-
-    return private, public
+    return load_signing_keypair(keys_dir)
 
 
 class TrustProject:
@@ -1160,6 +1122,11 @@ class TrustProject:
                 chain_valid = False
         except FileNotFoundError:
             integrity_issues.append("signing keys missing from keys/ directory")
+            chain_valid = False
+        except ValueError:
+            integrity_issues.append(
+                "public key mismatch or invalid signing key in keys/"
+            )
             chain_valid = False
 
         # Map posture to verification level

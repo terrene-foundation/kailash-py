@@ -832,8 +832,12 @@ class TestReadOnlyGovernanceViewIsActuallyReadOnly:
             gov.verify_action(role_address="D1-R1", action="submit", context={})
             is not None
         )
-        ok, _ = gov.verify_audit_integrity()
-        assert ok is True
+        result = gov.verify_audit_integrity()
+        assert result == admin.verify_audit_integrity()
+        ok, reason = result
+        assert ok is False
+        assert reason is not None
+        assert "no SQLite audit log configured" in reason
 
         # These legitimately return None on the minimal org (no envelopes, no
         # vacancy, no suspended plan). Comparing against the real engine keeps

@@ -361,6 +361,7 @@ class MigrationConnectionManager:
         # CRUD/DDL; ``_memory_db_uri`` is None for every other configuration.
         database_url = (
             getattr(self.dataflow, "_memory_db_uri", None)
+            or vars(self.dataflow).get("_sqlite_database_url")
             or self.dataflow.config.database.url
             or ":memory:"
         )
@@ -375,14 +376,12 @@ class MigrationConnectionManager:
                 # check_same_thread=False allows use with async_safe_run thread pool
                 import sqlite3
 
-                # Issue #1502: a ``file:...?mode=memory&cache=shared`` URI MUST be
-                # opened with uri=True to reach the shared in-memory DB.
-                if database_url.startswith("file:"):
-                    connection = sqlite3.connect(
-                        database_url, check_same_thread=False, uri=True
-                    )
-                else:
-                    connection = sqlite3.connect(database_url, check_same_thread=False)
+                from kailash.utils.sqlite_url import sqlite_connection_target
+
+                target, options = sqlite_connection_target(database_url)
+                connection = sqlite3.connect(
+                    target, **{"check_same_thread": False, **options}
+                )
                 logger.debug("Created new SQLite connection")
                 return connection
 
@@ -457,22 +456,29 @@ class MigrationConnectionManager:
         """Create AsyncSQL wrapper connection."""
         try:
             from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
+            from kailash.utils.sqlite_url import is_sqlite_url
 
             from ..adapters.connection_parser import ConnectionParser
 
-            # Create safe connection string
-            components = ConnectionParser.parse_connection_string(
-                self.dataflow.config.database.url
+            database_url = (
+                vars(self.dataflow).get("_memory_db_uri")
+                or vars(self.dataflow).get("_sqlite_database_url")
+                or self.dataflow.config.database.url
             )
-            safe_connection_string = ConnectionParser.build_connection_string(
-                scheme=components.get("scheme"),
-                host=components.get("host"),
-                database=components.get("database"),
-                username=components.get("username"),
-                password=components.get("password"),
-                port=components.get("port"),
-                **components.get("query_params", {}),
-            )
+            if is_sqlite_url(database_url):
+                safe_connection_string = database_url
+            else:
+                # Create safe connection string
+                components = ConnectionParser.parse_connection_string(database_url)
+                safe_connection_string = ConnectionParser.build_connection_string(
+                    scheme=components.get("scheme"),
+                    host=components.get("host"),
+                    database=components.get("database"),
+                    username=components.get("username"),
+                    password=components.get("password"),
+                    port=components.get("port"),
+                    **components.get("query_params", {}),
+                )
 
             # Create wrapper that supports the needed interface
             class AsyncSQLConnectionWrapper:

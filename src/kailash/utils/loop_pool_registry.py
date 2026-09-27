@@ -35,13 +35,15 @@ Design notes:
   NEVER registered — the registry only ever holds entries for loops the
   bridge itself created and will drain-then-close. This prevents
   unbounded accumulation / a memory leak on long-lived app loops.
-* The drain path is strictly best-effort: teardown must never raise.
+* Callback failures are best-effort; caller cancellation propagates after drains.
 """
 
 import asyncio
 import logging
 import threading
 from typing import Awaitable, Callable, Dict, List
+
+from kailash.utils.secure_logging import safe_type_name
 
 logger = logging.getLogger(__name__)
 
@@ -108,8 +110,9 @@ async def drain_loop_pools(loop: asyncio.AbstractEventLoop) -> None:
 
     Best-effort by contract: each ``await drain()`` is bounded by
     :data:`_DRAIN_TIMEOUT_SECONDS` and guarded; on timeout or failure it
-    logs at DEBUG and continues. This function NEVER raises — it is
-    teardown, and a raise here would crash the bridge worker.
+    logs at DEBUG and continues. Callback cancellation is also a cleanup
+    failure. Cancellation of the caller is delayed until remaining drains
+    finish, then re-raised; an already-unwinding caller error is preserved.
 
     Security: logs ONLY ``id(loop)`` and counts — never a pool key,
     DSN, connection string, or exception-embedded text (they may carry
@@ -127,10 +130,35 @@ async def drain_loop_pools(loop: asyncio.AbstractEventLoop) -> None:
     )
 
     drained = 0
+    owner = asyncio.current_task()
+    cancellation_count = owner.cancelling() if owner is not None else 0
+    caller_cancellation = None
     for drain in drains:
         try:
-            # Bound each drain so a hung disconnect() can't block the bridge.
-            await asyncio.wait_for(drain(), timeout=_DRAIN_TIMEOUT_SECONDS)
+            # Own the bounded drain separately so its self-cancellation can be
+            # distinguished from cancellation of the caller. Shield lets that
+            # bounded cleanup finish even when the caller requests cancellation.
+            task = asyncio.create_task(
+                asyncio.wait_for(drain(), timeout=_DRAIN_TIMEOUT_SECONDS)
+            )
+            while True:
+                try:
+                    await asyncio.shield(task)
+                    break
+                except asyncio.CancelledError as exc:
+                    current_count = owner.cancelling() if owner is not None else 0
+                    if task.cancelled() and current_count == cancellation_count:
+                        logger.debug(
+                            "loop_pool_registry.drain.error",
+                            extra={"loop_id": id(loop), "error_type": "CancelledError"},
+                        )
+                        break
+                    caller_cancellation = exc
+                    cancellation_count = current_count
+                    # Retrieve the owned task's outcome on the next iteration,
+                    # including a cancellation racing with caller cancellation.
+            if task.cancelled():
+                continue
             drained += 1
         except asyncio.TimeoutError:
             # Drain exceeded the bound — abandon it and move on; teardown
@@ -146,13 +174,15 @@ async def drain_loop_pools(loop: asyncio.AbstractEventLoop) -> None:
             # credential-bearing DSN (rules/security.md, observability 6.3).
             logger.debug(
                 "loop_pool_registry.drain.error",
-                extra={"loop_id": id(loop), "error_type": type(exc).__name__},
+                extra={"loop_id": id(loop), "error_type": safe_type_name(exc)},
             )
 
     logger.debug(
         "loop_pool_registry.drain.done",
         extra={"loop_id": id(loop), "drained": drained, "pool_count": len(drains)},
     )
+    if caller_cancellation is not None:
+        raise caller_cancellation
 
 
 __all__ = [

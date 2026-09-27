@@ -86,17 +86,19 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from .errors import (
+from .errors import (  # deprecated alias
     BadGatewayError,
     ConflictError,
     ForbiddenError,
     NexusError,
     NotFoundError,
+    PermissionError as NexusPermissionError,
+    RateLimitError,
+    ServiceUnavailableError,
+    TimeoutError as NexusTimeoutError,
+    UnauthorizedError,
+    ValidationError,
 )
-from .errors import PermissionError as NexusPermissionError  # deprecated alias
-from .errors import RateLimitError, ServiceUnavailableError
-from .errors import TimeoutError as NexusTimeoutError
-from .errors import UnauthorizedError, ValidationError
 from .http_client import (
     HttpClient,
     HttpClientConfig,

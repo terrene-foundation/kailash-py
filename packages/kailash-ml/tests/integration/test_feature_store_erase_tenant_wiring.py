@@ -45,6 +45,8 @@ from pathlib import Path
 
 import polars as pl
 import pytest
+
+from dataflow import DataFlow
 from kailash_ml.errors import (
     ErasureRefusedError,
     FeatureStoreError,
@@ -59,8 +61,6 @@ from kailash_ml.features import (
     FeatureStore,
     feature,
 )
-
-from dataflow import DataFlow
 
 pytestmark = pytest.mark.integration
 
@@ -248,8 +248,10 @@ async def test_erase_tenant_refusal_raises_reused_error(store_db):
     """The alias-protection refusal path raises the REUSED canonical
     ErasureRefusedError (a TrackingError subclass, NOT a redefined class)
     (invariant 4)."""
-    from kailash.ml.errors import ErasureRefusedError as CanonicalErasureRefused
-    from kailash.ml.errors import TrackingError
+    from kailash.ml.errors import (
+        ErasureRefusedError as CanonicalErasureRefused,
+        TrackingError,
+    )
 
     store, registry, df = store_db
     await _seed_two_tenants(store, registry)

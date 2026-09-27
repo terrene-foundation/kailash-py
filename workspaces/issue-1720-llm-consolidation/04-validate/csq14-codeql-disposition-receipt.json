@@ -1,0 +1,110 @@
+{
+  "authorized_ids": [
+    11595,
+    11596,
+    11466,
+    11467,
+    10866,
+    5153,
+    131,
+    133,
+    6082
+  ],
+  "authorization": "User explicitly approved all nine dismissals in this continuation; supersedes the earlier eight-alert approval.",
+  "reason": "false positive",
+  "proposal": "workspaces/issue-1720-llm-consolidation/04-validate/csq14-codeql-disposition-proposal.md",
+  "started_at": "2026-09-26T06:11:36.282104+00:00",
+  "results": [
+    {
+      "number": 11595,
+      "prior_state": null,
+      "state": "dismissed",
+      "reason": "false positive",
+      "comment": "Approved CSQ14 FP. json.loads rejects malformed input before regex (0 calls); valid JSON reaches it. Reached unguarded control slows. Evidence: workspaces/issue-1720-llm-consolidation/04-validate/csq14-codeql-disposition-proposal.md",
+      "runtime_evidence": "Malformed escaped-quote data is rejected by json.loads before the token regex (0 regex calls); valid JSON reaches it (1 call). Reached unguarded regex control slowed to 1.009s, while guarded path took 0.000246s. Scoped to the reported malformed-input path.",
+      "url": "https://github.com/terrene-foundation/kailash-py/security/code-scanning/11595",
+      "dismissed_at": "2026-09-26T06:11:37Z"
+    },
+    {
+      "number": 11596,
+      "prior_state": null,
+      "state": "dismissed",
+      "reason": "false positive",
+      "comment": "Approved CSQ14 FP. Scheme-run boundary prevents restarts; reached removal control slows 0.000136s to 1.333s. Secrets still masked. Evidence: workspaces/issue-1720-llm-consolidation/04-validate/csq14-codeql-disposition-proposal.md",
+      "runtime_evidence": "The negative lookbehind prevents restarting within a scheme-character run. Actual 16000-character probe took 0.000136s; reached removal control took 1.333s. Credential-bearing URL masking still passed. Scoped to the reported repeated-letter path.",
+      "url": "https://github.com/terrene-foundation/kailash-py/security/code-scanning/11596",
+      "dismissed_at": "2026-09-26T06:11:39Z"
+    },
+    {
+      "number": 11466,
+      "prior_state": "open",
+      "state": "dismissed",
+      "reason": "false positive",
+      "comment": "Approved CSQ14 FP. Actual nested producer omits secret values; field digest is correlation metadata. Reached identity control fails. Evidence: workspaces/issue-1720-llm-consolidation/04-validate/csq14-codeql-disposition-proposal.md",
+      "runtime_evidence": "The actual extracted nested producer emits a schema-field digest and fixed pattern/value-redacted text; secret values are absent. Reached identity-helper mutation exposes the field name and fails the instrument. Field names remain dictionary-recoverable correlation metadata; no secrecy claim for schema symbols.",
+      "url": "https://github.com/terrene-foundation/kailash-py/security/code-scanning/11466",
+      "dismissed_at": "2026-09-26T06:11:40Z"
+    },
+    {
+      "number": 11467,
+      "prior_state": "open",
+      "state": "dismissed",
+      "reason": "false positive",
+      "comment": "Approved CSQ14 FP. Actual nested producer omits secret values; field digest is correlation metadata. Reached identity control fails. Evidence: workspaces/issue-1720-llm-consolidation/04-validate/csq14-codeql-disposition-proposal.md",
+      "runtime_evidence": "The actual extracted nested producer emits a schema-field digest and fixed pattern/value-redacted text; secret values are absent. Reached identity-helper mutation exposes the field name and fails the instrument. Field names remain dictionary-recoverable correlation metadata; no secrecy claim for schema symbols.",
+      "url": "https://github.com/terrene-foundation/kailash-py/security/code-scanning/11467",
+      "dismissed_at": "2026-09-26T06:11:42Z"
+    },
+    {
+      "number": 10866,
+      "prior_state": "open",
+      "state": "dismissed",
+      "reason": "false positive",
+      "comment": "Approved CSQ14 FP. Public preset symbol is an 8hex tag, not secret data. Reached plaintext control fails; no name-secrecy claim. Evidence: workspaces/issue-1720-llm-consolidation/04-validate/csq14-codeql-disposition-proposal.md",
+      "runtime_evidence": "Preset rejection emits an eight-hex tag of a public preset symbol, not the raw supplied value. Reached plaintext-helper mutation exposes it and fails the instrument. Enumerable public preset names are not claimed confidential.",
+      "url": "https://github.com/terrene-foundation/kailash-py/security/code-scanning/10866",
+      "dismissed_at": "2026-09-26T06:11:45Z"
+    },
+    {
+      "number": 5153,
+      "prior_state": "open",
+      "state": "dismissed",
+      "reason": "false positive",
+      "comment": "Approved CSQ14 FP. Actual public Ed25519 file is 0644; private bytes are 0600. Reached private-write control fails. Fresh POSIX scope. Evidence: workspaces/issue-1720-llm-consolidation/04-validate/csq14-codeql-disposition-proposal.md",
+      "runtime_evidence": "The 0644 file contains only the public Ed25519 key; actual private bytes are written to 0600. The public key verifies legitimate signatures but cannot forge one under the trusted verifier. Reached private-bytes-to-public-file mutation fails the content assertion. Proof covers fresh local POSIX files, not existing permissions or Windows ACLs.",
+      "url": "https://github.com/terrene-foundation/kailash-py/security/code-scanning/5153",
+      "dismissed_at": "2026-09-26T06:11:49Z"
+    },
+    {
+      "number": 131,
+      "prior_state": "open",
+      "state": "dismissed",
+      "reason": "false positive",
+      "comment": "Approved CSQ14 FP. Generic branch removes all brackets after regex. Reached backstop removal retains script tag; context-limited. Evidence: workspaces/issue-1720-llm-consolidation/04-validate/csq14-codeql-disposition-proposal.md",
+      "runtime_evidence": "The complete generic branch removes every angle bracket after the regex. Actual malformed closing-tag/nested-tag/image-handler inputs contain no tag delimiters. Reached bracket-removal mutation retains a script tag and fails. Scoped to tag creation through this branch, not universal HTML/JavaScript-context safety.",
+      "url": "https://github.com/terrene-foundation/kailash-py/security/code-scanning/131",
+      "dismissed_at": "2026-09-26T06:11:51Z"
+    },
+    {
+      "number": 133,
+      "prior_state": "open",
+      "state": "dismissed",
+      "reason": "false positive",
+      "comment": "Approved CSQ14 FP. Shell branch removes all brackets after regex. Reached backstop removal retains script tag; context-limited. Evidence: workspaces/issue-1720-llm-consolidation/04-validate/csq14-codeql-disposition-proposal.md",
+      "runtime_evidence": "The complete shell branch removes every angle bracket after the regex. Actual malformed closing-tag/nested-tag/image-handler inputs contain no tag delimiters. Reached bracket-removal mutation retains a script tag and fails. Scoped to tag creation through this branch, not universal HTML/JavaScript-context safety.",
+      "url": "https://github.com/terrene-foundation/kailash-py/security/code-scanning/133",
+      "dismissed_at": "2026-09-26T06:11:54Z"
+    },
+    {
+      "number": 6082,
+      "prior_state": "fixed",
+      "state": "dismissed",
+      "reason": "false positive",
+      "comment": "Approved CSQ14 FP. Both finalizers only warn. Actual parent call duplicates warning without cleanup; closed/partial objects silent. Evidence: workspaces/issue-1720-llm-consolidation/04-validate/csq14-codeql-disposition-proposal.md",
+      "runtime_evidence": "Both actual finalizers intentionally warn without cleanup. The subclass emits one warning and leaves resources unchanged; a reached parent-call control emits two warnings without extra cleanup. Closed and partially constructed instances emit none. This deliberately replaces the warning-only parent; deterministic cleanup remains caller-owned.",
+      "url": "https://github.com/terrene-foundation/kailash-py/security/code-scanning/6082",
+      "dismissed_at": "2026-09-26T06:11:56Z"
+    }
+  ],
+  "completed_at": "2026-09-26T06:11:56.746004+00:00"
+}

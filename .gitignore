@@ -185,6 +185,8 @@ examples/output/
 # Generated files in root and examples directories
 /*.csv
 /*.json
+# Declared, committed sources are required by the burndown generator.
+!/burndown-manifest.json
 /examples/*.csv
 /examples/*.json
 /examples/customer_*.csv

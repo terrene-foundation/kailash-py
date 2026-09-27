@@ -35,6 +35,8 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
+
+from kailash._from_brief import BriefInterpretationError
 from kailash_ml.engines.training_pipeline import EvalSpec, ModelSpec
 from kailash_ml.features.schema import FeatureField, FeatureSchema
 from kailash_ml.from_brief import (
@@ -49,8 +51,6 @@ from kailash_ml.from_brief import (
     _validate_task,
     from_brief,
 )
-
-from kailash._from_brief import BriefInterpretationError
 
 # =========================================================================
 # Dtype mapping coverage

@@ -66,10 +66,12 @@ from kailash_align.ml._trajectory import trajectory_from_alignment_run
 # when ``kailash-ml[rl]>=1.1`` is missing (see
 # ``kailash_align.rl_bridge.__init__``), so the import chain either
 # succeeds cleanly or fails early with an actionable extra name.
-from kailash_align.rl_bridge import DPOAdapter as DPOTrainer
-from kailash_align.rl_bridge import OnlineDPOAdapter as OnlineDPOTrainer
-from kailash_align.rl_bridge import PPORLHFAdapter as PPOTrainer
-from kailash_align.rl_bridge import RLOOAdapter as RLOOTrainer
+from kailash_align.rl_bridge import (
+    DPOAdapter as DPOTrainer,
+    OnlineDPOAdapter as OnlineDPOTrainer,
+    PPORLHFAdapter as PPOTrainer,
+    RLOOAdapter as RLOOTrainer,
+)
 
 # W6-016 — single-source-in-ml mandate (spec §7): TrajectorySchema is
 # the canonical bundle defined in kailash_ml.rl and re-exported here so

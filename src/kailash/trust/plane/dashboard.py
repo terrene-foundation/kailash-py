@@ -126,12 +126,26 @@ def _esc(value: object) -> str:
 
 
 def _format_timestamp(dt: Any) -> str:
-    """Format a datetime for display."""
+    """Format a datetime for display, HTML-escaped on every return path.
+
+    Callers interpolate the result straight into markup, so it has to be safe on
+    its own terms. The ``strftime`` path is digits-only TODAY because every
+    producer coerces through ``datetime.fromisoformat`` -- but that invariant
+    lives in other modules (models.py, holds.py), so depending on it makes this
+    function's safety contingent on an edit somewhere else staying correct. The
+    fallback path takes whatever object it is handed and has no such invariant
+    at all.
+
+    Escaping costs nothing on a timestamp and removes the cross-file dependency.
+    Identified by the residual sweep for CodeQL alert 5149 (issue #2173), which
+    confirmed every other interpolation site in this module already routes
+    through :func:`_esc`; these two return paths were the exceptions.
+    """
     if dt is None:
         return ""
     if hasattr(dt, "strftime"):
-        return dt.strftime("%Y-%m-%d %H:%M:%S UTC")
-    return str(dt)
+        return _esc(dt.strftime("%Y-%m-%d %H:%M:%S UTC"))
+    return _esc(dt)
 
 
 def _trust_badge_html(chain_valid: bool) -> str:

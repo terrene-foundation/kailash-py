@@ -37,6 +37,11 @@ from kailash.trust.action_policy import (
     permitted_action_set,
     scope_permitted,
 )
+from kailash.trust.pact.immutable import (
+    FrozenAnyMapping,
+    FrozenFloatMapping,
+    FrozenMapping,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -137,11 +142,16 @@ class OperationalConstraintConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    allowed_actions: list[str] = Field(
-        default_factory=list, description="Actions this agent may perform"
+    # tuple, not list: frozen=True blocks REBINDING the field, but a list field
+    # stays mutable in place -- and the verdict path reads this very object, so
+    # `.append("wire_transfer")` on it was a permanent self-granted permission
+    # (#2226). The sibling model in kailash.trust.envelope already spells these
+    # two fields as tuples for the same reason.
+    allowed_actions: tuple[str, ...] = Field(
+        default_factory=tuple, description="Actions this agent may perform"
     )
-    blocked_actions: list[str] = Field(
-        default_factory=list, description="Actions explicitly blocked"
+    blocked_actions: tuple[str, ...] = Field(
+        default_factory=tuple, description="Actions explicitly blocked"
     )
     max_actions_per_day: int | None = Field(
         default=None, gt=0, description="Daily action rate limit"
@@ -358,8 +368,8 @@ class TemporalConstraintConfig(BaseModel):
         default=None, description="End of active window (HH:MM, 24h)"
     )
     timezone: str = Field(default="UTC", description="Timezone for active hours")
-    blackout_periods: list[str] = Field(
-        default_factory=list, description="Periods when agent must not operate"
+    blackout_periods: tuple[str, ...] = Field(
+        default_factory=tuple, description="Periods when agent must not operate"
     )
     reasoning_required: bool = Field(
         default=False,
@@ -387,14 +397,14 @@ class DataAccessConstraintConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    read_paths: list[str] = Field(
-        default_factory=list, description="Paths/resources agent may read"
+    read_paths: tuple[str, ...] = Field(
+        default_factory=tuple, description="Paths/resources agent may read"
     )
-    write_paths: list[str] = Field(
-        default_factory=list, description="Paths/resources agent may write"
+    write_paths: tuple[str, ...] = Field(
+        default_factory=tuple, description="Paths/resources agent may write"
     )
-    blocked_data_types: list[str] = Field(
-        default_factory=list,
+    blocked_data_types: tuple[str, ...] = Field(
+        default_factory=tuple,
         description="Data types agent must never access (e.g., 'pii', 'financial_records')",
     )
     reasoning_required: bool = Field(
@@ -411,8 +421,8 @@ class CommunicationConstraintConfig(BaseModel):
     internal_only: bool = Field(
         default=False, description="Agent restricted to internal channels"
     )
-    allowed_channels: list[str] = Field(
-        default_factory=list, description="Channels agent may communicate through"
+    allowed_channels: tuple[str, ...] = Field(
+        default_factory=tuple, description="Channels agent may communicate through"
     )
     external_requires_approval: bool = Field(
         default=True, description="External communication requires human approval"
@@ -456,8 +466,12 @@ class ConfidenceThresholdConfig(BaseModel):
             "disables the gate for any action with no per_action override."
         ),
     )
-    per_action: dict[str, float] = Field(
-        default_factory=dict,
+    # default_factory=FrozenMapping, not dict: pydantic does NOT run field
+    # validators on DEFAULTS, so `default_factory=dict` handed every
+    # default-constructed model a plain MUTABLE dict -- the fail-open case,
+    # and the common one (#2226).
+    per_action: FrozenFloatMapping = Field(
+        default_factory=FrozenMapping,
         description=(
             "Per-action-class confidence thresholds (0.0-1.0), each overriding "
             "default_threshold for the named action."
@@ -569,7 +583,15 @@ class ConstraintEnvelopeConfig(BaseModel):
 
 
 class GradientRuleConfig(BaseModel):
-    """A single verification gradient rule -- maps action patterns to verification levels."""
+    """A single verification gradient rule -- maps action patterns to verification levels.
+
+    frozen (#2226): reachable read-only through
+    ``get_node(team_address).team.verification_gradient.rules``, so a mutable
+    rule would let a read-only holder rewrite which actions require human
+    verification.
+    """
+
+    model_config = ConfigDict(frozen=True)
 
     pattern: str = Field(description="Action pattern to match (glob or regex)")
     level: VerificationLevel = Field(
@@ -579,10 +601,15 @@ class GradientRuleConfig(BaseModel):
 
 
 class VerificationGradientConfig(BaseModel):
-    """Verification gradient rules for an agent or team."""
+    """Verification gradient rules for an agent or team.
 
-    rules: list[GradientRuleConfig] = Field(
-        default_factory=list,
+    frozen + tuple rules (#2226): see :class:`GradientRuleConfig`.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    rules: tuple[GradientRuleConfig, ...] = Field(
+        default_factory=tuple,
         description="Ordered list of gradient rules (first match wins)",
     )
     default_level: VerificationLevel = Field(
@@ -712,14 +739,28 @@ class WorkspaceConfig(BaseModel):
 
 
 class TeamConfig(BaseModel):
-    """Configuration for an agent team."""
+    """Configuration for an agent team.
+
+    frozen (#2226): ``get_node(team_address)`` hands back the LIVE TeamConfig
+    the compiled org holds, and this model was the one org config that never
+    got ``frozen=True`` while its sibling :class:`DepartmentConfig` did -- so a
+    holder of the read-only governance view could rename the team, rewrite its
+    roster and plant arbitrary metadata by plain attribute access. Freezing
+    alone is NOT sufficient and was measured not to be: ``frozen=True`` blocks
+    rebinding but leaves ``list``/``dict`` fields mutable in place, which is
+    exactly how DepartmentConfig -- already frozen -- was still exploitable via
+    ``.teams.append(...)``. The collection fields below are immutable types for
+    that reason.
+    """
+
+    model_config = ConfigDict(frozen=True)
 
     id: str = Field(description="Unique team identifier")
     name: str = Field(description="Human-readable team name")
     workspace: str = Field(description="ID of the workspace this team operates in")
     team_lead: str | None = Field(default=None, description="ID of the team lead agent")
-    agents: list[str] = Field(
-        default_factory=list, description="IDs of agents in this team"
+    agents: tuple[str, ...] = Field(
+        default_factory=tuple, description="IDs of agents in this team"
     )
     default_llm_backend: str = Field(
         default="anthropic", description="Default LLM backend for team agents"
@@ -727,8 +768,12 @@ class TeamConfig(BaseModel):
     verification_gradient: VerificationGradientConfig | None = Field(
         default=None, description="Team-level default gradient rules"
     )
-    metadata: dict[str, Any] = Field(
-        default_factory=dict, description="Additional team-specific metadata"
+    # default_factory=FrozenMapping, not dict: validators do not run on
+    # defaults, and a team with no explicit metadata is the COMMON case, so
+    # `default_factory=dict` would leave the usual path mutable (#2226).
+    metadata: FrozenAnyMapping = Field(
+        default_factory=FrozenMapping,
+        description="Additional team-specific metadata",
     )
 
 
@@ -753,8 +798,11 @@ class DepartmentConfig(BaseModel):
     department_id: str = Field(description="Unique department identifier")
     name: str = Field(description="Human-readable department name")
     description: str = Field(default="", description="Optional department description")
-    teams: list[str] = Field(
-        default_factory=list, description="Team IDs belonging to this department"
+    # tuple, not list (#2226): this model was ALREADY frozen=True and was still
+    # exploitable -- `get_node("D1").department.teams.append(...)` mutated the
+    # live compiled org. frozen=True does not freeze a list field.
+    teams: tuple[str, ...] = Field(
+        default_factory=tuple, description="Team IDs belonging to this department"
     )
     head_agent_id: str | None = Field(
         default=None,

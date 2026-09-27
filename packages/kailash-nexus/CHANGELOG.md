@@ -2,6 +2,102 @@
 
 ## [Unreleased]
 
+### Fixed (SECURITY) — rate-limit identifier tags are now KEYED (#2171)
+
+- **The 429 log line's identifier tag was an unkeyed digest, so it was not private.**
+  `RateLimitMiddleware` logged `identifier_fp=<8 hex>` derived from
+  `fingerprint_secret()` — unkeyed BLAKE2b — under a comment claiming "the raw value
+  stays confined to the rate-limit backend key". The default extractor yields
+  `ip:<addr>` for unauthenticated callers, a space of 2**32 values. Measured on
+  commodity hardware: ~1.3e5 candidate digests/second/core, recovering a target IP
+  from its tag in **0.224 s** within a single /16, and the whole IPv4 space in
+  ~9 single-core-hours. For any log reader the tag was equivalent to the plaintext IP.
+- **The tag is now `HMAC-SHA256(key, DOMAIN || 0x00 || identifier)`**, truncated to
+  16 hex characters (64 bits, up from 32 — 8 hex collides at ~2**16 identifiers by
+  the birthday bound, which silently merges two offenders under one tag).
+- **Key sourcing:** `NEXUS_RATE_LIMIT_FINGERPRINT_KEY`, minimum 32 bytes. Set the
+  **same value on every node** to keep cross-node correlation, which is the property
+  the unkeyed helper existed to provide. A key that is present but too short raises
+  `InvalidFingerprintKeyError` at middleware construction — at startup, not as a 500
+  in place of a 429.
+- **No key configured is NOT a silent no-op.** Confidentiality fails **closed**: a
+  fresh random per-process key is minted, so the tag is unforgeable and irreversible
+  with no operator action. The degraded property — cross-node/cross-restart
+  correlation — is announced by a **loud warning at construction** naming the exact
+  variable to set. There is no fallback to the unkeyed digest and no dropped tag.
+- **Rate limiting itself is unaffected by key rotation or restart.** Buckets are keyed
+  on the raw identifier (`check_and_record(identifier=...)`), never on the tag, so a
+  rotation changes log tags only; it cannot reset anyone's token bucket, and an
+  attacker cannot wash away an in-progress throttle by provoking one. Log queries
+  spanning a rotation must be scoped to one key epoch.
+- **Scope:** this fixes the Nexus call site only. #2171 also asks for a sweep of the
+  other enumerable `fingerprint_secret` call sites (`command_safety.py`,
+  `kaizen/llm/presets.py`, `from_env.py`, `url_safety.py`, `auth/gcp.py`,
+  `dataflow/core/nodes.py`), all of which live outside `packages/kailash-nexus/` and
+  are NOT addressed here. The keyed construction is deliberately nexus-local for now;
+  if that sweep proceeds it likely belongs in `kailash.utils.url_credentials` beside
+  `process_local_config_key` so every call site shares one implementation.
+
+### Fixed (SECURITY) — MCP resource surface no longer serves credentials
+
+Found by an adversarial review of the two fixes below, not by either issue. Both
+findings were **pre-existing but newly REACHABLE**, which per `zero-tolerance.md`
+Rule 1a makes them this change's to own.
+
+- **`workflow://{name}` served node configuration verbatim, including secrets.**
+  Two repairs combined to expose it: #2013's dead-guard fix made
+  `_extract_workflow_info` return real nodes (it had returned empty lists for every
+  genuine workflow), and #2056's template fix made the handler invocable at all.
+  Measured before the fix, the resource returned `"api_key": "sk-SUPERSECRET-abc123"`
+  and `postgres://user:hunter2@db/prod` to any MCP client. Node config, workflow
+  metadata, and the input/output schema are now redacted by key name via
+  `is_sensitive_query_key` (the canonical set, consulted first), a substring
+  supplement for compound families it does not cover (`connection_string`, `dsn`,
+  `credentials`, `passphrase`, `authorization`, `cookie`, ...), and a token pass
+  for standalone credential words that appear as a separator-delimited component.
+  The token pass is why `x-auth` and `auth_header` are caught while `author` and
+  `oauth_provider_name` are not — a bare `auth` substring rule cannot draw that
+  line. `Authorization` / `Cookie` header configs were the M1 residual, found in
+  confirming review: the standard `{"headers": {"Authorization": "Bearer ..."}}`
+  shape was served verbatim. Non-sensitive parameters are untouched, so the
+  resource remains useful for agent discovery.
+- **URL-valued config is masked rather than blanked.** A credential inside a URL
+  lives in the VALUE, not the key name — `redis_url` is not in the canonical set —
+  so URL-shaped values route through the canonical `mask_url`. `config://limits`
+  now returns `redis://***@cache:6379/0`: the password is gone, the host remains.
+- **`data://` path containment was lexical and is now resolved.** The check was
+  `os.path.abspath(...).startswith(safe_base)`, unsound twice: `startswith` is a
+  prefix test, not a boundary test (`/srv/database` satisfies a `/srv/data` base),
+  and `abspath` never resolves symlinks, so a link under `./data` pointing anywhere
+  was followed and read. Both operands now go through `os.path.realpath` with an
+  `os.path.commonpath` boundary test, resolution failure denies, and the read uses
+  `O_NOFOLLOW`. Regression tests demonstrate both escapes leaking real content
+  against the old check. Per `security.md` § Path Containment this closes the
+  lexical/symlink class; it does not by itself defeat check-to-use TOCTOU on
+  intermediate directories.
+
+### Fixed (BREAKING) — MCP resource URIs are templates, not wildcards (#2056)
+
+- **`NexusResourceManager` raised on construction wherever the official `mcp` package
+  was installed.** All five providers registered `scheme://*` against handlers taking
+  a `uri` argument; FastMCP requires a template's `{param}` placeholders to match the
+  handler signature exactly and rejected every one with
+  `ValueError: Mismatch between URI parameters set() and function parameters {'uri'}`.
+  `kailash_mcp`'s non-FastMCP fallback accepted the same registrations, which is why
+  the failure looked import-order dependent rather than constant.
+- **New URI contract** (MCP clients consuming these resources must update):
+  `workflow://{name}`, `docs://{topic}`, `config://{key}`, `help://{topic}`, and
+  `data://` at one-to-four path segments. Response bodies are unchanged — handlers
+  reconstruct the full URI for the `uri` field.
+- **`data://` registers one template per depth on purpose.** FastMCP compiles a
+  template parameter to `[^/]+`, so a single `{path}` cannot span a `/`: with
+  `data://{path}` registered, `data://examples/sample.json` — this module's own
+  documented example — matches nothing. The RFC 6570 explode form `{path*}` is not
+  supported either (it fails `re.compile` with `bad character in group name`).
+  Four segments is the supported ceiling; deeper paths report as not found.
+- **`register_custom_resource()` now documents the template form.** The previous
+  `"custom://*"` example is the exact pattern FastMCP rejects.
+
 ### Changed (BREAKING) — `enable_auth=True` now installs real authentication, and requires a credential (#2013)
 
 - **`Nexus(enable_auth=True)` previously installed nothing.** It set three booleans

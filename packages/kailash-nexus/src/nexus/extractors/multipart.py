@@ -43,8 +43,7 @@ from typing import Callable, List, Optional, Tuple
 from starlette.datastructures import UploadFile
 from starlette.requests import Request
 
-from nexus.extractors import NexusHandlerError
-from nexus.extractors import UploadFile as _ExportedUploadFile
+from nexus.extractors import NexusHandlerError, UploadFile as _ExportedUploadFile
 
 logger = logging.getLogger(__name__)
 

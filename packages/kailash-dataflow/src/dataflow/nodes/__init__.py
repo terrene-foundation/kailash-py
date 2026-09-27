@@ -3,9 +3,9 @@
 try:
     from .aggregate_operations import AggregateNode
     from .file_source import FileSourceNode
-    from .mongodb_nodes import BulkDocumentInsertNode
-    from .mongodb_nodes import CreateIndexNode as MongoCreateIndexNode
     from .mongodb_nodes import (
+        BulkDocumentInsertNode,
+        CreateIndexNode as MongoCreateIndexNode,
         DocumentCountNode,
         DocumentDeleteNode,
         DocumentFindNode,

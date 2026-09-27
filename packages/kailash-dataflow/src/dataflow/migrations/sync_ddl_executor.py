@@ -22,16 +22,15 @@ import re
 import sqlite3
 from typing import Any, Dict, List, Optional, Tuple
 
+from dataflow.adapters.dialect import identifier_budget_for
+
 # Issue #1550: this executor is the LOWEST layer that touches the raw driver
 # exception on the eager-DDL path — it logs the error BEFORE returning it to the
 # engine, so sanitizing only at the engine layer leaves this log raw. Redact
 # here, at the single point every DDL caller (engine, schema_state_manager,
 # auto_migration_system) funnels through.
 from dataflow.core.exceptions import sanitize_db_error
-from kailash.db.dialect import (
-    DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
-    _validate_identifier,
-)
+from kailash.db.dialect import _validate_identifier
 from kailash.utils.url_credentials import mask_url
 
 logger = logging.getLogger(__name__)
@@ -178,36 +177,10 @@ class SyncDDLExecutor:
 
     def _get_sqlite_connection(self):
         """Get a synchronous SQLite connection."""
-        db_path = self.database_url
+        from kailash.utils.sqlite_url import sqlite_connection_target
 
-        # Issue #1502: a ``file:...?mode=memory&cache=shared`` URI reaches the
-        # per-DataFlow-instance shared in-memory DB. It MUST be opened with
-        # ``uri=True`` and MUST NOT be run through the ``sqlite://`` stripping
-        # below, or sqlite3 would treat the literal ``file:...`` text as a
-        # filesystem path and create a separate on-disk DB.
-        if db_path.startswith("file:"):
-            conn = sqlite3.connect(db_path, check_same_thread=False, uri=True)
-            logger.debug(
-                "sync_ddl_executor.created_sync_sqlite_uri_connection_for_ddl",
-                extra={"db_path": db_path},
-            )
-            return conn
-
-        if db_path.startswith("sqlite:///"):
-            db_path = db_path.replace("sqlite:///", "")
-        elif db_path.startswith("sqlite://"):
-            db_path = db_path.replace("sqlite://", "")
-
-        # For in-memory databases
-        if db_path == "" or db_path == ":memory:":
-            db_path = ":memory:"
-
-        conn = sqlite3.connect(db_path, check_same_thread=False)
-        logger.debug(
-            "sync_ddl_executor.created_sync_sqlite_connection_for_ddl",
-            extra={"db_path": db_path},
-        )
-        return conn
+        db_path, options = sqlite_connection_target(self.database_url)
+        return sqlite3.connect(db_path, **{"check_same_thread": False, **options})
 
     def _get_mysql_connection(self):
         """Get a synchronous MySQL connection using pymysql."""
@@ -580,8 +553,11 @@ class SyncDDLExecutor:
             # rules/dataflow-identifier-safety.md MUST 1: identifiers in DDL/PRAGMA
             # paths MUST be validated against the canonical regex before
             # interpolation. PRAGMA arguments are not parameterizable.
+            # Issue #1971: this branch is guarded by ``self._db_type ==
+            # "sqlite"``, so the engine is known — bind SQLite's budget rather
+            # than the unknown sentinel.
             _validate_identifier(
-                table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+                table_name, max_length=identifier_budget_for(self._db_type)
             )
             sql = f"PRAGMA table_info({table_name})"
             result = self.execute_query(sql)

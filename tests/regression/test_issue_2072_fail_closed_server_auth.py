@@ -33,12 +33,15 @@ with a valid token and gets 200. Without it, the 401 in the load-bearing test
 could equally be a broken route.
 """
 
+import asyncio
 import json
 import socket
 import threading
 import time
 import urllib.error
 import urllib.request
+from contextlib import ExitStack, contextmanager
+from functools import wraps
 
 import pytest
 from fastapi.testclient import TestClient
@@ -57,6 +60,55 @@ _AUTH_ENV_NAMES = (
     "KAILASH_JWT_ALGORITHM",
     "KAILASH_AUTH_EXEMPT_PATHS",
 )
+
+
+@pytest.fixture(autouse=True)
+def owned_server_resources(monkeypatch):
+    """Close successfully constructed test owners without replacing their work."""
+    from kailash.api.gateway import WorkflowAPIGateway
+    from kailash.api.workflow_api import WorkflowAPI
+    from kailash.gateway import api as gateway_api
+    from kailash.gateway.enhanced_gateway import EnhancedDurableAPIGateway
+    from kailash.middleware.communication.api_gateway import APIGateway
+    from kailash.servers import DurableWorkflowServer, EnterpriseWorkflowServer
+
+    def close_server(server):
+        try:
+            if not server.shutdown_coordinator.is_shutting_down:
+                asyncio.run(server.shutdown_coordinator.shutdown())
+        finally:
+            server.close()
+
+    # Enterprise servers construct a real SecretManager even for auth probes.
+    monkeypatch.setenv(
+        "KAILASH_ENCRYPTION_KEY",
+        "issue-2072-test-encryption-passphrase-at-least-32-bytes",
+    )
+    with ExitStack() as cleanup:
+
+        def track(cls, close):
+            original = cls.__init__
+
+            @wraps(original)
+            def initialize(owner, *args, **kwargs):
+                original(owner, *args, **kwargs)
+                # Base initialization is not successful subclass construction.
+                # A failed constructor must fix its own allocated resources.
+                if type(owner) is cls:
+                    cleanup.callback(close, owner)
+
+            monkeypatch.setattr(cls, "__init__", initialize)
+
+        for cls in (WorkflowServer, DurableWorkflowServer, EnterpriseWorkflowServer):
+            track(cls, close_server)
+        for cls in (WorkflowAPI, WorkflowAPIGateway, TestClient):
+            track(cls, lambda owner: owner.close())
+        track(APIGateway, lambda owner: owner.agent_ui.close())
+        track(EnhancedDurableAPIGateway, lambda owner: asyncio.run(owner.shutdown()))
+        monkeypatch.setattr(
+            gateway_api, "_gateway_instance", gateway_api._gateway_instance
+        )
+        yield
 
 
 @pytest.fixture
@@ -86,7 +138,7 @@ def authed_env(clean_auth_env):
 
 def _probe_workflow():
     wb = WorkflowBuilder()
-    wb.add_node("PythonCodeNode", "n", {"code": "result = {'ran': True}"})
+    wb.add_node("DataTransformer", "n", {"data": {"ran": True}, "transformations": []})
     return wb.build()
 
 
@@ -928,57 +980,103 @@ def test_installed_log_does_not_echo_config_derived_algorithm(authed_env, caplog
 # ---------------------------------------------------------------------------
 
 
+@contextmanager
+def _running_probe_server(server):
+    """Own the real transport and release it even when an assertion fails."""
+    transport = None
+    thread = None
+    errors = []
+    stopped = threading.Event()
+    with socket.socket() as listener:
+        try:
+            import uvicorn
+
+            listener.bind(("127.0.0.1", 0))
+            port = listener.getsockname()[1]
+            config = uvicorn.Config(
+                server.app,
+                host="127.0.0.1",
+                port=port,
+                loop="asyncio",
+                ws="none",  # This instrument exercises HTTP, not WebSockets.
+                log_config=None,
+            )
+            # Import protocol/lifespan implementations before timing readiness.
+            # Passing the still-bound socket removes the reserve/rebind race.
+            config.load()
+            transport = uvicorn.Server(config)
+
+            def run():
+                try:
+                    transport.run(sockets=[listener])
+                except BaseException as exc:
+                    errors.append(exc)
+                finally:
+                    stopped.set()
+
+            thread = threading.Thread(
+                target=run, name="issue-2072-uvicorn", daemon=True
+            )
+            thread.start()
+            deadline = time.monotonic() + 10.0
+            while not transport.started:
+                if stopped.wait(0.01):
+                    if errors:
+                        raise RuntimeError("uvicorn startup failed") from errors[0]
+                    pytest.fail("uvicorn exited before application startup completed")
+                if time.monotonic() >= deadline:
+                    pytest.fail(f"server never completed startup on port {port}")
+            yield port
+        finally:
+            if transport is not None:
+                transport.should_exit = True
+            if thread is not None:
+                if thread.ident is not None:
+                    thread.join(timeout=10.0)
+                assert not thread.is_alive(), "uvicorn thread failed to stop"
+            # Config/startup can fail before lifespan takes ownership. Once the
+            # thread is gone, release resources allocated by WorkflowServer.
+            try:
+                if not server.shutdown_coordinator.is_shutting_down:
+                    asyncio.run(server.shutdown_coordinator.shutdown())
+            finally:
+                server.close()
+            if errors:
+                raise RuntimeError("uvicorn server failed") from errors[0]
+
+
 @pytest.mark.slow
 def test_real_uvicorn_socket_rejects_anonymous_execution(authed_env):
-    """The issue's verbatim reproducer, re-run against the fixed server.
-
-    ``TestClient`` drives the real ASGI stack, but the original proof was a
-    real uvicorn process on a real port hit by a real HTTP client. This repeats
-    that so the fix is measured on the same instrument as the defect.
-    """
-    with socket.socket() as probe_sock:
-        probe_sock.bind(("127.0.0.1", 0))
-        port = probe_sock.getsockname()[1]
-
+    """Real HTTP preserves anonymous denial and authenticated execution."""
     server = _server_with_probe()
-    threading.Thread(
-        target=server.run,
-        kwargs={"host": "127.0.0.1", "port": port},
-        daemon=True,
-    ).start()
+    with _running_probe_server(server) as port:
+        url = f"http://127.0.0.1:{port}/workflows/probe/execute"
+        body = json.dumps({"inputs": {}}).encode()
 
-    for _ in range(100):
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=0.2):
-                break
-        except OSError:
-            time.sleep(0.1)
-    else:  # pragma: no cover -- server failed to bind
-        pytest.fail(f"server never came up on port {port}")
+        anonymous = urllib.request.Request(
+            url, data=body, headers={"Content-Type": "application/json"}, method="POST"
+        )
+        with pytest.raises(urllib.error.HTTPError) as excinfo:
+            with urllib.request.urlopen(anonymous, timeout=30):
+                pass
+        with excinfo.value:
+            assert excinfo.value.code == 401
 
-    url = f"http://127.0.0.1:{port}/workflows/probe/execute"
-    body = json.dumps({"inputs": {}}).encode()
-
-    anonymous = urllib.request.Request(
-        url, data=body, headers={"Content-Type": "application/json"}, method="POST"
-    )
-    with pytest.raises(urllib.error.HTTPError) as excinfo:
-        urllib.request.urlopen(anonymous, timeout=30)
-    assert excinfo.value.code == 401
-
-    # Discrimination control on the same socket.
-    credentialed = urllib.request.Request(
-        url,
-        data=body,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {_make_token()}",
-        },
-        method="POST",
-    )
-    with urllib.request.urlopen(credentialed, timeout=60) as response:
-        assert response.status == 200
-        assert json.loads(response.read())["outputs"]["n"]["result"] == {"ran": True}
+        # Discrimination control on the same socket.
+        credentialed = urllib.request.Request(
+            url,
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {_make_token()}",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(credentialed, timeout=60) as response:
+            assert response.status == 200
+            assert json.loads(response.read())["outputs"]["n"]["result"] == {
+                "ran": True
+            }
 
 
 # ---------------------------------------------------------------------------
@@ -1080,6 +1178,89 @@ def test_websocket_middleware_requires_a_config():
 
     with pytest.raises(ValueError, match="requires a JWTConfig"):
         JWTWebSocketAuthMiddleware(app=lambda *a: None, config=None)
+
+
+@pytest.mark.parametrize("server_type", ["basic", "enterprise"])
+def test_websocket_normal_disconnect_is_not_an_error(authed_env, caplog, server_type):
+    from kailash.servers.gateway import create_gateway
+
+    server = create_gateway(server_type=server_type)
+    with TestClient(server.app) as client:
+        with client.websocket_connect(
+            "/ws", headers={"Authorization": f"Bearer {_make_token()}"}
+        ) as websocket:
+            websocket.send_text("probe")
+            assert websocket.receive_text() == "Echo: probe"
+    assert not [r for r in caplog.records if r.levelname == "ERROR"]
+
+
+@pytest.mark.parametrize("server_type", ["basic", "enterprise"])
+def test_websocket_unexpected_receive_failure_is_reported(
+    authed_env, caplog, server_type
+):
+    from starlette.websockets import WebSocketDisconnect
+
+    from kailash.servers.gateway import create_gateway
+
+    server = create_gateway(server_type=server_type)
+    with TestClient(server.app) as client:
+        with client.websocket_connect(
+            "/ws", headers={"Authorization": f"Bearer {_make_token()}"}
+        ) as websocket:
+            # The text-only echo endpoint cannot consume a binary frame.
+            websocket.send_bytes(b"binary-probe")
+            with pytest.raises(WebSocketDisconnect):
+                websocket.receive_text()
+    errors = [r.getMessage() for r in caplog.records if r.levelname == "ERROR"]
+    assert errors == ["WebSocket error: 'text'"]
+
+
+@pytest.mark.parametrize("server_type", ["basic", "enterprise"])
+def test_websocket_cancellation_closes_transport(authed_env, caplog, server_type):
+    from starlette.routing import WebSocketRoute
+    from starlette.websockets import WebSocket, WebSocketState
+
+    from kailash.servers.gateway import create_gateway
+
+    server = create_gateway(server_type=server_type)
+    endpoints = [
+        route.endpoint
+        for route in server.app.routes
+        if isinstance(route, WebSocketRoute) and route.path == "/ws"
+    ]
+    assert len(endpoints) == 1
+    endpoint = endpoints[0]
+
+    async def drive():
+        incoming = asyncio.Queue()
+        incoming.put_nowait({"type": "websocket.connect"})
+        sent = []
+        accepted = asyncio.Event()
+
+        async def send(message):
+            sent.append(message)
+            if message["type"] == "websocket.accept":
+                accepted.set()
+
+        websocket = WebSocket({"type": "websocket"}, incoming.get, send)
+        task = asyncio.create_task(endpoint(websocket))
+        try:
+            await asyncio.wait_for(accepted.wait(), timeout=1.0)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert [message["type"] for message in sent] == [
+                "websocket.accept",
+                "websocket.close",
+            ]
+            assert websocket.application_state is WebSocketState.DISCONNECTED
+        finally:
+            if not task.done():
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+
+    asyncio.run(drive())
+    assert not [r for r in caplog.records if r.levelname == "ERROR"]
 
 
 def test_enterprise_ws_route_is_not_merely_broken(clean_auth_env):

@@ -5,6 +5,11 @@ NODE: ``LLMAgentNode.get_parameters()["provider"].default`` is ``None`` and
 ``run()`` raises ``ConfigurationError`` when ``provider`` resolves to ``None``.
 Mock stays reachable only when ``provider="mock"`` is passed EXPLICITLY.
 
+Subsequent #2220 model routing distinguishes provider identity from credentials:
+a known model keeps its registered vendor even when keyless, then fails loudly
+at credential validation. The model-less surface still resolves to None. Both
+contracts are checked here; neither may silently produce mock content.
+
 #1952 closes the RESIDUAL surface #1947 left open — the *keyless dispatch
 resolution*:
 
@@ -60,8 +65,17 @@ def _keyless_env(monkeypatch):
     resolves the way it does for a real keyless caller, not the way the unit
     harness configures it. ``monkeypatch`` restores every var at teardown.
     """
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    for name in (
+        "OPENAI_API_KEY",
+        "AZURE_OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "GOOGLE_API_KEY",
+        "KAILASH_LLM_DEPLOYMENT",
+        "KAILASH_LLM_PROVIDER",
+        "KAIZEN_DEFAULT_PROVIDER",
+        "DEFAULT_LLM_PROVIDER",
+    ):
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.delenv("KAIZEN_ALLOW_KEYLESS_MOCK", raising=False)
     # A model is required to construct/execute an Agent (env-models.md); the
     # provider fail-loud fires before any model is used, but construction needs
@@ -102,14 +116,21 @@ class TestDetectProviderKeylessDoesNotReturnMock:
 
 
 class TestAgentSurfaceKeylessFailsLoud:
-    """Task deliverable (i), Agent surface: keyless -> fail-loud, not fabricated."""
+    """Missing credentials fail loudly without changing a known model's vendor."""
 
-    def test_agent_get_provider_is_none_when_keyless(self, _keyless_env):
+    def test_known_model_keeps_registered_provider_when_keyless(self, _keyless_env):
         from kaizen.core.agents import Agent
 
-        # The resolution seam every Agent dispatch site feeds into. None here
-        # is what flows to LLMAgentNode(provider=None) -> the #1947 gate.
-        assert Agent("qa", {})._get_provider_for_config() is None
+        # #2220: credentials do not choose a known model's vendor. Missing
+        # credentials fail at dispatch; they do not change its provider.
+        assert (
+            Agent("qa", {"model": "gpt-4o-mini"})._get_provider_for_config() == "openai"
+        )
+
+    def test_model_less_agent_get_provider_is_none_when_keyless(self, _keyless_env):
+        from kaizen.core.agents import Agent
+
+        assert Agent("qa", {"model": ""})._get_provider_for_config() is None
 
     def test_agent_get_provider_explicit_mock_still_works(self, _keyless_env):
         from kaizen.core.agents import Agent
@@ -122,7 +143,7 @@ class TestAgentSurfaceKeylessFailsLoud:
         # Composition: the None the Agent surface resolves, handed to a real
         # LLMAgentNode exactly as every dispatch site does, fails loud — no
         # fabricated content is producible on the keyless Agent path.
-        resolved = Agent("qa", {})._get_provider_for_config()
+        resolved = Agent("qa", {"model": ""})._get_provider_for_config()
         assert resolved is None
         with pytest.raises(ConfigurationError) as exc_info:
             LLMAgentNode().run(provider=resolved, messages=_MESSAGES)
@@ -136,7 +157,9 @@ class TestAgentSurfaceKeylessFailsLoud:
         # a real framework runs the real workflow and hits the node's gate.
         from kaizen.core.framework import Kaizen
 
-        agent = Kaizen().create_agent("qa", signature="question -> answer")
+        agent = Kaizen().create_agent(
+            "qa", {"model": "gpt-4o-mini"}, signature="question -> answer"
+        )
         raised = None
         result = None
         try:
@@ -149,8 +172,8 @@ class TestAgentSurfaceKeylessFailsLoud:
         # answer produced by a silent mock.
         surfaced = str(raised) if raised is not None else repr(result)
         lowered = surfaced.lower()
-        assert "provider" in lowered and (
-            "unresolved" in lowered or "#1947" in surfaced or "#1952" in surfaced
+        assert "provider openai is not available" in lowered and (
+            "no api key for openai" in lowered
         ), (
             "keyless Agent execute did not surface the fail-loud provider error; "
             f"observed: {surfaced[:300]!r}"

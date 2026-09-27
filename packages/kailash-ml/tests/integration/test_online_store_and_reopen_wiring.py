@@ -31,6 +31,8 @@ from pathlib import Path
 
 import polars as pl
 import pytest
+
+from dataflow import DataFlow
 from kailash_ml.errors import OnlineStoreUnavailableError, TenantRequiredError
 from kailash_ml.features import (
     FeatureField,
@@ -40,8 +42,6 @@ from kailash_ml.features import (
     OnlineFeatureStore,
     feature,
 )
-
-from dataflow import DataFlow
 
 pytestmark = pytest.mark.integration
 

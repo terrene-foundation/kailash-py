@@ -95,8 +95,12 @@ class ConnectionManagerAdapter:
             self._owns_runtime = True
 
         # Get connection details from DataFlow config
-        self._connection_string = self.dataflow.config.database.get_connection_url(
-            self.dataflow.config.environment
+        self._connection_string = (
+            vars(self.dataflow).get("_memory_db_uri")
+            or vars(self.dataflow).get("_sqlite_database_url")
+            or self.dataflow.config.database.get_connection_url(
+                self.dataflow.config.environment
+            )
         )
         self._database_type = self._detect_database_type()
 
@@ -366,14 +370,11 @@ class ConnectionManagerAdapter:
         MUST NOT invoke ``close()`` itself — see issue #1000.
         """
         if getattr(self, "_runtime", None) is not None:
-            try:
-                _warnings.warn(
-                    f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
-                    ResourceWarning,
-                    source=self,
-                )
-            except Exception:
-                pass
+            _warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
 
     def _convert_parameters(
         self, sql: str, params: Optional[List]

@@ -26,8 +26,7 @@ pytest.importorskip(
     reason="hypothesis is declared by kailash-pact/kailash-ml only — root runs skip",
 )
 
-from hypothesis import assume, given, settings  # noqa: E402
-from hypothesis import strategies as st  # noqa: E402
+from hypothesis import assume, given, settings, strategies as st  # noqa: E402
 
 from kailash.trust.chain import (  # noqa: E402
     AuthorityType,

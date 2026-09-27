@@ -34,9 +34,8 @@ Acceptance per ``todos/active/S3-nexus-add-startup-handler-public-api.md``:
 - Both async ``def`` and sync ``def`` are supported.
 - downstream-consumer pattern E2E (DataFlow ``create_tables_async`` from a
   startup hook) is the canonical use case AND depends on #713 / S4
-  (lazy DataFlow runtime). This file ships with that test SKIPPED with
-  an explicit reason — orchestrator MUST remove the skip after
-  ``feat/issue-713-dataflow-lazy-runtime`` merges to main.
+  (lazy DataFlow runtime). The test constructs DataFlow synchronously,
+  then drives the real Nexus lifespan and verifies persisted SQLite schema.
 """
 
 from __future__ import annotations
@@ -299,6 +298,7 @@ async def test_add_startup_handler_fires_during_uvicorn_boot() -> None:
         port=port,
         log_level="warning",
         loop="asyncio",
+        ws="none",  # HTTP lifecycle coverage needs no WebSocket protocol.
     )
     server = uvicorn.Server(config)
     server.config.lifespan = "on"
@@ -360,6 +360,7 @@ async def test_add_shutdown_handler_fires_during_uvicorn_teardown() -> None:
         port=port,
         log_level="warning",
         loop="asyncio",
+        ws="none",  # HTTP lifecycle coverage needs no WebSocket protocol.
     )
     server = uvicorn.Server(config)
     server.config.lifespan = "on"
@@ -399,40 +400,61 @@ async def test_add_shutdown_handler_fires_during_uvicorn_teardown() -> None:
 
 
 @pytest.mark.regression
-@pytest.mark.asyncio
-@pytest.mark.skip(
-    reason=(
-        "Depends on #713 / S4 (lazy DataFlow runtime). The the downstream consumer "
-        "pattern is `db = DataFlow(url)` at module scope, then "
-        "`await db.create_tables_async()` inside a startup hook. Today this "
-        "fails with `AttributeError: 'LocalRuntime' object has no attribute "
-        "'execute_workflow_async'` because DataFlow.__init__ binds "
-        "LocalRuntime when no event loop is running. Enable this test "
-        "after `feat/issue-713-dataflow-lazy-runtime` merges to main — "
-        "orchestrator: remove this skip decorator."
+def test_add_startup_handler_runs_dataflow_create_tables_async(tmp_path) -> None:
+    """Sync-constructed DataFlow creates a real schema in Nexus startup."""
+    import sqlite3
+    from contextlib import closing
+
+    from dataflow import DataFlow
+    from kailash.runtime import AsyncLocalRuntime, LocalRuntime
+
+    database_path = tmp_path / "startup-schema.db"
+    db = DataFlow(f"sqlite:///{database_path}", auto_migrate=False)
+    app = Nexus(
+        api_port=_free_port(),
+        auto_discovery=False,
+        enable_durability=False,
+        rate_limit=None,
     )
-)
-async def test_add_startup_handler_runs_dataflow_create_tables_async() -> None:
-    """Regression: #712 + #713 — downstream-consumer E2E pattern.
-
-    The canonical consumer pattern this PR enables:
-
-        nexus = Nexus(...)
-        db = DataFlow("postgresql://...")
+    try:
+        assert isinstance(db.runtime, LocalRuntime)
+        assert not db._is_async
 
         @db.model
-        class User:
-            id: int
+        class StartupRecord:
+            id: str
+            value: str
+
+        fired = []
 
         async def init_schema():
+            assert isinstance(db.runtime, AsyncLocalRuntime)
             await db.create_tables_async()
+            fired.append("schema-created")
 
-        nexus.add_startup_handler(init_schema)
-        nexus.start()
+        app.add_startup_handler(init_schema)
+        fastapi_app = app.fastapi_app
 
-    On a fresh PostgreSQL container, the schema MUST exist after boot.
-    """
-    # Implementation deferred until #713 lands. Test body intentionally
-    # omitted to avoid shipping a partial repro that masks the real
-    # failure mode.
-    pytest.fail("Should be skipped until #713 lands")
+        async def serve():
+            try:
+                async with fastapi_app.router.lifespan_context(fastapi_app):
+                    assert fired == ["schema-created"]
+                    with closing(sqlite3.connect(database_path)) as connection:
+                        tables = connection.execute(
+                            "SELECT name FROM sqlite_master WHERE type = 'table'"
+                        ).fetchall()
+                    assert ("startup_records",) in tables
+                    created = await db.express.create(
+                        "StartupRecord", {"id": "startup-1", "value": "ready"}
+                    )
+                    assert created["id"] == "startup-1"
+                    assert (await db.express.read("StartupRecord", "startup-1"))[
+                        "value"
+                    ] == "ready"
+            finally:
+                await db.close_async()
+
+        asyncio.run(serve())
+    finally:
+        app.close()
+        db.close()

@@ -1,0 +1,904 @@
+{
+  "head": "e4a789e73337c4dd8dfd18238f2ad1e44db19881",
+  "verified_files": {
+    "packages/kailash-dataflow/src/dataflow/core/model_registry.py": "926b5a66ab1dbc22e77eda97a2d4aab728760a52bd8546a8e9cacc28b2642a8b",
+    "packages/kailash-dataflow/src/dataflow/core/engine.py": "d62f287c61a146bea09eeccc69d97601270ce29d45255f538fd96bb94b377dac",
+    "packages/kailash-dataflow/tests/regression/test_issue_352_fastapi_startup.py": "a0d9ebda2dece7b8cc90bf13c8cdefdab28cdb3886e5b22df573f53f40d8d73f",
+    "packages/kailash-dataflow/tests/unit/core/test_model_registry_runtime_injection.py": "a6a700d8c76f540894fbd18fd838e094cca593eddcdd50ada9745ae98c9319bb",
+    "specs/dataflow-core.md": "d7d519663556ba8592ae08a1e506778f274d0cf6e2947cf2ae502588b3c2fa00",
+    "packages/kailash-dataflow/tests/regression/test_model_registry_native_owner_bridge.py": "e325a8df4a2a9c19a22e6464ac9fa3d8d9ad7170627c082e7e98b08fdff51530",
+    "src/kailash/runtime/local.py": "afaf1197c3308adbe86b641566ed86cad6e0ac30ace98f2aa8c93fb87e3b44fe"
+  },
+  "core_changed_methods": [
+    "LocalRuntime.acquire"
+  ],
+  "absolute_runtime_acquire_calls": [
+    {
+      "path": "src/kailash/middleware/core/agent_ui.py",
+      "line": 370,
+      "target": "runtime"
+    },
+    {
+      "path": "src/kailash/middleware/core/workflows.py",
+      "line": 332,
+      "target": "runtime"
+    },
+    {
+      "path": "src/kailash/middleware/mcp/enhanced_server.py",
+      "line": 227,
+      "target": "runtime"
+    },
+    {
+      "path": "src/kailash/middleware/gateway/durable_request.py",
+      "line": 182,
+      "target": "runtime"
+    },
+    {
+      "path": "src/kailash/runtime/parallel_cyclic.py",
+      "line": 62,
+      "target": "runtime"
+    },
+    {
+      "path": "src/kailash/runtime/testing.py",
+      "line": 349,
+      "target": "runtime"
+    },
+    {
+      "path": "src/kailash/api/workflow_api.py",
+      "line": 244,
+      "target": "runtime"
+    },
+    {
+      "path": "src/kailash/servers/enterprise_workflow_server.py",
+      "line": 204,
+      "target": "self._injected_runtime"
+    },
+    {
+      "path": "src/kailash/channels/mcp_channel.py",
+      "line": 105,
+      "target": "runtime"
+    },
+    {
+      "path": "src/kailash/channels/cli_channel.py",
+      "line": 93,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-nexus/src/nexus/core.py",
+      "line": 744,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-nexus/src/nexus/transports/mcp.py",
+      "line": 193,
+      "target": "injected"
+    },
+    {
+      "path": "packages/kailash-nexus/src/nexus/transports/websocket.py",
+      "line": 757,
+      "target": "self._injected_runtime"
+    },
+    {
+      "path": "packages/kaizen-agents/src/kaizen_agents/patterns/state_manager.py",
+      "line": 243,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-kaizen/src/kaizen/integrations/nexus/storage.py",
+      "line": 129,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-kaizen/src/kaizen/governance/storage.py",
+      "line": 154,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-kaizen/src/kaizen/trust/store.py",
+      "line": 126,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-kaizen/src/kaizen/trust/authority.py",
+      "line": 115,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-kaizen/src/kaizen/trust/audit_store.py",
+      "line": 120,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/gateway_integration.py",
+      "line": 101,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/migrations/auto_migration_system.py",
+      "line": 259,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/migrations/auto_migration_system.py",
+      "line": 1048,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/migrations/auto_migration_system.py",
+      "line": 1671,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/migrations/schema_state_manager.py",
+      "line": 687,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/model_registry.py",
+      "line": 290,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/model_registry.py",
+      "line": 122,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/utils/connection_adapter.py",
+      "line": 70,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/testing/dataflow_test_utils.py",
+      "line": 47,
+      "target": "runtime"
+    }
+  ],
+  "all_acquire_navigation": [
+    {
+      "path": "src/kailash/middleware/core/agent_ui.py",
+      "line": 370,
+      "target": "runtime"
+    },
+    {
+      "path": "src/kailash/middleware/core/workflows.py",
+      "line": 332,
+      "target": "runtime"
+    },
+    {
+      "path": "src/kailash/middleware/mcp/enhanced_server.py",
+      "line": 227,
+      "target": "runtime"
+    },
+    {
+      "path": "src/kailash/middleware/gateway/durable_request.py",
+      "line": 182,
+      "target": "runtime"
+    },
+    {
+      "path": "src/kailash/middleware/gateway/storage_backends.py",
+      "line": 190,
+      "target": "pool"
+    },
+    {
+      "path": "src/kailash/middleware/gateway/storage_backends.py",
+      "line": 205,
+      "target": "pool"
+    },
+    {
+      "path": "src/kailash/middleware/gateway/storage_backends.py",
+      "line": 221,
+      "target": "pool"
+    },
+    {
+      "path": "src/kailash/middleware/gateway/storage_backends.py",
+      "line": 230,
+      "target": "pool"
+    },
+    {
+      "path": "src/kailash/middleware/gateway/storage_backends.py",
+      "line": 236,
+      "target": "pool"
+    },
+    {
+      "path": "src/kailash/middleware/gateway/storage_backends.py",
+      "line": 355,
+      "target": "pool"
+    },
+    {
+      "path": "src/kailash/middleware/gateway/storage_backends.py",
+      "line": 382,
+      "target": "pool"
+    },
+    {
+      "path": "src/kailash/middleware/gateway/storage_backends.py",
+      "line": 405,
+      "target": "pool"
+    },
+    {
+      "path": "src/kailash/core/pool/sqlite_pool.py",
+      "line": 272,
+      "target": "self._write_lock"
+    },
+    {
+      "path": "src/kailash/core/pool/sqlite_pool.py",
+      "line": 342,
+      "target": "self._read_semaphore"
+    },
+    {
+      "path": "src/kailash/nodes/transaction/saga_state_storage.py",
+      "line": 292,
+      "target": "self.db_pool"
+    },
+    {
+      "path": "src/kailash/nodes/transaction/saga_state_storage.py",
+      "line": 316,
+      "target": "self.db_pool"
+    },
+    {
+      "path": "src/kailash/nodes/transaction/saga_state_storage.py",
+      "line": 349,
+      "target": "self.db_pool"
+    },
+    {
+      "path": "src/kailash/nodes/transaction/saga_state_storage.py",
+      "line": 370,
+      "target": "self.db_pool"
+    },
+    {
+      "path": "src/kailash/nodes/transaction/saga_state_storage.py",
+      "line": 389,
+      "target": "self.db_pool"
+    },
+    {
+      "path": "src/kailash/nodes/transaction/two_phase_commit.py",
+      "line": 922,
+      "target": "self.db_pool"
+    },
+    {
+      "path": "src/kailash/nodes/transaction/two_phase_commit.py",
+      "line": 955,
+      "target": "self.db_pool"
+    },
+    {
+      "path": "src/kailash/nodes/transaction/two_phase_commit.py",
+      "line": 977,
+      "target": "self.db_pool"
+    },
+    {
+      "path": "src/kailash/nodes/transaction/two_phase_commit.py",
+      "line": 995,
+      "target": "self.db_pool"
+    },
+    {
+      "path": "src/kailash/nodes/transaction/distributed_transaction_manager.py",
+      "line": 929,
+      "target": "self.db_pool"
+    },
+    {
+      "path": "src/kailash/nodes/transaction/distributed_transaction_manager.py",
+      "line": 953,
+      "target": "self.db_pool"
+    },
+    {
+      "path": "src/kailash/nodes/alerts/discord.py",
+      "line": 433,
+      "target": "self.rate_limiter"
+    },
+    {
+      "path": "src/kailash/nodes/api/http.py",
+      "line": 780,
+      "target": "_http_session_pool"
+    },
+    {
+      "path": "src/kailash/nodes/api/http.py",
+      "line": 1186,
+      "target": "_async_http_session_pool"
+    },
+    {
+      "path": "src/kailash/nodes/data/async_connection.py",
+      "line": 311,
+      "target": "pool"
+    },
+    {
+      "path": "src/kailash/nodes/data/async_connection.py",
+      "line": 344,
+      "target": "pool"
+    },
+    {
+      "path": "src/kailash/nodes/data/async_connection.py",
+      "line": 353,
+      "target": "pool"
+    },
+    {
+      "path": "src/kailash/nodes/data/async_sql.py",
+      "line": 934,
+      "target": "self._kailash_driver_pool"
+    },
+    {
+      "path": "src/kailash/nodes/data/async_sql.py",
+      "line": 1166,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/nodes/data/async_sql.py",
+      "line": 2069,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/nodes/data/async_sql.py",
+      "line": 2141,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/nodes/data/async_sql.py",
+      "line": 2442,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/nodes/data/async_sql.py",
+      "line": 2485,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/nodes/data/async_sql.py",
+      "line": 1983,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/nodes/data/async_sql.py",
+      "line": 2136,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/nodes/data/async_sql.py",
+      "line": 2358,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/nodes/data/async_sql.py",
+      "line": 2478,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/nodes/data/async_sql.py",
+      "line": 2936,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/nodes/data/async_sql.py",
+      "line": 2833,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/nodes/data/async_sql.py",
+      "line": 4807,
+      "target": "self.lock"
+    },
+    {
+      "path": "src/kailash/nodes/data/query_pipeline.py",
+      "line": 435,
+      "target": "pool"
+    },
+    {
+      "path": "src/kailash/nodes/data/query_pipeline.py",
+      "line": 526,
+      "target": "pool"
+    },
+    {
+      "path": "src/kailash/nodes/data/query_pipeline.py",
+      "line": 582,
+      "target": "pool"
+    },
+    {
+      "path": "src/kailash/resources/health.py",
+      "line": 104,
+      "target": "pool"
+    },
+    {
+      "path": "src/kailash/runtime/local.py",
+      "line": 1313,
+      "target": "self._persistent_execution_lock"
+    },
+    {
+      "path": "src/kailash/runtime/resource_manager.py",
+      "line": 621,
+      "target": "pool"
+    },
+    {
+      "path": "src/kailash/runtime/resource_manager.py",
+      "line": 625,
+      "target": "pool"
+    },
+    {
+      "path": "src/kailash/runtime/parallel_cyclic.py",
+      "line": 62,
+      "target": "runtime"
+    },
+    {
+      "path": "src/kailash/runtime/distributed.py",
+      "line": 1420,
+      "target": "spec.semaphore"
+    },
+    {
+      "path": "src/kailash/runtime/testing.py",
+      "line": 349,
+      "target": "runtime"
+    },
+    {
+      "path": "src/kailash/runtime/async_local.py",
+      "line": 841,
+      "target": "self._persistent_execution_lock"
+    },
+    {
+      "path": "src/kailash/runtime/quotas.py",
+      "line": 247,
+      "target": "self._semaphore"
+    },
+    {
+      "path": "src/kailash/runtime/quotas.py",
+      "line": 261,
+      "target": "self._semaphore"
+    },
+    {
+      "path": "src/kailash/utils/resource_manager.py",
+      "line": 476,
+      "target": "self._semaphore"
+    },
+    {
+      "path": "src/kailash/utils/resource_manager.py",
+      "line": 102,
+      "target": "self._semaphore"
+    },
+    {
+      "path": "src/kailash/utils/resource_manager.py",
+      "line": 511,
+      "target": "self._semaphore"
+    },
+    {
+      "path": "src/kailash/workflow/async_builder.py",
+      "line": 495,
+      "target": "pool"
+    },
+    {
+      "path": "src/kailash/db/connection.py",
+      "line": 203,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/db/connection.py",
+      "line": 215,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/db/connection.py",
+      "line": 283,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/db/connection.py",
+      "line": 305,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/db/connection.py",
+      "line": 330,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/api/workflow_api.py",
+      "line": 244,
+      "target": "runtime"
+    },
+    {
+      "path": "src/kailash/trust/_locking.py",
+      "line": 100,
+      "target": "lock"
+    },
+    {
+      "path": "src/kailash/trust/signing/rotation.py",
+      "line": 325,
+      "target": "lock"
+    },
+    {
+      "path": "src/kailash/trust/esa/database.py",
+      "line": 342,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/trust/esa/database.py",
+      "line": 537,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/trust/esa/database.py",
+      "line": 623,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/trust/esa/database.py",
+      "line": 729,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/trust/esa/database.py",
+      "line": 818,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/trust/esa/database.py",
+      "line": 345,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/trust/esa/database.py",
+      "line": 402,
+      "target": "self.esa._pool"
+    },
+    {
+      "path": "src/kailash/trust/esa/database.py",
+      "line": 542,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/trust/esa/database.py",
+      "line": 630,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/trust/esa/database.py",
+      "line": 735,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/trust/esa/database.py",
+      "line": 824,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/trust/esa/database.py",
+      "line": 405,
+      "target": "self.esa._pool"
+    },
+    {
+      "path": "src/kailash/trust/registry/store.py",
+      "line": 279,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/trust/registry/store.py",
+      "line": 304,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/trust/registry/store.py",
+      "line": 344,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/trust/registry/store.py",
+      "line": 388,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/trust/registry/store.py",
+      "line": 414,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/trust/registry/store.py",
+      "line": 436,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/trust/registry/store.py",
+      "line": 463,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/trust/registry/store.py",
+      "line": 489,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/trust/registry/store.py",
+      "line": 511,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/trust/registry/store.py",
+      "line": 538,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/trust/registry/store.py",
+      "line": 584,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/trust/registry/store.py",
+      "line": 639,
+      "target": "self._pool"
+    },
+    {
+      "path": "src/kailash/infrastructure/lock_store.py",
+      "line": 683,
+      "target": "self"
+    },
+    {
+      "path": "src/kailash/servers/enterprise_workflow_server.py",
+      "line": 204,
+      "target": "self._injected_runtime"
+    },
+    {
+      "path": "src/kailash/gateway/resource_resolver.py",
+      "line": 114,
+      "target": "resource"
+    },
+    {
+      "path": "src/kailash/channels/mcp_channel.py",
+      "line": 105,
+      "target": "runtime"
+    },
+    {
+      "path": "src/kailash/channels/cli_channel.py",
+      "line": 93,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-nexus/src/nexus/core.py",
+      "line": 744,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-nexus/src/nexus/transports/mcp.py",
+      "line": 193,
+      "target": "injected"
+    },
+    {
+      "path": "packages/kailash-nexus/src/nexus/transports/websocket.py",
+      "line": 757,
+      "target": "self._injected_runtime"
+    },
+    {
+      "path": "packages/kaizen-agents/src/kaizen_agents/patterns/state_manager.py",
+      "line": 243,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-kaizen/src/kaizen/integrations/nexus/storage.py",
+      "line": 129,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-kaizen/src/kaizen/governance/storage.py",
+      "line": 154,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-kaizen/src/kaizen/trust/store.py",
+      "line": 126,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-kaizen/src/kaizen/trust/authority.py",
+      "line": 115,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-kaizen/src/kaizen/trust/audit_store.py",
+      "line": 120,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/gateway_integration.py",
+      "line": 101,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/migrations/staging_environment_manager.py",
+      "line": 381,
+      "target": "prod_pool"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/migrations/staging_environment_manager.py",
+      "line": 487,
+      "target": "prod_pool"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/migrations/staging_environment_manager.py",
+      "line": 950,
+      "target": "staging_pool"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/migrations/staging_environment_manager.py",
+      "line": 382,
+      "target": "staging_pool"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/migrations/staging_environment_manager.py",
+      "line": 488,
+      "target": "staging_pool"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/migrations/auto_migration_system.py",
+      "line": 259,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/migrations/auto_migration_system.py",
+      "line": 1048,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/migrations/auto_migration_system.py",
+      "line": 1671,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/migrations/schema_state_manager.py",
+      "line": 687,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/pool_lightweight.py",
+      "line": 235,
+      "target": "self._pool"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/pool_lightweight.py",
+      "line": 243,
+      "target": "lock"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/model_registry.py",
+      "line": 290,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/model_registry.py",
+      "line": 122,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/event_stores/postgresql.py",
+      "line": 109,
+      "target": "self._pool"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/event_stores/postgresql.py",
+      "line": 157,
+      "target": "self._pool"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/event_stores/postgresql.py",
+      "line": 240,
+      "target": "self._pool"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/event_stores/postgresql.py",
+      "line": 303,
+      "target": "self._pool"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/nodes/bulk_create_pool.py",
+      "line": 312,
+      "target": "pool"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/features/transactions.py",
+      "line": 396,
+      "target": "pool"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/utils/connection_adapter.py",
+      "line": 70,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/testing/performance_optimization.py",
+      "line": 197,
+      "target": "pool"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/testing/performance_optimization.py",
+      "line": 152,
+      "target": "pool"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/testing/dataflow_test_utils.py",
+      "line": 47,
+      "target": "runtime"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/testing/tdd_support.py",
+      "line": 189,
+      "target": "self.connection_pool"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/adapters/postgresql.py",
+      "line": 656,
+      "target": "self.connection_pool"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/adapters/postgresql.py",
+      "line": 192,
+      "target": "self.connection_pool"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/adapters/postgresql.py",
+      "line": 221,
+      "target": "self.connection_pool"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/adapters/postgresql.py",
+      "line": 246,
+      "target": "self.connection_pool"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/adapters/postgresql.py",
+      "line": 293,
+      "target": "self.connection_pool"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/adapters/mysql.py",
+      "line": 615,
+      "target": "self.connection_pool"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/adapters/mysql.py",
+      "line": 148,
+      "target": "self.connection_pool"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/adapters/mysql.py",
+      "line": 181,
+      "target": "self.connection_pool"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/adapters/mysql.py",
+      "line": 211,
+      "target": "self.connection_pool"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/fabric/pipeline.py",
+      "line": 843,
+      "target": "self._exec_semaphore"
+    }
+  ],
+  "runtime_subclasses": [
+    {
+      "path": "src/kailash/runtime/async_local.py",
+      "name": "AsyncLocalRuntime",
+      "bases": [
+        "LocalRuntime"
+      ]
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/protection_middleware.py",
+      "name": "ProtectedDataFlowRuntime",
+      "bases": [
+        "LocalRuntime"
+      ]
+    }
+  ],
+  "cleaned_up_assignments": [
+    {
+      "path": "src/kailash/runtime/async_local.py",
+      "line": 152,
+      "statement": "self._cleaned_up = False"
+    },
+    {
+      "path": "src/kailash/runtime/async_local.py",
+      "line": 296,
+      "statement": "self._cleaned_up = True"
+    },
+    {
+      "path": "src/kailash/runtime/async_local.py",
+      "line": 2269,
+      "statement": "self._cleaned_up = True"
+    }
+  ],
+  "prior_v1_absolute_SQL_callers_and_assertions": "/tmp/csq16-registry-correctness-mechanical.json",
+  "scope": "All production Python modules AST scanned; pool/lock/semaphore acquire calls excluded by receiver and reviewed source. Only AsyncLocalRuntime has runtime cleaned flag; two other assignments belong ExecutionContext."
+}

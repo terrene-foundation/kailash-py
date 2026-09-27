@@ -39,14 +39,25 @@ import contextvars
 import hashlib
 import json
 import logging
+import math
 import sys
 import threading
 import time
 import warnings
 from collections import OrderedDict
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from types import ModuleType
 from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Tuple
+
+from kailash.runtime.resource_manager import (
+    _is_retry_observer_failure,
+    _retry_execution_scope,
+)
+from kailash.utils.secure_logging import (
+    safe_exception_frames,
+    safe_log_field,
+    safe_type_name,
+)
 
 if TYPE_CHECKING:
     # Type-only imports — runtime imports stay lazy inside __init__ to
@@ -68,6 +79,7 @@ from kailash.runtime.durable import (
     NodeCompletionCallback,
     NodeCompletionEvent,
     NodeCompletionHookRegistry,
+    _validate_force_resume_with_drift,
     build_checkpoint_key,
     check_shape_drift_or_raise,
     compute_workflow_fingerprint,
@@ -112,6 +124,7 @@ from kailash.tracking import TaskManager, TaskStatus
 from kailash.tracking.metrics_collector import MetricsCollector
 from kailash.tracking.models import TaskMetrics
 from kailash.utils.data_validation import DataTypeValidator
+from kailash.utils.finalizer import warn_unclosed
 from kailash.workflow import Workflow
 from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor
 
@@ -269,7 +282,7 @@ def _resolve_exception_class(exc_name: str) -> type:
     return _EXCEPTION_ALLOWLIST[exc_name]
 
 
-class ContentAwareExecutionError(Exception):
+class ContentAwareExecutionError(WorkflowExecutionError, RuntimeExecutionError):
     """Exception raised when content-aware success detection identifies a failure."""
 
     node_id: str
@@ -401,6 +414,18 @@ def _safe_serialize(data: Any, max_size: int = 10000) -> Any:
         return {"_type": str(type(data)), "_str": str(data)[:1000]}
 
 
+@dataclass(frozen=True)
+class _ConditionalExecutionState:
+    """Prepared attempt controls shared by every conditional execution phase."""
+
+    execution_tracker: ExecutionTracker | None = None
+    cancellation_token: CancellationToken | None = None
+    workflow_fingerprint: str | None = None
+    checkpoint_key: str | None = None
+    tenant_id: str | None = None
+    idempotency_key: str | None = None
+
+
 class LocalRuntime(
     BaseRuntime, CycleExecutionMixin, ValidationMixin, ConditionalExecutionMixin
 ):
@@ -495,7 +520,7 @@ class LocalRuntime(
             enable_connection_sharing: Whether to enable connection pool sharing across runtime instances.
             max_concurrent_workflows: Maximum number of concurrent workflows in persistent mode.
             connection_pool_size: Default size for connection pools.
-            sync_bridge_timeout: Optional hard bound, in seconds, on the
+            sync_bridge_timeout: Optional finite positive hard bound, in float-representable seconds, on the
                 sync->async bridge join (issue #2081). ``execute()`` called
                 from inside a running event loop runs the workflow on a worker
                 thread and waits for it. Default ``None`` waits indefinitely —
@@ -508,8 +533,39 @@ class LocalRuntime(
                 ``RuntimeExecutionError`` naming the workflow.
 
         Raises:
-            ValueError: If ``sync_bridge_timeout`` is set and not positive.
+            TypeError: If ``sync_bridge_timeout`` is neither an int, float, nor None.
+            ValueError: If a configured ``sync_bridge_timeout`` is non-positive,
+                non-finite, or outside the representable float range.
         """
+        # Reject invalid configuration before parent initialization or resource
+        # ownership: failed construction cannot hand the caller a runtime to close.
+        if sync_bridge_timeout is not None:
+            if not isinstance(sync_bridge_timeout, (int, float)):
+                raise TypeError("sync_bridge_timeout must be an int or float, or None")
+            try:
+                # Normalize once so admitted values match the join's float arithmetic.
+                sync_bridge_timeout = float(sync_bridge_timeout)
+                valid_timeout = (
+                    math.isfinite(sync_bridge_timeout) and sync_bridge_timeout > 0
+                )
+            except OverflowError:
+                # An integer beyond float range cannot reach the join arithmetic.
+                valid_timeout = False
+            if not valid_timeout:
+                raise ValueError(
+                    "sync_bridge_timeout must be a finite positive number of seconds "
+                    "representable as a float, or "
+                    f"None (got {sync_bridge_timeout!r})"
+                )
+        if history_store is not None:
+            record_event = getattr(history_store, "record_event", None)
+            if not callable(record_event):
+                raise TypeError(
+                    "LocalRuntime(history_store=...): the history_store "
+                    "must expose a callable 'record_event(event)' coroutine "
+                    "matching the WorkflowHistoryStore protocol."
+                )
+
         # Initialize parent classes (BaseRuntime + CycleExecutionMixin)
         # Pass ALL configuration to BaseRuntime for unified initialization
         super().__init__(
@@ -749,7 +805,7 @@ class LocalRuntime(
                             exception_classifier.add_retriable_exception(exc_class)
                         except (ValueError, KeyError) as e:
                             logger.warning(
-                                f"Could not add retriable exception: {exc_name}: {e}"
+                                f"Could not add retriable exception: {exc_name}: {safe_exception_frames(e)}"
                             )
 
                     # Add custom non-retriable exceptions
@@ -759,7 +815,7 @@ class LocalRuntime(
                             exception_classifier.add_non_retriable_exception(exc_class)
                         except (ValueError, KeyError) as e:
                             logger.warning(
-                                f"Could not add non-retriable exception: {exc_name}: {e}"
+                                f"Could not add non-retriable exception: {exc_name}: {safe_exception_frames(e)}"
                             )
 
                     # Add pattern-based rules
@@ -827,7 +883,7 @@ class LocalRuntime(
                             )
                         except Exception as e:
                             logger.warning(
-                                f"Could not register strategy for {exc_name}: {e}"
+                                f"Could not register strategy for {exc_name}: {safe_exception_frames(e)}"
                             )
 
                 self._enable_retry_coordination = True
@@ -836,7 +892,9 @@ class LocalRuntime(
                 )
 
             except ImportError as e:
-                logger.warning(f"Retry policy engine not available: {e}")
+                logger.warning(
+                    f"Retry policy engine not available: {safe_exception_frames(e)}"
+                )
 
         # Initialize pool coordinator immediately if persistent mode is enabled
         if self._persistent_mode:
@@ -899,6 +957,7 @@ class LocalRuntime(
         self._persistent_loop: Optional[asyncio.AbstractEventLoop] = None
         self._loop_thread: Optional[threading.Thread] = None
         self._loop_lock = threading.Lock()  # Protect loop creation/cleanup
+        self._persistent_execution_lock = threading.Lock()
         self._ref_count = 1  # Creator holds first reference
         self._is_context_managed = False  # Track if using context manager
         self._cleanup_registered = False  # Track if atexit cleanup registered
@@ -951,11 +1010,6 @@ class LocalRuntime(
         # Issue #2081: None keeps the historical wait-forever semantics, but
         # the join is now sliced so a stuck bridge emits a stack every
         # SYNC_BRIDGE_WATCHDOG_INTERVAL instead of failing silently.
-        if sync_bridge_timeout is not None and sync_bridge_timeout <= 0:
-            raise ValueError(
-                "sync_bridge_timeout must be a positive number of seconds or "
-                f"None (got {sync_bridge_timeout!r})"
-            )
         self._sync_bridge_timeout = sync_bridge_timeout
         self._hook_registry = NodeCompletionHookRegistry()
         # W2 auto-subscribe: when a history store is provided, register
@@ -966,13 +1020,6 @@ class LocalRuntime(
         # facade ``history_store=`` kwarg lands its production call site
         # in the same shard as the kwarg's wiring.
         if history_store is not None:
-            record_event = getattr(history_store, "record_event", None)
-            if not callable(record_event):
-                raise TypeError(
-                    "LocalRuntime(history_store=...): the history_store "
-                    "must expose a callable 'record_event(event)' coroutine "
-                    "matching the WorkflowHistoryStore protocol."
-                )
             self._hook_registry.register(record_event)
         # Per-run asyncio.Lock for parallel-node checkpoint atomicity.
         # LocalRuntime executes nodes sequentially in
@@ -1185,6 +1232,7 @@ class LocalRuntime(
         # Validate the typed time-limit kwargs at the entry point so caller
         # bugs (negative values, soft >= hard, NaN/Inf) raise loudly here,
         # not later from a timer thread (per #912 Shard 1 + Shard 6).
+        _validate_force_resume_with_drift(force_resume_with_drift)
         _validate_limits(soft_time_limit, time_limit)
 
         # Emit deprecation warning for non-context-managed usage.
@@ -1253,13 +1301,21 @@ class LocalRuntime(
         _metrics_bridge = get_metrics_bridge()
         _metrics_workflow_name = getattr(workflow, "name", "") or ""
         _metrics_start_time = time.perf_counter()
+        persistent_admitted = False
 
         try:
             try:
                 try:
-                    # Check if we're already in an event loop
                     loop = asyncio.get_running_loop()
-                    # If we're in an event loop, run synchronously instead
+                except RuntimeError:
+                    loop = None
+                if loop is None:
+                    persistent_admitted = self._persistent_execution_lock.acquire(
+                        blocking=False
+                    )
+                if loop is not None or not persistent_admitted:
+                    # A running caller loop or occupied persistent loop uses
+                    # the existing independently owned bridge, without waiting.
                     if effective_trust_ctx is not None:
                         from kailash.runtime.trust.context import runtime_trust_context
 
@@ -1281,32 +1337,13 @@ class LocalRuntime(
                             search_attributes=search_attributes,
                             **durable_kwargs,
                         )
-                except RuntimeError:
+                else:
                     # No event loop running, use persistent loop
                     loop = self._ensure_event_loop()
 
                     # CARE-017: Verify workflow trust before execution (async path)
                     if effective_trust_ctx is not None:
-                        from kailash.runtime.trust.context import (
-                            TrustVerificationMode,
-                            runtime_trust_context,
-                        )
-
-                        # Run verification before execution if verifier is configured
-                        if (
-                            self._trust_verification_mode
-                            != TrustVerificationMode.DISABLED
-                            and self._trust_verifier is not None
-                        ):
-                            allowed = loop.run_until_complete(
-                                self._verify_workflow_trust(
-                                    workflow, effective_trust_ctx
-                                )
-                            )
-                            if not allowed:
-                                raise WorkflowExecutionError(
-                                    "Trust verification denied workflow execution"
-                                )
+                        from kailash.runtime.trust.context import runtime_trust_context
 
                         # Run the async execution in the persistent loop with trust context
                         with runtime_trust_context(effective_trust_ctx):
@@ -1370,6 +1407,8 @@ class LocalRuntime(
 
             return results
         finally:
+            if persistent_admitted:
+                self._persistent_execution_lock.release()
             # Issue #1708 W1f: record the canonical workflow RED triple.
             # `sys.exc_info()` inside a `finally` attached to the same
             # `try` frame that is unwinding reports the in-flight exception
@@ -1439,6 +1478,7 @@ class LocalRuntime(
             WorkflowCancelledError: If cancellation is requested.
             PermissionError: If access control denies execution.
         """
+        _validate_force_resume_with_drift(force_resume_with_drift)
         return await self._execute_async(
             workflow=workflow,
             task_manager=task_manager,
@@ -1916,7 +1956,7 @@ class LocalRuntime(
                                                 pass
                             except Exception as e:
                                 logger.warning(
-                                    f"Error disposing AsyncSQL pools during shutdown: {e}"
+                                    f"Error disposing AsyncSQL pools during shutdown: {safe_exception_frames(e)}"
                                 )
                         else:
                             # Outer loop owns the pools; we cannot dispose
@@ -1976,7 +2016,7 @@ class LocalRuntime(
                                 _cleanup()
                         except Exception as e:
                             logger.warning(
-                                f"Error disposing SQL pools during shutdown: {e}"
+                                f"Error disposing SQL pools during shutdown: {safe_exception_frames(e)}"
                             )
 
                     # Close the loop
@@ -1991,8 +2031,7 @@ class LocalRuntime(
                 except Exception as e:
                     # Log error but don't raise - cleanup must succeed
                     logger.warning(
-                        f"Error during event loop cleanup for runtime {self._runtime_id}: {e}. "
-                        f"Force-closing loop."
+                        f"Error during event loop cleanup for runtime {self._runtime_id}: {safe_exception_frames(e)}. Force-closing loop."
                     )
                     # Force close even if cleanup fails
                     if not loop.is_closed():
@@ -2000,7 +2039,7 @@ class LocalRuntime(
                             loop.close()
                         except Exception as e2:
                             logger.error(
-                                f"Failed to force-close event loop for runtime {self._runtime_id}: {e2}"
+                                f"Failed to force-close event loop for runtime {self._runtime_id}: {safe_exception_frames(e2)}"
                             )
 
             # Clear reference
@@ -2151,10 +2190,10 @@ class LocalRuntime(
             subsystem = Subsystem(runtime=shared_runtime.acquire())
 
         Raises:
-            RuntimeError: If the runtime has already been fully closed (ref_count <= 0).
+            RuntimeError: If the runtime has been fully closed or its resources cleaned up.
         """
         with self._loop_lock:
-            if self._ref_count <= 0:
+            if self._ref_count <= 0 or getattr(self, "_cleaned_up", False):
                 raise RuntimeError(
                     "Cannot acquire a closed runtime. "
                     "Create a new runtime instance instead."
@@ -2174,21 +2213,36 @@ class LocalRuntime(
         """Current reference count (for debugging/testing)."""
         return self._ref_count
 
-    def __del__(self, _warnings: ModuleType = warnings) -> None:
-        """Emit ResourceWarning if runtime was not properly closed."""
-        if getattr(self, "_ref_count", 0) > 0:
-            _warnings.warn(
-                f"Unclosed {self.__class__.__name__} (ref_count={self._ref_count}). "
-                f"Use 'with {self.__class__.__name__}() as runtime:' or call runtime.close().",
-                ResourceWarning,
-                source=self,
+    def __del__(self, _warn=warn_unclosed) -> None:
+        """Emit ResourceWarning if the runtime was not properly closed.
+
+        Warns and RETURNS. This finalizer performs no cleanup, deliberately.
+
+        The previous body forced ``_ref_count = 1`` and called ``close()``.
+        That is the single shortest route into the documented deadlock: on this
+        class ``close()`` runs ``logger.debug(...)``, then takes
+        ``self._loop_lock``, then calls ``_cleanup_event_loop()``, which logs
+        again and drives ``loop.run_until_complete``. A finalizer fires at an
+        arbitrary bytecode boundary on whichever thread drops the last
+        reference — possibly a thread already inside ``logging`` holding the
+        root logging lock, or already inside ``self._loop_lock``. Neither lock
+        is reentrant, so re-entering either wedges the process permanently.
+
+        The swallow-and-continue guard that wrapped the call could not help: a
+        deadlock raises nothing, so there was never an exception to catch. All
+        it did was hide real close failures (``zero-tolerance.md`` Rule 3).
+
+        Deterministic cleanup stays the caller's job via ``close()`` or
+        ``with LocalRuntime() as runtime:``. See ``rules/patterns.md``
+        § "Async Resource Cleanup" and issue #2107.
+        """
+        ref_count = getattr(self, "_ref_count", 0)
+        if ref_count > 0:
+            _warn(
+                self,
+                f"Use 'with {type(self).__name__}() as runtime:' or call runtime.close().",
+                detail=f"ref_count={ref_count}",
             )
-            # Force cleanup regardless
-            self._ref_count = 1  # Ensure close() actually cleans up
-            try:
-                self.close()
-            except Exception:
-                pass
 
     def __enter__(self) -> "LocalRuntime":
         """
@@ -2284,7 +2338,7 @@ class LocalRuntime(
         if self.debug:
             logger.debug(
                 f"Exiting context manager for runtime {self._runtime_id} "
-                f"(exception: {exc_type.__name__ if exc_type else 'None'})"
+                f"(exception: {safe_type_name(exc_val) if exc_type else 'None'})"
             )
 
         # Use close() which handles ref counting and cleanup
@@ -2328,6 +2382,7 @@ class LocalRuntime(
             WorkflowCancelledError: If cancellation is requested.
         """
         # Create new event loop for sync execution
+        _validate_force_resume_with_drift(force_resume_with_drift)
         import threading
 
         result_container = []
@@ -2342,6 +2397,17 @@ class LocalRuntime(
         # mirroring stdlib ``asyncio.to_thread`` semantics (#1200).
         _caller_ctx = contextvars.copy_context()
 
+        async def execute_in_bridge():
+            return await self._execute_async(
+                workflow=workflow,
+                task_manager=task_manager,
+                parameters=parameters,
+                cancellation_token=cancellation_token,
+                search_attributes=search_attributes,
+                idempotency_key=idempotency_key,
+                force_resume_with_drift=force_resume_with_drift,
+            )
+
         def run_in_thread():
             """Run async execution in separate thread."""
             loop = None
@@ -2349,19 +2415,9 @@ class LocalRuntime(
                 # Create new event loop in thread
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                result = loop.run_until_complete(
-                    self._execute_async(
-                        workflow=workflow,
-                        task_manager=task_manager,
-                        parameters=parameters,
-                        cancellation_token=cancellation_token,
-                        search_attributes=search_attributes,
-                        idempotency_key=idempotency_key,
-                        force_resume_with_drift=force_resume_with_drift,
-                    )
-                )
+                result = loop.run_until_complete(execute_in_bridge())
                 result_container.append(result)
-            except Exception as e:
+            except BaseException as e:
                 exception_container.append(e)
             finally:
                 if loop and not loop.is_closed():
@@ -2430,8 +2486,7 @@ class LocalRuntime(
                                         pass
                     except Exception as e:
                         logger.warning(
-                            f"Error disposing AsyncSQL pools during "
-                            f"_execute_sync teardown: {e}"
+                            f"Error disposing AsyncSQL pools during _execute_sync teardown: {safe_exception_frames(e)}"
                         )
                     try:
                         from kailash.nodes.data.sql import SQLDatabaseNode
@@ -2441,8 +2496,7 @@ class LocalRuntime(
                             _cleanup()
                     except Exception as e:
                         logger.warning(
-                            f"Error disposing SQL pools during "
-                            f"_execute_sync teardown: {e}"
+                            f"Error disposing SQL pools during _execute_sync teardown: {safe_exception_frames(e)}"
                         )
                 if loop:
                     loop.close()
@@ -2468,6 +2522,7 @@ class LocalRuntime(
 
         return result_container[0]
 
+    @_retry_execution_scope
     async def _execute_async(
         self,
         workflow: Workflow,
@@ -2503,7 +2558,21 @@ class LocalRuntime(
             WorkflowCancelledError: If cancellation is requested.
             PermissionError: If access control denies execution.
         """
+        cyclic_executor = self._cycle_executor_for_attempt()
+        from kailash.runtime.trust.context import TrustVerificationMode
+
+        trust_context = self._get_effective_trust_context()
+        if (
+            trust_context is not None
+            and self._trust_verification_mode != TrustVerificationMode.DISABLED
+            and self._trust_verifier is not None
+        ):
+            if not await self._verify_workflow_trust(workflow, trust_context):
+                raise WorkflowExecutionError(
+                    "Trust verification denied workflow execution"
+                )
         # Extract kwargs for backward compatibility
+        _validate_force_resume_with_drift(kwargs.get("force_resume_with_drift", False))
         task_manager: TaskManager | None = kwargs.get("task_manager")
         parameters: dict[str, dict[str, Any]] | dict[str, Any] | None = kwargs.get(
             "parameters"
@@ -2513,9 +2582,7 @@ class LocalRuntime(
         search_attributes: dict[str, Any] | None = kwargs.get("search_attributes")
         # W1: durable-execution kwargs
         idempotency_key: Optional[str] = kwargs.get("idempotency_key")
-        force_resume_with_drift: bool = bool(
-            kwargs.get("force_resume_with_drift", False)
-        )
+        force_resume_with_drift: bool = kwargs.get("force_resume_with_drift", False)
 
         if not workflow:
             raise RuntimeExecutionError("No workflow provided")
@@ -2545,9 +2612,7 @@ class LocalRuntime(
                 except Exception as load_err:  # pragma: no cover — defensive
                     self.logger.warning(
                         "durable.checkpoint.load_failed",
-                        extra={
-                            "error_type": type(load_err).__name__,
-                        },
+                        extra={"error_type": safe_type_name(load_err)},
                     )
                     prior_blob = None
                 if prior_blob is not None:
@@ -2580,6 +2645,7 @@ class LocalRuntime(
         run_id = None
         _deferred_storage = None  # P0D-007: Initialize before try block
         _signal_key = None  # Signal cleanup key
+        _progress_token = None
 
         try:
             # Resource Limit Enforcement: Check limits before execution (P0A-003: opt-in only)
@@ -2663,6 +2729,11 @@ class LocalRuntime(
             if execution_tracker is None:
                 execution_tracker = ExecutionTracker()
             workflow_context["execution_tracker"] = execution_tracker
+            conditional_state = _ConditionalExecutionState(
+                execution_tracker=execution_tracker,
+                cancellation_token=cancellation_token,
+                **_w1_kwargs,
+            )
 
             # Transform workflow-level parameters if needed
             processed_parameters = self._process_workflow_parameters(
@@ -2713,10 +2784,12 @@ class LocalRuntime(
                             )
                         except Exception as sa_err:
                             self.logger.warning(
-                                f"Failed to set search attributes: {sa_err}"
+                                f"Failed to set search attributes: {safe_exception_frames(sa_err)}"
                             )
                 except Exception as e:
-                    self.logger.warning(f"Failed to create task run: {e}")
+                    self.logger.warning(
+                        f"Failed to create task run: {safe_exception_frames(e)}"
+                    )
                     # Continue without tracking
 
             # === Signal/Query System ===
@@ -2731,10 +2804,16 @@ class LocalRuntime(
             }
 
             # Check for cyclic workflows and delegate to CycleExecutionMixin
-            if self.enable_cycles and workflow.has_cycles():
+            if cyclic_executor is not None and workflow.has_cycles():
                 # Delegate to CycleExecutionMixin (Phase 3 integration)
-                results, run_id = self._execute_cyclic_workflow(
-                    workflow, processed_parameters, task_manager, run_id
+                results, run_id = await self._execute_cyclic_workflow_async(
+                    workflow,
+                    processed_parameters,
+                    task_manager,
+                    run_id,
+                    workflow_context=workflow_context,
+                    execution_state=conditional_state,
+                    cyclic_executor=cyclic_executor,
                 )
             elif (
                 self.conditional_execution == "skip_branches"
@@ -2773,10 +2852,21 @@ class LocalRuntime(
                                     task_manager=task_manager,
                                     run_id=run_id,
                                     workflow_context=workflow_context,
+                                    execution_state=conditional_state,
                                 )
                             except Exception as e:
+                                if isinstance(
+                                    e,
+                                    (
+                                        ContentAwareExecutionError,
+                                        WorkflowCancelledError,
+                                        SoftTimeLimitExceeded,
+                                        HardTimeLimitExceeded,
+                                    ),
+                                ) or _is_retry_observer_failure(e):
+                                    raise
                                 self.logger.warning(
-                                    f"Conditional execution failed, falling back to standard execution: {e}"
+                                    f"Conditional execution failed, falling back to standard execution: {safe_exception_frames(e)}"
                                 )
                                 # Fallback to standard execution
                                 results = await self._execute_workflow_async(
@@ -2801,10 +2891,21 @@ class LocalRuntime(
                                 task_manager=task_manager,
                                 run_id=run_id,
                                 workflow_context=workflow_context,
+                                execution_state=conditional_state,
                             )
                         except Exception as e:
+                            if isinstance(
+                                e,
+                                (
+                                    ContentAwareExecutionError,
+                                    WorkflowCancelledError,
+                                    SoftTimeLimitExceeded,
+                                    HardTimeLimitExceeded,
+                                ),
+                            ) or _is_retry_observer_failure(e):
+                                raise
                             self.logger.warning(
-                                f"Conditional execution failed, falling back to standard execution: {e}"
+                                f"Conditional execution failed, falling back to standard execution: {safe_exception_frames(e)}"
                             )
                             # Fallback to standard execution
                             results = await self._execute_workflow_async(
@@ -2829,10 +2930,21 @@ class LocalRuntime(
                             task_manager=task_manager,
                             run_id=run_id,
                             workflow_context=workflow_context,
+                            execution_state=conditional_state,
                         )
                     except Exception as e:
+                        if isinstance(
+                            e,
+                            (
+                                ContentAwareExecutionError,
+                                WorkflowCancelledError,
+                                SoftTimeLimitExceeded,
+                                HardTimeLimitExceeded,
+                            ),
+                        ) or _is_retry_observer_failure(e):
+                            raise
                         self.logger.warning(
-                            f"Conditional execution failed, falling back to standard execution: {e}"
+                            f"Conditional execution failed, falling back to standard execution: {safe_exception_frames(e)}"
                         )
                         # Fallback to standard execution
                         results = await self._execute_workflow_async(
@@ -2884,7 +2996,9 @@ class LocalRuntime(
                 try:
                     task_manager.update_run_status(run_id, "completed")
                 except Exception as e:
-                    self.logger.warning(f"Failed to update run status: {e}")
+                    self.logger.warning(
+                        f"Failed to update run status: {safe_exception_frames(e)}"
+                    )
 
             # P0E-003: Persist deferred tracking data to SQLite (CARE audit record).
             # Passes RuntimeAuditGenerator events into the storage backend before flush
@@ -2910,14 +3024,11 @@ class LocalRuntime(
                         await node_instance.cleanup()
                     except Exception as cleanup_error:
                         self.logger.warning(
-                            f"Error during final cleanup of node {node_id}: {cleanup_error}"
+                            f"Error during final cleanup of node {node_id}: {safe_exception_frames(cleanup_error)}"
                         )
 
             # === Signal/Query System Cleanup ===
             self._workflow_signals.pop(_signal_key, None)
-
-            # === Progress Reporting Cleanup ===
-            _current_progress_registry.reset(_progress_token)
 
             return results, run_id
 
@@ -2941,9 +3052,7 @@ class LocalRuntime(
                     pass
             # P0E-003: Persist deferred tracking on error path (CARE audit trail)
             if _deferred_storage is not None:
-                self._flush_deferred_storage_sqlite(
-                    _deferred_storage, log_warning=False
-                )
+                self._flush_deferred_storage_sqlite(_deferred_storage, log_warning=True)
             if _signal_key:
                 self._workflow_signals.pop(_signal_key, None)
             raise
@@ -2955,7 +3064,7 @@ class LocalRuntime(
                     {
                         "workflow_id": workflow.workflow_id,
                         "user_context": self._serialize_user_context(),
-                        "error": str(e),
+                        "error": safe_exception_frames(e),
                     },
                 )
             # Re-raise permission errors as-is
@@ -2966,32 +3075,39 @@ class LocalRuntime(
                     pass
             # P0E-003: Persist deferred tracking on error path (CARE audit trail)
             if _deferred_storage is not None:
-                self._flush_deferred_storage_sqlite(
-                    _deferred_storage, log_warning=False
-                )
+                self._flush_deferred_storage_sqlite(_deferred_storage, log_warning=True)
             if _signal_key:
                 self._workflow_signals.pop(_signal_key, None)
             raise
-        except WorkflowCancelledError as e:
+        except (WorkflowCancelledError, asyncio.CancelledError) as e:
             # Cancellation should propagate without wrapping
             if self.enable_audit:
                 await self._log_audit_event_async(
                     "workflow_execution_cancelled",
                     {
                         "workflow_id": workflow.workflow_id,
-                        "completed_nodes": e.completed_nodes,
-                        "cancelled_at_node": e.cancelled_at_node,
+                        **(
+                            {
+                                "completed_nodes": e.completed_nodes,
+                                "cancelled_at_node": e.cancelled_at_node,
+                            }
+                            if isinstance(e, WorkflowCancelledError)
+                            else {"error": safe_exception_frames(e)}
+                        ),
                     },
                 )
             if task_manager and run_id:
                 try:
-                    task_manager.update_run_status(run_id, "cancelled", error=str(e))
-                except Exception:
-                    pass
+                    # Workflow runs have only completed/failed terminal states;
+                    # cancellation remains distinct in the audit event above.
+                    task_manager.update_run_status(run_id, "failed", error=str(e))
+                except Exception as tracking_error:
+                    self.logger.warning(
+                        "Failed to persist cancelled workflow status: %s",
+                        safe_exception_frames(tracking_error),
+                    )
             if _deferred_storage is not None:
-                self._flush_deferred_storage_sqlite(
-                    _deferred_storage, log_warning=False
-                )
+                self._flush_deferred_storage_sqlite(_deferred_storage, log_warning=True)
             if _signal_key:
                 self._workflow_signals.pop(_signal_key, None)
             raise
@@ -3002,7 +3118,7 @@ class LocalRuntime(
                     "workflow_execution_failed",
                     {
                         "workflow_id": workflow.workflow_id,
-                        "error": str(e),
+                        "error": safe_exception_frames(e),
                     },
                 )
             # Mark run as failed
@@ -3013,16 +3129,26 @@ class LocalRuntime(
                     pass
             # P0E-003: Persist deferred tracking on error path (CARE audit trail)
             if _deferred_storage is not None:
-                self._flush_deferred_storage_sqlite(
-                    _deferred_storage, log_warning=False
-                )
+                self._flush_deferred_storage_sqlite(_deferred_storage, log_warning=True)
             if _signal_key:
                 self._workflow_signals.pop(_signal_key, None)
 
+            if isinstance(
+                e,
+                (
+                    ContentAwareExecutionError,
+                    SoftTimeLimitExceeded,
+                    HardTimeLimitExceeded,
+                ),
+            ) or _is_retry_observer_failure(e):
+                raise
             # Wrap other errors in RuntimeExecutionError
             raise RuntimeExecutionError(
                 f"Unified enterprise workflow execution failed: {type(e).__name__}: {e}"
             ) from e
+        finally:
+            if _progress_token is not None:
+                _current_progress_registry.reset(_progress_token)
 
     async def _execute_workflow_async(
         self,
@@ -3060,6 +3186,14 @@ class LocalRuntime(
             WorkflowExecutionError: If execution fails.
             WorkflowCancelledError: If cancellation is requested between nodes.
         """
+        execution_state = _ConditionalExecutionState(
+            execution_tracker=execution_tracker,
+            cancellation_token=cancellation_token,
+            workflow_fingerprint=workflow_fingerprint,
+            checkpoint_key=checkpoint_key,
+            tenant_id=tenant_id,
+            idempotency_key=idempotency_key,
+        )
         # P0C-001: Use cached topological sort from Workflow
         try:
             execution_order = workflow.get_execution_order()
@@ -3159,6 +3293,7 @@ class LocalRuntime(
                 node_id
             ):
                 cached_output = execution_tracker.get_output(node_id)
+                self._check_node_result(node_id, cached_output)
                 results[node_id] = cached_output
                 node_outputs[node_id] = cached_output
                 completed_nodes.append(node_id)
@@ -3220,7 +3355,7 @@ class LocalRuntime(
                         )
                 except Exception as e:
                     self.logger.warning(
-                        f"Failed to create task for node '{node_id}': {e}"
+                        f"Failed to create task for node '{node_id}': {safe_exception_frames(e)}"
                     )
 
             # OpenTelemetry tracing: per-node span (DETAILED+ level)
@@ -3255,7 +3390,7 @@ class LocalRuntime(
                 # cross-node parameter leaks while maintaining proper scoping
 
                 if self.debug:
-                    self.logger.debug(f"Node {node_id} inputs: {inputs}")
+                    self.logger.debug("Node %s inputs prepared", node_id)
 
                 # CONDITIONAL EXECUTION: Skip nodes that only receive None inputs from conditional routing
                 # Uses shared mixin method (ConditionalExecutionMixin._should_skip_conditional_node)
@@ -3263,9 +3398,7 @@ class LocalRuntime(
                     workflow, node_id, inputs, self._current_results
                 ):
                     if self.debug:
-                        self.logger.debug(
-                            f"DEBUG: Skipping {node_id} - inputs: {inputs}"
-                        )
+                        self.logger.debug("Skipping conditional node %s", node_id)
                     self.logger.info(
                         f"Skipping node {node_id} - all conditional inputs are None"
                     )
@@ -3321,121 +3454,6 @@ class LocalRuntime(
                 # Get performance metrics
                 performance_metrics = metrics_context.result()
 
-                # Store outputs
-                node_outputs[node_id] = outputs
-                results[node_id] = outputs
-                completed_nodes.append(node_id)
-
-                # === Checkpoint/Restore ===
-                # Record completion so that checkpoint captures include this node.
-                if execution_tracker is not None:
-                    execution_tracker.record_completion(node_id, outputs)
-
-                # === W1: Durable execution — checkpoint + hook dispatch ===
-                # Build the canonical NodeCompletionEvent (post-redaction)
-                # and (a) persist a checkpoint blob if checkpoint_after_each_node
-                # is True, (b) dispatch the event to every subscriber.  Both
-                # paths route through redact_event_for_persistence first so
-                # neither the store nor any subscriber sees a classified
-                # PK or a redacted field's raw value.
-                _node_ended_at = datetime.now(UTC)
-                _node_duration_ms = int(
-                    (_node_ended_at - _node_started_at).total_seconds() * 1000
-                )
-                _raw_outputs: Mapping[str, Any] = (
-                    outputs if isinstance(outputs, Mapping) else {"result": outputs}
-                )
-                _completion_event = NodeCompletionEvent(
-                    run_id=run_id,
-                    workflow_id=getattr(workflow, "workflow_id", "") or "",
-                    workflow_fingerprint=workflow_fingerprint or "",
-                    node_id=node_id,
-                    node_type=node_instance.__class__.__name__,
-                    outputs=_raw_outputs,
-                    started_at=_node_started_at,
-                    ended_at=_node_ended_at,
-                    duration_ms=_node_duration_ms,
-                    tenant_id=tenant_id,
-                    idempotency_key=idempotency_key,
-                    error=None,
-                    metadata={},
-                )
-                _classification_policy = getattr(self, "_classification_policy", None)
-                _redacted_event = redact_event_for_persistence(
-                    _completion_event,
-                    classification_policy=_classification_policy,
-                )
-
-                # Persist the checkpoint blob if requested AND a store is
-                # configured AND we have a checkpoint_key.  The lock
-                # serialises the per-run save against parallel-node
-                # paths in subclasses.
-                #
-                # W6 redaction discipline: the on_node_complete subscriber
-                # surface dispatches the REDACTED event above (line 2761),
-                # but the tracker_state passed to encode_checkpoint_payload
-                # is the RAW execution_tracker.to_dict() — which embeds
-                # raw classified node outputs in node_outputs[<node_id>].
-                # Route the tracker state through the same classification-
-                # aware redaction helper so the persisted checkpoint blob
-                # carries [REDACTED] / hashed-PK sentinels for every
-                # classified field, matching the hook contract documented
-                # in on_node_complete() above.  See
-                # rules/zero-tolerance.md Rule 2 ("fake redaction") and
-                # rules/dataflow-classification.md MUST Rule 1 ("every
-                # mutation return-path applies redaction").
-                if (
-                    self._checkpoint_after_each_node
-                    and self._checkpoint_store is not None
-                    and checkpoint_key is not None
-                    and execution_tracker is not None
-                ):
-                    _lock_key = run_id or checkpoint_key
-                    _lock = self._get_or_create_checkpoint_lock(_lock_key)
-                    async with _lock:
-                        _redacted_tracker_state = redacted_tracker_state_for_checkpoint(
-                            execution_tracker.to_dict(),
-                            classification_policy=_classification_policy,
-                            workflow_id=getattr(workflow, "workflow_id", "") or "",
-                            workflow_fingerprint=workflow_fingerprint or "",
-                            tenant_id=tenant_id,
-                            idempotency_key=idempotency_key,
-                        )
-                        _blob = encode_checkpoint_payload(
-                            workflow_fingerprint=workflow_fingerprint or "",
-                            tracker_state=_redacted_tracker_state,
-                            tenant_id=tenant_id,
-                            workflow_id=getattr(workflow, "workflow_id", "") or "",
-                            idempotency_key=idempotency_key,
-                        )
-                        try:
-                            await self._checkpoint_store.save(checkpoint_key, _blob)
-                        except (
-                            asyncio.CancelledError,
-                            KeyboardInterrupt,
-                            SystemExit,
-                        ):
-                            raise
-                        except Exception as save_err:
-                            self.logger.warning(
-                                "durable.checkpoint.save_failed",
-                                extra={
-                                    "node_id_hash": hashlib.sha256(
-                                        node_id.encode("utf-8")
-                                    ).hexdigest()[:8],
-                                    "error_type": type(save_err).__name__,
-                                },
-                            )
-
-                # Dispatch the (redacted) event to all subscribers.  Sync
-                # and async callbacks are both honored.  Subscriber
-                # exceptions are caught + WARN-logged inside dispatch.
-                if self._hook_registry.subscriber_count > 0:
-                    await self._hook_registry.dispatch_async(_redacted_event)
-
-                if self.debug:
-                    self.logger.debug(f"Node {node_id} outputs: {outputs}")
-
                 # Content-aware success detection (CRITICAL FIX)
                 if self.content_aware_success_detection:
                     should_stop, error_message = should_stop_on_content_failure(
@@ -3458,7 +3476,9 @@ class LocalRuntime(
 
                         # Log the content-aware failure
                         self.logger.error(
-                            f"Content-aware failure detected in node {node_id}: {error_message}"
+                            "Content-aware failure detected in node %s: %s",
+                            node_id,
+                            safe_exception_frames(error),
                         )
 
                         # Update task status to failed if task manager exists
@@ -3472,6 +3492,24 @@ class LocalRuntime(
 
                         # Raise the content-aware execution error
                         raise error
+
+                # Store outputs
+                node_outputs[node_id] = outputs
+                results[node_id] = outputs
+                completed_nodes.append(node_id)
+
+                await self._publish_node_completion(
+                    workflow=workflow,
+                    node_id=node_id,
+                    node_instance=node_instance,
+                    outputs=outputs,
+                    run_id=run_id,
+                    started_at=_node_started_at,
+                    execution_state=execution_state,
+                )
+
+                if self.debug:
+                    self.logger.debug("Node %s outputs available", node_id)
 
                 # Update task status with enhanced metrics
                 if task and task_manager:
@@ -3533,7 +3571,7 @@ class LocalRuntime(
                         await node_instance.cleanup()
                     except Exception as cleanup_error:
                         self.logger.warning(
-                            f"Error during node {node_id} cleanup: {cleanup_error}"
+                            f"Error during node {node_id} cleanup: {safe_exception_frames(cleanup_error)}"
                         )
 
             except Exception as e:
@@ -3541,7 +3579,7 @@ class LocalRuntime(
                 _tracer.end_span(_node_span, status="error", error=e)
 
                 failed_nodes.append(node_id)
-                self.logger.error(f"Node {node_id} failed: {e}", exc_info=self.debug)
+                self.logger.error(f"Node {node_id} failed: {safe_exception_frames(e)}")
 
                 # Execution audit trail: NODE_FAILED event
                 _node_fail_time = time.monotonic()
@@ -3578,13 +3616,14 @@ class LocalRuntime(
                         await node_instance.cleanup()
                     except Exception as cleanup_error:
                         self.logger.warning(
-                            f"Error during node {node_id} cleanup after failure: {cleanup_error}"
+                            f"Error during node {node_id} cleanup after failure: {safe_exception_frames(cleanup_error)}"
                         )
 
                 # Content-aware execution errors should always stop execution
-                if isinstance(e, ContentAwareExecutionError):
-                    error_msg = f"Content-aware failure in node '{node_id}': {e}"
-                    raise WorkflowExecutionError(error_msg) from e
+                if isinstance(
+                    e, ContentAwareExecutionError
+                ) or _is_retry_observer_failure(e):
+                    raise
 
                 # CARE-039: Trust verification denials must always stop execution
                 if "Trust verification denied" in str(e):
@@ -3670,7 +3709,8 @@ class LocalRuntime(
                     _save_audit(enriched_events)
             except Exception as audit_err:
                 self.logger.warning(
-                    "Failed to persist execution audit trail: %s", audit_err
+                    "Failed to persist execution audit trail: %s",
+                    safe_exception_frames(audit_err),
                 )
 
         # Store audit events in workflow context for programmatic access
@@ -3737,15 +3777,13 @@ class LocalRuntime(
 
             if self.debug:
                 self.logger.debug(f"Processing edge {source_node_id} -> {node_id}")
-                self.logger.debug(f"  Edge data: {edge[2]}")
-                self.logger.debug(f"  Mapping: {mapping}")
+                self.logger.debug(f"  Edge metadata count: {len(edge[2])}")
+                self.logger.debug(f"  Mapping entry count: {len(mapping)}")
 
             if source_node_id in node_outputs:
                 source_outputs = node_outputs[source_node_id]
                 if self.debug:
-                    self.logger.debug(
-                        f"  Source outputs: {list(source_outputs.keys())}"
-                    )
+                    self.logger.debug(f"  Source output count: {len(source_outputs)}")
 
                 # Check if the source node failed
                 if isinstance(source_outputs, dict) and source_outputs.get("failed"):
@@ -3760,7 +3798,7 @@ class LocalRuntime(
                     )
                 except Exception as e:
                     self.logger.warning(
-                        f"Data validation failed for node '{source_node_id}': {e}"
+                        f"Data validation failed for node '{source_node_id}': {safe_exception_frames(e)}"
                     )
 
                 for source_key, target_key in mapping.items():
@@ -3773,14 +3811,14 @@ class LocalRuntime(
 
                         if self.debug:
                             self.logger.debug(f"  Navigating nested path: {source_key}")
-                            self.logger.debug(f"  Starting value: {value}")
+                            self.logger.debug("  Nested mapping traversal started")
 
                         for i, part in enumerate(parts):
                             if isinstance(value, dict) and part in value:
                                 value = value[part]
                                 if self.debug:
                                     self.logger.debug(
-                                        f"    Part '{part}' found, value type: {type(value)}"
+                                        f"    Part '{part}' found, value type: {safe_type_name(value)}"
                                     )
                             else:
                                 # Check if it's a direct key in source_outputs (for backwards compatibility)
@@ -3798,15 +3836,15 @@ class LocalRuntime(
                                             f"  MISSING: Nested path '{source_key}' - failed at part '{part}'"
                                         )
                                         self.logger.debug(
-                                            f"    Current value type: {type(value)}"
+                                            f"    Current value type: {safe_type_name(value)}"
                                         )
                                         if isinstance(value, dict):
                                             self.logger.debug(
-                                                f"    Available keys: {list(value.keys())}"
+                                                f"    Available key count: {len(value)}"
                                             )
                                     self.logger.warning(
                                         f"Source output '{source_key}' not found in node '{source_node_id}'. "
-                                        f"Available outputs: {list(source_outputs.keys())}"
+                                        f"Available output count: {len(source_outputs)}"
                                     )
                                     break
 
@@ -3826,7 +3864,7 @@ class LocalRuntime(
                                 inputs[target_key] = value
                                 if self.debug:
                                     self.logger.debug(
-                                        f"  MAPPED: {source_key} -> {target_key} (type: {type(value)})"
+                                        f"  MAPPED: {source_key} -> {target_key} (type: {safe_type_name(value)})"
                                     )
                     else:
                         # Simple key mapping
@@ -3847,16 +3885,16 @@ class LocalRuntime(
                                 inputs[target_key] = value
                                 if self.debug:
                                     self.logger.debug(
-                                        f"  MAPPED: {source_key} -> {target_key} (type: {type(value)})"
+                                        f"  MAPPED: {source_key} -> {target_key} (type: {safe_type_name(value)})"
                                     )
                         else:
                             if self.debug:
                                 self.logger.debug(
-                                    f"  MISSING: {source_key} not in {list(source_outputs.keys())}"
+                                    f"  MISSING: {source_key}; available output count: {len(source_outputs)}"
                                 )
                             self.logger.warning(
                                 f"Source output '{source_key}' not found in node '{source_node_id}'. "
-                                f"Available outputs: {list(source_outputs.keys())}"
+                                f"Available output count: {len(source_outputs)}"
                             )
             else:
                 if self.debug:
@@ -3906,6 +3944,12 @@ class LocalRuntime(
             # Apply the filtered parameters
             inputs.update(filtered_params)
 
+        # A pruned branch does not consume its mapped None inputs. Preserve
+        # those inputs for the owner's identical skip decision before applying
+        # execution-input validation to nodes that will actually run.
+        if self._should_skip_conditional_node(workflow, node_id, inputs, node_outputs):
+            return inputs
+
         # Connection parameter validation with enhanced error messages and metrics
         if self.connection_validation != "off":
             metrics_collector = get_metrics_collector()
@@ -3935,7 +3979,7 @@ class LocalRuntime(
 
                 # Merge node config with inputs before validation (matches node.execute behavior)
                 # This ensures connection validation considers both runtime inputs AND node configuration
-                merged_inputs = {**node_instance.config, **inputs}
+                merged_inputs = {**node_instance._get_execution_config(), **inputs}
 
                 # Handle nested config case (same as in node.execute)
                 if "config" in merged_inputs and isinstance(
@@ -4004,7 +4048,9 @@ class LocalRuntime(
                     raise WorkflowExecutionError(error_msg) from e
                 elif self.connection_validation == "warn":
                     # Warn mode: log enhanced warning and continue with unvalidated inputs
-                    self.logger.warning(error_msg)
+                    self.logger.warning(
+                        "Node input validation failed: %s", safe_exception_frames(e)
+                    )
                     # Continue with original inputs
         else:
             # Record mode bypass for metrics
@@ -4201,7 +4247,9 @@ class LocalRuntime(
             if isinstance(e, PermissionError):
                 raise
             # Log but don't fail on access control errors
-            self.logger.warning(f"Access control check failed: {e}")
+            self.logger.warning(
+                f"Access control check failed: {safe_exception_frames(e)}"
+            )
 
     def _log_audit_event(self, event_type: str, event_data: dict[str, Any]) -> None:
         """Log audit events using enterprise audit logging (synchronous)."""
@@ -4212,7 +4260,7 @@ class LocalRuntime(
             # Use existing AuditLogNode pattern
             from kailash.nodes.security.audit_log import AuditLogNode
 
-            audit_node = AuditLogNode()
+            audit_node = AuditLogNode(name="runtime_audit")
             # Use the SDK pattern - execute the node
             audit_node.execute(
                 event_type=event_type,
@@ -4222,10 +4270,14 @@ class LocalRuntime(
             )
         except ImportError:
             # Audit logging not available, fall back to standard logging
-            self.logger.info(f"AUDIT: {event_type} - {event_data}")
+            self.logger.info(
+                "AUDIT: %s - data_fields=%d",
+                safe_log_field(event_type),
+                len(event_data),
+            )
         except Exception as e:
             # Audit logging failures shouldn't stop execution
-            self.logger.warning(f"Audit logging failed: {e}")
+            self.logger.warning(f"Audit logging failed: {safe_exception_frames(e)}")
 
     def _flush_deferred_storage_sqlite(
         self, deferred_storage: Any, log_warning: bool = True
@@ -4269,7 +4321,10 @@ class LocalRuntime(
                 deferred_storage.flush_to_filesystem()
         except Exception as exc:
             if log_warning:
-                self.logger.warning("Failed to persist deferred tracking data: %s", exc)
+                self.logger.warning(
+                    "Failed to persist deferred tracking data: %s",
+                    safe_exception_frames(exc),
+                )
 
     async def _log_audit_event_async(
         self, event_type: str, event_data: dict[str, Any]
@@ -4282,7 +4337,7 @@ class LocalRuntime(
             # Use existing AuditLogNode pattern
             from kailash.nodes.security.audit_log import AuditLogNode
 
-            audit_node = AuditLogNode()
+            audit_node = AuditLogNode(name="runtime_audit")
             # Use the SDK pattern - try async first, fallback to sync
             _async_run = getattr(audit_node, "async_run", None)
             if _async_run is not None:
@@ -4302,10 +4357,14 @@ class LocalRuntime(
                 )
         except ImportError:
             # Audit logging not available, fall back to standard logging
-            self.logger.info(f"AUDIT: {event_type} - {event_data}")
+            self.logger.info(
+                "AUDIT: %s - data_fields=%d",
+                safe_log_field(event_type),
+                len(event_data),
+            )
         except Exception as e:
             # Audit logging failures shouldn't stop execution
-            self.logger.warning(f"Audit logging failed: {e}")
+            self.logger.warning(f"Audit logging failed: {safe_exception_frames(e)}")
 
     async def execute_node_with_enterprise_features(
         self, node, node_id: str, inputs: dict[str, Any], **execution_kwargs
@@ -4368,34 +4427,25 @@ class LocalRuntime(
 
         # Execute node with retry policy and circuit breaker if available
         node_result = None
-        if self._retry_policy_engine and self._circuit_breaker:
-            # Enterprise retry with circuit breaker integration
-            try:
-                _cb_call = getattr(
-                    self._circuit_breaker, "call_async", None
-                ) or getattr(self._circuit_breaker, "call", None)
-                _node_fn = getattr(node, "async_run", None) or node.execute
-                if _cb_call is not None:
-                    node_result = await self._retry_policy_engine.execute_with_retry(
-                        _cb_call(_node_fn), **inputs
-                    )
-                else:
-                    node_result = await self._retry_policy_engine.execute_with_retry(
-                        _node_fn, **inputs
-                    )
-            except Exception as e:
-                logger.error(f"Enterprise node execution failed for {node_id}: {e}")
-                raise
-
-        elif self._retry_policy_engine:
-            # Retry policy without circuit breaker
+        if self._retry_policy_engine:
+            # The engine already owns the configured circuit breaker. Pass a
+            # callable once and adapt its policy envelope to the node API.
             try:
                 _node_fn = getattr(node, "async_run", None) or node.execute
-                node_result = await self._retry_policy_engine.execute_with_retry(
+                retry_result = await self._retry_policy_engine.execute_with_retry(
                     _node_fn, **inputs
                 )
+                if not retry_result.success:
+                    if retry_result.final_exception is not None:
+                        raise retry_result.final_exception
+                    raise RuntimeExecutionError(
+                        "Enterprise retry policy exhausted without a result"
+                    )
+                node_result = retry_result.value
             except Exception as e:
-                logger.error(f"Retry policy node execution failed for {node_id}: {e}")
+                logger.error(
+                    f"Enterprise node execution failed for {node_id}: {safe_exception_frames(e)}"
+                )
                 raise
 
         elif self._circuit_breaker:
@@ -4405,7 +4455,7 @@ class LocalRuntime(
                 node_result = await self._circuit_breaker.call(_node_fn, **inputs)
             except Exception as e:
                 logger.error(
-                    f"Circuit breaker node execution failed for {node_id}: {e}"
+                    f"Circuit breaker node execution failed for {node_id}: {safe_exception_frames(e)}"
                 )
                 raise
 
@@ -4420,7 +4470,9 @@ class LocalRuntime(
                 else:
                     node_result = node.execute(**inputs)
             except Exception as e:
-                logger.error(f"Standard node execution failed for {node_id}: {e}")
+                logger.error(
+                    f"Standard node execution failed for {node_id}: {safe_exception_frames(e)}"
+                )
                 raise
 
         # Post-execution resource monitoring
@@ -4445,57 +4497,61 @@ class LocalRuntime(
         import asyncio
 
         try:
-            # Check if we're in an event loop
-            loop = asyncio.get_running_loop()
-            # We're in an async context, but need to run sync
-            # Use thread pool to avoid blocking
+            asyncio.get_running_loop()
+        except RuntimeError:
+            running = False
+        else:
+            running = True
+
+        entered = False
+
+        async def run_async():
+            nonlocal entered
+            entered = True
+            return await self.execute_node_with_enterprise_features(
+                node, node_id, inputs, **execution_kwargs
+            )
+
+        def run_owned_coroutine(runner):
+            coroutine = run_async()
+            try:
+                return runner(coroutine)
+            finally:
+                # A runner can reject before taking ownership (including a
+                # loop-start failure). Close our coroutine on every exit.
+                coroutine.close()
+
+        if running:
             import concurrent.futures
 
-            async def run_async():
-                return await self.execute_node_with_enterprise_features(
-                    node, node_id, inputs, **execution_kwargs
-                )
-
             try:
-                # Propagate the caller's contextvars across the thread-pool
-                # boundary so a ContextVar set before execution is visible
-                # inside the node's run() on this sync-in-async path (#1200).
                 _caller_ctx = contextvars.copy_context()
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(_caller_ctx.run, asyncio.run, run_async())
+                    future = executor.submit(
+                        _caller_ctx.run, run_owned_coroutine, asyncio.run
+                    )
                     return future.result()
-            except RuntimeError as thread_err:
-                # Python 3.13: asyncio.run() may fail in worker threads, or
-                # thread pool exhausted — fall back to direct node execution
-                if "cannot be called from a running event loop" in str(
-                    thread_err
-                ) or "can't start new thread" in str(thread_err):
+            except RuntimeError as error:
+                if not entered and (
+                    "cannot be called from a running event loop" in str(error)
+                    or "can't start new thread" in str(error)
+                ):
                     context = inputs.pop("context", None)
                     if context is not None:
                         return node.execute(context=context, **inputs)
                     return node.execute(**inputs)
                 raise
-
-        except RuntimeError:
-            # No event loop, can run directly
+        else:
             try:
-                return asyncio.run(
-                    self.execute_node_with_enterprise_features(
-                        node, node_id, inputs, **execution_kwargs
-                    )
-                )
-            except RuntimeError as e:
-                if "cannot be called from a running event loop" in str(e):
-                    # Python 3.13: asyncio.run() may raise even when
-                    # get_running_loop() raised RuntimeError — use new_event_loop
+                return run_owned_coroutine(asyncio.run)
+            except RuntimeError as error:
+                if not entered and "cannot be called from a running event loop" in str(
+                    error
+                ):
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
                     try:
-                        return loop.run_until_complete(
-                            self.execute_node_with_enterprise_features(
-                                node, node_id, inputs, **execution_kwargs
-                            )
-                        )
+                        return run_owned_coroutine(loop.run_until_complete)
                     finally:
                         loop.close()
                 raise
@@ -4544,7 +4600,9 @@ class LocalRuntime(
             else:
                 return {"user_context": str(self.user_context)}
         except Exception as e:
-            self.logger.warning(f"Failed to serialize user context: {e}")
+            self.logger.warning(
+                f"Failed to serialize user context: {safe_exception_frames(e)}"
+            )
             return {"user_context": str(self.user_context)}
 
     def _process_workflow_parameters(
@@ -4604,8 +4662,9 @@ class LocalRuntime(
             # Validate the transformation
             warnings = injector.validate_parameters(workflow_level_params)
             if warnings and self.debug:
-                for warning in warnings:
-                    self.logger.warning(f"Parameter validation: {warning}")
+                self.logger.warning(
+                    "Parameter validation reported %d warning(s)", len(warnings)
+                )
 
         # Inject secrets into the processed parameters
         if self.secret_provider:
@@ -4695,8 +4754,8 @@ class LocalRuntime(
         if self.debug:
             self.logger.debug(
                 f"Separated parameters: "
-                f"node_specific={list(node_specific_params.keys())}, "
-                f"workflow_level={list(workflow_level_params.keys())}"
+                f"node_specific={len(node_specific_params)}, "
+                f"workflow_level={len(workflow_level_params)}"
             )
 
         return node_specific_params, workflow_level_params
@@ -4775,7 +4834,8 @@ class LocalRuntime(
         parameters: dict[str, Any] = kwargs.get("parameters") or inputs or {}
         task_manager: TaskManager | None = kwargs.get("task_manager")
         run_id: str = kwargs.get("run_id", "")
-        workflow_context: dict[str, Any] = kwargs.get("workflow_context") or {}
+        workflow_context = kwargs.get("workflow_context")
+        execution_state = kwargs.get("execution_state")
 
         self.logger.info("Starting conditional execution approach")
         results: dict[str, dict[str, Any]] = {}
@@ -4799,6 +4859,7 @@ class LocalRuntime(
                 task_manager=task_manager,
                 run_id=run_id,
                 workflow_context=workflow_context,
+                execution_state=execution_state,
             )
 
             # Extract just switch results for validation and planning
@@ -4830,6 +4891,7 @@ class LocalRuntime(
                 run_id=run_id,
                 workflow_context=workflow_context,
                 existing_results=results,
+                execution_state=execution_state,
             )
 
             # Merge remaining results
@@ -4874,10 +4936,22 @@ class LocalRuntime(
             return results
 
         except Exception as e:
+            if isinstance(
+                e,
+                (
+                    ContentAwareExecutionError,
+                    WorkflowCancelledError,
+                    SoftTimeLimitExceeded,
+                    HardTimeLimitExceeded,
+                ),
+            ) or _is_retry_observer_failure(e):
+                raise
             # Enhanced error logging with fallback reasoning
-            self.logger.error(f"Error in conditional execution approach: {e}")
+            self.logger.error(
+                f"Error in conditional execution approach: {safe_exception_frames(e)}"
+            )
             if fallback_reason:
-                self.logger.warning(f"Fallback reason: {fallback_reason}")
+                self.logger.warning("Conditional fallback reason recorded")
 
             # Log performance impact before fallback (mixin signature: workflow, error, context)
             context = {
@@ -4892,23 +4966,11 @@ class LocalRuntime(
                 "Falling back to normal execution approach due to conditional execution failure"
             )
 
-            try:
-                # Execute fallback with additional monitoring
-                fallback_results, _ = await self._execute_async(
-                    workflow=workflow,
-                    parameters=parameters,
-                    task_manager=task_manager,
-                )
-
-                # Track fallback usage for monitoring (mixin signature: workflow, reason)
-                self._track_fallback_usage(workflow, fallback_reason or str(e))
-
-                return fallback_results
-
-            except Exception as fallback_error:
-                self.logger.error(f"Fallback execution also failed: {fallback_error}")
-                # If both conditional and fallback fail, re-raise the original error
-                raise e from fallback_error
+            # The dispatch owner already holds this attempt's context, tracker,
+            # cancellation and checkpoint wiring. Re-entering _execute_async here
+            # selects this same optimization again and recursively retries it.
+            self._track_fallback_usage(workflow, fallback_reason or str(e))
+            raise
 
     async def _execute_switch_nodes(
         self,
@@ -4935,7 +4997,8 @@ class LocalRuntime(
         parameters: dict[str, Any] = kwargs.get("parameters") or inputs or {}
         task_manager: TaskManager | None = kwargs.get("task_manager")
         run_id: str = kwargs.get("run_id", "")
-        workflow_context: dict[str, Any] = kwargs.get("workflow_context") or {}
+        workflow_context = kwargs.get("workflow_context")
+        execution_state = kwargs.get("execution_state")
 
         self.logger.info("Phase 1: Executing SwitchNodes and their dependencies")
         all_phase1_results: dict[str, dict[str, Any]] = (
@@ -4989,6 +5052,7 @@ class LocalRuntime(
                         workflow=workflow,
                         workflow_context=workflow_context,
                         run_id=run_id,
+                        execution_state=execution_state,
                     )
                     return result
 
@@ -5091,15 +5155,28 @@ class LocalRuntime(
                         workflow=workflow,
                         run_id=run_id,
                         workflow_context=workflow_context,
+                        execution_state=execution_state,
                     )
 
                     all_phase1_results[node_id] = result
                     self.logger.debug(
-                        f"Node {node_id} completed with result keys: {list(result.keys()) if isinstance(result, dict) else type(result)}"
+                        f"Node {node_id} completed with result field count: {len(result) if isinstance(result, dict) else 0}"
                     )
 
                 except Exception as e:
-                    self.logger.error(f"Error executing node {node_id}: {e}")
+                    if isinstance(
+                        e,
+                        (
+                            ContentAwareExecutionError,
+                            WorkflowCancelledError,
+                            SoftTimeLimitExceeded,
+                            HardTimeLimitExceeded,
+                        ),
+                    ) or _is_retry_observer_failure(e):
+                        raise
+                    self.logger.error(
+                        f"Error executing node {node_id}: {safe_exception_frames(e)}"
+                    )
                     # Continue with other nodes
                     all_phase1_results[node_id] = {
                         "error": str(e),
@@ -5120,7 +5197,19 @@ class LocalRuntime(
             return all_phase1_results  # Return ALL results, not just switches
 
         except Exception as e:
-            self.logger.error(f"Error in switch execution phase: {e}")
+            if isinstance(
+                e,
+                (
+                    ContentAwareExecutionError,
+                    WorkflowCancelledError,
+                    SoftTimeLimitExceeded,
+                    HardTimeLimitExceeded,
+                ),
+            ) or _is_retry_observer_failure(e):
+                raise
+            self.logger.error(
+                f"Error in switch execution phase: {safe_exception_frames(e)}"
+            )
             return all_phase1_results
 
     async def _execute_pruned_plan(
@@ -5152,7 +5241,8 @@ class LocalRuntime(
         parameters: dict[str, Any] = kwargs.get("parameters") or inputs or {}
         task_manager: TaskManager | None = kwargs.get("task_manager")
         run_id: str = kwargs.get("run_id", "")
-        workflow_context: dict[str, Any] = kwargs.get("workflow_context") or {}
+        workflow_context = kwargs.get("workflow_context")
+        execution_state = kwargs.get("execution_state")
         existing_results: dict[str, dict[str, Any]] = kwargs.get("existing_results", {})
 
         self.logger.info("Phase 2: Executing pruned plan based on switch results")
@@ -5255,13 +5345,26 @@ class LocalRuntime(
                         workflow=workflow,
                         run_id=run_id,
                         workflow_context=workflow_context,
+                        execution_state=execution_state,
                     )
 
                     remaining_results[node_id] = result
                     self.logger.debug(f"Node {node_id} completed")
 
                 except Exception as e:
-                    self.logger.error(f"Error executing remaining node {node_id}: {e}")
+                    if isinstance(
+                        e,
+                        (
+                            ContentAwareExecutionError,
+                            WorkflowCancelledError,
+                            SoftTimeLimitExceeded,
+                            HardTimeLimitExceeded,
+                        ),
+                    ) or _is_retry_observer_failure(e):
+                        raise
+                    self.logger.error(
+                        f"Error executing remaining node {node_id}: {safe_exception_frames(e)}"
+                    )
                     # Continue with other nodes or stop based on error handling
                     if self._should_stop_on_error(workflow, node_id):
                         raise
@@ -5278,8 +5381,163 @@ class LocalRuntime(
             return remaining_results
 
         except Exception as e:
-            self.logger.error(f"Error in pruned plan execution: {e}")
+            if isinstance(
+                e,
+                (
+                    ContentAwareExecutionError,
+                    WorkflowCancelledError,
+                    SoftTimeLimitExceeded,
+                    HardTimeLimitExceeded,
+                ),
+            ) or _is_retry_observer_failure(e):
+                raise
+            self.logger.error(
+                f"Error in pruned plan execution: {safe_exception_frames(e)}"
+            )
             return remaining_results
+
+    async def _publish_node_completion(
+        self,
+        *,
+        workflow,
+        node_id,
+        node_instance,
+        outputs,
+        run_id,
+        started_at,
+        execution_state: _ConditionalExecutionState,
+    ) -> None:
+        """Publish one validated completion through the canonical durable path."""
+        execution_tracker = execution_state.execution_tracker
+        workflow_fingerprint = execution_state.workflow_fingerprint
+        checkpoint_key = execution_state.checkpoint_key
+        tenant_id = execution_state.tenant_id
+        idempotency_key = execution_state.idempotency_key
+        _node_started_at = started_at
+        # === Checkpoint/Restore ===
+        # Record completion so that checkpoint captures include this node.
+        if execution_tracker is not None:
+            execution_tracker.record_completion(node_id, outputs)
+
+        # === W1: Durable execution — checkpoint + hook dispatch ===
+        # Build the canonical NodeCompletionEvent (post-redaction)
+        # and (a) persist a checkpoint blob if checkpoint_after_each_node
+        # is True, (b) dispatch the event to every subscriber.  Both
+        # paths route through redact_event_for_persistence first so
+        # neither the store nor any subscriber sees a classified
+        # PK or a redacted field's raw value.
+        _node_ended_at = datetime.now(UTC)
+        _node_duration_ms = int(
+            (_node_ended_at - _node_started_at).total_seconds() * 1000
+        )
+        _raw_outputs: Mapping[str, Any] = (
+            outputs if isinstance(outputs, Mapping) else {"result": outputs}
+        )
+        _completion_event = NodeCompletionEvent(
+            run_id=run_id,
+            workflow_id=getattr(workflow, "workflow_id", "") or "",
+            workflow_fingerprint=workflow_fingerprint or "",
+            node_id=node_id,
+            node_type=node_instance.__class__.__name__,
+            outputs=_raw_outputs,
+            started_at=_node_started_at,
+            ended_at=_node_ended_at,
+            duration_ms=_node_duration_ms,
+            tenant_id=tenant_id,
+            idempotency_key=idempotency_key,
+            error=None,
+            metadata={},
+        )
+        _classification_policy = getattr(self, "_classification_policy", None)
+        _redacted_event = redact_event_for_persistence(
+            _completion_event,
+            classification_policy=_classification_policy,
+        )
+
+        # Persist the checkpoint blob if requested AND a store is
+        # configured AND we have a checkpoint_key.  The lock
+        # serialises the per-run save against parallel-node
+        # paths in subclasses.
+        #
+        # W6 redaction discipline: the on_node_complete subscriber
+        # surface dispatches the REDACTED event above (line 2761),
+        # but the tracker_state passed to encode_checkpoint_payload
+        # is the RAW execution_tracker.to_dict() — which embeds
+        # raw classified node outputs in node_outputs[<node_id>].
+        # Route the tracker state through the same classification-
+        # aware redaction helper so the persisted checkpoint blob
+        # carries [REDACTED] / hashed-PK sentinels for every
+        # classified field, matching the hook contract documented
+        # in on_node_complete() above.  See
+        # rules/zero-tolerance.md Rule 2 ("fake redaction") and
+        # rules/dataflow-classification.md MUST Rule 1 ("every
+        # mutation return-path applies redaction").
+        if (
+            self._checkpoint_after_each_node
+            and self._checkpoint_store is not None
+            and checkpoint_key is not None
+            and execution_tracker is not None
+        ):
+            _lock_key = run_id or checkpoint_key
+            _lock = self._get_or_create_checkpoint_lock(_lock_key)
+            async with _lock:
+                _redacted_tracker_state = redacted_tracker_state_for_checkpoint(
+                    execution_tracker.to_dict(),
+                    classification_policy=_classification_policy,
+                    workflow_id=getattr(workflow, "workflow_id", "") or "",
+                    workflow_fingerprint=workflow_fingerprint or "",
+                    tenant_id=tenant_id,
+                    idempotency_key=idempotency_key,
+                )
+                _blob = encode_checkpoint_payload(
+                    workflow_fingerprint=workflow_fingerprint or "",
+                    tracker_state=_redacted_tracker_state,
+                    tenant_id=tenant_id,
+                    workflow_id=getattr(workflow, "workflow_id", "") or "",
+                    idempotency_key=idempotency_key,
+                )
+                try:
+                    await self._checkpoint_store.save(checkpoint_key, _blob)
+                except (
+                    asyncio.CancelledError,
+                    KeyboardInterrupt,
+                    SystemExit,
+                ):
+                    raise
+                except Exception as save_err:
+                    self.logger.warning(
+                        "durable.checkpoint.save_failed",
+                        extra={
+                            "node_id_hash": hashlib.sha256(
+                                node_id.encode("utf-8")
+                            ).hexdigest()[:8],
+                            "error_type": safe_type_name(save_err),
+                        },
+                    )
+
+        # Dispatch the (redacted) event to all subscribers.  Sync
+        # and async callbacks are both honored.  Subscriber
+        # exceptions are caught + WARN-logged inside dispatch.
+        if self._hook_registry.subscriber_count > 0:
+            await self._hook_registry.dispatch_async(_redacted_event)
+
+    @staticmethod
+    def _check_execution_cancelled(node_id, execution_state):
+        token = execution_state.cancellation_token
+        tracker = execution_state.execution_tracker
+        if token is not None and token.is_cancelled:
+            raise WorkflowCancelledError(
+                cancelled_at_node=node_id,
+                completed_nodes=tracker.all_completed_node_ids if tracker else [],
+            )
+
+    def _check_node_result(self, node_id: str, result: Any) -> None:
+        """Reject failed output before publishing results or successful checkpoints."""
+        should_stop, error_info = should_stop_on_content_failure(
+            result, content_aware_mode=self.content_aware_success_detection
+        )
+        if should_stop:
+            raise create_content_aware_error(node_id, result, error_info)
 
     async def _execute_single_node(
         self,
@@ -5312,22 +5570,35 @@ class LocalRuntime(
         if workflow is None:
             workflow = kwargs.get("workflow")
         run_id: str = kwargs.get("run_id", "")
-        workflow_context: dict[str, Any] = kwargs.get("workflow_context", {})
+        workflow_context = kwargs.get("workflow_context")
+        execution_state: _ConditionalExecutionState | None = kwargs.get(
+            "execution_state"
+        )
+        started_at = datetime.now(UTC)
+        if execution_state is not None:
+            tracker = execution_state.execution_tracker
+            self._check_execution_cancelled(node_id, execution_state)
+            if tracker is not None and tracker.is_completed(node_id):
+                restored = tracker.get_output(node_id)
+                self._check_node_result(node_id, restored)
+                return restored
 
         # P0B-001: Removed VP#1 (DataTypeValidator.validate_node_input)
         # Node.execute() performs authoritative validation via VP#3
 
-        # Set workflow context on the node instance
-        if hasattr(node_instance, "_workflow_context"):
-            node_instance._workflow_context = workflow_context
-        else:
-            # Initialize the workflow context if it doesn't exist
+        # Local dispatch supplies its context; a native async caller may have
+        # already bound a transaction context directly to the node.
+        if workflow_context is not None:
             node_instance._workflow_context = workflow_context
 
         # Execute the node with retry policy if enabled
         if self._enable_retry_coordination and self._retry_policy_engine:
-            # Define node execution function for retry wrapper
+            # Only a pre-dispatch engine failure may use the direct fallback.
+            attempted = False
+
             async def node_execution_func():
+                nonlocal attempted
+                attempted = True
                 if self.enable_async and hasattr(node_instance, "execute_async"):
                     return await node_instance.execute_async(**node_inputs)
                 else:
@@ -5339,7 +5610,28 @@ class LocalRuntime(
                     node_execution_func,
                     timeout=node_inputs.get("timeout"),  # Use node timeout if specified
                 )
-
+            except (
+                ContentAwareExecutionError,
+                WorkflowCancelledError,
+                SoftTimeLimitExceeded,
+                HardTimeLimitExceeded,
+            ):
+                raise
+            except Exception as e:
+                # Handle retry policy engine errors (shouldn't happen in normal operation)
+                logger.error(
+                    f"Retry policy engine error for node {node_id}: {safe_exception_frames(e)}"
+                )
+                if attempted:
+                    raise
+                # The engine failed before any node invocation.
+                if self.enable_async and hasattr(node_instance, "execute_async"):
+                    outputs = await node_instance.execute_async(**node_inputs)
+                else:
+                    outputs = node_instance.execute(**node_inputs)
+            else:
+                # A failed policy result is an exhausted node attempt, not an
+                # engine malfunction. Let the workflow owner choose its fallback.
                 if retry_result.success:
                     outputs = retry_result.value
 
@@ -5355,6 +5647,17 @@ class LocalRuntime(
                         f"Node {node_id} failed after {retry_result.total_attempts} attempts "
                         f"in {retry_result.total_time:.2f}s"
                     )
+
+                    if isinstance(
+                        retry_result.final_exception,
+                        (
+                            ContentAwareExecutionError,
+                            WorkflowCancelledError,
+                            SoftTimeLimitExceeded,
+                            HardTimeLimitExceeded,
+                        ),
+                    ) or _is_retry_observer_failure(retry_result.final_exception):
+                        raise retry_result.final_exception
 
                     # Re-raise the final exception with enhanced context
                     if retry_result.final_exception:
@@ -5394,14 +5697,6 @@ class LocalRuntime(
                             f"Node '{node_id}' failed after {retry_result.total_attempts} retry attempts"
                         )
 
-            except Exception as e:
-                # Handle retry policy engine errors (shouldn't happen in normal operation)
-                logger.error(f"Retry policy engine error for node {node_id}: {e}")
-                # Fall back to direct execution
-                if self.enable_async and hasattr(node_instance, "execute_async"):
-                    outputs = await node_instance.execute_async(**node_inputs)
-                else:
-                    outputs = node_instance.execute(**node_inputs)
         else:
             # Execute directly without retry policy
             if self.enable_async and hasattr(node_instance, "execute_async"):
@@ -5409,6 +5704,17 @@ class LocalRuntime(
             else:
                 outputs = node_instance.execute(**node_inputs)
 
+        self._check_node_result(node_id, outputs)
+        if execution_state is not None:
+            await self._publish_node_completion(
+                workflow=workflow,
+                node_id=node_id,
+                node_instance=node_instance,
+                outputs=outputs,
+                run_id=run_id,
+                started_at=started_at,
+                execution_state=execution_state,
+            )
         return outputs
 
     # Retry Policy Management Methods
@@ -5570,7 +5876,9 @@ class LocalRuntime(
             self._execution_plan_cache[cache_key] = execution_plan
 
         except Exception as e:
-            self.logger.warning(f"Error creating cached execution plan: {e}")
+            self.logger.warning(
+                f"Error creating cached execution plan: {safe_exception_frames(e)}"
+            )
             # P0C-002: Fallback to cached topological order
             execution_plan = workflow.get_execution_order()
 
@@ -5613,7 +5921,7 @@ class LocalRuntime(
             return hashlib.md5(combined_key.encode()).hexdigest()
 
         except Exception as e:
-            self.logger.warning(f"Error creating cache key: {e}")
+            self.logger.warning(f"Error creating cache key: {safe_exception_frames(e)}")
             # Fallback to simple key
             return f"{workflow.workflow_id}_{hash(str(switch_results))}"
 
@@ -5921,7 +6229,9 @@ class LocalRuntime(
             )
 
         except Exception as e:
-            self.logger.warning(f"Error during runtime optimization: {e}")
+            self.logger.warning(
+                f"Error during runtime optimization: {safe_exception_frames(e)}"
+            )
             optimization_result["error"] = str(e)
 
         return optimization_result
@@ -6117,7 +6427,7 @@ class LocalRuntime(
             )
 
         except Exception as e:
-            logger.error(f"Failed to start persistent mode: {e}")
+            logger.error(f"Failed to start persistent mode: {safe_exception_frames(e)}")
             raise RuntimeError(f"Failed to start persistent mode: {e}") from e
 
     async def shutdown_gracefully(self, timeout: int = 30) -> None:
@@ -6153,7 +6463,7 @@ class LocalRuntime(
                 "Resource cleanup timed out, some resources may not be properly cleaned"
             )
         except Exception as e:
-            logger.warning(f"Error during resource cleanup: {e}")
+            logger.warning(f"Error during resource cleanup: {safe_exception_frames(e)}")
 
         # Mark as shutdown
         self._is_persistent_started = False
@@ -6251,7 +6561,9 @@ class LocalRuntime(
                     self._resource_monitor.get_connection_count()
                 )
             except Exception as e:
-                logger.warning(f"Failed to get resource metrics: {e}")
+                logger.warning(
+                    f"Failed to get resource metrics: {safe_exception_frames(e)}"
+                )
 
         # Add runtime monitor data if available
         if self._runtime_monitor and hasattr(
@@ -6261,7 +6573,9 @@ class LocalRuntime(
                 runtime_metrics = self._runtime_monitor.get_aggregated_metrics()
                 performance.update(runtime_metrics)
             except Exception as e:
-                logger.warning(f"Failed to get runtime metrics: {e}")
+                logger.warning(
+                    f"Failed to get runtime metrics: {safe_exception_frames(e)}"
+                )
 
         return {
             "resources": resources,
@@ -6295,7 +6609,9 @@ class LocalRuntime(
                     health_status["status"] = "degraded"
                     health_status["details"]["violations"] = violations
             except Exception as e:
-                logger.warning(f"Failed to check resource violations: {e}")
+                logger.warning(
+                    f"Failed to check resource violations: {safe_exception_frames(e)}"
+                )
                 health_status["status"] = "unknown"
                 health_status["details"]["error"] = str(e)
 
@@ -6317,7 +6633,9 @@ class LocalRuntime(
                 ):
                     health_status["status"] = "degraded"
             except Exception as e:
-                logger.warning(f"Failed to run health checks: {e}")
+                logger.warning(
+                    f"Failed to run health checks: {safe_exception_frames(e)}"
+                )
 
         return health_status
 
@@ -6396,12 +6714,16 @@ class LocalRuntime(
             logger.debug("Persistent resources initialized successfully")
 
         except ImportError as e:
-            logger.error(f"Failed to import persistent mode dependencies: {e}")
+            logger.error(
+                f"Failed to import persistent mode dependencies: {safe_exception_frames(e)}"
+            )
             raise RuntimeError(
                 f"Persistent mode dependencies not available: {e}"
             ) from e
         except Exception as e:
-            logger.error(f"Failed to initialize persistent resources: {e}")
+            logger.error(
+                f"Failed to initialize persistent resources: {safe_exception_frames(e)}"
+            )
             raise
 
     @property
@@ -6471,4 +6793,4 @@ class LocalRuntime(
             logger.debug("Resource cleanup completed")
 
         except Exception as e:
-            logger.warning(f"Error during resource cleanup: {e}")
+            logger.warning(f"Error during resource cleanup: {safe_exception_frames(e)}")

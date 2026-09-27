@@ -10,6 +10,7 @@ Tests the convergence and safety features including:
 """
 
 import time
+from copy import copy
 
 import pytest
 
@@ -18,6 +19,22 @@ from kailash.nodes.base import NodeParameter
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.cycle_exceptions import CycleConfigurationError
+
+
+@pytest.fixture(autouse=True)
+def _convergence_code_security_config():
+    # Cycle safety limits are owned by the runtime monitor. These in-process
+    # PythonCode fixtures do not exercise the separate code memory guard.
+    from kailash.security import get_security_config, set_security_config
+
+    original = get_security_config()
+    configured = copy(original)
+    configured.memory_limit = None
+    set_security_config(configured)
+    try:
+        yield
+    finally:
+        set_security_config(original)
 
 
 class TestConvergenceSafety:
@@ -53,14 +70,14 @@ class TestConvergenceSafety:
         ).max_iterations(20).converge_when("quality >= 0.9").build()
 
         # Execute
-        runtime = LocalRuntime(enable_cycles=True)
-        results, run_id = runtime.execute(
-            workflow,
-            parameters={"improver": {"quality": 0.0, "improvement_rate": 0.15}},
-        )
+        with LocalRuntime(enable_cycles=True) as runtime:
+            results, run_id = runtime.execute(
+                workflow,
+                parameters={"improver": {"quality": 0.0, "improvement_rate": 0.15}},
+            )
 
-        # Verify convergence
-        assert results["improver"]["result"]["quality"] >= 0.9
+            # Verify convergence
+            assert results["improver"]["result"]["quality"] >= 0.9
 
     def test_max_iteration_safety(self):
         """Test maximum iteration limit prevents infinite loops."""
@@ -88,13 +105,13 @@ class TestConvergenceSafety:
         ).max_iterations(5).converge_when("value >= 1.0").build()
 
         # Execute
-        runtime = LocalRuntime(enable_cycles=True)
-        results, run_id = runtime.execute(workflow)
+        with LocalRuntime(enable_cycles=True) as runtime:
+            results, run_id = runtime.execute(workflow)
 
-        # Should stop at max iterations
-        value = results["improver"]["result"]["value"]
-        assert value < 1.0  # Didn't reach convergence
-        assert value == pytest.approx(0.05, rel=1e-5)  # 5 iterations * 0.01
+            # Should stop at max iterations
+            value = results["improver"]["result"]["value"]
+            assert value < 1.0  # Didn't reach convergence
+            assert value == pytest.approx(0.05, rel=1e-5)  # 5 iterations * 0.01
 
     def test_compound_convergence_conditions(self):
         """Test multiple convergence conditions working together."""
@@ -137,13 +154,13 @@ class TestConvergenceSafety:
         ).max_iterations(15).converge_when("error_rate <= 0.1").build()
 
         # Execute
-        runtime = LocalRuntime(enable_cycles=True)
-        results, run_id = runtime.execute(workflow)
+        with LocalRuntime(enable_cycles=True) as runtime:
+            results, run_id = runtime.execute(workflow)
 
-        # Check results
-        result = results["processor"]["result"]
-        assert result["error_rate"] <= 0.1
-        assert result["processed_count"] > 0
+            # Check results
+            result = results["processor"]["result"]
+            assert result["error_rate"] <= 0.1
+            assert result["processed_count"] > 0
 
     def test_timeout_safety_mechanism(self):
         """Test timeout safety for long-running cycles."""
@@ -177,19 +194,19 @@ class TestConvergenceSafety:
         ).max_iterations(3).build()
 
         # Execute with runtime timeout (if supported)
-        runtime = LocalRuntime(enable_cycles=True)
-        start_time = time.time()
+        with LocalRuntime(enable_cycles=True) as runtime:
+            start_time = time.time()
 
-        results, run_id = runtime.execute(
-            workflow,
-            parameters={"slow": {"counter": 0, "delay": 0.01}},  # Small delay
-        )
+            results, run_id = runtime.execute(
+                workflow,
+                parameters={"slow": {"counter": 0, "delay": 0.01}},  # Small delay
+            )
 
-        elapsed = time.time() - start_time
+            elapsed = time.time() - start_time
 
-        # Should complete within reasonable time
-        assert elapsed < 5.0  # Less than 5 seconds (CI can be slower)
-        assert results["slow"]["result"]["counter"] == 3
+            # Should complete within reasonable time
+            assert elapsed < 5.0  # Less than 5 seconds (CI can be slower)
+            assert results["slow"]["result"]["counter"] == 3
 
     def test_resource_monitoring_safety(self):
         """Test resource monitoring during cycle execution."""
@@ -226,18 +243,17 @@ class TestConvergenceSafety:
         ).max_iterations(5).build()
 
         # Execute with resource monitoring
-        runtime = LocalRuntime(
-            enable_cycles=True,
-            # If supported: resource_limits={"memory_mb": 100}
-        )
+        with LocalRuntime(enable_cycles=True) as runtime:
 
-        results, run_id = runtime.execute(
-            workflow, parameters={"memory": {"size": 100}}
-        )
+            results, run_id = runtime.execute(
+                workflow, parameters={"memory": {"size": 100}}
+            )
 
-        # Should complete without resource exhaustion
-        assert results["memory"]["result"]["iteration"] <= 5
-        assert results["memory"]["result"]["size"] == 100 * (2**5)  # Geometric growth
+            # Should complete without resource exhaustion
+            assert results["memory"]["result"]["iteration"] <= 5
+            assert results["memory"]["result"]["size"] == 100 * (
+                2**5
+            )  # Geometric growth
 
     def test_early_termination_on_convergence(self):
         """Test that cycles terminate early when convergence is reached."""
@@ -265,13 +281,13 @@ class TestConvergenceSafety:
         ).max_iterations(10).converge_when("value >= 1.0").build()
 
         # Execute
-        runtime = LocalRuntime(enable_cycles=True)
-        results, run_id = runtime.execute(workflow)
+        with LocalRuntime(enable_cycles=True) as runtime:
+            results, run_id = runtime.execute(workflow)
 
-        # Should converge in ~4 iterations (0 -> 0.3 -> 0.6 -> 0.9 -> 1.2)
-        value = results["fast"]["result"]["value"]
-        assert value >= 1.0
-        assert value < 2.0  # Didn't run all 10 iterations
+            # Should converge in ~4 iterations (0 -> 0.3 -> 0.6 -> 0.9 -> 1.2)
+            value = results["fast"]["result"]["value"]
+            assert value >= 1.0
+            assert value < 2.0  # Didn't run all 10 iterations
 
     def test_invalid_convergence_expression(self):
         """Test handling of invalid convergence expressions."""
@@ -287,8 +303,8 @@ class TestConvergenceSafety:
         ).converge_when("invalid_var > 10").build()
 
         # Execute - should handle gracefully (rely on max_iterations)
-        runtime = LocalRuntime(enable_cycles=True)
-        results, run_id = runtime.execute(workflow)
+        with LocalRuntime(enable_cycles=True) as runtime:
+            results, run_id = runtime.execute(workflow)
 
-        # Should complete based on max_iterations
-        assert "node" in results
+            # Should complete based on max_iterations
+            assert "node" in results

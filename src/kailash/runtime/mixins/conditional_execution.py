@@ -40,6 +40,7 @@ from abc import abstractmethod
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from kailash.sdk_exceptions import RuntimeExecutionError, WorkflowValidationError
+from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
 from kailash.workflow import Workflow
 
 if TYPE_CHECKING:
@@ -204,7 +205,9 @@ class ConditionalExecutionMixin:
             return has_switches
 
         except Exception as e:
-            self.logger.warning(f"Error checking conditional patterns: {e}")
+            self.logger.warning(
+                f"Error checking conditional patterns: {safe_exception_frames(e)}"
+            )
             return False
 
     def _workflow_has_cycles(self, workflow: Workflow) -> bool:
@@ -258,7 +261,7 @@ class ConditionalExecutionMixin:
             return False
 
         except Exception as e:
-            self.logger.warning(f"Error detecting cycles: {e}")
+            self.logger.warning(f"Error detecting cycles: {safe_exception_frames(e)}")
             # On error, assume cycles exist for safety
             return True
 
@@ -314,7 +317,9 @@ class ConditionalExecutionMixin:
             return False
 
         except Exception as e:
-            self.logger.warning(f"Error analyzing hierarchical execution: {e}")
+            self.logger.warning(
+                f"Error analyzing hierarchical execution: {safe_exception_frames(e)}"
+            )
             return False
 
     # ========================================================================
@@ -367,6 +372,8 @@ class ConditionalExecutionMixin:
         Raises:
             None - Method is defensive and returns False on any error
         """
+        from kailash.nodes.logic.operations import SwitchNode
+
         try:
             # Get all incoming edges for this node
             if not hasattr(workflow, "graph") or workflow.graph is None:
@@ -393,7 +400,7 @@ class ConditionalExecutionMixin:
                         has_non_none_connected_input = True
 
                 # Direct connection from SwitchNode
-                if source_node and source_node.__class__.__name__ in ["SwitchNode"]:
+                if isinstance(source_node, SwitchNode):
                     has_conditional_inputs = True
                 # Transitive dependency: source node was skipped due to conditional routing
                 elif current_results and source_node_id in current_results:
@@ -459,8 +466,7 @@ class ConditionalExecutionMixin:
                             # Check if this None input came from conditional routing
                             source_node = workflow._node_instances.get(source_node_id)
                             is_from_conditional = (
-                                source_node
-                                and source_node.__class__.__name__ in ["SwitchNode"]
+                                isinstance(source_node, SwitchNode)
                             ) or (
                                 current_results
                                 and source_node_id in current_results
@@ -483,7 +489,7 @@ class ConditionalExecutionMixin:
             # Defensive: on any error, execute the node for safety
             if hasattr(self, "logger"):
                 self.logger.warning(
-                    f"Error checking if node {node_id} should be skipped: {e}"
+                    f"Error checking if node {node_id} should be skipped: {safe_exception_frames(e)}"
                 )
             return False
 
@@ -552,7 +558,7 @@ class ConditionalExecutionMixin:
 
         except Exception as e:
             self.logger.warning(
-                f"Error tracking conditional execution performance: {e}"
+                f"Error tracking conditional execution performance: {safe_exception_frames(e)}"
             )
 
     def _log_conditional_execution_failure(
@@ -583,8 +589,8 @@ class ConditionalExecutionMixin:
             self.logger.error(
                 f"Conditional execution failed after {nodes_completed}/{total_nodes} nodes"
             )
-            self.logger.error(f"Error type: {type(error).__name__}")
-            self.logger.error(f"Error message: {str(error)}")
+            self.logger.error(f"Error type: {safe_type_name(error)}")
+            self.logger.error(f"Error frames: {safe_exception_frames(error)}")
 
             # Log workflow characteristics for debugging
             from kailash.analysis import ConditionalBranchAnalyzer
@@ -598,11 +604,11 @@ class ConditionalExecutionMixin:
 
             # Log additional context
             if context:
-                self.logger.debug(f"Execution context: {context}")
+                self.logger.debug(f"Execution context field count: {len(context)}")
 
         except Exception as log_error:
             self.logger.warning(
-                f"Error logging conditional execution failure: {log_error}"
+                f"Error logging conditional execution failure: {safe_exception_frames(log_error)}"
             )
 
     def _track_fallback_usage(self, workflow: Workflow, reason: str) -> None:
@@ -624,12 +630,16 @@ class ConditionalExecutionMixin:
         """
         try:
             # Log fallback usage
-            self.logger.info(f"Fallback used for workflow '{workflow.name}': {reason}")
+            self.logger.info(
+                "Fallback used for workflow %s (reason supplied: %s)",
+                workflow.name,
+                bool(reason),
+            )
 
             # Track for monitoring (could be sent to metrics system).
             # Signature must match LocalRuntime._record_execution_metrics(
             #   workflow, execution_time, node_count, skipped_nodes, execution_mode);
-            # the fallback reason is already surfaced in the info log above.
+            # the fallback event is surfaced in the info log above.
             # Passing a single metrics dict silently raised a swallowed
             # "missing 4 required positional arguments" WARN on every fallback
             # (same defect as _track_conditional_execution_performance).
@@ -643,7 +653,9 @@ class ConditionalExecutionMixin:
                 )
 
         except Exception as e:
-            self.logger.warning(f"Error tracking fallback usage: {e}")
+            self.logger.warning(
+                f"Error tracking fallback usage: {safe_exception_frames(e)}"
+            )
 
     # ========================================================================
     # Template Methods (Orchestration with Runtime-Specific Delegation)
@@ -758,9 +770,11 @@ class ConditionalExecutionMixin:
 
         except Exception as e:
             # Enhanced error logging with fallback reasoning
-            self.logger.error(f"Error in conditional execution approach: {e}")
+            self.logger.error(
+                f"Error in conditional execution approach: {safe_exception_frames(e)}"
+            )
             if fallback_reason:
-                self.logger.warning(f"Fallback reason: {fallback_reason}")
+                self.logger.warning("Conditional fallback reason recorded")
 
             # Log performance impact before fallback
             context = {
@@ -786,7 +800,9 @@ class ConditionalExecutionMixin:
                 return fallback_results
 
             except Exception as fallback_error:
-                self.logger.error(f"Fallback execution also failed: {fallback_error}")
+                self.logger.error(
+                    f"Fallback execution also failed: {safe_exception_frames(fallback_error)}"
+                )
                 # If both conditional and fallback fail, re-raise the original error
                 raise e from fallback_error
 
@@ -940,11 +956,13 @@ class ConditionalExecutionMixin:
 
                     all_phase1_results[node_id] = result
                     self.logger.debug(
-                        f"Node {node_id} completed with result keys: {list(result.keys()) if isinstance(result, dict) else type(result)}"
+                        f"Node {node_id} completed with result field count: {len(result) if isinstance(result, dict) else 0}"
                     )
 
                 except Exception as e:
-                    self.logger.error(f"Error executing node {node_id}: {e}")
+                    self.logger.error(
+                        f"Error executing node {node_id}: {safe_exception_frames(e)}"
+                    )
                     # Continue with other nodes
                     all_phase1_results[node_id] = {
                         "error": str(e),
@@ -958,7 +976,9 @@ class ConditionalExecutionMixin:
             return all_phase1_results  # Return ALL results, not just switches
 
         except Exception as e:
-            self.logger.error(f"Error in switch execution phase: {e}")
+            self.logger.error(
+                f"Error in switch execution phase: {safe_exception_frames(e)}"
+            )
             return all_phase1_results
 
     async def _execute_pruned_plan(
@@ -1041,7 +1061,9 @@ class ConditionalExecutionMixin:
                     self.logger.debug(f"Node {node_id} completed")
 
                 except Exception as e:
-                    self.logger.error(f"Error executing node {node_id}: {e}")
+                    self.logger.error(
+                        f"Error executing node {node_id}: {safe_exception_frames(e)}"
+                    )
                     # Continue with other nodes or stop based on error handling
                     if hasattr(self, "_should_stop_on_error"):
                         if self._should_stop_on_error(e, node_id):
@@ -1059,7 +1081,9 @@ class ConditionalExecutionMixin:
             return remaining_results
 
         except Exception as e:
-            self.logger.error(f"Error in pruned plan execution: {e}")
+            self.logger.error(
+                f"Error in pruned plan execution: {safe_exception_frames(e)}"
+            )
             return remaining_results
 
     # ========================================================================

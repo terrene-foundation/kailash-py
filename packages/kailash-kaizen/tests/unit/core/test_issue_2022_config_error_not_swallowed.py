@@ -102,12 +102,30 @@ class TestUnresolvedProviderSurfacesThroughRun:
     -surface parity: one predicate, every surface that swallows.
     """
 
+    # SETUP NOTE (#2220 residual). These three cases used
+    # ``model="gpt-4o-mini"`` under the ``keyless`` fixture to manufacture an
+    # unresolved provider, which worked while `BaseAgent.to_workflow()`
+    # resolved via `detect_provider_from_env()` — keyless returned None.
+    #
+    # That call now resolves from the MODEL, so `gpt-4o-mini` resolves to
+    # `openai` whether or not a credential exists, which is simply the true
+    # answer (and what `AgentConfig` has done since #2220's primary fix). The
+    # CONTRACT under test is unchanged — an unresolved provider must surface
+    # as a typed ConfigurationError rather than an empty result dict — but the
+    # old setup no longer produces an unresolved provider, so it was pinning
+    # the assertion to a scenario that had ceased to exist.
+    #
+    # A config with NO model is the genuine unresolved case: nothing names a
+    # vendor, resolution returns None, and LLMAgentNode's #1947 gate fires.
+    # `test_registered_model_keyless_still_fails_loudly` below covers the
+    # scenario these cases used to construct, so no coverage is lost.
+
     @pytest.mark.parametrize("strategy_type", ["single_shot", "multi_cycle"])
     def test_run_raises_configuration_error_not_empty_result(
         self, keyless, strategy_type
     ):
         agent = BaseAgent(
-            config=BaseAgentConfig(model="gpt-4o-mini", strategy_type=strategy_type),
+            config=BaseAgentConfig(strategy_type=strategy_type),
             mcp_servers=[],
         )
         with pytest.raises(ConfigurationError):
@@ -118,12 +136,53 @@ class TestUnresolvedProviderSurfacesThroughRun:
         from kaizen.strategies.single_shot import SingleShotStrategy
 
         agent = BaseAgent(
-            config=BaseAgentConfig(model="gpt-4o-mini"),
+            config=BaseAgentConfig(),
             strategy=SingleShotStrategy(),
             mcp_servers=[],
         )
         with pytest.raises(ConfigurationError):
             agent.run(input="hello")
+
+    @pytest.mark.parametrize("strategy_type", ["single_shot", "multi_cycle"])
+    def test_registered_model_keyless_does_not_report_success(
+        self, keyless, strategy_type
+    ):
+        """The scenario the cases above used to construct, pinned as it ACTUALLY behaves.
+
+        A registered model with no credential resolves to its real vendor and
+        fails at dispatch, rather than resolving to None and raising at the
+        #1947 gate. ``AgentConfig`` has behaved this way since #2220's primary
+        fix (verified: keyless ``AgentConfig(model="gpt-4o-mini").llm_provider``
+        is ``'openai'``); #2220's residual fix makes ``BaseAgent`` consistent
+        with it.
+
+        What this pins is the property that still holds and matters most: the
+        run does NOT report success. It asserts the observed shape rather than
+        a raise, because a raise is NOT what happens — writing the stronger
+        assertion would have made this test a statement of intent instead of a
+        measurement.
+
+        KNOWN GAP, deliberately recorded rather than asserted away: the
+        returned error is ``"Missing required output field: output"``, a
+        downstream schema symptom, not the real cause ("no API key for
+        openai"), which is logged but not propagated into the envelope. That
+        diagnosability gap belongs to the strategy/AgentLoop swallow surface
+        that #2022 owns — it is not introduced here and is not this change's
+        to move, but it is now reachable from more entry points, so it is
+        pinned here to stay visible instead of being discovered again later.
+        """
+        agent = BaseAgent(
+            config=BaseAgentConfig(model="gpt-4o-mini", strategy_type=strategy_type),
+            mcp_servers=[],
+        )
+
+        result = agent.run(input="hello")
+
+        assert isinstance(result, dict), f"expected a result envelope, got {result!r}"
+        assert result.get("success") is False, (
+            "a keyless registered model must never report success — it cannot "
+            f"have reached a provider. Got: {result!r}"
+        )
 
 
 class TestResolveAgentProvider:
@@ -157,12 +216,38 @@ class TestResolveAgentProvider:
 
         assert resolve_agent_provider(model) == expected
 
-    def test_unregistered_model_falls_back_to_environment(self, keyless):
-        """Preserves today's behaviour for models outside the prefix registry."""
+    def test_unregistered_model_no_longer_falls_back_to_environment(self, keyless):
+        """#2220 REVERSED this assertion deliberately; it pinned the defect.
+
+        This test used to read ``== "openai"`` and was titled "preserves
+        today's behaviour for models outside the prefix registry". That
+        behaviour was the #2220 vulnerability: the env fallback answered
+        "which vendor serves this model" using a fact that only says "which
+        vendor do I hold a credential for". With ``OPENAI_API_KEY`` exported,
+        ``model="llama-3.1"`` dispatched a local model's prompt to OpenAI.
+
+        ``chatgpt-4o-latest`` is kept as the model precisely because it is the
+        SYMPATHETIC case — it really is OpenAI-served, so the old guess
+        happened to be right here, and this is the population the fix breaks.
+        They now pass ``llm_provider="openai"`` explicitly. That cost is
+        accepted: the resolver cannot distinguish this model from
+        ``llama-3.1``, and being right by luck for one is what made it wrong
+        for the other.
+        """
         from kaizen.core import resolve_agent_provider
 
         keyless.setenv("OPENAI_API_KEY", "sk-test-not-used")
-        assert resolve_agent_provider("chatgpt-4o-latest") == "openai"
+        with pytest.raises(ConfigurationError) as caught:
+            resolve_agent_provider("chatgpt-4o-latest")
+
+        # The migration must be named, or the caller's obvious next move is to
+        # export another key — which is what caused the silent dispatch.
+        assert "llm_provider=" in str(caught.value)
+
+        # The documented migration must actually work.
+        assert (
+            resolve_agent_provider("gpt-4o-mini") == "openai"
+        ), "registered prefixes must keep resolving — this fix is not 'always raise'"
 
     def test_unresolvable_raises_actionable_configuration_error(self, keyless):
         """Fail LOUD and name the fix — never return None into the node gate."""

@@ -1,0 +1,398 @@
+{
+  "reviewed_head": "709759a385ae5950fdeab2eda739718dddfb75e3",
+  "scope": "Recovery and structural revalidation only; existing archive-wide dispositions remain conservative and no wholesale merge is authorized.",
+  "ran": true,
+  "verdict": "Pass",
+  "inventory_scope": "All live refs/archive and refs/original compared against frozen csq13-ref-adjudication.json rows; ordinary branch and tag inventory is outside the 52-ref denominator.",
+  "inventory_expected": 52,
+  "inventory_observed": 52,
+  "omitted_refs": [],
+  "missing_refs": [],
+  "changed_recorded_tips": [],
+  "refs": [
+    {
+      "ref": "refs/archive/2026-08-21/audit/w5-a-core-spec-audit",
+      "tip": "68cb2cc3d69a98a633534fca559eb5a9d86c359c",
+      "inherited_disposition": "landed-equivalent"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/audit/w5-b-dataflow-spec-audit",
+      "tip": "a96169277196846b42b1d28efc804fe1f901b9bc",
+      "inherited_disposition": "landed-equivalent"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/audit/w5-c-nexus-spec-audit",
+      "tip": "16187704f5608944819e18470ab94b31443a72e8",
+      "inherited_disposition": "landed-equivalent"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/audit/w5-d-kaizen-spec-audit",
+      "tip": "ef83d5df5251cc2d66190248b3a6ea5ee89f0fef",
+      "inherited_disposition": "landed-equivalent"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/audit/w5-e1-ml-core-spec-audit",
+      "tip": "4494c2bc1d0d8cedfccbe2e29029f9251aa7ba90",
+      "inherited_disposition": "landed-equivalent"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/audit/w5-e2-ml-extras-align-spec-audit",
+      "tip": "e20392a7d255b6511a111880a6ff4ba9da8a9a43",
+      "inherited_disposition": "landed-equivalent"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/audit/w5-f-trust-pact-sec-spec-audit",
+      "tip": "dc24a1cad5c7d92bd882dcff3d7b54507e9a329c",
+      "inherited_disposition": "landed-equivalent"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/debug/issue-1010-phase-a-diagnostics",
+      "tip": "2aa62651ba2a9b59d2d1e86687f23f84fd483bda",
+      "inherited_disposition": "superseded-diagnostics"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/debug/issue-1010-phase-a-prime-linux",
+      "tip": "cface915007d3a8d631671cbfa561cb8708cf47c",
+      "inherited_disposition": "diagnostics-superseded-baggage-unverified"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/dev",
+      "tip": "c6596582bb7c81330bc17be14e6bb5906b0de5a6",
+      "inherited_disposition": "retained-historical-strategy-document"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/docs/mcp-gateway-integration",
+      "tip": "f7ac1505b4913b8ee66118df45ecbfe510dfd08a",
+      "inherited_disposition": "landed-exact-tree-via-squash"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/docs/notes-cont18-execution",
+      "tip": "d1e4d8d63061fa24edaf1e15d9dc68f6f94772e2",
+      "inherited_disposition": "superseded-checkpoint"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/docs/update-iterative-llm-agent-v0.9.9",
+      "tip": "a3b6f8cc81a67809b9fb8e3bc5494a2cd095b219",
+      "inherited_disposition": "landed-exact-tree-via-squash"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/docs/update-v0.8.6-documentation",
+      "tip": "91187aeb112cba2bf3176594d011dd01f3bf99b7",
+      "inherited_disposition": "landed-exact-tree-via-squash"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/feat/dataflow-dynamic-model-registration",
+      "tip": "bc4f229523c8496f532524a5a286a4517948a93f",
+      "inherited_disposition": "landed-exact-tree-via-squash"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/feat/fabric-consumer-adapters",
+      "tip": "a9977f9da462fde7e727e8241ccecea98db4a637",
+      "inherited_disposition": "landed-equivalent"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/feat/outstanding-issues-consolidation",
+      "tip": "bc2f685dbcdcffd184fb1f2ad691c781427ade36",
+      "inherited_disposition": "landed-repair-with-evolved-dependencies"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/feat/studio-app-session",
+      "tip": "4c3eb694c6dbeef8b09428db67f706466818437c",
+      "inherited_disposition": "landed-exact-tree-via-squash"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/feat/w6-010-nexus-package-name-canonical",
+      "tip": "9212cbe9378d8823be43fc6fc739c5d25e5bd3d3",
+      "inherited_disposition": "landed-equivalent"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/feat/w6-023-strip-w31-31b-import-error",
+      "tip": "82ac634f822a6805b8597804ffc18f93c4f15d98",
+      "inherited_disposition": "superseded"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/feature/kaizen-agent-development",
+      "tip": "d0c1daa5a38fa31cccd4188c2ef806ffe9b35c4e",
+      "inherited_disposition": "landed-exact-tree-via-squash"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/feature/kaizen-developer-experience-improvements",
+      "tip": "0292389bdd6d7ed6caad60f2e4e86a5039f4bbd0",
+      "inherited_disposition": "unresolved"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/2070-logging-hook-redaction-defeat",
+      "tip": "cbb64f8fca867b60de412c1454a8a471c0d9bf14",
+      "inherited_disposition": "superseded"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/async-runtime-tier1-tests",
+      "tip": "f890f14c49f20864a2d90122e3f6d25ab7e71b55",
+      "inherited_disposition": "landed-exact-tree-via-squash"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/bug-report-issues",
+      "tip": "f723e0ab05427d765c8aaba07dfb3ac9746f4b98",
+      "inherited_disposition": "landed-content-with-superseded-test-markers"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/ci-green-v5",
+      "tip": "dcf64b6bc7ed0795d1e888a83e739fa25bc6773f",
+      "inherited_disposition": "superseded"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/dataflow-connection-parsing-bug",
+      "tip": "b31fe462154869bfcf90a146f169ab902abe3530",
+      "inherited_disposition": "landed-exact-tree-via-squash"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/docs-deploy-gtar-missing",
+      "tip": "afde98c0481c9a9cedd2e8678253ef7f62cabce8",
+      "inherited_disposition": "landed-exact-tree-via-squash"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/github-actions-branch-patterns",
+      "tip": "3ebf7eb14c5a9a4bdb78b60574ecbed11acebc59",
+      "inherited_disposition": "current-equivalent"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/iterative-llm-agent-fallback-bug",
+      "tip": "b20cdcc1e246c14a787d9f79cd9353cbab37c739",
+      "inherited_disposition": "landed-exact-tree-via-squash"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/mcp-openai-pydantic-v2",
+      "tip": "a0106d1e719e8e26824f63871f8fa8e5f07f711b",
+      "inherited_disposition": "landed-exact-tree-via-squash"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/remove-iterative-llm-mock-mode",
+      "tip": "b12346453ee933b69ce8398e9d83f30ec33c2483",
+      "inherited_disposition": "landed-exact-tree-via-squash"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/fix/runtime-leak-lifecycle-71",
+      "tip": "246631f030552afda1f6d2c6184902ce7e2e86c2",
+      "inherited_disposition": "landed-exact-tree-via-squash"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/kaizen",
+      "tip": "230e29ee236ee13330a621c627a2e362cad9f78d",
+      "inherited_disposition": "landed-exact-tree-via-squash"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/license-update-v0.9.10",
+      "tip": "ac914c9959e2ffe3e1406d4f041fd00afda6a11c",
+      "inherited_disposition": "included-in-landed-snapshot"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.12.5",
+      "tip": "fc054c73eeea5daa9dbd2329a348ccf4ed7eebf4",
+      "inherited_disposition": "landed-exact-tree-via-squash"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.4.1",
+      "tip": "de158198fdca7d4a9c4d79047993911b0cc11ec0",
+      "inherited_disposition": "landed-exact-tree-via-squash"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.8.5",
+      "tip": "e935f137fa9f5228b7ce8b8925eccca1b0910954",
+      "inherited_disposition": "landed-exact-tree-via-squash"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.11-final",
+      "tip": "f56816d720d377d37d0eedb7a09a592fc02ecc05",
+      "inherited_disposition": "landed-exact-tree-via-squash"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.16-version-bump",
+      "tip": "d8db843e6e42f42eb51d72aa1e1ee89cb44537e3",
+      "inherited_disposition": "superseded-release-metadata"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.17-final",
+      "tip": "666d0c3d1d195c7d5a5e8a46db9f6b9b3cae4c5a",
+      "inherited_disposition": "superseded-ci-experiment"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.17-update",
+      "tip": "c4b3ba40c009b9855fcf8aa18aad1089b9304780",
+      "inherited_disposition": "landed-content-with-evolved-release-metadata"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.17-version-update",
+      "tip": "32e35ba67d9b4c979a08cc2d61b1b00493f1ebdd",
+      "inherited_disposition": "superseded-release-metadata"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.4",
+      "tip": "459722e450b1d695a21e9d92f2ad902bdd39a8c9",
+      "inherited_disposition": "landed-exact-tree-via-squash"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.7",
+      "tip": "25f9e3d70e4e3ae7be740f53bbf7b04a62606ea9",
+      "inherited_disposition": "retained-historical-release-tag"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/release/v0.9.9",
+      "tip": "0b58129039ada2f93089b09d383883aa8d21792e",
+      "inherited_disposition": "included-in-landed-snapshot"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/scrap/pre-triage-snapshot-2026-04-08",
+      "tip": "4cd5ef5124e8360c47784c786bf554130e830942",
+      "inherited_disposition": "unverified-large-mixed-snapshot"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/sync/main-with-dataflow-v0.4.3-release",
+      "tip": "6cdf0ada0d54915423fb7d6c54c9de8780e22f75",
+      "inherited_disposition": "unresolved-historical-docs-and-probes"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/test/ci-verification",
+      "tip": "3e332b5ad088cb6f1570bab7f4e85b1767f6285d",
+      "inherited_disposition": "superseded-ci-experiment"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/test/ci-verification-v2",
+      "tip": "6b16ed192f44488f6d88d42a33592589fdb8ac5c",
+      "inherited_disposition": "landed-content-with-test-relocation"
+    },
+    {
+      "ref": "refs/archive/2026-08-21/todo-096-parameter-injection-testing",
+      "tip": "82055a2525d56772ce709f5d3f4a083eb7706bd6",
+      "inherited_disposition": "unresolved-production-prototype"
+    },
+    {
+      "ref": "refs/original/refs/heads/feat/1125-from-brief-analyze",
+      "tip": "62eb198e362498f4beb7dba404b3505742279f84",
+      "inherited_disposition": "landed-equivalent"
+    }
+  ],
+  "fresh_checks": [
+    {
+      "kind": "devex-exact-blob-retention",
+      "path": "src/kailash/security.py",
+      "ancestor": "cb50071d65a989f0ab3ff14ca83dfb70bf9c3a16",
+      "verdict": "Pass"
+    },
+    {
+      "kind": "devex-exact-blob-retention",
+      "path": "src/kailash/nodes/code/python.py",
+      "ancestor": "cb50071d65a989f0ab3ff14ca83dfb70bf9c3a16",
+      "verdict": "Pass"
+    },
+    {
+      "kind": "devex-exact-blob-retention",
+      "path": "src/kailash/nodes/code/python.py",
+      "ancestor": "559231f72c889028c89b36a08803570deaa22ce0",
+      "verdict": "Pass"
+    },
+    {
+      "kind": "devex-exact-blob-retention",
+      "path": "src/kailash/runtime/local.py",
+      "ancestor": "559231f72c889028c89b36a08803570deaa22ce0",
+      "verdict": "Pass"
+    },
+    {
+      "kind": "devex-exact-blob-retention",
+      "path": "src/kailash/api/workflow_api.py",
+      "ancestor": "b9c14177bc278e7c7c484927b4b71bf57c6ca9c9",
+      "verdict": "Pass"
+    },
+    {
+      "kind": "devex-exact-blob-retention",
+      "path": "src/kailash/runtime/__init__.py",
+      "ancestor": "b9c14177bc278e7c7c484927b4b71bf57c6ca9c9",
+      "verdict": "Pass"
+    },
+    {
+      "kind": "devex-exact-blob-retention",
+      "path": "src/kailash/runtime/async_local.py",
+      "ancestor": "2809fa708edca34f336a161d3a5840821cff6574",
+      "verdict": "Pass"
+    }
+  ],
+  "candidate_search_results": {
+    "ast": {
+      "path_count": 48,
+      "matched_path_count": 16,
+      "unmatched_path_count": 32,
+      "status_counts": {
+        "unresolved-no-exact-AST-match": 32,
+        "historical-whole-AST-retained": 16
+      }
+    },
+    "import-normalized": {
+      "path_count": 48,
+      "matched_path_count": 31,
+      "unmatched_path_count": 17,
+      "status_counts": {
+        "unresolved-no-import-normalized-AST-match": 17,
+        "historical-AST-equal-except-import-order-grouping": 31
+      }
+    },
+    "nonimport": {
+      "path_count": 48,
+      "matched_path_count": 33,
+      "unmatched_path_count": 15,
+      "status_counts": {
+        "unresolved-no-nonimport-AST-match": 15,
+        "historical-nonimport-AST-match-needs-import-review": 33
+      }
+    }
+  },
+  "controls": {
+    "ref_inventory": "Removing one in-memory frozen ref makes set equality false.",
+    "ancestor": "HEAD ancestor of HEAD exits 0; HEAD ancestor of HEAD^ exits 1.",
+    "blob_equality": "All listed landed blobs match archived blobs; their recorded parent blobs differ.",
+    "ast_literals": "x=1 versus x=2 differs; x = 1 versus x=1 matches.",
+    "ordered_imports": "import a; import b differs from reversed order in whole AST comparator.",
+    "api_wiring": "Native awaited method count is two; in-memory wrong_bridge replacement yields zero.",
+    "debug_fixture": "Diagnostic removal matches base AST; additional baseline async-function deletion differs."
+  },
+  "protected_state": {
+    "archive_original_tag_refs_unchanged": true,
+    "held_stash_objects_unchanged": true,
+    "held_stash_count": 5
+  },
+  "reports": [
+    {
+      "path": "csq13-devex-archive-adjudication.json",
+      "sha256": "008cd7a816d169237c047746f40283835b72a4cec073ac321f0fd8cb1af93cd5"
+    },
+    {
+      "path": "csq13-debug-1010-incidental-adjudication.json",
+      "sha256": "8f48a857edb7591d969ecca1e09a973dcbee7430eafd5c90218453c655040d75"
+    },
+    {
+      "path": "csq13-scrap-ast-retention.json",
+      "sha256": "3c2e8dedf4b4450bf4c4a90e7abe78b6ea0602726c28cd249b83147b64a7c9a4"
+    },
+    {
+      "path": "csq13-scrap-import-normalized-retention.json",
+      "sha256": "ad729c26de653eb5219da7d3c591eeedb8ed68d62c4f7c90b2e8ab2c6560f2ca"
+    },
+    {
+      "path": "csq13-scrap-nonimport-retention.json",
+      "sha256": "9ae325c4554db41682a4d971f6e798c9808f4f738a1f87c796950935451c8e62"
+    }
+  ],
+  "not_run": [
+    "Prior DevEx runtime probes",
+    "Historical or fresh CI",
+    "API HTTP and Docker behavior",
+    "Import-delta behavioral adjudication",
+    "Non-Python scrap adjudication",
+    "Broad historical-ref behavioral conformance"
+  ],
+  "open_scope": [
+    "DevEx unmatched tests/infrastructure and historical docs/skills beyond the four named source contracts",
+    "Unique unpublished architecture presentation retained only in archive; prior assertions uncertified",
+    "Scrap mixed snapshot including import-sensitive candidates and non-Python content",
+    "Historical sync docs/probes",
+    "Parameter debugger/optimizer and separately recorded unresolved policy/spec questions"
+  ]
+}

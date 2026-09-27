@@ -265,6 +265,26 @@ class _Cancellable:
         if self._hard_task is not None and not self._hard_task.done():
             self._hard_task.cancel()
 
+    async def disarm_async(self) -> None:
+        """Cancel and finish this handle's owned asyncio timer tasks."""
+        self.disarm()
+        tasks = [
+            task for task in (self._soft_task, self._hard_task) if task is not None
+        ]
+        if tasks:
+            completion = asyncio.gather(*tasks, return_exceptions=True)
+            cancellation = None
+            while not completion.done():
+                try:
+                    await asyncio.shield(completion)
+                except asyncio.CancelledError as exc:
+                    # A new caller cancellation must propagate, but only after
+                    # the timer tasks have finished their owned cleanup.
+                    cancellation = exc
+            completion.result()
+            if cancellation is not None:
+                raise cancellation
+
 
 def arm_time_limits(
     token: CancellationToken,
@@ -404,6 +424,10 @@ def arm_time_limits_async(
     Identical semantics to :func:`arm_time_limits`. Uses
     :func:`asyncio.create_task` + :func:`asyncio.sleep` against the
     running event loop instead of :class:`threading.Timer`.
+
+    Callers must await :meth:`_Cancellable.disarm_async` in a finally
+    block covering preparation and execution, so timer tasks finish even
+    when an early validation, checkpoint read, or caller cancellation fails.
 
     MUST be called from inside a running event loop (raises
     :class:`RuntimeError` otherwise — surface the integration error at

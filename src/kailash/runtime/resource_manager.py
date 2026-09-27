@@ -11,6 +11,8 @@ Components:
 """
 
 import asyncio
+import contextvars
+import functools
 import gc
 import logging
 import random
@@ -31,6 +33,11 @@ except ImportError:
     psutil = None  # Included in base install
 
 from kailash.sdk_exceptions import CircuitBreakerOpenError, ResourceLimitExceededError
+from kailash.utils.secure_logging import (
+    safe_callable_name,
+    safe_exception_frames,
+    safe_type_name,
+)
 from kailash.utils.url_credentials import mask_url, process_local_config_key
 
 logger = logging.getLogger(__name__)
@@ -2002,7 +2009,7 @@ class AdaptiveRetryStrategy(RetryStrategy):
             self.exception_delays[exception_type] = new_delay
 
             logger.debug(
-                f"Adaptive retry learned: {exception_type.__name__} delay "
+                f"Adaptive retry learned: {safe_callable_name(exception_type)} delay "
                 f"{current_delay:.2f}s -> {new_delay:.2f}s (success: {success})"
             )
 
@@ -2099,38 +2106,34 @@ class ExceptionClassifier:
             # Check non-retriable patterns first (higher priority)
             for pattern, case_sensitive in self.non_retriable_patterns:
                 if pattern.search(exception_message):
-                    logger.debug(
-                        f"Exception '{exception_message}' matched non-retriable pattern"
-                    )
+                    logger.debug("Exception matched non-retriable pattern")
                     return False
 
             # Check non-retriable exception types
             for non_retriable_type in self.non_retriable_exceptions:
                 if issubclass(exception_type, non_retriable_type):
                     logger.debug(
-                        f"Exception type {exception_type.__name__} is non-retriable"
+                        f"Exception type {safe_callable_name(exception_type)} is non-retriable"
                     )
                     return False
 
             # Check retriable patterns
             for pattern, case_sensitive in self.retriable_patterns:
                 if pattern.search(exception_message):
-                    logger.debug(
-                        f"Exception '{exception_message}' matched retriable pattern"
-                    )
+                    logger.debug("Exception matched retriable pattern")
                     return True
 
             # Check retriable exception types
             for retriable_type in self.retriable_exceptions:
                 if issubclass(exception_type, retriable_type):
                     logger.debug(
-                        f"Exception type {exception_type.__name__} is retriable"
+                        f"Exception type {safe_callable_name(exception_type)} is retriable"
                     )
                     return True
 
             # Default to non-retriable for unknown exceptions
             logger.debug(
-                f"Exception type {exception_type.__name__} not classified, defaulting to non-retriable"
+                f"Exception type {safe_callable_name(exception_type)} not classified, defaulting to non-retriable"
             )
             return False
 
@@ -2145,7 +2148,9 @@ class ExceptionClassifier:
             # Remove from non-retriable if present
             self.non_retriable_exceptions.discard(exception_type)
 
-        logger.info(f"Added {exception_type.__name__} to retriable exceptions")
+        logger.info(
+            f"Added {safe_callable_name(exception_type)} to retriable exceptions"
+        )
 
     def add_non_retriable_exception(self, exception_type: Type[Exception]) -> None:
         """Add an exception type to non-retriable list.
@@ -2158,7 +2163,9 @@ class ExceptionClassifier:
             # Remove from retriable if present
             self.retriable_exceptions.discard(exception_type)
 
-        logger.info(f"Added {exception_type.__name__} to non-retriable exceptions")
+        logger.info(
+            f"Added {safe_callable_name(exception_type)} to non-retriable exceptions"
+        )
 
     def add_retriable_pattern(self, pattern: str, case_sensitive: bool = True) -> None:
         """Add a regex pattern for retriable exceptions.
@@ -2172,9 +2179,7 @@ class ExceptionClassifier:
             compiled_pattern = re.compile(pattern, flags)
             self.retriable_patterns.append((compiled_pattern, case_sensitive))
 
-        logger.info(
-            f"Added retriable pattern: {pattern} (case_sensitive: {case_sensitive})"
-        )
+        logger.info(f"Added retriable pattern (case_sensitive: {case_sensitive})")
 
     def add_non_retriable_pattern(
         self, pattern: str, case_sensitive: bool = True
@@ -2190,9 +2195,7 @@ class ExceptionClassifier:
             compiled_pattern = re.compile(pattern, flags)
             self.non_retriable_patterns.append((compiled_pattern, case_sensitive))
 
-        logger.info(
-            f"Added non-retriable pattern: {pattern} (case_sensitive: {case_sensitive})"
-        )
+        logger.info(f"Added non-retriable pattern (case_sensitive: {case_sensitive})")
 
     def get_classification_rules(self) -> Dict[str, Any]:
         """Get current classification rules.
@@ -2558,6 +2561,105 @@ class RetryAnalytics:
         return recommendations
 
 
+class _RetryExecutionOwner:
+    def __init__(self):
+        self.failures = {}
+        self.lock = threading.RLock()
+
+
+_RETRY_EXECUTION_SCOPE = contextvars.ContextVar("retry_execution_scope", default=None)
+_RETRY_INVOCATIONS = contextvars.ContextVar("retry_invocations", default=())
+
+
+def _retry_execution_scope(function):
+    @functools.wraps(function)
+    async def scoped(*args, **kwargs):
+        parent_owner = _RETRY_EXECUTION_SCOPE.get()
+        token = _RETRY_EXECUTION_SCOPE.set(_RetryExecutionOwner())
+        invocations = _RETRY_INVOCATIONS.set(())
+        observer_error = None
+        try:
+            return await function(*args, **kwargs)
+        except BaseException as error:
+            if _is_retry_observer_failure(error):
+                observer_error = error
+            raise
+        finally:
+            _RETRY_EXECUTION_SCOPE.get().failures.clear()
+            _RETRY_INVOCATIONS.reset(invocations)
+            _RETRY_EXECUTION_SCOPE.reset(token)
+            if observer_error is not None and parent_owner is not None:
+                _mark_retry_observer_failure(observer_error)
+
+    return scoped
+
+
+def _retry_engine_scope(function):
+    @functools.wraps(function)
+    async def scoped(*args, **kwargs):
+        token = None
+        if _RETRY_EXECUTION_SCOPE.get() is None:
+            token = _RETRY_EXECUTION_SCOPE.set(_RetryExecutionOwner())
+        invocation = _RETRY_INVOCATIONS.set((*_RETRY_INVOCATIONS.get(), object()))
+        try:
+            return await function(*args, **kwargs)
+        finally:
+            _RETRY_INVOCATIONS.reset(invocation)
+            if token is not None:
+                _RETRY_EXECUTION_SCOPE.get().failures.clear()
+                _RETRY_EXECUTION_SCOPE.reset(token)
+
+    return scoped
+
+
+def _mark_retry_observer_failure(exception: BaseException) -> None:
+    # Scope-owned identity entries, never caller exception attributes or global
+    # registries. Child tasks share the owner; distinct executions cannot erase
+    # each other's provenance even when they raise the same exception object.
+    owner = _RETRY_EXECUTION_SCOPE.get()
+    if owner is not None:
+        with owner.lock:
+            entry = owner.failures.setdefault(id(exception), (exception, set()))
+            entry[1].update(_RETRY_INVOCATIONS.get())
+
+
+def _is_retry_observer_failure(exception: BaseException) -> bool:
+    owner = _RETRY_EXECUTION_SCOPE.get()
+    if owner is None:
+        return False
+    with owner.lock:
+        entry = owner.failures.get(id(exception))
+        if entry is None or entry[0] is not exception:
+            return False
+        invocations = _RETRY_INVOCATIONS.get()
+        # A new engine invocation must classify a reused ordinary exception
+        # afresh. Ancestors of the actual observer failure still propagate it.
+        return not invocations or invocations[-1] in entry[1]
+
+
+def _raise_if_runtime_terminal(exception: BaseException) -> None:
+    """Runtime controls cannot be overridden by configurable retry rules."""
+    # LocalRuntime imports this module, so resolve its typed content error lazily.
+    from kailash.runtime.local import ContentAwareExecutionError
+    from kailash.sdk_exceptions import (
+        HardTimeLimitExceeded,
+        SoftTimeLimitExceeded,
+        WorkflowCancelledError,
+    )
+
+    if isinstance(
+        exception,
+        (
+            asyncio.CancelledError,
+            ContentAwareExecutionError,
+            WorkflowCancelledError,
+            SoftTimeLimitExceeded,
+            HardTimeLimitExceeded,
+        ),
+    ):
+        raise exception
+
+
 class RetryPolicyEngine:
     """Comprehensive retry policy engine with pluggable strategies and enterprise integration."""
 
@@ -2645,7 +2747,7 @@ class RetryPolicyEngine:
         with self._lock:
             self.exception_strategies[exception_type] = strategy
         logger.info(
-            f"Registered strategy for {exception_type.__name__}: {strategy.name}"
+            f"Registered strategy for {safe_callable_name(exception_type)}: {strategy.name}"
         )
 
     def select_strategy(
@@ -2675,6 +2777,7 @@ class RetryPolicyEngine:
             # Default strategy
             return self.default_strategy
 
+    @_retry_engine_scope
     async def execute_with_retry(
         self,
         func: Callable,
@@ -2707,8 +2810,6 @@ class RetryPolicyEngine:
             f"Starting retry session {session_id} with strategy: {current_strategy.name}"
         )
 
-        attempt_start = start_time
-        attempt_time = 0.0
         for attempt_num in range(1, current_strategy.max_attempts + 1):
             # Check timeout
             if timeout and (time.time() - start_time) >= timeout:
@@ -2721,9 +2822,7 @@ class RetryPolicyEngine:
                     limits_check = self.resource_limit_enforcer.check_all_limits()
                     for resource_type, result in limits_check.items():
                         if not result.can_proceed:
-                            logger.warning(
-                                f"Resource limit prevents retry: {result.message}"
-                            )
+                            logger.warning("Resource limit prevents retry")
                             return RetryResult(
                                 success=False,
                                 total_attempts=attempt_num,
@@ -2734,54 +2833,42 @@ class RetryPolicyEngine:
                                 attempts=attempts,
                             )
                 except Exception as e:
-                    logger.error(f"Error checking resource limits: {e}")
-
-            # Check circuit breaker if enabled
-            if self.enable_circuit_breaker_coordination and self.circuit_breaker:
-                try:
-                    # Execute through circuit breaker
-                    attempt_start = time.time()
-                    if asyncio.iscoroutinefunction(func):
-                        result = await self.circuit_breaker.call(func, *args, **kwargs)
-                    else:
-                        result = await self.circuit_breaker.call(func, *args, **kwargs)
-                    attempt_time = time.time() - attempt_start
-
-                    # Success
-                    attempt = RetryAttempt(
-                        timestamp=datetime.now(UTC),
-                        exception_type=None,
-                        attempt_number=attempt_num,
-                        delay_used=0.0,
-                        success=True,
-                        execution_time=attempt_time,
-                    )
-                    attempts.append(attempt)
-
-                    # Record metrics
-                    if self.metrics:
-                        self.metrics.record_attempt(attempt)
-
-                    # Record strategy effectiveness
-                    self.record_strategy_effectiveness(
-                        current_strategy, attempt_num, True, time.time() - start_time
+                    _raise_if_runtime_terminal(e)
+                    logger.error(
+                        f"Error checking resource limits: {safe_exception_frames(e)}"
                     )
 
-                    total_time = time.time() - start_time
-                    logger.info(
-                        f"Retry session {session_id} succeeded on attempt {attempt_num}"
-                    )
+            # Capture only operation failures. Successful-operation observers
+            # must not turn a completed side effect into another retry attempt.
+            operation_completed = False
 
-                    return RetryResult(
-                        success=True,
-                        value=result,
-                        total_attempts=attempt_num,
-                        total_time=total_time,
-                        attempts=attempts,
-                    )
+            async def invoke_operation():
+                nonlocal operation_completed
+                if asyncio.iscoroutinefunction(func):
+                    value = await func(*args, **kwargs)
+                else:
+                    value = func(*args, **kwargs)
+                operation_completed = True
+                return value
 
-                except CircuitBreakerOpenError as e:
-                    # Circuit breaker is open, fail immediately
+            attempt_start = time.time()
+            try:
+                if self.enable_circuit_breaker_coordination and self.circuit_breaker:
+                    result = await self.circuit_breaker.call(invoke_operation)
+                else:
+                    result = await invoke_operation()
+            except Exception as e:
+                if _is_retry_observer_failure(e):
+                    raise
+                _raise_if_runtime_terminal(e)
+                if operation_completed:
+                    _mark_retry_observer_failure(e)
+                    raise
+                if (
+                    self.enable_circuit_breaker_coordination
+                    and self.circuit_breaker
+                    and isinstance(e, CircuitBreakerOpenError)
+                ):
                     logger.warning(
                         f"Circuit breaker open, failing retry session {session_id}"
                     )
@@ -2792,20 +2879,11 @@ class RetryPolicyEngine:
                         final_exception=e,
                         attempts=attempts,
                     )
-
-                except Exception as e:
-                    last_exception = e
+                last_exception = e
+                attempt_time = time.time() - attempt_start
             else:
-                # Execute without circuit breaker
                 try:
-                    attempt_start = time.time()
-                    if asyncio.iscoroutinefunction(func):
-                        result = await func(*args, **kwargs)
-                    else:
-                        result = func(*args, **kwargs)
                     attempt_time = time.time() - attempt_start
-
-                    # Success
                     attempt = RetryAttempt(
                         timestamp=datetime.now(UTC),
                         exception_type=None,
@@ -2815,21 +2893,15 @@ class RetryPolicyEngine:
                         execution_time=attempt_time,
                     )
                     attempts.append(attempt)
-
-                    # Record metrics
                     if self.metrics:
                         self.metrics.record_attempt(attempt)
-
-                    # Record strategy effectiveness
                     self.record_strategy_effectiveness(
                         current_strategy, attempt_num, True, time.time() - start_time
                     )
-
                     total_time = time.time() - start_time
                     logger.info(
                         f"Retry session {session_id} succeeded on attempt {attempt_num}"
                     )
-
                     return RetryResult(
                         success=True,
                         value=result,
@@ -2837,10 +2909,9 @@ class RetryPolicyEngine:
                         total_time=total_time,
                         attempts=attempts,
                     )
-
                 except Exception as e:
-                    last_exception = e
-                    attempt_time = time.time() - attempt_start
+                    _mark_retry_observer_failure(e)
+                    raise
 
             # Handle exception
             if last_exception:
@@ -2851,7 +2922,7 @@ class RetryPolicyEngine:
                 if exception_specific_strategy != current_strategy:
                     logger.debug(
                         f"Switching strategy from {current_strategy.name} to "
-                        f"{exception_specific_strategy.name} for {type(last_exception).__name__}"
+                        f"{exception_specific_strategy.name} for {safe_type_name(last_exception)}"
                     )
                     current_strategy = exception_specific_strategy
 
@@ -2859,7 +2930,7 @@ class RetryPolicyEngine:
                 if not self.exception_classifier.is_retriable(last_exception):
                     logger.info(
                         f"Non-retriable exception in session {session_id}: "
-                        f"{type(last_exception).__name__}: {last_exception}"
+                        f"{safe_type_name(last_exception)}: {safe_exception_frames(last_exception)}"
                     )
 
                     # Record non-retriable attempt
@@ -2916,7 +2987,7 @@ class RetryPolicyEngine:
 
                     logger.warning(
                         f"Attempt {attempt_num} failed in session {session_id}, "
-                        f"retrying in {delay:.2f}s: {type(last_exception).__name__}: {last_exception}"
+                        f"retrying in {delay:.2f}s: {safe_type_name(last_exception)}: {safe_exception_frames(last_exception)}"
                     )
 
                     # Wait before retry

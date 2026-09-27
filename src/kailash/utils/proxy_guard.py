@@ -104,8 +104,7 @@ import logging
 import re
 from typing import Any, Callable, Iterable, Optional, Sequence, Union
 
-from .network_guard import BlockedDestinationError
-from .network_guard import check_url as _check_destination_url
+from .network_guard import BlockedDestinationError, check_url as _check_destination_url
 
 logger = logging.getLogger(__name__)
 

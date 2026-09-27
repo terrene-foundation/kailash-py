@@ -205,9 +205,9 @@ class TestTrustVerifierCaching:
         verifier = TrustVerifier(config=config)
 
         # Create a result and cache it with workflow key format
-        # CARE-058: Use null byte separator for cache keys
+        # Cache identity preserves each complete raw fields
         result = VerificationResult(allowed=True, reason="test")
-        cache_key = "wf\x00test-workflow\x00agent-1"
+        cache_key = ("wf", "test-workflow", "agent-1")
         verifier._set_cache(cache_key, result)
 
         # Verify cache hit
@@ -221,9 +221,9 @@ class TestTrustVerifierCaching:
         config = TrustVerifierConfig(mode="enforcing", cache_enabled=True)
         verifier = TrustVerifier(config=config)
 
-        # CARE-058: Use null byte separator for cache keys
+        # Cache identity preserves each complete raw fields
         result = VerificationResult(allowed=False, reason="node denied")
-        cache_key = "node\x00node-1\x00HttpRequest\x00agent-1"
+        cache_key = ("node", "node-1", "HttpRequest", "agent-1")
         verifier._set_cache(cache_key, result)
 
         cached = verifier._get_cached(cache_key)
@@ -235,9 +235,9 @@ class TestTrustVerifierCaching:
         config = TrustVerifierConfig(mode="enforcing", cache_enabled=True)
         verifier = TrustVerifier(config=config)
 
-        # CARE-058: Use null byte separator for cache keys
+        # Cache identity preserves each complete raw fields
         result = VerificationResult(allowed=True, reason="resource access granted")
-        cache_key = "res\x00/data/file.txt\x00read\x00agent-1"
+        cache_key = ("res", "/data/file.txt", "read", "agent-1")
         verifier._set_cache(cache_key, result)
 
         cached = verifier._get_cached(cache_key)
@@ -249,7 +249,7 @@ class TestTrustVerifierCaching:
         config = TrustVerifierConfig(mode="enforcing", cache_enabled=True)
         verifier = TrustVerifier(config=config)
 
-        cached = verifier._get_cached("nonexistent-key")
+        cached = verifier._get_cached(("nonexistent-key",))
         assert cached is None
 
     def test_cache_disabled_returns_none(self):
@@ -259,10 +259,10 @@ class TestTrustVerifierCaching:
 
         # Set a value
         result = VerificationResult(allowed=True)
-        verifier._set_cache("some-key", result)
+        verifier._set_cache(("some-key",), result)
 
         # Should still return None when cache is disabled
-        cached = verifier._get_cached("some-key")
+        cached = verifier._get_cached(("some-key",))
         assert cached is None
 
     def test_clear_cache(self):
@@ -272,19 +272,19 @@ class TestTrustVerifierCaching:
 
         # Add some cached entries
         result = VerificationResult(allowed=True)
-        verifier._set_cache("key1", result)
-        verifier._set_cache("key2", result)
+        verifier._set_cache(("key1",), result)
+        verifier._set_cache(("key2",), result)
 
         # Verify they exist
-        assert verifier._get_cached("key1") is not None
-        assert verifier._get_cached("key2") is not None
+        assert verifier._get_cached(("key1",)) is not None
+        assert verifier._get_cached(("key2",)) is not None
 
         # Clear cache
         verifier.clear_cache()
 
         # Verify cleared
-        assert verifier._get_cached("key1") is None
-        assert verifier._get_cached("key2") is None
+        assert verifier._get_cached(("key1",)) is None
+        assert verifier._get_cached(("key2",)) is None
 
     def test_cache_expiry(self):
         """Test cache entries expire after TTL."""
@@ -296,16 +296,16 @@ class TestTrustVerifierCaching:
         verifier = TrustVerifier(config=config)
 
         result = VerificationResult(allowed=True)
-        verifier._set_cache("expiring-key", result)
+        verifier._set_cache(("expiring-key",), result)
 
         # Should be cached immediately
-        assert verifier._get_cached("expiring-key") is not None
+        assert verifier._get_cached(("expiring-key",)) is not None
 
         # Wait for expiry
         time.sleep(1.1)
 
         # Should be expired now
-        assert verifier._get_cached("expiring-key") is None
+        assert verifier._get_cached(("expiring-key",)) is None
 
 
 class TestTrustVerifierDisabledMode:
@@ -490,8 +490,8 @@ class TestTrustVerifierCacheHit:
         assert result1.allowed is True
 
         # Manually set cache with a different result
-        # CARE-058: Use null byte separator for cache key
-        cache_key = "wf\x00cached-wf\x00agent-1"
+        # Cache identity preserves each complete raw field
+        cache_key = ("wf", "cached-wf", "agent-1")
         cached_result = VerificationResult(
             allowed=False,
             reason="From cache",
@@ -517,8 +517,7 @@ class TestCacheKeyCollisionPrevention:
     - workflow_id="a:b" agent_id="c" -> "wf:a:b:c"
     - workflow_id="a" agent_id="b:c" -> "wf:a:b:c" (COLLISION!)
 
-    The fix uses null byte (\\x00) as separator since it cannot appear
-    in legitimate string IDs.
+    Tuple keys retain identity boundaries even when raw fields contain delimiters.
     """
 
     @pytest.mark.asyncio
@@ -548,9 +547,7 @@ class TestCacheKeyCollisionPrevention:
 
         # Verify both are cached separately by checking cache size
         # With collision, there would only be 1 entry
-        workflow_cache_entries = [
-            k for k in verifier._cache.keys() if k.startswith("wf")
-        ]
+        workflow_cache_entries = [k for k in verifier._cache.keys() if k[0] == "wf"]
         assert len(workflow_cache_entries) == 2, (
             f"Cache collision detected: expected 2 workflow cache entries, "
             f"got {len(workflow_cache_entries)}. "
@@ -586,7 +583,7 @@ class TestCacheKeyCollisionPrevention:
         assert result2.allowed is True
 
         # Verify both are cached separately
-        node_cache_entries = [k for k in verifier._cache.keys() if k.startswith("node")]
+        node_cache_entries = [k for k in verifier._cache.keys() if k[0] == "node"]
         assert len(node_cache_entries) == 2, (
             f"Cache collision detected: expected 2 node cache entries, "
             f"got {len(node_cache_entries)}. "
@@ -622,7 +619,7 @@ class TestCacheKeyCollisionPrevention:
         assert result2.allowed is True
 
         # Verify both are cached separately
-        res_cache_entries = [k for k in verifier._cache.keys() if k.startswith("res")]
+        res_cache_entries = [k for k in verifier._cache.keys() if k[0] == "res"]
         assert len(res_cache_entries) == 2, (
             f"Cache collision detected: expected 2 resource cache entries, "
             f"got {len(res_cache_entries)}. "
@@ -630,24 +627,20 @@ class TestCacheKeyCollisionPrevention:
             "resource='a',action='b:c'"
         )
 
-    def test_cache_key_uses_null_byte_separator(self):
-        """Test that cache keys use null byte separator for collision resistance.
-
-        CARE-058: The null byte (\\x00) cannot appear in legitimate string IDs,
-        making it an ideal separator that prevents collision attacks.
-        """
+    def test_cache_key_preserves_exact_fields(self):
+        """A tuple keeps caller fields distinct without assuming forbidden bytes."""
         config = TrustVerifierConfig(mode="enforcing", fallback_allow=True)
         verifier = TrustVerifier(config=config)
 
         # Set a value to populate the cache
         result = VerificationResult(allowed=True, reason="test")
         # Manually construct a cache key with the expected format
-        expected_key = "wf\x00test-workflow\x00test-agent"
+        expected_key = ("wf", "test-workflow", "test-agent")
         verifier._set_cache(expected_key, result)
 
-        # The cache should contain the key with null byte separator
+        # The cache should contain the exact field tuple
         assert (
             expected_key in verifier._cache
-        ), "Cache key should use null byte (\\x00) as separator"
-        # Verify the key contains null bytes
-        assert "\x00" in expected_key, "Cache key must contain null byte separator"
+        ), "Cache key should preserve each raw identity field"
+        # Verify the domain and identity fields remain separate
+        assert expected_key == ("wf", "test-workflow", "test-agent")

@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 
 from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-from kaizen.core.deprecation import deprecated
+from kaizen.core.deprecation import deprecated, resolve_deprecated_hook, warn_deprecated
 from kaizen.errors import raise_if_configuration_error, unwrap_configuration_error
 from kaizen.nodes.ai.audio_utils import (
     encode_audio,
@@ -29,6 +29,14 @@ from kaizen.nodes.ai.vision_utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Deprecation text for the pre_execute/post_execute extension points, kept in one
+# place so the decorator and the runtime override-dispatch warning cannot drift.
+_EXTENSION_POINT_DEPRECATION = (
+    "Use composition wrappers (MonitoredAgent, L3GovernedAgent, StreamingAgent) "
+    "instead."
+)
+_EXTENSION_POINT_SINCE = "2.5.0"
 
 # File-path keys a high-level multimodal input dict may carry (a local path,
 # NOT a data-URI or remote URL).
@@ -210,8 +218,9 @@ class AsyncSingleShotStrategy:
             >>> strategy = AsyncSingleShotStrategy()
             >>> result = await strategy.execute(agent, {'question': 'What is AI?'})
         """
-        # Pre-execution
-        preprocessed_inputs = self.pre_execute(inputs)
+        # Pre-execution (internal hop; honours a caller's override — see
+        # _apply_pre_execute — without warning agents that never overrode it)
+        preprocessed_inputs = self._apply_pre_execute(inputs)
 
         # Build workflow
         workflow = self.build_workflow(agent)
@@ -358,8 +367,8 @@ class AsyncSingleShotStrategy:
             # Parse result
             parsed_result = self.parse_result(results)
 
-            # Post-execution
-            final_result = self.post_execute(parsed_result)
+            # Post-execution (internal hop; see _apply_post_execute)
+            final_result = self._apply_post_execute(parsed_result)
 
             # Extract signature output fields
             if hasattr(agent.signature, "output_fields"):
@@ -459,15 +468,47 @@ class AsyncSingleShotStrategy:
             )
             return None
 
-    @deprecated(
-        "Use composition wrappers (MonitoredAgent, GovernedAgent, StreamingAgent) instead.",
-        since="2.5.0",
-    )
+    def _apply_pre_execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Internal pre-execution hop used by :meth:`execute`.
+
+        ``pre_execute`` is deprecated but remains a public extension point, so
+        the framework must not call it on the default path (every agent would
+        emit a DeprecationWarning it has no supported way to avoid — #2212) and
+        must not stop honouring an override either (that would silently drop a
+        caller's behaviour). Resolution: call it only when someone actually
+        overrode it, and warn at that point, because *then* the deprecated
+        surface really is in use.
+        """
+        override = resolve_deprecated_hook(self, AsyncSingleShotStrategy, "pre_execute")
+        if override is None:
+            return inputs
+        warn_deprecated(
+            _EXTENSION_POINT_DEPRECATION, since=_EXTENSION_POINT_SINCE, stacklevel=3
+        )
+        return override(inputs)
+
+    def _apply_post_execute(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Internal post-execution hop used by :meth:`execute`.
+
+        Mirror of :meth:`_apply_pre_execute`; see that docstring for rationale.
+        """
+        override = resolve_deprecated_hook(
+            self, AsyncSingleShotStrategy, "post_execute"
+        )
+        if override is None:
+            return result
+        warn_deprecated(
+            _EXTENSION_POINT_DEPRECATION, since=_EXTENSION_POINT_SINCE, stacklevel=3
+        )
+        return override(result)
+
+    @deprecated(_EXTENSION_POINT_DEPRECATION, since=_EXTENSION_POINT_SINCE)
     def pre_execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Preprocess inputs before execution.
 
         .. deprecated:: 2.5.0
-            Use composition wrappers (MonitoredAgent, GovernedAgent, StreamingAgent) instead.
+            Use composition wrappers (MonitoredAgent, L3GovernedAgent,
+            StreamingAgent) instead.
         """
         return inputs
 
@@ -517,15 +558,13 @@ class AsyncSingleShotStrategy:
 
         return raw_result
 
-    @deprecated(
-        "Use composition wrappers (MonitoredAgent, GovernedAgent, StreamingAgent) instead.",
-        since="2.5.0",
-    )
+    @deprecated(_EXTENSION_POINT_DEPRECATION, since=_EXTENSION_POINT_SINCE)
     def post_execute(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """Post-process final result.
 
         .. deprecated:: 2.5.0
-            Use composition wrappers (MonitoredAgent, GovernedAgent, StreamingAgent) instead.
+            Use composition wrappers (MonitoredAgent, L3GovernedAgent,
+            StreamingAgent) instead.
         """
         return result
 

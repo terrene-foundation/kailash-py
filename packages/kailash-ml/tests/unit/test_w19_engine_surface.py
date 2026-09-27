@@ -25,6 +25,7 @@ from typing import Any
 
 import polars as pl
 import pytest
+
 from kailash_ml import MLEngine, SetupResult
 from kailash_ml._env import (
     CANONICAL_STORE_URL_ENV,

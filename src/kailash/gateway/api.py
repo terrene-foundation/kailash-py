@@ -333,9 +333,8 @@ def create_gateway_app(
 
     # `@app.on_event(...)` is deprecated in FastAPI and emits a
     # DeprecationWarning on every construction; a lifespan context manager is
-    # the supported form and runs the same startup/shutdown work. The body
-    # reads `_gateway_instance` at REQUEST time, not definition time, so
-    # defining it before the instance is assigned below is safe.
+    # the supported form. Capture this application's owner so creating another
+    # application cannot redirect shutdown to the newer global route default.
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         logger.info("Enhanced Gateway starting up...")
@@ -346,8 +345,7 @@ def create_gateway_app(
             # startup or serving raises -- otherwise a failed boot leaks every
             # resource the registry opened.
             logger.info("Enhanced Gateway shutting down...")
-            if _gateway_instance and _gateway_instance.resource_registry:
-                await _gateway_instance.resource_registry.cleanup()
+            await gateway.shutdown()
 
     app = FastAPI(
         title=title, description=description, version=version, lifespan=lifespan
@@ -355,7 +353,7 @@ def create_gateway_app(
 
     # Set up gateway instance
     global _gateway_instance
-    _gateway_instance = EnhancedDurableAPIGateway(
+    gateway = EnhancedDurableAPIGateway(
         resource_registry=resource_registry,
         secret_manager=secret_manager,
         title=title,
@@ -366,6 +364,12 @@ def create_gateway_app(
         external_auth_reason=external_auth_reason,
         auth_exempt_paths=auth_exempt_paths,
     )
+    _gateway_instance = gateway
+
+    async def application_gateway() -> EnhancedDurableAPIGateway:
+        return gateway
+
+    app.dependency_overrides[get_gateway] = application_gateway
 
     # Include router
     app.include_router(router)
@@ -390,7 +394,7 @@ def create_gateway_app(
     # while the served app stayed fully open -- a gate installed one object to
     # the left of the door. Installing here binds it to the surface that
     # actually receives requests.
-    if _gateway_instance._auth_config is not None:
-        install_server_auth_middleware(app, _gateway_instance._auth_config)
+    if gateway._auth_config is not None:
+        install_server_auth_middleware(app, gateway._auth_config)
 
     return app

@@ -23,8 +23,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from kaizen.l3.plan.types import PlanNodeState as SdkPlanNodeState
-from kaizen.l3.plan.types import PlanState as SdkPlanState
+from kaizen.l3.plan.types import (
+    PlanNodeState as SdkPlanNodeState,
+    PlanState as SdkPlanState,
+)
 from kaizen.l3.plan.validator import PlanValidator as SdkPlanValidator
 from kaizen_agents._sdk_compat import plan_from_sdk, plan_to_sdk
 from kaizen_agents.llm import LLMClient

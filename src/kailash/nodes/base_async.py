@@ -17,6 +17,7 @@ from kailash.nodes.mixins import (
 )
 from kailash.runtime.template_resolver import resolve_templates
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
+from kailash.utils.loop_pool_registry import BRIDGE_LOOP_ATTR, drain_loop_pools
 from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
 
 
@@ -100,7 +101,7 @@ class AsyncNode(
         """Execute the node synchronously by running async code with proper event loop handling.
 
         This enhanced implementation handles all event loop scenarios:
-        1. No event loop: Create new one with asyncio.run()
+        1. No event loop: Run on an owned transient loop
         2. Event loop running: Use ThreadPoolExecutor with isolated loop
         3. Threaded contexts: Proper thread-safe execution
         4. Windows compatibility: ProactorEventLoopPolicy support
@@ -116,9 +117,7 @@ class AsyncNode(
             NodeExecutionError: If execution fails
         """
         import asyncio
-        import concurrent.futures
         import sys
-        import threading
 
         # For sync execution, we always create a new event loop
         # This avoids complexity with nested loops and ensures clean execution
@@ -126,56 +125,46 @@ class AsyncNode(
             # Windows requires special handling
             asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-        # Check if we're in a thread without an event loop
-        current_thread = threading.current_thread()
-        is_main_thread = current_thread is threading.main_thread()
-
-        # Run the async method - handle existing event loop
+        # Catch only loop detection. A RuntimeError raised by node execution
+        # must propagate once, never be mistaken for a missing caller loop.
         try:
-            # Try to get current event loop
-            loop = asyncio.get_running_loop()
-            # Event loop is running - need to run in separate thread
-            return self._execute_in_thread(**runtime_inputs)
+            asyncio.get_running_loop()
         except RuntimeError:
-            # No event loop running
-            if is_main_thread:
-                # Main thread without loop - safe to use asyncio.run()
-                return asyncio.run(self.execute_async(**runtime_inputs))
-            else:
-                # Non-main thread without loop - create new loop
-                return self._execute_in_new_loop(**runtime_inputs)
+            return self._execute_in_new_loop(**runtime_inputs)
+        return self._execute_in_thread(**runtime_inputs)
 
     def _execute_in_thread(self, **runtime_inputs) -> dict[str, Any]:
-        """Execute async code in a separate thread with its own event loop."""
-        import asyncio
+        """Use an isolated worker when the caller already has a running loop."""
         import concurrent.futures
 
-        def run_in_new_loop():
-            """Run async code in a completely new event loop."""
-            # Create fresh event loop for this thread
-            new_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(new_loop)
-            try:
-                return new_loop.run_until_complete(self.execute_async(**runtime_inputs))
-            finally:
-                new_loop.close()
-                asyncio.set_event_loop(None)
-
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            future = executor.submit(run_in_new_loop)
+            future = executor.submit(self._execute_in_new_loop, **runtime_inputs)
             return future.result()
 
     def _execute_in_new_loop(self, **runtime_inputs) -> dict[str, Any]:
-        """Execute async code by creating a new event loop in current thread."""
-        import asyncio
+        """Execute once and release resources before closing our transient loop.
 
-        # Create and set new event loop for this thread
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        Runner owns task cancellation, async-generator finalization, and default
+        executor shutdown. Marking our loop lets database adapters register their
+        existing bounded pool drains, without touching a persistent caller loop.
+        """
+
+        def create_loop():
+            loop = asyncio.new_event_loop()
+            setattr(loop, BRIDGE_LOOP_ATTR, True)
+            asyncio.set_event_loop(loop)
+            return loop
+
+        async def execute_and_drain():
+            try:
+                return await self.execute_async(**runtime_inputs)
+            finally:
+                await drain_loop_pools(asyncio.get_running_loop())
+
         try:
-            return loop.run_until_complete(self.execute_async(**runtime_inputs))
+            with asyncio.Runner(loop_factory=create_loop) as runner:
+                return runner.run(execute_and_drain())
         finally:
-            loop.close()
             asyncio.set_event_loop(None)
 
     def run(self, **kwargs) -> dict[str, Any]:
@@ -238,7 +227,7 @@ class AsyncNode(
             self.logger.info(f"Executing node {self.id} asynchronously")
 
             # Merge runtime inputs with config (runtime inputs take precedence)
-            merged_inputs = {**self.config, **runtime_inputs}
+            merged_inputs = {**self._get_execution_config(), **runtime_inputs}
 
             # Resolve ${param} templates in merged parameters (v0.9.30)
             # This enables dynamic parameter injection in nested configurations
@@ -250,12 +239,17 @@ class AsyncNode(
             if "config" in merged_inputs and isinstance(merged_inputs["config"], dict):
                 # Extract nested config
                 nested_config = merged_inputs["config"]
-                merged_inputs.update(nested_config)
+                for key, value in nested_config.items():
+                    if key not in runtime_inputs:
+                        merged_inputs[key] = value
                 # Don't remove the config key as some nodes might need it
 
             # Validate inputs
             validated_inputs = self.validate_inputs(**merged_inputs)
-            self.logger.debug(f"Validated inputs for {self.id}: {validated_inputs}")
+            self.logger.debug(
+                "node.async_inputs_validated",
+                extra={"input_count": len(validated_inputs)},
+            )
 
             # Execute node logic asynchronously
             outputs = await self.async_run(**validated_inputs)
@@ -380,7 +374,8 @@ class AsyncNode(
             if self.security_config.enable_audit_logging:  # type: ignore[reportAttributeAccessIssue]
                 await asyncio.to_thread(
                     self.logger.debug,
-                    f"Inputs validated for {self.__class__.__name__}: {list(validated_inputs.keys())}",
+                    "node.security_inputs_validated count=%d",
+                    len(validated_inputs),
                 )
 
             return validated_inputs
@@ -394,7 +389,9 @@ class AsyncNode(
                     if self.security_config.enable_audit_logging:  # type: ignore[reportAttributeAccessIssue]
                         await asyncio.to_thread(
                             self.logger.error,
-                            f"Security validation failed for {self.__class__.__name__}: {e}",
+                            "node.security_validation_failed: %s (at %s)",
+                            safe_type_name(e),
+                            safe_exception_frames(e),
                         )
                     raise
             except ImportError:
@@ -406,7 +403,9 @@ class AsyncNode(
             ):
                 await asyncio.to_thread(
                     self.logger.error,
-                    f"Unexpected validation error for {self.__class__.__name__}: {e}",
+                    "node.validation_failed: %s (at %s)",
+                    safe_type_name(e),
+                    safe_exception_frames(e),
                 )
             raise
 
@@ -446,7 +445,7 @@ class AsyncNode(
     async def log_error_with_traceback(
         self, error: Exception, operation: str = "unknown"
     ) -> None:
-        """Log an error with full traceback information (async override).
+        """Log an error with exception type and frame locations (async override).
 
         Overrides LoggingMixin.log_error_with_traceback to prevent blocking.
 
@@ -454,14 +453,11 @@ class AsyncNode(
             error: Exception that occurred
             operation: Operation that failed
         """
-        import traceback
-
         await self.log_with_context(
             "error",
             f"Operation failed: {operation}",
             error_type=safe_type_name(error),
-            error_message=str(error),
-            traceback=traceback.format_exc(),
+            traceback=safe_exception_frames(error),
         )
 
     async def log_info(self, message: str, **extra) -> None:
@@ -503,7 +499,7 @@ class AsyncNode(
 
         if error:
             log_data["error_type"] = safe_type_name(error)
-            log_data["error_message"] = str(error)
+            log_data["error_frames"] = safe_exception_frames(error)
 
         await asyncio.to_thread(self.logger.error, message, extra=log_data)
 

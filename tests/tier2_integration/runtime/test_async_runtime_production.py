@@ -67,7 +67,8 @@ class ErrorAsyncNode(AsyncNode):
 def simple_workflow():
     """Create simple fast workflow."""
     workflow = WorkflowBuilder()
-    workflow.add_node(FastAsyncNode, "fast_node", {"value": "test"})
+    with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+        workflow.add_node(FastAsyncNode, "fast_node", {"value": "test"})
     return workflow.build()
 
 
@@ -75,7 +76,8 @@ def simple_workflow():
 def slow_workflow():
     """Create workflow that takes 5 seconds."""
     workflow = WorkflowBuilder()
-    workflow.add_node(SlowAsyncNode, "slow_node", {"sleep_duration": 5.0})
+    with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+        workflow.add_node(SlowAsyncNode, "slow_node", {"sleep_duration": 5.0})
     return workflow.build()
 
 
@@ -83,7 +85,8 @@ def slow_workflow():
 def error_workflow():
     """Create workflow that raises error."""
     workflow = WorkflowBuilder()
-    workflow.add_node(ErrorAsyncNode, "error_node", {"error_message": "Test error"})
+    with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+        workflow.add_node(ErrorAsyncNode, "error_node", {"error_message": "Test error"})
     return workflow.build()
 
 
@@ -91,9 +94,12 @@ def error_workflow():
 def multi_node_workflow():
     """Create workflow with multiple nodes."""
     workflow = WorkflowBuilder()
-    workflow.add_node(FastAsyncNode, "node1", {"value": "first"})
-    workflow.add_node(FastAsyncNode, "node2", {"value": "second"})
-    workflow.add_node(FastAsyncNode, "node3", {"value": "third"})
+    with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+        workflow.add_node(FastAsyncNode, "node1", {"value": "first"})
+    with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+        workflow.add_node(FastAsyncNode, "node2", {"value": "second"})
+    with pytest.warns(UserWarning, match=r"^✅ CUSTOM NODE USAGE CORRECT\n"):
+        workflow.add_node(FastAsyncNode, "node3", {"value": "third"})
     return workflow.build()
 
 
@@ -106,9 +112,10 @@ class TestTimeoutProtection:
     """Test timeout protection features."""
 
     @pytest.mark.asyncio
-    async def test_default_timeout_300s(self, simple_workflow):
+    async def test_default_timeout_300s(self, simple_workflow, request):
         """Test default timeout is 300 seconds."""
         runtime = AsyncLocalRuntime()
+        request.addfinalizer(runtime.close)
 
         # Default timeout should be 300s (from __init__ or env var)
         # This test verifies the default exists and workflow completes within timeout
@@ -129,10 +136,11 @@ class TestTimeoutProtection:
         assert timeout > 0, "Default timeout must be positive"
 
     @pytest.mark.asyncio
-    async def test_configurable_timeout_via_init(self, simple_workflow):
+    async def test_configurable_timeout_via_init(self, simple_workflow, request):
         """Test timeout configurable via AsyncLocalRuntime(execution_timeout=seconds)."""
         # Configure 10 second timeout
         runtime = AsyncLocalRuntime(execution_timeout=10)
+        request.addfinalizer(runtime.close)
 
         # Verify timeout configured
         assert hasattr(
@@ -148,13 +156,16 @@ class TestTimeoutProtection:
         assert run_id is not None
 
     @pytest.mark.asyncio
-    async def test_configurable_timeout_via_env_var(self, simple_workflow, monkeypatch):
+    async def test_configurable_timeout_via_env_var(
+        self, simple_workflow, monkeypatch, request
+    ):
         """Test timeout configurable via environment variable DATAFLOW_EXECUTION_TIMEOUT."""
         # Set environment variable
         monkeypatch.setenv("DATAFLOW_EXECUTION_TIMEOUT", "15")
 
         # Create runtime - should read from env var
         runtime = AsyncLocalRuntime()
+        request.addfinalizer(runtime.close)
 
         # Verify timeout read from env var
         assert hasattr(
@@ -173,10 +184,11 @@ class TestTimeoutProtection:
         assert results is not None
 
     @pytest.mark.asyncio
-    async def test_timeout_error_with_clear_message(self, slow_workflow):
+    async def test_timeout_error_with_clear_message(self, slow_workflow, request):
         """Test TimeoutError with clear message when exceeded."""
         # Configure 1 second timeout for 5 second workflow
         runtime = AsyncLocalRuntime(execution_timeout=1)
+        request.addfinalizer(runtime.close)
 
         # Should timeout after 1 second
         with pytest.raises(asyncio.TimeoutError) as exc_info:
@@ -189,9 +201,10 @@ class TestTimeoutProtection:
         assert error_msg is not None, "Timeout error must have message"
 
     @pytest.mark.asyncio
-    async def test_cleanup_running_tasks_on_timeout(self, slow_workflow):
+    async def test_cleanup_running_tasks_on_timeout(self, slow_workflow, request):
         """Test cleanup of running tasks on timeout."""
         runtime = AsyncLocalRuntime(execution_timeout=1)
+        request.addfinalizer(runtime.close)
 
         # Track cleanup
         cleanup_called = False
@@ -229,9 +242,10 @@ class TestConnectionLifecycle:
     """Test connection lifecycle management."""
 
     @pytest.mark.asyncio
-    async def test_explicit_connection_acquisition(self, simple_workflow):
+    async def test_explicit_connection_acquisition(self, simple_workflow, request):
         """Test explicit connection acquisition."""
         runtime = AsyncLocalRuntime()
+        request.addfinalizer(runtime.close)
 
         # Execute workflow - should acquire connections if needed
         results, run_id = await runtime.execute_workflow_async(
@@ -252,9 +266,10 @@ class TestConnectionLifecycle:
         ), "ExecutionContext must track connections"
 
     @pytest.mark.asyncio
-    async def test_connection_cleanup_in_finally_blocks(self, simple_workflow):
+    async def test_connection_cleanup_in_finally_blocks(self, simple_workflow, request):
         """Test connection cleanup in finally blocks."""
         runtime = AsyncLocalRuntime()
+        request.addfinalizer(runtime.close)
 
         # Mock connection tracking
         connections_before = {}
@@ -295,9 +310,10 @@ class TestConnectionLifecycle:
         ), "ExecutionContext must support context manager or explicit acquire/release"
 
     @pytest.mark.asyncio
-    async def test_connection_state_tracking(self, simple_workflow):
+    async def test_connection_state_tracking(self, simple_workflow, request):
         """Test connection state tracking."""
         runtime = AsyncLocalRuntime()
+        request.addfinalizer(runtime.close)
 
         # Execute workflow
         results, run_id = await runtime.execute_workflow_async(
@@ -319,10 +335,13 @@ class TestConnectionLifecycle:
         ), "ExecutionContext must track connection state"
 
     @pytest.mark.asyncio
-    async def test_connection_leak_detection_in_debug_mode(self, multi_node_workflow):
+    async def test_connection_leak_detection_in_debug_mode(
+        self, multi_node_workflow, request
+    ):
         """Test connection leak detection in debug mode."""
         # Create runtime with debug mode
         runtime = AsyncLocalRuntime(debug=True)
+        request.addfinalizer(runtime.close)
 
         # Execute multiple workflows
         for i in range(5):
@@ -346,9 +365,10 @@ class TestTaskCancellation:
     """Test task cancellation features."""
 
     @pytest.mark.asyncio
-    async def test_graceful_cancellation_of_pending_tasks(self, slow_workflow):
+    async def test_graceful_cancellation_of_pending_tasks(self, slow_workflow, request):
         """Test graceful cancellation of all pending tasks."""
         runtime = AsyncLocalRuntime(execution_timeout=1)
+        request.addfinalizer(runtime.close)
 
         # Start workflow that will timeout
         with pytest.raises(asyncio.TimeoutError):
@@ -392,9 +412,10 @@ class TestTaskCancellation:
             await task
 
     @pytest.mark.asyncio
-    async def test_task_cleanup_in_finally_blocks(self, slow_workflow):
+    async def test_task_cleanup_in_finally_blocks(self, slow_workflow, request):
         """Test task cleanup in finally blocks."""
         runtime = AsyncLocalRuntime(execution_timeout=1)
+        request.addfinalizer(runtime.close)
 
         # Execute workflow that will timeout
         try:
@@ -415,9 +436,12 @@ class TestTaskCancellation:
         ), "ExecutionContext must have task cleanup method"
 
     @pytest.mark.asyncio
-    async def test_cancellation_propagation_through_workflow(self, slow_workflow):
+    async def test_cancellation_propagation_through_workflow(
+        self, slow_workflow, request
+    ):
         """Test cancellation propagation through workflow."""
         runtime = AsyncLocalRuntime(execution_timeout=0.5)
+        request.addfinalizer(runtime.close)
 
         # Short timeout for slow workflow (5s) - should trigger cancellation
         with pytest.raises(asyncio.TimeoutError):
@@ -458,9 +482,10 @@ class TestProductionMonitoring:
     """Test production monitoring metrics."""
 
     @pytest.mark.asyncio
-    async def test_execution_metrics_timing(self, simple_workflow):
+    async def test_execution_metrics_timing(self, simple_workflow, request):
         """Test execution metrics (start_time, end_time, duration)."""
         runtime = AsyncLocalRuntime()
+        request.addfinalizer(runtime.close)
 
         start = time.time()
         results, run_id = await runtime.execute_workflow_async(
@@ -486,9 +511,10 @@ class TestProductionMonitoring:
         assert has_timing, "ExecutionContext must track execution timing"
 
     @pytest.mark.asyncio
-    async def test_task_state_tracking(self, multi_node_workflow):
+    async def test_task_state_tracking(self, multi_node_workflow, request):
         """Test task state tracking (running, completed, failed, cancelled)."""
         runtime = AsyncLocalRuntime()
+        request.addfinalizer(runtime.close)
 
         results, run_id = await runtime.execute_workflow_async(
             multi_node_workflow, inputs={}
@@ -512,9 +538,10 @@ class TestProductionMonitoring:
         assert has_state_tracking, "ExecutionContext must track task states"
 
     @pytest.mark.asyncio
-    async def test_resource_usage_metrics(self, multi_node_workflow):
+    async def test_resource_usage_metrics(self, multi_node_workflow, request):
         """Test resource usage metrics (connection count, task count)."""
         runtime = AsyncLocalRuntime()
+        request.addfinalizer(runtime.close)
 
         results, run_id = await runtime.execute_workflow_async(
             multi_node_workflow, inputs={}
@@ -547,7 +574,9 @@ class TestIntegration:
     """Integration tests for production deployment."""
 
     @pytest.mark.asyncio
-    async def test_full_workflow_execution_with_timeout(self, multi_node_workflow):
+    async def test_full_workflow_execution_with_timeout(
+        self, multi_node_workflow, request
+    ):
         """Test full workflow execution with timeout protection."""
         # Create runtime with all production features
         runtime = AsyncLocalRuntime(
@@ -556,6 +585,7 @@ class TestIntegration:
             enable_profiling=True,
             max_concurrent_nodes=5,
         )
+        request.addfinalizer(runtime.close)
 
         # Execute complex workflow
         start_time = time.time()
@@ -576,10 +606,11 @@ class TestIntegration:
         await runtime.cleanup()
 
     @pytest.mark.asyncio
-    async def test_fastapi_integration_simulation(self, simple_workflow):
+    async def test_fastapi_integration_simulation(self, simple_workflow, request):
         """Test FastAPI integration (simulated)."""
         # Simulate FastAPI request handler pattern
         runtime = AsyncLocalRuntime(execution_timeout=10, max_concurrent_nodes=10)
+        request.addfinalizer(runtime.close)
 
         async def fastapi_endpoint_handler(workflow_inputs):
             """Simulate FastAPI endpoint."""
@@ -622,10 +653,11 @@ class TestBackwardCompatibility:
     """Test backward compatibility with existing code."""
 
     @pytest.mark.asyncio
-    async def test_existing_code_still_works(self, simple_workflow):
+    async def test_existing_code_still_works(self, simple_workflow, request):
         """Test existing AsyncLocalRuntime code works without changes."""
         # Old-style usage (no timeout specified)
         runtime = AsyncLocalRuntime()
+        request.addfinalizer(runtime.close)
 
         # Should work exactly as before
         results, run_id = await runtime.execute_workflow_async(
@@ -636,13 +668,15 @@ class TestBackwardCompatibility:
         assert run_id is not None
 
     @pytest.mark.asyncio
-    async def test_minimal_api_changes(self):
+    async def test_minimal_api_changes(self, request):
         """Test API changes are minimal and backward compatible."""
         # All new parameters should be optional
         runtime = AsyncLocalRuntime()  # No required new parameters
+        request.addfinalizer(runtime.close)
 
         # Can also use with new parameters
         runtime_with_timeout = AsyncLocalRuntime(execution_timeout=60)
+        request.addfinalizer(runtime_with_timeout.close)
 
         # Both should work
         assert runtime is not None

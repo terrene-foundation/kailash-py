@@ -47,11 +47,11 @@ Scoped to the `kailash` core and categorised, the real picture is:
 
 | Metric                                                  | Count |
 | ------------------------------------------------------- | ----- |
-| Files with ≥1 marker (`src/kailash`)                    | 36    |
-| Total marker lines                                      | 64    |
+| Files with ≥1 marker (`src/kailash`)                    | 35    |
+| Total marker lines                                      | 63    |
 | — false-positive (not a real marker)                    | 31    |
 | — sentinel (intentional contract)                       | 25    |
-| — gap (genuine deferred work)                           | 8     |
+| — gap (genuine deferred work)                           | 7     |
 | — tracked (deferred + issue-linked)                     | 0     |
 | **Genuine gaps reachable from a documented public API** | **1** |
 
@@ -93,7 +93,13 @@ more than an internal one).
 | 5   | `middleware/communication/events.py:280`         | `# TODO: Add AsyncQueueNode when available for event buffering`                                 |   no    | track       | Depends on a node that does not yet exist.                                                                                                       |
 | 6   | `middleware/communication/events.py:281`         | `# TODO: Add MetricsCollectorNode when available for performance tracking`                      |   no    | track       | Depends on a node that does not yet exist.                                                                                                       |
 | 7   | `nodes/data/bulk_operations.py:269`              | `# TODO: Implement COPY FROM for maximum performance`                                           |   no    | track       | Performance optimisation only — functionally complete via the multi-row-`INSERT` fallback directly below it.                                     |
-| 8   | `runtime/parallel_cyclic.py:224`                 | `# TODO: Add cycle-aware parallel execution optimizations`                                      |   no    | track       | Performance optimisation; the path executes correctly without it.                                                                                |
+
+**Removed marker (former internal gap #8):** commit `1ea7f5dd7` removed the
+cycle-optimization comment while routing cyclic execution through the canonical
+runtime owner. The current method delegates through `_cycle_executor_scope` and
+`local_runtime.execute`; this inventory change records the marker removal and
+does not claim new cycle-parallelization optimizations. Source:
+`src/kailash/runtime/parallel_cyclic.py:213-232`.
 
 **Resolved this cycle (3 of the 4 former public-reachable gaps):**
 
@@ -189,11 +195,11 @@ Documented so the count is complete and the guard's raw hits are explained.
 {
   "scope": "src/kailash",
   "regex": "\\b(TODO|FIXME|HACK|STUB|XXX)\\b|NotImplementedError",
-  "total": 64,
+  "total": 63,
   "category_tally": {
     "false_positive": 31,
     "sentinel": 25,
-    "gap": 8,
+    "gap": 7,
     "tracked": 0
   },
   "public_reachable_gaps": 1,
@@ -221,7 +227,6 @@ Documented so the count is complete and the guard's raw hits are explained.
     "src/kailash/runtime/mixins/conditional_execution.py": 3,
     "src/kailash/runtime/mixins/parameters.py": 1,
     "src/kailash/runtime/mixins/validation.py": 1,
-    "src/kailash/runtime/parallel_cyclic.py": 1,
     "src/kailash/runtime/shutdown.py": 1,
     "src/kailash/runtime/validation/base_error_enhancer.py": 2,
     "src/kailash/runtime/validation/core_error_enhancer.py": 2,

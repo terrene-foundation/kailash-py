@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from kailash.trust._locking import file_lock, safe_read_text
+from kailash.trust.plane._key_files import load_signing_keypair, write_key_file
 from kailash.trust.signing.crypto import generate_keypair, sign, verify_signature
 
 if TYPE_CHECKING:
@@ -138,31 +139,14 @@ def _load_or_create_signing_keys(keys_dir: Path) -> tuple[str, str]:
     priv_path = keys_dir / "private.key"
     pub_path = keys_dir / "public.key"
 
-    if priv_path.exists() and pub_path.exists():
-        return safe_read_text(priv_path), safe_read_text(pub_path)
-
-    private_key, public_key = generate_keypair()
     keys_dir.mkdir(parents=True, exist_ok=True)
-
-    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
-    fd = os.open(str(priv_path), flags, 0o600)
     try:
-        os.write(fd, private_key.encode())
-    finally:
-        os.close(fd)
-
-    pub_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-    if hasattr(os, "O_NOFOLLOW"):
-        pub_flags |= os.O_NOFOLLOW
-    pub_fd = os.open(str(pub_path), pub_flags, 0o644)
-    try:
-        os.write(pub_fd, public_key.encode())
-    finally:
-        os.close(pub_fd)
-
-    return private_key, public_key
+        return load_signing_keypair(keys_dir)
+    except FileNotFoundError:
+        private_key, public_key = generate_keypair()
+        write_key_file(priv_path, private_key.encode(), private=True, exclusive=True)
+        write_key_file(pub_path, public_key.encode(), private=False, exclusive=True)
+        return private_key, public_key
 
 
 class HoldManager:

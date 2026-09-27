@@ -262,7 +262,14 @@ class PlanMonitor:
 
         Returns:
             A PlanResult summarising the execution outcome.
+
+        Raises:
+            ValueError: If the plan is empty (INV-PLAN-05).
         """
+        if not plan.nodes:
+            errors = self._validator.validate_structure(plan)
+            raise ValueError("; ".join(f"{e.code}: {e.message}" for e in errors))
+
         plan.state = PlanState.EXECUTING
         plan.gradient = self._gradient
 
@@ -703,9 +710,13 @@ class PlanMonitor:
                 plan.nodes[node_id].error = None
                 return True
 
-            # Apply each modification
+            # A recovery proposal is not evidence that anything changed.
+            # Keep idempotent operations safe without reporting them as applied.
+            changed = False
             for mod in recovery.modifications:
-                self._apply_modification(plan, mod)
+                if not self._apply_modification(plan, mod):
+                    continue
+                changed = True
                 result.modifications_applied.append(mod)
                 mod_event = PlanEvent(
                     event_type=PlanEventType.MODIFICATION_APPLIED,
@@ -714,8 +725,9 @@ class PlanMonitor:
                 result.events.append(mod_event)
 
             # After modifications, update readiness
-            self._update_ready_nodes(plan)
-            return True
+            if changed:
+                self._update_ready_nodes(plan)
+            return changed
 
         except (KeyError, ValueError) as exc:
             logger.warning(
@@ -725,7 +737,7 @@ class PlanMonitor:
             )
             return False
 
-    def _apply_modification(self, plan: Plan, mod: PlanModification) -> None:
+    def _apply_modification(self, plan: Plan, mod: PlanModification) -> bool:
         """Apply a single PlanModification to the plan.
 
         This is the simplified version of what the SDK's PlanExecutor will do.
@@ -735,63 +747,108 @@ class PlanMonitor:
         Args:
             plan: The plan to modify in place.
             mod: The modification to apply.
+
+        Returns:
+            True only when the plan changed. Removing an absent node or edge
+            remains an idempotent operation and returns False.
+
+        Raises:
+            ValueError: If a required payload or mutation target is missing.
         """
         mod_type = mod.modification_type
 
-        if mod_type == PlanModificationType.ADD_NODE and mod.node:
+        if mod_type == PlanModificationType.ADD_NODE:
+            if mod.node is None:
+                raise ValueError("ADD_NODE requires a node")
+            added_edges = [e for e in (mod.edges or []) if e not in plan.edges]
+            if plan.nodes.get(mod.node.node_id) == mod.node and not added_edges:
+                return False
             plan.nodes[mod.node.node_id] = mod.node
-            if mod.edges:
-                plan.edges.extend(mod.edges)
+            plan.edges.extend(added_edges)
+            return True
 
-        elif mod_type == PlanModificationType.REMOVE_NODE and mod.node_id:
-            plan.nodes.pop(mod.node_id, None)
-            plan.edges = [
+        if mod_type == PlanModificationType.REMOVE_NODE:
+            if not mod.node_id:
+                raise ValueError("REMOVE_NODE requires a node_id")
+            remaining_edges = [
                 e
                 for e in plan.edges
                 if e.from_node != mod.node_id and e.to_node != mod.node_id
             ]
+            if mod.node_id not in plan.nodes and remaining_edges == plan.edges:
+                return False
+            plan.nodes.pop(mod.node_id, None)
+            plan.edges = remaining_edges
+            return True
 
-        elif mod_type == PlanModificationType.REPLACE_NODE:
+        if mod_type == PlanModificationType.REPLACE_NODE:
             old_id = mod.old_node_id
             new_node = mod.new_node
-            if old_id and new_node:
-                plan.nodes.pop(old_id, None)
-                plan.nodes[new_node.node_id] = new_node
-                # Rewire edges: replace references to old_id with new_node.node_id
-                new_edges: list[PlanEdge] = []
-                for edge in plan.edges:
-                    from_n = (
-                        new_node.node_id if edge.from_node == old_id else edge.from_node
-                    )
-                    to_n = new_node.node_id if edge.to_node == old_id else edge.to_node
-                    new_edges.append(
-                        PlanEdge(
-                            from_node=from_n, to_node=to_n, edge_type=edge.edge_type
-                        )
-                    )
-                plan.edges = new_edges
+            if not old_id or new_node is None:
+                raise ValueError("REPLACE_NODE requires old_node_id and new_node")
+            if old_id not in plan.nodes:
+                raise ValueError(f"REPLACE_NODE target does not exist: {old_id}")
+            if old_id == new_node.node_id and plan.nodes[old_id] == new_node:
+                return False
+            plan.nodes.pop(old_id)
+            plan.nodes[new_node.node_id] = new_node
+            # Rewire edges: replace references to old_id with new_node.node_id.
+            new_edges: list[PlanEdge] = []
+            for edge in plan.edges:
+                from_n = (
+                    new_node.node_id if edge.from_node == old_id else edge.from_node
+                )
+                to_n = new_node.node_id if edge.to_node == old_id else edge.to_node
+                new_edges.append(
+                    PlanEdge(from_node=from_n, to_node=to_n, edge_type=edge.edge_type)
+                )
+            plan.edges = new_edges
+            return True
 
-        elif mod_type == PlanModificationType.SKIP_NODE and mod.node_id:
+        if mod_type == PlanModificationType.SKIP_NODE:
+            if not mod.node_id:
+                raise ValueError("SKIP_NODE requires a node_id")
             node = plan.nodes.get(mod.node_id)
-            if node:
-                node.state = PlanNodeState.SKIPPED
+            if node is None:
+                raise ValueError(f"SKIP_NODE target does not exist: {mod.node_id}")
+            if node.state == PlanNodeState.SKIPPED:
+                return False
+            node.state = PlanNodeState.SKIPPED
+            return True
 
-        elif mod_type == PlanModificationType.ADD_EDGE and mod.edge:
+        if mod_type == PlanModificationType.ADD_EDGE:
+            if mod.edge is None:
+                raise ValueError("ADD_EDGE requires an edge")
+            if mod.edge in plan.edges:
+                return False
             plan.edges.append(mod.edge)
+            return True
 
-        elif mod_type == PlanModificationType.REMOVE_EDGE:
-            if mod.from_node and mod.to_node:
-                plan.edges = [
-                    e
-                    for e in plan.edges
-                    if not (e.from_node == mod.from_node and e.to_node == mod.to_node)
-                ]
+        if mod_type == PlanModificationType.REMOVE_EDGE:
+            if not mod.from_node or not mod.to_node:
+                raise ValueError("REMOVE_EDGE requires from_node and to_node")
+            remaining_edges = [
+                e
+                for e in plan.edges
+                if not (e.from_node == mod.from_node and e.to_node == mod.to_node)
+            ]
+            if remaining_edges == plan.edges:
+                return False
+            plan.edges = remaining_edges
+            return True
 
-        elif mod_type == PlanModificationType.UPDATE_SPEC:
-            if mod.node_id and mod.new_spec:
-                node = plan.nodes.get(mod.node_id)
-                if node:
-                    node.agent_spec = mod.new_spec
+        if mod_type == PlanModificationType.UPDATE_SPEC:
+            if not mod.node_id or mod.new_spec is None:
+                raise ValueError("UPDATE_SPEC requires node_id and new_spec")
+            node = plan.nodes.get(mod.node_id)
+            if node is None:
+                raise ValueError(f"UPDATE_SPEC target does not exist: {mod.node_id}")
+            if node.agent_spec == mod.new_spec:
+                return False
+            node.agent_spec = mod.new_spec
+            return True
+
+        raise ValueError(f"Unsupported plan modification: {mod_type!r}")
 
     # ------------------------------------------------------------------
     # Internal: downstream termination
@@ -835,7 +892,7 @@ class PlanMonitor:
     def _evaluate_plan_success(self, plan: Plan) -> bool:
         """Determine whether the plan succeeded overall.
 
-        A plan succeeds if all required (non-optional) nodes are in a
+        A non-empty plan succeeds if all required (non-optional) nodes are in a
         terminal success state (COMPLETED or SKIPPED). If any required
         node is FAILED, the plan has failed.
 
@@ -845,6 +902,8 @@ class PlanMonitor:
         Returns:
             True if all required nodes completed successfully.
         """
+        if not plan.nodes:
+            return False
         for node in plan.nodes.values():
             if node.optional:
                 continue

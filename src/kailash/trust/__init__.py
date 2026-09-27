@@ -58,6 +58,7 @@ from kailash.trust.audit_store import (
     AuditFilter,
     AuditOutcome,
     AuditStoreProtocol,
+    ChainStatus,
     InMemoryAuditStore,
     SqliteAuditStore,
 )
@@ -78,9 +79,7 @@ from kailash.trust.chain import (
     AuthorityType,
     CapabilityAttestation,
     CapabilityType,
-)
-from kailash.trust.chain import ChainConstraintEnvelope as ConstraintEnvelope
-from kailash.trust.chain import (
+    ChainConstraintEnvelope as ConstraintEnvelope,
     Constraint,
     ConstraintType,
     DelegationLimits,
@@ -125,9 +124,10 @@ from kailash.trust.disclosure import (
 )
 
 # Canonical envelope (SPEC-07 unification)
-from kailash.trust.envelope import AgentPosture, CommunicationConstraint
-from kailash.trust.envelope import ConstraintEnvelope as CanonicalConstraintEnvelope
 from kailash.trust.envelope import (
+    AgentPosture,
+    CommunicationConstraint,
+    ConstraintEnvelope as CanonicalConstraintEnvelope,
     DataAccessConstraint,
     EnvelopeValidationError,
     FinancialConstraint,
@@ -137,10 +137,10 @@ from kailash.trust.envelope import (
     TemporalConstraint,
     UnknownEnvelopeFieldError,
     from_plane_envelope,
+    sign_envelope as sign_canonical_envelope,
+    to_plane_envelope,
+    verify_envelope as verify_canonical_envelope,
 )
-from kailash.trust.envelope import sign_envelope as sign_canonical_envelope
-from kailash.trust.envelope import to_plane_envelope
-from kailash.trust.envelope import verify_envelope as verify_canonical_envelope
 
 # Exceptions
 from kailash.trust.exceptions import (
@@ -246,39 +246,27 @@ logger = logging.getLogger(__name__)
 # declarations keep static analysis (pyright) happy with __all__.
 # ---------------------------------------------------------------------------
 if TYPE_CHECKING:
-    from kailash.trust.signing.crypto import NACL_AVAILABLE as NACL_AVAILABLE
-    from kailash.trust.signing.crypto import SALT_LENGTH as SALT_LENGTH
-    from kailash.trust.signing.crypto import DualSignature as DualSignature
     from kailash.trust.signing.crypto import (
+        NACL_AVAILABLE as NACL_AVAILABLE,
+        SALT_LENGTH as SALT_LENGTH,
+        DualSignature as DualSignature,
         derive_key_with_salt as derive_key_with_salt,
-    )
-    from kailash.trust.signing.crypto import dual_sign as dual_sign
-    from kailash.trust.signing.crypto import dual_verify as dual_verify
-    from kailash.trust.signing.crypto import generate_keypair as generate_keypair
-    from kailash.trust.signing.crypto import generate_salt as generate_salt
-    from kailash.trust.signing.crypto import hash_chain as hash_chain
-    from kailash.trust.signing.crypto import (
+        dual_sign as dual_sign,
+        dual_verify as dual_verify,
+        generate_keypair as generate_keypair,
+        generate_salt as generate_salt,
+        hash_chain as hash_chain,
         hash_reasoning_trace as hash_reasoning_trace,
-    )
-    from kailash.trust.signing.crypto import (
         hash_trust_chain_state as hash_trust_chain_state,
-    )
-    from kailash.trust.signing.crypto import (
         hash_trust_chain_state_salted as hash_trust_chain_state_salted,
-    )
-    from kailash.trust.signing.crypto import hmac_sign as hmac_sign
-    from kailash.trust.signing.crypto import hmac_verify as hmac_verify
-    from kailash.trust.signing.crypto import (
+        hmac_sign as hmac_sign,
+        hmac_verify as hmac_verify,
         serialize_for_signing as serialize_for_signing,
-    )
-    from kailash.trust.signing.crypto import sign as sign
-    from kailash.trust.signing.crypto import (
+        sign as sign,
         sign_reasoning_trace as sign_reasoning_trace,
-    )
-    from kailash.trust.signing.crypto import (
         verify_reasoning_signature as verify_reasoning_signature,
+        verify_signature as verify_signature,
     )
-    from kailash.trust.signing.crypto import verify_signature as verify_signature
 
 # ---------------------------------------------------------------------------
 # Issue #604 algorithm-agility scaffold (canonical re-export)
@@ -479,6 +467,7 @@ __all__ = [
     "AuditEvent",
     "AuditEventType",
     "AuditOutcome",
+    "ChainStatus",
     "AuditFilter",
     "AuditStoreProtocol",
     "InMemoryAuditStore",

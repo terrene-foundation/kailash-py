@@ -24,8 +24,9 @@ Test strategy
 """
 from __future__ import annotations
 
-import kailash_ml
 import pytest
+
+import kailash_ml
 from kailash_ml import EngineInfo, engine_info, list_engines
 from kailash_ml.engines.registry import EngineNotFoundError, MethodSignature, ParamSpec
 

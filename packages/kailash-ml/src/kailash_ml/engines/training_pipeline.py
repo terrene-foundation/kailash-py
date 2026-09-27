@@ -17,6 +17,7 @@ from typing import Any
 
 import numpy as np
 import polars as pl
+
 from kailash_ml.engines._shared import validate_model_class as _validate_model_class
 from kailash_ml.engines.model_registry import ModelRegistry, ModelVersion
 from kailash_ml.interop import to_sklearn_input

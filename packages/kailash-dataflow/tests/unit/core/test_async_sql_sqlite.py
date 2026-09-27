@@ -15,10 +15,17 @@ _wf = pytest.importorskip("kailash.workflow.builder")
 WorkflowBuilder = _wf.WorkflowBuilder
 
 
+@pytest.fixture
+def runtime():
+    """Own the runtime through execution and release it on every test exit."""
+    with LocalRuntime() as instance:
+        yield instance
+
+
 class TestAsyncSQLSQLite:
     """Unit tests for AsyncSQLDatabaseNode with SQLite."""
 
-    def test_kailash_sqlite_direct(self, tmp_path):
+    def test_kailash_sqlite_direct(self, tmp_path, runtime):
         """Test Kailash AsyncSQLDatabaseNode with SQLite directly."""
         db_path = tmp_path / "kailash_sqlite_direct.db"
 
@@ -40,7 +47,6 @@ class TestAsyncSQLSQLite:
             },
         )
 
-        runtime = LocalRuntime()
         results, run_id = runtime.execute(workflow.build())
 
         assert "create_table" in results
@@ -82,7 +88,7 @@ class TestAsyncSQLSQLite:
         assert len(data) == 1
         assert data[0]["name"] == "John Doe"
 
-    def test_memory_sqlite(self):
+    def test_memory_sqlite(self, runtime):
         """Test with memory SQLite database."""
         workflow = WorkflowBuilder()
         workflow.add_node(
@@ -100,7 +106,6 @@ class TestAsyncSQLSQLite:
             },
         )
 
-        runtime = LocalRuntime()
         results, run_id = runtime.execute(workflow.build())
 
         assert "create_table" in results

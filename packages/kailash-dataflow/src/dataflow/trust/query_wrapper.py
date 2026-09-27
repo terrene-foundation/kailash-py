@@ -39,6 +39,9 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
+from kailash.runtime.trust.verifier import _safe_trust_log_field, _safe_trust_log_reason
+from kailash.utils.secure_logging import safe_exception_frames
+
 if TYPE_CHECKING:
     # Avoid hard dependencies - use TYPE_CHECKING for type annotations only
     pass
@@ -222,7 +225,7 @@ class ConstraintEnvelopeWrapper:
                 # Invalid format, skip
                 logger.debug(
                     "query_wrapper.invalid_data_scope_format_skipping",
-                    extra={"part": part},
+                    extra={"part": _safe_trust_log_field(part)},
                 )
                 continue
 
@@ -318,7 +321,7 @@ class ConstraintEnvelopeWrapper:
         # Unknown format
         logger.debug(
             "query_wrapper.unknown_time_window_format",
-            extra={"constraint_value": constraint_value},
+            extra={"constraint_value": _safe_trust_log_field(constraint_value)},
         )
         return {}
 
@@ -348,13 +351,14 @@ class ConstraintEnvelopeWrapper:
             if limit < 0:
                 logger.debug(
                     "query_wrapper.negative_row_limit_not_allowed",
-                    extra={"limit": limit},
+                    extra={"limit": _safe_trust_log_field(limit)},
                 )
                 return None
             return limit
         except ValueError:
             logger.debug(
-                "query_wrapper.invalid_row_limit_value", extra={"value_str": value_str}
+                "query_wrapper.invalid_row_limit_value",
+                extra={"value_str": _safe_trust_log_field(value_str)},
             )
             return None
 
@@ -471,7 +475,7 @@ class ConstraintEnvelopeWrapper:
             if constraint_type is None:
                 logger.debug(
                     "query_wrapper.constraint_has_no_type",
-                    extra={"constraint": constraint},
+                    extra={"constraint": _safe_trust_log_field(constraint)},
                 )
                 continue
 
@@ -626,7 +630,10 @@ class TrustAwareQueryExecutor:
         except Exception as e:
             logger.warning(
                 "query_wrapper.failed_to_get_agent_constraints_for",
-                extra={"agent_id": agent_id, "error": str(e)},
+                extra={
+                    "agent_id": _safe_trust_log_field(agent_id),
+                    "error": safe_exception_frames(e),
+                },
             )
             return []
 
@@ -646,7 +653,7 @@ class TrustAwareQueryExecutor:
         Raises:
             PermissionError: If access denied in enforcing mode
         """
-        if self._trust_verifier is None:
+        if self._enforcement_mode == "disabled" or self._trust_verifier is None:
             return True
 
         try:
@@ -663,9 +670,11 @@ class TrustAwareQueryExecutor:
                     )
                 elif self._enforcement_mode == "permissive":
                     logger.warning(
-                        f"Table access would be denied for '{model_name}' "
-                        f"(permissive mode): {result.reason}"
+                        "Table access would be denied for '%s' (permissive mode): %s",
+                        _safe_trust_log_field(model_name),
+                        _safe_trust_log_reason(result),
                     )
+                    return True
                 return result.allowed
 
             return True
@@ -675,7 +684,7 @@ class TrustAwareQueryExecutor:
         except Exception as e:
             logger.warning(
                 "query_wrapper.table_access_verification_failed",
-                extra={"error": str(e)},
+                extra={"error": safe_exception_frames(e)},
             )
             # In case of verification failure, deny in enforcing mode
             if self._enforcement_mode == "enforcing":
@@ -703,7 +712,8 @@ class TrustAwareQueryExecutor:
                     return list(schema["columns"].keys())
         except Exception as e:
             logger.debug(
-                "query_wrapper.could_not_get_model_columns", extra={"error": str(e)}
+                "query_wrapper.could_not_get_model_columns",
+                extra={"error": safe_exception_frames(e)},
             )
 
         # Return empty list if we can't determine columns
@@ -802,7 +812,8 @@ class TrustAwareQueryExecutor:
             return getattr(event, "event_id", None)
         except Exception as e:
             logger.warning(
-                "query_wrapper.failed_to_record_audit_event", extra={"error": str(e)}
+                "query_wrapper.failed_to_record_audit_event",
+                extra={"error": safe_exception_frames(e)},
             )
             return None
 
@@ -886,8 +897,8 @@ class TrustAwareQueryExecutor:
                         raise PermissionError(access_result.denied_reason)
                     else:
                         logger.warning(
-                            f"Read access would be denied (permissive): "
-                            f"{access_result.denied_reason}"
+                            "Read access would be denied (permissive): %s",
+                            _safe_trust_log_field(access_result.denied_reason),
                         )
 
                 # Merge additional filters
@@ -1025,8 +1036,8 @@ class TrustAwareQueryExecutor:
                         raise PermissionError(access_result.denied_reason)
                     else:
                         logger.warning(
-                            f"Write access would be denied (permissive): "
-                            f"{access_result.denied_reason}"
+                            "Write access would be denied (permissive): %s",
+                            _safe_trust_log_field(access_result.denied_reason),
                         )
 
                 applied_constraints = access_result.applied_constraints
@@ -1173,9 +1184,9 @@ class TrustAwareQueryExecutor:
             logger.warning(
                 "trust.read.permissive_denied",
                 extra={
-                    "model": model_name,
-                    "agent_id": agent_id,
-                    "reason": access_result.denied_reason,
+                    "model": _safe_trust_log_field(model_name),
+                    "agent_id": _safe_trust_log_field(agent_id),
+                    "reason": _safe_trust_log_field(access_result.denied_reason),
                 },
             )
             # In permissive mode, override to allowed so the caller proceeds.
@@ -1261,10 +1272,10 @@ class TrustAwareQueryExecutor:
             logger.warning(
                 "trust.write.permissive_denied",
                 extra={
-                    "model": model_name,
-                    "operation": operation,
-                    "agent_id": agent_id,
-                    "reason": access_result.denied_reason,
+                    "model": _safe_trust_log_field(model_name),
+                    "operation": _safe_trust_log_field(operation),
+                    "agent_id": _safe_trust_log_field(agent_id),
+                    "reason": _safe_trust_log_field(access_result.denied_reason),
                 },
             )
             return QueryAccessResult(
@@ -1386,6 +1397,10 @@ class TrustAwareQueryExecutor:
         except Exception as e:  # pragma: no cover - defensive
             logger.warning(
                 "trust.audit_store.record_failed",
-                extra={"model": model_name, "operation": operation, "error": str(e)},
+                extra={
+                    "model": _safe_trust_log_field(model_name),
+                    "operation": _safe_trust_log_field(operation),
+                    "error": safe_exception_frames(e),
+                },
             )
             return None

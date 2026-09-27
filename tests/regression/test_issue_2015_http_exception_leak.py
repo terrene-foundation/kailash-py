@@ -25,11 +25,14 @@ client body must not swallow the error), and that the reference id appearing
 in the client body is the one in the log, so an operator can correlate them.
 """
 
+import ast
 import asyncio
 import json
 import logging
+import os
 import pathlib
 import types
+import unicodedata
 
 import pytest
 
@@ -607,48 +610,48 @@ def test_template_routes_never_catch_valueerror_around_an_execute():
     )
 
 
-@pytest.mark.regression
-def test_every_module_calling_the_helper_also_imports_it():
-    """The import-omission class, swept structurally across all call sites.
+_VENDORED_SOURCE_DIRS = {
+    ".venv",
+    "venv",
+    "site-packages",
+    "node_modules",
+    "build",
+    ".tox",
+    "dist",
+}
 
-    Driving every converted branch behaviourally is the ideal, but some sit
-    behind servers that are expensive to stand up. This closes the same gap
-    for ALL of them at once, and keeps closing it for sites added later:
-    a module that calls `safe_http_detail` without importing it fails here
-    even if no test ever reaches its except branch.
-    """
-    import ast
 
-    repo_root = pathlib.Path(__file__).resolve().parents[2]
+def _raise_walk_error(error):
+    raise error
 
-    # Scope to FIRST-PARTY source. `packages/*/` carries local `.venv` /
-    # `site-packages` trees in a developer checkout, so an unscoped rglob walks
-    # ~78k files instead of ~4.8k -- 94% of them third-party. That is not just
-    # slow (6min vs seconds): this sweep asserts a property of OUR modules, so
-    # auditing a vendored dependency's source can only produce a finding no one
-    # in this repo can act on. CI checkouts have no such trees, which is exactly
-    # why the cost is invisible there and only ever bites a local full-suite run.
-    _VENDORED = {
-        ".venv",
-        "venv",
-        "site-packages",
-        "node_modules",
-        "build",
-        ".tox",
-        "dist",
-    }
 
-    def _first_party(root: pathlib.Path):
-        for p in root.rglob("*.py"):
-            if _VENDORED.isdisjoint(p.parts):
-                yield p
+def _first_party_python_files(repo_root):
+    """Prune vendored descendants without excluding similarly named ancestors."""
+    for root in (repo_root / "src", repo_root / "packages"):
+        for directory, children, files in os.walk(root, onerror=_raise_walk_error):
+            children[:] = [
+                name for name in children if name not in _VENDORED_SOURCE_DIRS
+            ]
+            for name in files:
+                if name.endswith(".py"):
+                    yield pathlib.Path(directory) / name
 
+
+def _missing_http_helper_imports(repo_root):
     offenders = []
-    for path in list(_first_party(repo_root / "src")) + list(
-        _first_party(repo_root / "packages")
-    ):
+    for path in _first_party_python_files(repo_root):
+        source = path.read_text(encoding="utf-8", errors="replace")
+        # Python normalizes identifiers to NFKC. An ASCII-only substring
+        # prefilter would miss e.g. full-width spellings of safe_http_detail.
+        # Normalize only for candidate selection; the ORIGINAL source's AST
+        # still decides whether a call exists and whether its name is bound.
+        if "safe_http_detail" not in source and (
+            source.isascii()
+            or "safe_http_detail" not in unicodedata.normalize("NFKC", source)
+        ):
+            continue
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+            tree = ast.parse(source)
         except SyntaxError:
             continue  # scaffold templates carry substitution tokens
         # Bare-name calls only bind if the name itself is imported. An
@@ -684,7 +687,96 @@ def test_every_module_calling_the_helper_also_imports_it():
             if mod not in bound:
                 offenders.append(f"{path.relative_to(repo_root)} (via {mod}.)")
 
+    return offenders
+
+
+@pytest.mark.regression
+def test_every_module_calling_the_helper_also_imports_it():
+    """Every first-party helper call retains the AST import-omission check."""
+    offenders = _missing_http_helper_imports(_REPO_ROOT)
     assert not offenders, (
         "these modules call safe_http_detail without importing it; each is a "
         f"NameError raised while handling another exception: {offenders}"
     )
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize(
+    "source,missing",
+    [
+        ("safe_http_detail(error)", True),
+        (
+            "from kailash.utils.http_errors import safe_http_detail\nsafe_http_detail(error)",
+            False,
+        ),
+        ("http_errors.safe_http_detail(error)", True),
+        (
+            "from kailash.utils import http_errors\nhttp_errors.safe_http_detail(error)",
+            False,
+        ),
+        ("ｓａｆｅ_ｈｔｔｐ_ｄｅｔａｉｌ(error)", True),
+        ("http_errors.ｓａｆｅ_ｈｔｔｐ_ｄｅｔａｉｌ(error)", True),
+        (
+            "from kailash.utils.http_errors import safe_http_detail\nｓａｆｅ_ｈｔｔｐ_ｄｅｔａｉｌ(error)",
+            False,
+        ),
+        ('message = "safe_http_detail(error)"', False),
+        ("# safe_http_detail(error)", False),
+    ],
+)
+def test_import_scan_checks_calls_in_original_ast(tmp_path, source, missing):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "packages").mkdir()
+    (tmp_path / "src" / "candidate.py").write_text(source, encoding="utf-8")
+    expected = "src/candidate.py"
+    if source.startswith("http_errors."):
+        expected += " (via http_errors.)"
+    assert _missing_http_helper_imports(tmp_path) == ([expected] if missing else [])
+
+
+@pytest.mark.regression
+def test_import_scan_prunes_vendor_descendants_not_checkout_ancestors(
+    tmp_path, monkeypatch
+):
+    repo_root = tmp_path / "build" / "checkout"
+    (repo_root / "src").mkdir(parents=True)
+    package = repo_root / "packages" / "example"
+    package.mkdir(parents=True)
+    candidate = package / "first_party.py"
+    candidate.write_text("safe_http_detail(error)", encoding="utf-8")
+    excluded = set()
+    for name in _VENDORED_SOURCE_DIRS:
+        directory = package / name
+        directory.mkdir()
+        (directory / "shadow.py").write_text(
+            "safe_http_detail(error)", encoding="utf-8"
+        )
+        excluded.add(directory)
+    scandir = os.scandir
+    visited = []
+
+    def checked_scandir(directory):
+        path = pathlib.Path(directory)
+        assert path not in excluded, f"descended into vendored tree: {path}"
+        visited.append(path)
+        return scandir(directory)
+
+    monkeypatch.setattr(os, "scandir", checked_scandir)
+    assert list(_first_party_python_files(repo_root)) == [candidate]
+    assert package in visited
+    assert _missing_http_helper_imports(repo_root) == [
+        "packages/example/first_party.py"
+    ]
+
+
+@pytest.mark.regression
+def test_import_scan_avoids_ast_for_impossible_candidates(tmp_path, monkeypatch):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "packages").mkdir()
+    (tmp_path / "src" / "unrelated.py").write_text("answer = 42", encoding="utf-8")
+
+    def unexpected_parse(*args, **kwargs):
+        pytest.fail("parsed source with no possible helper identifier")
+
+    monkeypatch.setattr(ast, "parse", unexpected_parse)
+    assert _missing_http_helper_imports(tmp_path) == []

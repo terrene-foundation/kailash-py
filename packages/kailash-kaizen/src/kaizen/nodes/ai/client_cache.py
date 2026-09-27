@@ -22,6 +22,7 @@ Usage:
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import threading
 import time
@@ -63,8 +64,12 @@ class BYOKClientCache:
     @staticmethod
     def _make_key(api_key: Optional[str], base_url: Optional[str]) -> str:
         """Create a SHA-256 cache key from credentials."""
-        raw = f"{api_key or ''}|{base_url or ''}"
-        return hashlib.sha256(raw.encode()).hexdigest()
+        # JSON preserves field boundaries and None versus an empty string.
+        # Hash only the canonical encoding; never retain credentials as keys.
+        # Preserve every Python str code point, including a Unicode scalar
+        # versus a literal surrogate pair, without storing either in the index.
+        raw = json.dumps([api_key, base_url], ensure_ascii=False, separators=(",", ":"))
+        return hashlib.sha256(raw.encode("utf-8", errors="surrogatepass")).hexdigest()
 
     def get_or_create(
         self,

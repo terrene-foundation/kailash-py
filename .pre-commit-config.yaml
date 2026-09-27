@@ -16,7 +16,7 @@ repos:
 
   # isort - Python import sorter
   - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
+    rev: 9.0.1
     hooks:
       - id: isort
         name: Sort imports with isort
@@ -38,7 +38,7 @@ repos:
 
   # Built-in pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v6.0.0
     hooks:
       # `.claude/audit-fixtures/` and `tests/fixtures/` are TEST DATA, not source:
       # the exact bytes ARE the fixture. end-of-file-fixer appending a trailing

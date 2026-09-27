@@ -21,12 +21,10 @@ import logging
 import os
 import sys
 import time
-import warnings
 import weakref
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from types import ModuleType
 from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, Union
 
 from kailash.nodes.base import Node
@@ -40,6 +38,7 @@ from kailash.runtime._time_limits import (
 from kailash.runtime.cancellation import CancellationToken
 from kailash.runtime.durable import (
     NodeCompletionEvent,
+    _validate_force_resume_with_drift,
     build_checkpoint_key,
     check_shape_drift_or_raise,
     compute_workflow_fingerprint,
@@ -50,8 +49,16 @@ from kailash.runtime.durable import (
     resolve_tenant_id,
 )
 from kailash.runtime.execution_tracker import ExecutionTracker
-from kailash.runtime.local import LocalRuntime
+from kailash.runtime.local import (
+    ContentAwareExecutionError,
+    LocalRuntime,
+    _ConditionalExecutionState,
+)
 from kailash.runtime.metrics import get_metrics_bridge
+from kailash.runtime.resource_manager import (
+    _is_retry_observer_failure,
+    _retry_execution_scope,
+)
 from kailash.sdk_exceptions import (
     HardTimeLimitExceeded,
     RuntimeExecutionError,
@@ -60,6 +67,8 @@ from kailash.sdk_exceptions import (
     WorkflowExecutionError,
 )
 from kailash.tracking import TaskManager, TaskStatus
+from kailash.utils.finalizer import warn_unclosed
+from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +160,7 @@ class ExecutionContext:
         self._w1_idempotency_key: Optional[str] = None
         self._w1_run_id: Optional[str] = None
         self._w1_execution_tracker: Optional["ExecutionTracker"] = None
+        self._w1_cancellation_token: CancellationToken | None = None
 
     def set_variable(self, key: str, value: Any) -> None:
         """Set a context variable accessible to all nodes."""
@@ -201,7 +211,9 @@ class ExecutionContext:
                     await conn.disconnect()
                 logger.debug(f"Released connection: {conn_id}")
             except Exception as e:
-                logger.warning(f"Error releasing connection {conn_id}: {e}")
+                logger.warning(
+                    f"Error releasing connection {conn_id}: {safe_exception_frames(e)}"
+                )
 
         self.connections.clear()
 
@@ -244,7 +256,11 @@ class ExecutionContext:
             if isinstance(result, Exception) and not isinstance(
                 result, asyncio.CancelledError
             ):
-                logger.warning(f"Task {i} raised error during cancellation: {result}")
+                logger.warning(
+                    "Task %s raised error during cancellation: %s",
+                    i,
+                    safe_exception_frames(result),
+                )
 
         logger.info("All tasks cancelled successfully")
 
@@ -265,13 +281,17 @@ class ExecutionContext:
             # Cancel running tasks first
             await self.cancel_all_tasks()
         except Exception as e:
-            logger.warning(f"Error cancelling tasks during cleanup: {e}")
+            logger.warning(
+                f"Error cancelling tasks during cleanup: {safe_exception_frames(e)}"
+            )
 
         try:
             # Release connections
             await self.release_connections()
         except Exception as e:
-            logger.warning(f"Error releasing connections during cleanup: {e}")
+            logger.warning(
+                f"Error releasing connections during cleanup: {safe_exception_frames(e)}"
+            )
 
         self._cleaned_up = True
         logger.debug("ExecutionContext cleanup complete")
@@ -582,6 +602,9 @@ class AsyncLocalRuntime(LocalRuntime):
         # This prevents race conditions where __init__ runs outside async context
         self._semaphore = None
         self._max_concurrent = max_concurrent_nodes
+        self._native_loop = None
+        self._close_task = None
+        self._close_error = None
 
         logger.info(
             f"AsyncLocalRuntime initialized with max_concurrent_nodes={max_concurrent_nodes}, "
@@ -713,12 +736,23 @@ class AsyncLocalRuntime(LocalRuntime):
                             "node_id_hash": hashlib.sha256(
                                 node_id.encode("utf-8")
                             ).hexdigest()[:8],
-                            "error_type": type(save_err).__name__,
+                            "error_type": safe_type_name(save_err),
                         },
                     )
 
         if self._hook_registry.subscriber_count > 0:
             await self._hook_registry.dispatch_async(redacted)
+
+    @staticmethod
+    def _validate_compatibility_controls(**controls: Any) -> None:
+        """Reject LocalRuntime controls the native async engine cannot honor."""
+        unsupported = [name for name, value in controls.items() if value is not None]
+        if unsupported:
+            raise TypeError(
+                "AsyncLocalRuntime does not support execution controls: "
+                + ", ".join(unsupported)
+                + "; use LocalRuntime for these controls or omit them"
+            )
 
     def execute(
         self,
@@ -736,13 +770,18 @@ class AsyncLocalRuntime(LocalRuntime):
         Execute workflow without creating threads (Docker-safe).
 
         This override prevents the parent's threading-based execution that causes
-        Docker file descriptor issues. Uses pure async execution via asyncio.run
-        or returns the async task if already in an event loop.
+        Docker file descriptor issues. Drives pure async execution on the owned loop
+        and rejects calls made from an already-running event loop.
 
         Args:
             workflow: Workflow to execute
-            task_manager: Optional task manager for tracking
+            task_manager: LocalRuntime compatibility argument; must be None.
             parameters: Input parameters for the workflow
+            cancellation_token: LocalRuntime compatibility argument; must be None.
+            search_attributes: LocalRuntime compatibility argument; must be None.
+            kwargs: Forwarded to execute_workflow_async, including context,
+                idempotency_key and force_resume_with_drift. Unsupported options
+                raise TypeError before workflow execution.
             soft_time_limit: Optional advisory deadline in seconds (#912).
                 Raises :class:`~kailash.sdk_exceptions.SoftTimeLimitExceeded`
                 when reached; user code MAY catch and exit cleanly.
@@ -776,10 +815,16 @@ class AsyncLocalRuntime(LocalRuntime):
         # #912 Shard 1: validate typed time-limit kwargs at the entry point.
         _validate_limits(soft_time_limit, time_limit)
 
+        self._validate_compatibility_controls(
+            task_manager=task_manager,
+            cancellation_token=cancellation_token,
+            search_attributes=search_attributes,
+        )
+
         # Check if we're already in an event loop
         try:
             loop = asyncio.get_running_loop()
-            # If we get here, we're in an event loop - can't use asyncio.run()
+            # A synchronous driver cannot run inside an active caller loop.
             # User should call execute_workflow_async() instead
             raise RuntimeError(
                 "AsyncLocalRuntime.execute() called from async context. "
@@ -791,9 +836,27 @@ class AsyncLocalRuntime(LocalRuntime):
             if "async context" in str(e):
                 # Our error - re-raise it
                 raise
-            # Otherwise it's the "no running loop" error - proceed with asyncio.run()
+            # Otherwise no caller loop is running; drive the owned loop directly.
             inputs = parameters if parameters else {}
-            result = asyncio.run(self.execute_workflow_async(workflow, inputs=inputs))
+            if not self._persistent_execution_lock.acquire(blocking=False):
+                raise RuntimeError(
+                    "AsyncLocalRuntime synchronous execution is already active"
+                )
+            try:
+                loop = self._ensure_event_loop()
+                operation = self.execute_workflow_async(
+                    workflow,
+                    inputs=inputs,
+                    soft_time_limit=soft_time_limit,
+                    time_limit=time_limit,
+                    **kwargs,
+                )
+                try:
+                    result = loop.run_until_complete(operation)
+                finally:
+                    operation.close()
+            finally:
+                self._persistent_execution_lock.release()
 
             # extract_workflow_async returns Tuple[Dict, str]
             if isinstance(result, tuple):
@@ -821,19 +884,32 @@ class AsyncLocalRuntime(LocalRuntime):
         """
         Execute workflow asynchronously (for LocalRuntime compatibility).
 
-        This method provides compatibility with LocalRuntime's execute_async()
-        interface while using AsyncLocalRuntime's execution engine.
+        This method preserves LocalRuntime's tuple return interface while using
+        AsyncLocalRuntime's execution engine. Non-None task_manager,
+        cancellation_token, execution_tracker and search_attributes are rejected
+        because this engine does not implement those execution controls.
 
         Args:
             workflow: Workflow to execute
-            task_manager: Optional task manager for tracking
+            task_manager: LocalRuntime compatibility argument; must be None.
             parameters: Input parameters for the workflow
+            cancellation_token: LocalRuntime compatibility argument; must be None.
+            search_attributes: LocalRuntime compatibility argument; must be None.
+            kwargs: Forwarded to execute_workflow_async, including context,
+                idempotency_key and force_resume_with_drift. Unsupported options
+                raise TypeError before workflow execution.
 
         Returns:
             Tuple of (results dict, run_id)
         """
+        self._validate_compatibility_controls(
+            task_manager=task_manager,
+            cancellation_token=cancellation_token,
+            execution_tracker=execution_tracker,
+            search_attributes=search_attributes,
+        )
         inputs = parameters if parameters else {}
-        result = await self.execute_workflow_async(workflow, inputs=inputs)
+        result = await self.execute_workflow_async(workflow, inputs=inputs, **kwargs)
 
         # execute_workflow_async returns Tuple[Dict, str]
         if isinstance(result, tuple):
@@ -848,6 +924,7 @@ class AsyncLocalRuntime(LocalRuntime):
 
         return (results, run_id)
 
+    @_retry_execution_scope
     async def execute_workflow_async(
         self,
         workflow,
@@ -917,7 +994,10 @@ class AsyncLocalRuntime(LocalRuntime):
                 ...  # save partial work, exit cleanly
         """
         # #912 Shard 1: validate typed time-limit kwargs at the entry point.
+        _validate_force_resume_with_drift(force_resume_with_drift)
         _validate_limits(soft_time_limit, time_limit)
+        self._claim_native_loop()
+        cyclic_executor = self._cycle_executor_for_attempt()
 
         # #912 Shard 6: arm asyncio-task-based deadlines around the
         # in-process async execution path. Mirrors the LocalRuntime
@@ -939,244 +1019,296 @@ class AsyncLocalRuntime(LocalRuntime):
                 time_limit=time_limit,
             )
 
-        start_time = time.time()
-
-        # Issue #1708 W1f: canonical workflow RED (Rate/Errors/Duration) via
-        # the OTel MetricsBridge, mirroring LocalRuntime.execute(). Bounded
-        # {workflow.name} label only — NEVER workflow_id (the per-build UUID
-        # cardinality bomb Wave 1d fixed). Recorded once, in the `finally`
-        # block below, on BOTH the success and exception path.
-        _metrics_bridge = get_metrics_bridge()
-        _metrics_workflow_name = getattr(workflow, "name", "") or ""
-
-        # Generate run_id for tracking (consistent with LocalRuntime)
-        run_id = f"run_{int(time.time() * 1000)}"
-
-        # Create execution context
-        if context is None:
-            context = ExecutionContext(resource_registry=self.resource_registry)
-
-        # Add inputs to context
-        context.variables.update(inputs)
-
-        # === W1: Durable execution — shape-drift check + checkpoint context ===
-        # Compute the fingerprint once, build the checkpoint key, and run
-        # the shape-drift gate BEFORE any node executes.  The same
-        # invariants apply here as in LocalRuntime._execute_async — the
-        # per-node hot path below will emit + persist + dispatch events
-        # using the values stashed onto the context.
-        workflow_fingerprint = compute_workflow_fingerprint(workflow)
-        tenant_id = resolve_tenant_id(self)
-        checkpoint_key: Optional[str] = None
-        execution_tracker: Optional[ExecutionTracker] = None
-        if idempotency_key is not None:
-            checkpoint_key = build_checkpoint_key(
-                workflow_fingerprint,
-                idempotency_key,
-                inputs if isinstance(inputs, dict) else None,
-                tenant_id=tenant_id,
-            )
-            if self._checkpoint_store is not None:
-                try:
-                    prior_blob = await self._checkpoint_store.load(checkpoint_key)
-                except Exception as load_err:  # pragma: no cover — defensive
-                    logger.warning(
-                        "durable.checkpoint.load_failed",
-                        extra={"error_type": type(load_err).__name__},
-                    )
-                    prior_blob = None
-                if prior_blob is not None:
-                    stored_payload = decode_checkpoint_payload(prior_blob)
-                    check_shape_drift_or_raise(
-                        idempotency_key=idempotency_key,
-                        stored_payload=stored_payload,
-                        current_fingerprint=workflow_fingerprint,
-                        force_resume_with_drift=force_resume_with_drift,
-                    )
-                    execution_tracker = ExecutionTracker.from_dict(
-                        stored_payload.get("tracker", {})
-                    )
-
-        # Stash durable-execution context as ATTRIBUTES on the
-        # ExecutionContext (not ``variables``) so the per-node input
-        # sanitiser never treats them as user-supplied parameters.  The
-        # attribute path is initialised on every ExecutionContext (see
-        # ExecutionContext.__init__) so a None default is always present.
-        context._w1_workflow_fingerprint = workflow_fingerprint
-        context._w1_checkpoint_key = checkpoint_key
-        context._w1_tenant_id = tenant_id
-        context._w1_idempotency_key = idempotency_key
-        context._w1_run_id = run_id
-        context._w1_execution_tracker = (
-            execution_tracker if execution_tracker is not None else ExecutionTracker()
-        )
-
-        # CARE-017: Get effective trust context and set up propagation
-        effective_trust_ctx = self._get_effective_trust_context()
-        trust_token = None
-
+        # Timers cover preparation as well as execution. Every early context,
+        # checkpoint or drift exit must finish the same owned timer tasks.
         try:
-            # Set trust context in ContextVar if available
-            if effective_trust_ctx is not None:
-                from kailash.runtime.trust.context import (
-                    TrustVerificationMode,
-                    _runtime_trust_context,
-                )
+            start_time = time.time()
 
-                trust_token = _runtime_trust_context.set(effective_trust_ctx)
+            # Issue #1708 W1f: canonical workflow RED (Rate/Errors/Duration) via
+            # the OTel MetricsBridge, mirroring LocalRuntime.execute(). Bounded
+            # {workflow.name} label only — NEVER workflow_id (the per-build UUID
+            # cardinality bomb Wave 1d fixed). Recorded once, in the `finally`
+            # block below, on BOTH the success and exception path.
+            _metrics_bridge = get_metrics_bridge()
+            _metrics_workflow_name = getattr(workflow, "name", "") or ""
 
-                # Verify workflow trust before execution
-                if (
-                    self._trust_verification_mode != TrustVerificationMode.DISABLED
-                    and self._trust_verifier is not None
-                ):
-                    allowed = await self._verify_workflow_trust(
-                        workflow, effective_trust_ctx
-                    )
-                    if not allowed:
-                        raise WorkflowExecutionError(
-                            "Trust verification denied workflow execution"
-                        )
-            # P0 Component 1: Timeout Protection
-            # Wrap execution with timeout if configured
-            if self.execution_timeout and self.execution_timeout > 0:
-                logger.debug(f"Executing with timeout={self.execution_timeout}s")
-                tracker_result = await asyncio.wait_for(
-                    self._execute_workflow_internal(workflow, inputs, context, run_id),
-                    timeout=self.execution_timeout,
-                )
-            else:
-                tracker_result = await self._execute_workflow_internal(
-                    workflow, inputs, context, run_id
-                )
+            # Generate run_id for tracking (consistent with LocalRuntime)
+            run_id = f"run_{int(time.time() * 1000)}"
 
-            # Update total execution time
-            total_time = time.time() - start_time
-            context.metrics.total_duration = total_time
+            # Create execution context
+            if context is None:
+                context = ExecutionContext(resource_registry=self.resource_registry)
 
-            logger.info(f"Workflow execution completed in {total_time:.2f}s")
+            # Add inputs to context
+            context.variables.update(inputs)
 
-            # Extract plain results dict
-            # Conditional approach (skip_branches mode) returns plain dict, other methods return tracker wrapper
-            if (
-                self._has_conditional_patterns(workflow)
-                and self.conditional_execution == "skip_branches"
-            ):
-                results = (
-                    tracker_result  # Already plain dict from conditional execution
-                )
-            else:
-                results = (
-                    tracker_result.get("results", {})
-                    if isinstance(tracker_result, dict)
-                    else tracker_result
-                )
+            # CARE-017: Get effective trust context and set up propagation
+            effective_trust_ctx = self._get_effective_trust_context()
+            trust_token = None
+            preparing_checkpoint = False
+            execution_succeeded = False
 
-            # #912 Shard 6: post-completion poll for hard-deadline-fired-
-            # after-success (Shard 2 invariant 5). Even when the workflow
-            # returned cleanly, the asyncio timer task may have set the
-            # hard flag — the kill is non-negotiable.
-            if cancellable is not None:
-                if cancellable.hard_deadline_reached:
-                    raise HardTimeLimitExceeded(
-                        f"workflow exceeded hard time limit "
-                        f"(time_limit={cancellable.time_limit}s + "
-                        f"grace_seconds={cancellable.grace_seconds}s)"
-                    )
-                if (
-                    _attempt_token is not None
-                    and _attempt_token.is_cancelled
-                    and cancellable.soft_time_limit is not None
-                ):
-                    raise SoftTimeLimitExceeded(
-                        f"workflow exceeded soft time limit "
-                        f"(soft_time_limit={cancellable.soft_time_limit}s)"
-                    )
-
-            # P0 Component 1: Return tuple (results, run_id) for consistency
-            # This matches LocalRuntime.execute() return structure
-            return (results, run_id)
-
-        except asyncio.TimeoutError:
-            # P0 Component 1: Task cancellation on timeout
-            logger.error(f"Workflow execution timeout after {self.execution_timeout}s")
-            context.metrics.error_count += 1
-            # Cancel running tasks
-            await context.cancel_all_tasks()
-            raise  # Re-raise TimeoutError
-
-        except WorkflowCancelledError as cancel_exc:
-            # #912 Shard 6: classify time-limit cancellations into the
-            # subclass that names the deadline. The runtime observed
-            # our token cancelled and raised; if our timers were armed,
-            # classify.
-            context.metrics.error_count += 1
-            if cancellable is not None:
-                classified = _TimeLimitClassifier(cancellable).classify(cancel_exc)
-                if classified is not cancel_exc:
-                    raise classified from cancel_exc
-            raise
-
-        except (SoftTimeLimitExceeded, HardTimeLimitExceeded):
-            # #912 Shard 6: typed deadline exceptions MUST propagate
-            # untouched. Without this catch-and-re-raise above the
-            # broad `except Exception`, the time-limit raise would
-            # be swallowed and re-wrapped as WorkflowExecutionError —
-            # callers could not catch the typed exception that the
-            # docstring promises.
-            context.metrics.error_count += 1
-            raise
-
-        except WorkflowExecutionError:
-            # Re-raise WorkflowExecutionError without wrapping (includes trust verification errors)
-            context.metrics.error_count += 1
-            raise
-
-        except Exception as e:
-            logger.error(f"Workflow execution failed: {e}")
-            context.metrics.error_count += 1
-            raise WorkflowExecutionError(f"Async execution failed: {e}") from e
-
-        finally:
-            # Issue #1708 W1f: record the canonical workflow RED triple.
-            # `sys.exc_info()` inside a `finally` attached to the same
-            # `try` frame that is unwinding reports the in-flight exception
-            # (or `(None, None, None)` on a clean return) — this single
-            # check point observes BOTH the success path (`return (results,
-            # run_id)` above) and every exception path (timeout, cancelled,
-            # time-limit, or generic) without duplicating the recording
-            # call at every `except` clause.
-            _metrics_success = sys.exc_info()[0] is None
-            _metrics_bridge.record_workflow_execution(
-                _metrics_workflow_name,
-                time.time() - start_time,
-                success=_metrics_success,
-            )
-            # #912 Shard 6: always release the asyncio timer tasks. Safe
-            # to call on the no-limits path (cancellable is None then).
-            if cancellable is not None:
-                cancellable.disarm()
-
-            # CARE-017: Reset trust context token
-            if trust_token is not None:
-                from kailash.runtime.trust.context import _runtime_trust_context
-
-                _runtime_trust_context.reset(trust_token)
-
-            # BYOK hardening: clear credential store after execution completes
-            from kailash.workflow.credentials import get_credential_store
-
-            get_credential_store().clear()
-
-            # P0 Component 1: Cleanup guarantees
-            # Always cleanup connections and resources
             try:
-                await context.cleanup()
-            except Exception as cleanup_error:
-                logger.warning(f"Error during context cleanup: {cleanup_error}")
+                if self.enable_audit:
+                    await self._log_audit_event_async(
+                        "workflow_execution_start",
+                        {
+                            "workflow_id": workflow.workflow_id,
+                            "user_context": self._serialize_user_context(),
+                            "parameters": inputs,
+                        },
+                    )
+                # Set trust context in ContextVar if available
+                if effective_trust_ctx is not None:
+                    from kailash.runtime.trust.context import (
+                        TrustVerificationMode,
+                        _runtime_trust_context,
+                    )
+
+                    trust_token = _runtime_trust_context.set(effective_trust_ctx)
+
+                    # Verify workflow trust before execution
+                    if (
+                        self._trust_verification_mode != TrustVerificationMode.DISABLED
+                        and self._trust_verifier is not None
+                    ):
+                        allowed = await self._verify_workflow_trust(
+                            workflow, effective_trust_ctx
+                        )
+                        if not allowed:
+                            raise WorkflowExecutionError(
+                                "Trust verification denied workflow execution"
+                            )
+                preparing_checkpoint = True
+                # === W1: Durable execution — shape-drift check + checkpoint context ===
+                # Compute the fingerprint once, build the checkpoint key, and run
+                # the shape-drift gate BEFORE any node executes.  The same
+                # invariants apply here as in LocalRuntime._execute_async — the
+                # per-node hot path below will emit + persist + dispatch events
+                # using the values stashed onto the context.
+                workflow_fingerprint = compute_workflow_fingerprint(workflow)
+                tenant_id = resolve_tenant_id(self)
+                checkpoint_key: Optional[str] = None
+                execution_tracker: Optional[ExecutionTracker] = None
+                if idempotency_key is not None:
+                    checkpoint_key = build_checkpoint_key(
+                        workflow_fingerprint,
+                        idempotency_key,
+                        inputs if isinstance(inputs, dict) else None,
+                        tenant_id=tenant_id,
+                    )
+                    if self._checkpoint_store is not None:
+                        try:
+                            prior_blob = await self._checkpoint_store.load(
+                                checkpoint_key
+                            )
+                        except Exception as load_err:  # pragma: no cover — defensive
+                            logger.warning(
+                                "durable.checkpoint.load_failed",
+                                extra={"error_type": safe_type_name(load_err)},
+                            )
+                            prior_blob = None
+                        if prior_blob is not None:
+                            stored_payload = decode_checkpoint_payload(prior_blob)
+                            check_shape_drift_or_raise(
+                                idempotency_key=idempotency_key,
+                                stored_payload=stored_payload,
+                                current_fingerprint=workflow_fingerprint,
+                                force_resume_with_drift=force_resume_with_drift,
+                            )
+                            execution_tracker = ExecutionTracker.from_dict(
+                                stored_payload.get("tracker", {})
+                            )
+
+                # Stash durable-execution context as ATTRIBUTES on the
+                # ExecutionContext (not ``variables``) so the per-node input
+                # sanitiser never treats them as user-supplied parameters.  The
+                # attribute path is initialised on every ExecutionContext (see
+                # ExecutionContext.__init__) so a None default is always present.
+                context._w1_workflow_fingerprint = workflow_fingerprint
+                context._w1_checkpoint_key = checkpoint_key
+                context._w1_tenant_id = tenant_id
+                context._w1_idempotency_key = idempotency_key
+                context._w1_run_id = run_id
+                context._w1_cancellation_token = _attempt_token
+                context._w1_execution_tracker = (
+                    execution_tracker
+                    if execution_tracker is not None
+                    else ExecutionTracker()
+                )
+
+                preparing_checkpoint = False
+
+                # P0 Component 1: Timeout Protection
+                # Wrap execution with timeout if configured
+                if self.execution_timeout and self.execution_timeout > 0:
+                    logger.debug(f"Executing with timeout={self.execution_timeout}s")
+                    tracker_result = await asyncio.wait_for(
+                        self._execute_workflow_internal(
+                            workflow,
+                            inputs,
+                            context,
+                            run_id,
+                            cyclic_executor=cyclic_executor,
+                        ),
+                        timeout=self.execution_timeout,
+                    )
+                else:
+                    tracker_result = await self._execute_workflow_internal(
+                        workflow,
+                        inputs,
+                        context,
+                        run_id,
+                        cyclic_executor=cyclic_executor,
+                    )
+
+                # Update total execution time
+                total_time = time.time() - start_time
+                context.metrics.total_duration = total_time
+
+                logger.info(f"Workflow execution completed in {total_time:.2f}s")
+
+                # Every internal strategy returns the tracker wrapper, including
+                # conditional success and the standard conditional fallback.
+                results = tracker_result.get("results", {})
+
+                # #912 Shard 6: post-completion poll for hard-deadline-fired-
+                # after-success (Shard 2 invariant 5). Even when the workflow
+                # returned cleanly, the asyncio timer task may have set the
+                # hard flag — the kill is non-negotiable.
+                if cancellable is not None:
+                    if cancellable.hard_deadline_reached:
+                        raise HardTimeLimitExceeded(
+                            f"workflow exceeded hard time limit "
+                            f"(time_limit={cancellable.time_limit}s + "
+                            f"grace_seconds={cancellable.grace_seconds}s)"
+                        )
+                    if (
+                        _attempt_token is not None
+                        and _attempt_token.is_cancelled
+                        and cancellable.soft_time_limit is not None
+                    ):
+                        raise SoftTimeLimitExceeded(
+                            f"workflow exceeded soft time limit "
+                            f"(soft_time_limit={cancellable.soft_time_limit}s)"
+                        )
+
+                # P0 Component 1: Return tuple (results, run_id) for consistency
+                # This matches LocalRuntime.execute() return structure
+                execution_succeeded = True
+                return (results, run_id)
+
+            except asyncio.TimeoutError:
+                # P0 Component 1: Task cancellation on timeout
+                logger.error(
+                    f"Workflow execution timeout after {self.execution_timeout}s"
+                )
+                context.metrics.error_count += 1
+                # Cancel running tasks
+                await context.cancel_all_tasks()
+                raise  # Re-raise TimeoutError
+
+            except WorkflowCancelledError as cancel_exc:
+                # #912 Shard 6: classify time-limit cancellations into the
+                # subclass that names the deadline. The runtime observed
+                # our token cancelled and raised; if our timers were armed,
+                # classify.
+                context.metrics.error_count += 1
+                if cancellable is not None:
+                    classified = _TimeLimitClassifier(cancellable).classify(cancel_exc)
+                    if classified is not cancel_exc:
+                        raise classified from cancel_exc
+                raise
+
+            except (SoftTimeLimitExceeded, HardTimeLimitExceeded):
+                # #912 Shard 6: typed deadline exceptions MUST propagate
+                # untouched. Without this catch-and-re-raise above the
+                # broad `except Exception`, the time-limit raise would
+                # be swallowed and re-wrapped as WorkflowExecutionError —
+                # callers could not catch the typed exception that the
+                # docstring promises.
+                context.metrics.error_count += 1
+                raise
+
+            except WorkflowExecutionError:
+                # Re-raise WorkflowExecutionError without wrapping (includes trust verification errors)
+                context.metrics.error_count += 1
+                raise
+
+            except Exception as e:
+                if preparing_checkpoint:
+                    # Preparation errors keep their original public identity.
+                    raise
+                logger.error(f"Workflow execution failed: {safe_exception_frames(e)}")
+                context.metrics.error_count += 1
+                if _is_retry_observer_failure(e):
+                    raise
+                raise WorkflowExecutionError(f"Async execution failed: {e}") from e
+
+            finally:
+                if self.enable_audit:
+                    audit_error = None if execution_succeeded else sys.exc_info()[1]
+                    if audit_error is None:
+                        await self._log_audit_event_async(
+                            "workflow_execution_completed",
+                            {
+                                "workflow_id": workflow.workflow_id,
+                                "run_id": run_id,
+                                "result_summary": {
+                                    key: type(value).__name__
+                                    for key, value in results.items()
+                                },
+                            },
+                        )
+                    else:
+                        await self._log_audit_event_async(
+                            "workflow_execution_failed",
+                            {
+                                "workflow_id": workflow.workflow_id,
+                                "error": safe_exception_frames(audit_error),
+                            },
+                        )
+                # Issue #1708 W1f: record the canonical workflow RED triple.
+                # An explicit completion flag avoids inheriting a caller's
+                # handled exception through sys.exc_info() on successful sync
+                # execution. All exception exits leave this flag false.
+                _metrics_success = execution_succeeded
+                _metrics_bridge.record_workflow_execution(
+                    _metrics_workflow_name,
+                    time.time() - start_time,
+                    success=_metrics_success,
+                )
+                # CARE-017: Reset trust context token
+                if trust_token is not None:
+                    from kailash.runtime.trust.context import _runtime_trust_context
+
+                    _runtime_trust_context.reset(trust_token)
+
+                # BYOK hardening: clear credential store after execution completes
+                from kailash.workflow.credentials import get_credential_store
+
+                get_credential_store().clear()
+
+                # P0 Component 1: Cleanup guarantees
+                # Always cleanup connections and resources
+                try:
+                    await context.cleanup()
+                except Exception as cleanup_error:
+                    logger.warning(
+                        f"Error during context cleanup: {safe_exception_frames(cleanup_error)}"
+                    )
+        finally:
+            if cancellable is not None:
+                await cancellable.disarm_async()
 
     async def _execute_workflow_internal(
-        self, workflow, inputs: Dict[str, Any], context: ExecutionContext, run_id: str
+        self,
+        workflow,
+        inputs: Dict[str, Any],
+        context: ExecutionContext,
+        run_id: str,
+        *,
+        cyclic_executor,
     ):
         """
         Internal workflow execution (extracted for timeout wrapping).
@@ -1184,6 +1316,25 @@ class AsyncLocalRuntime(LocalRuntime):
         P0 Component 1: Separated from execute_workflow_async to enable
         timeout protection via asyncio.wait_for().
         """
+        if cyclic_executor is not None and workflow.has_cycles():
+            results, _ = await self._execute_cyclic_workflow_async(
+                workflow,
+                inputs,
+                None,
+                run_id,
+                workflow_context=None,
+                cyclic_executor=cyclic_executor,
+                execution_state=_ConditionalExecutionState(
+                    execution_tracker=context._w1_execution_tracker,
+                    cancellation_token=context._w1_cancellation_token,
+                    workflow_fingerprint=context._w1_workflow_fingerprint,
+                    checkpoint_key=context._w1_checkpoint_key,
+                    tenant_id=context._w1_tenant_id,
+                    idempotency_key=context._w1_idempotency_key,
+                ),
+            )
+            return {"results": results}
+
         # Check for conditional workflow with skip_branches mode
         # Only use conditional execution approach if skip_branches is enabled
         if (
@@ -1193,58 +1344,81 @@ class AsyncLocalRuntime(LocalRuntime):
             logger.info(
                 "Conditional workflow with skip_branches mode detected, using conditional execution"
             )
-            # Use inherited conditional execution from ConditionalExecutionMixin
-            tracker_result = await self._execute_conditional_approach(
-                workflow=workflow,
-                parameters=inputs,
-                task_manager=None,
-                run_id=run_id,
-                workflow_context=None,
+            try:
+                results = await self._execute_conditional_approach(
+                    workflow=workflow,
+                    parameters=inputs,
+                    task_manager=None,
+                    run_id=run_id,
+                    workflow_context=None,
+                    execution_state=_ConditionalExecutionState(
+                        execution_tracker=context._w1_execution_tracker,
+                        cancellation_token=context._w1_cancellation_token,
+                        workflow_fingerprint=context._w1_workflow_fingerprint,
+                        checkpoint_key=context._w1_checkpoint_key,
+                        tenant_id=context._w1_tenant_id,
+                        idempotency_key=context._w1_idempotency_key,
+                    ),
+                )
+                return {"results": results}
+            except (
+                ContentAwareExecutionError,
+                WorkflowCancelledError,
+                SoftTimeLimitExceeded,
+                HardTimeLimitExceeded,
+            ):
+                raise
+            except Exception as error:
+                if _is_retry_observer_failure(error):
+                    raise
+                logger.warning(
+                    "Conditional optimization failed; using standard execution: %s",
+                    safe_exception_frames(error),
+                )
+
+        # Regular execution path
+        # Analyze workflow if enabled
+        execution_plan = None
+        if self.analyzer:
+            execution_plan = self.analyzer.analyze(workflow)
+            logger.info(
+                f"Execution plan: {execution_plan.max_concurrent_nodes} max concurrent, "
+                f"{len(execution_plan.execution_levels)} levels"
+            )
+
+        # W1: when durable execution wiring is active, force the
+        # node-level async path (mixed workflow) so per-node hooks
+        # fire.  The sync-only fallback (``_execute_sync_workflow``)
+        # bypasses ``_execute_sync_node_async`` and would silently
+        # swallow every NodeCompletionEvent — exactly the orphan
+        # failure mode this routing override prevents.
+        w1_active = (
+            self._checkpoint_after_each_node
+            or self._hook_registry.subscriber_count > 0
+            or getattr(context, "_w1_idempotency_key", None) is not None
+        )
+
+        # Choose execution strategy based on analysis
+        if execution_plan and execution_plan.is_fully_async:
+            tracker_result = await self._execute_fully_async_workflow(
+                workflow, context, execution_plan
+            )
+        elif execution_plan and execution_plan.has_async_nodes:
+            tracker_result = await self._execute_mixed_workflow(
+                workflow, context, execution_plan
+            )
+        elif w1_active:
+            # Force the mixed-workflow path so the per-node async
+            # entry point fires.  When the analyzer hasn't classified
+            # any nodes as async, treat them all as sync — they go
+            # through _execute_sync_node_async (thread pool) which
+            # IS a W1-emit caller.
+            synthetic_plan = self._build_w1_sync_only_plan(workflow)
+            tracker_result = await self._execute_mixed_workflow(
+                workflow, context, synthetic_plan
             )
         else:
-            # Regular execution path
-            # Analyze workflow if enabled
-            execution_plan = None
-            if self.analyzer:
-                execution_plan = self.analyzer.analyze(workflow)
-                logger.info(
-                    f"Execution plan: {execution_plan.max_concurrent_nodes} max concurrent, "
-                    f"{len(execution_plan.execution_levels)} levels"
-                )
-
-            # W1: when durable execution wiring is active, force the
-            # node-level async path (mixed workflow) so per-node hooks
-            # fire.  The sync-only fallback (``_execute_sync_workflow``)
-            # bypasses ``_execute_sync_node_async`` and would silently
-            # swallow every NodeCompletionEvent — exactly the orphan
-            # failure mode this routing override prevents.
-            w1_active = (
-                self._checkpoint_after_each_node
-                or self._hook_registry.subscriber_count > 0
-                or getattr(context, "_w1_idempotency_key", None) is not None
-            )
-
-            # Choose execution strategy based on analysis
-            if execution_plan and execution_plan.is_fully_async:
-                tracker_result = await self._execute_fully_async_workflow(
-                    workflow, context, execution_plan
-                )
-            elif execution_plan and execution_plan.has_async_nodes:
-                tracker_result = await self._execute_mixed_workflow(
-                    workflow, context, execution_plan
-                )
-            elif w1_active:
-                # Force the mixed-workflow path so the per-node async
-                # entry point fires.  When the analyzer hasn't classified
-                # any nodes as async, treat them all as sync — they go
-                # through _execute_sync_node_async (thread pool) which
-                # IS a W1-emit caller.
-                synthetic_plan = self._build_w1_sync_only_plan(workflow)
-                tracker_result = await self._execute_mixed_workflow(
-                    workflow, context, synthetic_plan
-                )
-            else:
-                tracker_result = await self._execute_sync_workflow(workflow, context)
+            tracker_result = await self._execute_sync_workflow(workflow, context)
 
         return tracker_result
 
@@ -1318,7 +1492,9 @@ class AsyncLocalRuntime(LocalRuntime):
             try:
                 await asyncio.gather(*tasks, return_exceptions=False)
             except Exception as e:
-                logger.error(f"Level {level.level} execution failed: {e}")
+                logger.error(
+                    f"Level {level.level} execution failed: {safe_exception_frames(e)}"
+                )
                 raise
 
         return tracker.get_result()
@@ -1486,9 +1662,14 @@ class AsyncLocalRuntime(LocalRuntime):
             # Execute node
             try:
                 result = node_instance.execute(**node_inputs)
+                self._check_node_result(node_id, result)
                 results[node_id] = result
                 node_outputs[node_id] = result
             except Exception as e:
+                if isinstance(
+                    e, ContentAwareExecutionError
+                ) or _is_retry_observer_failure(e):
+                    raise
                 raise WorkflowExecutionError(
                     f"Node '{node_id}' execution failed: {e}"
                 ) from e
@@ -1518,7 +1699,7 @@ class AsyncLocalRuntime(LocalRuntime):
                     inputs.update(value)
                 else:
                     logger.warning(
-                        f"Node-specific parameter for '{node_id}' is not a dict: {type(value)}"
+                        f"Node-specific parameter for '{node_id}' is not a dict: {safe_type_name(value)}"
                     )
             elif key not in node_ids_in_graph:
                 # ✅ Include workflow-level parameters (not meant for specific nodes)
@@ -1626,6 +1807,7 @@ class AsyncLocalRuntime(LocalRuntime):
             return False
 
         cached_output = w1_tracker.get_output(node_id)
+        self._check_node_result(node_id, cached_output)
         # Mirror the sync runtime: dependents must receive the restored
         # output exactly as a fresh execution would have produced it.
         await tracker.record_result(node_id, cached_output, 0.0)
@@ -1707,6 +1889,7 @@ class AsyncLocalRuntime(LocalRuntime):
                         node_instance, inputs
                     )
 
+                self._check_node_result(node_id, result)
                 execution_time = time.time() - start_time
                 await tracker.record_result(node_id, result, execution_time)
 
@@ -1728,8 +1911,12 @@ class AsyncLocalRuntime(LocalRuntime):
                 execution_time = time.time() - start_time
                 await tracker.record_error(node_id, e)
                 logger.error(
-                    f"Node '{node_id}' failed after {execution_time:.2f}s: {e}"
+                    f"Node '{node_id}' failed after {execution_time:.2f}s: {safe_exception_frames(e)}"
                 )
+                if isinstance(
+                    e, ContentAwareExecutionError
+                ) or _is_retry_observer_failure(e):
+                    raise
                 raise WorkflowExecutionError(
                     f"Node '{node_id}' execution failed: {e}"
                 ) from e
@@ -1742,7 +1929,7 @@ class AsyncLocalRuntime(LocalRuntime):
                         await _cleanup()
                     except Exception as cleanup_error:
                         logger.warning(
-                            f"Error during node '{node_id}' cleanup: {cleanup_error}"
+                            f"Error during node '{node_id}' cleanup: {safe_exception_frames(cleanup_error)}"
                         )
 
     async def _execute_sync_node_async(
@@ -1801,6 +1988,7 @@ class AsyncLocalRuntime(LocalRuntime):
                 # Execute sync node in thread pool
                 result = await self._execute_sync_node_in_thread(node_instance, inputs)
 
+                self._check_node_result(node_id, result)
                 execution_time = time.time() - start_time
                 await tracker.record_result(node_id, result, execution_time)
 
@@ -1824,8 +2012,12 @@ class AsyncLocalRuntime(LocalRuntime):
                 execution_time = time.time() - start_time
                 await tracker.record_error(node_id, e)
                 logger.error(
-                    f"Sync node '{node_id}' failed after {execution_time:.2f}s: {e}"
+                    f"Sync node '{node_id}' failed after {execution_time:.2f}s: {safe_exception_frames(e)}"
                 )
+                if isinstance(
+                    e, ContentAwareExecutionError
+                ) or _is_retry_observer_failure(e):
+                    raise
                 raise WorkflowExecutionError(
                     f"Sync node '{node_id}' execution failed: {e}"
                 ) from e
@@ -1870,7 +2062,7 @@ class AsyncLocalRuntime(LocalRuntime):
                     inputs.update(value)
                 else:
                     logger.warning(
-                        f"Node-specific parameter for '{node_id}' is not a dict: {type(value)}"
+                        f"Node-specific parameter for '{node_id}' is not a dict: {safe_type_name(value)}"
                     )
             elif key not in node_ids_in_graph:
                 # ✅ Include workflow-level parameters (not meant for specific nodes)
@@ -2001,7 +2193,9 @@ class AsyncLocalRuntime(LocalRuntime):
                 self.thread_pool.shutdown(wait=True)
                 logger.debug("Thread pool shutdown successfully")
             except Exception as e:
-                logger.warning(f"Error shutting down thread pool: {e}")
+                logger.warning(
+                    f"Error shutting down thread pool: {safe_exception_frames(e)}"
+                )
             finally:
                 self.thread_pool = None
 
@@ -2011,7 +2205,9 @@ class AsyncLocalRuntime(LocalRuntime):
                 await self.resource_registry.cleanup()
                 logger.debug("Resource registry cleaned up")
             except Exception as e:
-                logger.warning(f"Error cleaning up resource registry: {e}")
+                logger.warning(
+                    f"Error cleaning up resource registry: {safe_exception_frames(e)}"
+                )
 
         # Dispose connection pools
         try:
@@ -2051,7 +2247,9 @@ class AsyncLocalRuntime(LocalRuntime):
                         except Exception:
                             pass
         except Exception as e:
-            logger.warning(f"Error disposing AsyncSQL pools during cleanup: {e}")
+            logger.warning(
+                f"Error disposing AsyncSQL pools during cleanup: {safe_exception_frames(e)}"
+            )
         try:
             from kailash.nodes.data.sql import SQLDatabaseNode
 
@@ -2059,7 +2257,9 @@ class AsyncLocalRuntime(LocalRuntime):
             if _cleanup is not None:
                 _cleanup()
         except Exception as e:
-            logger.warning(f"Error disposing SQL pools during cleanup: {e}")
+            logger.warning(
+                f"Error disposing SQL pools during cleanup: {safe_exception_frames(e)}"
+            )
 
         # Clean up semaphore reference
         if hasattr(self, "_semaphore"):
@@ -2069,75 +2269,170 @@ class AsyncLocalRuntime(LocalRuntime):
         self._cleaned_up = True
         logger.info("AsyncLocalRuntime cleanup complete")
 
-    def close(self) -> None:
-        """Synchronous close that properly cleans up ALL async resources.
+    def _closed_loop_can_rebind(self) -> bool:
+        """Allow closed-loop reuse only when no owned async resources survive."""
+        if self._native_loop is None or not self._native_loop.is_closed():
+            return False
+        if self.resource_registry is not None:
+            return False
+        if self._semaphore is not None and (
+            self._semaphore._value != self._max_concurrent
+            or any(not waiter.done() for waiter in (self._semaphore._waiters or ()))
+        ):
+            return False
+        from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
-        Overrides LocalRuntime.close() to also handle thread pool,
-        resource registry, semaphore, and SQL connection pools.
+        prefix = f"{id(self._native_loop)}|"
+        return not any(
+            key.startswith(prefix) for key in AsyncSQLDatabaseNode._shared_pools
+        )
 
-        Reference-count aware: decrements _ref_count. Actual cleanup
-        only happens when _ref_count reaches 0.
-        """
-        if self.debug:
-            logger.debug(
-                f"AsyncLocalRuntime.close() called for runtime {self._runtime_id}"
+    def _claim_native_loop(self) -> asyncio.AbstractEventLoop:
+        """Bind loop-affine runtime resources before executing user work."""
+        loop = asyncio.get_running_loop()
+        with self._loop_lock:
+            if self._ref_count <= 0 or getattr(self, "_cleaned_up", False):
+                raise RuntimeError("AsyncLocalRuntime is closed; create a new runtime")
+            if self._native_loop is not None and self._native_loop is not loop:
+                if not self._closed_loop_can_rebind():
+                    raise RuntimeError(
+                        "AsyncLocalRuntime belongs to another event loop; "
+                        "use a separate runtime and close each on its owning loop"
+                    )
+                self._semaphore = None
+            self._native_loop = loop
+        return loop
+
+    async def _finish_async_close(self) -> None:
+        """Finish owned resources without stopping the caller's event loop."""
+        try:
+            await self.cleanup()
+        except BaseException as error:
+            self._close_error = error
+            raise
+        finally:
+            # An overridden or interrupted cleanup must not strand the executor.
+            if self.thread_pool is not None:
+                try:
+                    self.thread_pool.shutdown(wait=True)
+                except Exception as error:
+                    logger.warning(
+                        "Error shutting down thread pool: %s",
+                        safe_exception_frames(error),
+                    )
+                finally:
+                    self.thread_pool = None
+            self._workflow_signals.clear()
+            # An owned loop driven by sync close is retired after its driver
+            # returns. Caller-owned loops are never passed to loop teardown.
+            if self._persistent_loop is not asyncio.get_running_loop():
+                self._cleanup_event_loop()
+
+    def _observe_async_close(self, future) -> None:
+        """Observe retained asynchronous close failures even without an awaiter."""
+        try:
+            future.result()
+        except BaseException as error:
+            logger.error(
+                "AsyncLocalRuntime cleanup failed: %s", safe_exception_frames(error)
             )
 
+    def close(self) -> None:
+        """Release one reference and finish resources on their owning loop.
+
+        Outside an active caller loop, close waits for completion. On the owning
+        loop it retains a cleanup task; async context exit awaits that task.
+        """
         with self._loop_lock:
             if self._ref_count <= 0:
-                return  # Already fully closed
+                return
+            if (
+                self._ref_count == 1
+                and self._native_loop is not None
+                and self._native_loop.is_closed()
+                and not getattr(self, "_cleaned_up", False)
+            ):
+                if not self._closed_loop_can_rebind():
+                    raise RuntimeError(
+                        "AsyncLocalRuntime owner loop closed before cleanup; "
+                        "close the runtime before closing its event loop"
+                    )
+                self._native_loop = None
+                self._semaphore = None
             self._ref_count -= 1
             if self._ref_count > 0:
-                return  # Other consumers still active
+                return
 
-        # --- Async resource cleanup (not handled by parent close) ---
-        if not getattr(self, "_cleaned_up", False):
-            try:
-                loop = self._persistent_loop
-                if loop and not loop.is_closed():
-                    # Schedule async cleanup on the runtime's own event loop
-                    future = asyncio.run_coroutine_threadsafe(self.cleanup(), loop)
-                    try:
-                        future.result(timeout=5.0)
-                    except (TimeoutError, asyncio.TimeoutError):
-                        logger.warning("AsyncLocalRuntime cleanup timed out after 5s")
-                else:
-                    # No running loop — do sync-safe subset
-                    if hasattr(self, "thread_pool") and self.thread_pool:
-                        self.thread_pool.shutdown(wait=True)
-                        self.thread_pool = None
-                    if hasattr(self, "_semaphore"):
-                        self._semaphore = None
-                    self._cleaned_up = True
-            except Exception as e:
-                logger.warning(f"Error during AsyncLocalRuntime.close(): {e}")
-                # Fallback: at least kill thread pool
-                if hasattr(self, "thread_pool") and self.thread_pool:
-                    self.thread_pool.shutdown(wait=False)
-                    self.thread_pool = None
+        if getattr(self, "_cleaned_up", False):
+            self._workflow_signals.clear()
+            self._cleanup_event_loop()
+            return
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            current_loop = None
+        owner = self._native_loop or self._persistent_loop
+        if owner is None:
+            owner = current_loop or self._ensure_event_loop()
+            self._native_loop = owner
 
-        # --- Parent cleanup (event loop + signals) ---
-        # Call the parent's cleanup logic directly, NOT super().close()
-        # because super().close() would try to decrement _ref_count again.
-        self._workflow_signals.clear()
-        self._cleanup_event_loop()
-
-    def __del__(self, _warnings: ModuleType = warnings) -> None:
-        """Emit ResourceWarning if runtime was not properly closed."""
-        if getattr(self, "_ref_count", 0) > 0:
-            _warnings.warn(
-                f"Unclosed {self.__class__.__name__} (ref_count={self._ref_count}). "
-                f"Use 'async with {self.__class__.__name__}() as runtime:' or call runtime.close().",
-                ResourceWarning,
-                source=self,
+        if owner is current_loop:
+            self._close_task = owner.create_task(self._finish_async_close())
+            self._close_task.add_done_callback(self._observe_async_close)
+        elif owner.is_running():
+            self._close_task = asyncio.run_coroutine_threadsafe(
+                self._finish_async_close(), owner
             )
-            # Force cleanup regardless
-            self._ref_count = 1  # Ensure close() actually cleans up
-            try:
-                self.close()
-            except Exception:
-                pass
-        super().__del__(_warnings=_warnings)
+            self._close_task.add_done_callback(self._observe_async_close)
+            if current_loop is None:
+                self._close_task.result()
+        elif current_loop is None:
+            owner.run_until_complete(self._finish_async_close())
+            self._cleanup_event_loop()
+        else:
+            # A dormant owner cannot run on this already-running thread.
+            # Drive its existing loop off-thread; never migrate its resources.
+            async def finish_dormant_owner():
+                await asyncio.to_thread(
+                    owner.run_until_complete, self._finish_async_close()
+                )
+                self._cleanup_event_loop()
+
+            self._close_task = current_loop.create_task(finish_dormant_owner())
+            self._close_task.add_done_callback(self._observe_async_close)
+
+    def __del__(self, _warn=warn_unclosed) -> None:
+        """Emit ResourceWarning if the runtime was not properly closed.
+
+        Warns and RETURNS. This finalizer performs no cleanup, deliberately —
+        see :meth:`LocalRuntime.__del__` for the full deadlock rationale
+        (``close()`` logs, takes ``self._loop_lock``, then runs
+        ``_cleanup_event_loop()``; a finalizer can fire on a thread already
+        holding either lock, and neither is reentrant).
+
+        Deliberately does NOT call ``super().__del__()``. Python does not
+        chain ``__del__`` implicitly, so the parent finalizer runs only if
+        invoked explicitly — and now that both are warn-only with the SAME
+        ``_ref_count > 0`` predicate, chaining would emit two
+        ``ResourceWarning``s for one leaked object. The previous code chained
+        safely only by accident: it forced ``close()`` first, which drove
+        ``_ref_count`` to 0, so the parent's guard never fired. With the
+        cleanup gone that accident disappears, so the chain is removed and the
+        override subsumes the parent entirely, differing only in naming
+        ``async with`` as the remedy. Pinned by
+        ``tests/regression/test_issue_2107_del_finalizers_no_close.py::
+        test_async_local_runtime_warns_exactly_once``.
+
+        See ``rules/patterns.md`` § "Async Resource Cleanup" and issue #2107.
+        """
+        ref_count = getattr(self, "_ref_count", 0)
+        if ref_count > 0:
+            _warn(
+                self,
+                f"Use 'async with {type(self).__name__}() as runtime:' "
+                "or call runtime.close().",
+                detail=f"ref_count={ref_count}",
+            )
 
     async def __aenter__(self) -> "AsyncLocalRuntime":
         """Async context manager entry.
@@ -2146,15 +2441,49 @@ class AsyncLocalRuntime(LocalRuntime):
             async with AsyncLocalRuntime() as runtime:
                 results = await runtime.execute_workflow_async(workflow, inputs)
         """
+        self._claim_native_loop()
         self._is_context_managed = True
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        """Async context manager exit — calls close() which respects ref counting.
+    async def aclose(self) -> None:
+        """Release one reference and await final cleanup on the resource owner.
 
-        Uses close() instead of directly calling cleanup() to ensure the
-        ref counting contract is honored. If this runtime is shared via
-        acquire(), close() will only decrement — not destroy resources.
+        Cleanup completes through caller cancellation before that cancellation
+        is propagated. References retained with acquire() remain usable.
         """
-        self._is_context_managed = False
         self.close()
+        if self._close_task is not None:
+            pending = self._close_task
+            if isinstance(pending, asyncio.Future):
+                owner = pending.get_loop()
+                if owner is not asyncio.get_running_loop() and not pending.done():
+                    owner_task = pending
+
+                    async def wait_on_owner():
+                        await asyncio.shield(owner_task)
+
+                    pending = asyncio.wrap_future(
+                        asyncio.run_coroutine_threadsafe(wait_on_owner(), owner)
+                    )
+            else:
+                pending = asyncio.wrap_future(pending)
+            cancellation = None
+            while True:
+                try:
+                    await asyncio.shield(pending)
+                    break
+                except asyncio.CancelledError as error:
+                    if pending.cancelled():
+                        # shield() can discard an inner cancellation's message.
+                        if isinstance(self._close_error, asyncio.CancelledError):
+                            raise self._close_error
+                        raise
+                    if cancellation is None:
+                        cancellation = error
+            if cancellation is not None:
+                raise cancellation
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Release the context's reference and await owned cleanup."""
+        self._is_context_managed = False
+        await self.aclose()

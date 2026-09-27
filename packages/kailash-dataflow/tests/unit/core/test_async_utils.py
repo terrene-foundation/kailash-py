@@ -14,6 +14,7 @@ See: TODO-159 - Async-Safe Wrapper Utility
 """
 
 import asyncio
+import inspect
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -278,20 +279,138 @@ class TestAsyncSafeRunNestedCalls:
         assert result == "inner"
 
     def test_prevents_deep_recursion(self):
-        """Verify protection against infinite recursion."""
-        call_count = [0]
+        """Reject excessive nesting without abandoning the submitted coroutine."""
+        coroutines = []
 
         async def recursive():
-            call_count[0] += 1
-            if call_count[0] > 15:
+            if len(coroutines) > 15:
                 return "stopped"
-            # This would create deep nesting
-            return async_safe_run(recursive())
+            child = recursive()
+            coroutines.append(child)
+            return async_safe_run(child)
 
-        # Should either work (with thread pool) or raise recursion limit
-        # The implementation limits depth to 10
-        with pytest.raises(RuntimeError, match="recursively too many times"):
-            async_safe_run(recursive())
+        outer = recursive()
+        coroutines.append(outer)
+        try:
+            with pytest.raises(RuntimeError, match="recursively too many times"):
+                async_safe_run(outer)
+            assert all(
+                inspect.getcoroutinestate(coro) == inspect.CORO_CLOSED
+                for coro in coroutines
+            ), "recursion rejection left a submitted coroutine open"
+            assert async_safe_run(asyncio.sleep(0, result="recovered")) == "recovered"
+        finally:
+            # Keep a failed regression assertion from leaking its retained handles.
+            for coro in coroutines:
+                coro.close()
+
+    def test_recursion_rejection_cleanup_can_reenter_bridge(self):
+        """Closing suspended input runs finally blocks outside the depth lock."""
+        from dataflow.core import async_utils
+
+        cleaned = []
+
+        async def suspended():
+            try:
+                await asyncio.sleep(0)
+            finally:
+                # Fail promptly on the old deadlock instead of hanging pytest.
+                lock = async_utils._global_depth_lock
+                assert lock.acquire(blocking=False), "cleanup ran under depth lock"
+                lock.release()
+                with pytest.raises(RuntimeError, match="recursively too many times"):
+                    async_safe_run(asyncio.sleep(0))
+                cleaned.append(True)
+
+        coro = suspended()
+        coro.send(None)
+        assert inspect.getcoroutinestate(coro) == inspect.CORO_SUSPENDED
+        with patch.object(
+            async_utils, "_global_depth", async_utils._MAX_RECURSION_DEPTH
+        ):
+            try:
+                with pytest.raises(RuntimeError, match="recursively too many times"):
+                    async_safe_run(coro)
+                assert cleaned == [True]
+                assert async_utils._global_depth == async_utils._MAX_RECURSION_DEPTH
+                assert inspect.getcoroutinestate(coro) == inspect.CORO_CLOSED
+            finally:
+                coro.close()
+
+    @pytest.mark.asyncio
+    async def test_pool_submission_rejection_closes_coroutine(self):
+        """A shutdown executor rejects before scheduling and must not leak input."""
+        pool = ThreadPoolExecutor(max_workers=1)
+        pool.shutdown(wait=True)
+        coro = asyncio.sleep(0)
+        try:
+            with patch("dataflow.core.async_utils._get_thread_pool", return_value=pool):
+                with pytest.raises(RuntimeError, match="cannot schedule new futures"):
+                    async_safe_run(coro)
+            assert inspect.getcoroutinestate(coro) == inspect.CORO_CLOSED
+        finally:
+            coro.close()
+
+    @pytest.mark.asyncio
+    async def test_queued_submission_failure_discards_late_callback(self):
+        """A callback queued before submit raises cannot consume closed input."""
+        pool = ThreadPoolExecutor(max_workers=1)
+        coro = asyncio.sleep(0)
+        try:
+            with patch("dataflow.core.async_utils._get_thread_pool", return_value=pool):
+                with patch.object(
+                    pool,
+                    "_adjust_thread_count",
+                    side_effect=RuntimeError("start failed"),
+                ):
+                    with pytest.raises(RuntimeError, match="start failed"):
+                        async_safe_run(coro)
+            assert inspect.getcoroutinestate(coro) == inspect.CORO_CLOSED
+            # Real submit enqueued this work item before the injected failure.
+            work = pool._work_queue.get_nowait()
+            with patch("dataflow.core.async_utils._run_on_new_loop") as run:
+                work.run()
+            run.assert_not_called()
+            assert work.future.result() is None
+        finally:
+            pool.shutdown(wait=True)
+            coro.close()
+
+    @pytest.mark.asyncio
+    async def test_running_submission_failure_preserves_worker_ownership(self):
+        """A worker that starts before submit raises must finish its coroutine."""
+        entered = threading.Event()
+        release = threading.Event()
+        completed = threading.Event()
+
+        async def operation():
+            entered.set()
+            assert release.wait(5), "worker was never released"
+            completed.set()
+
+        def fail_after_worker_starts():
+            assert entered.wait(5), "queued coroutine never started"
+            raise RuntimeError("start failed after admission")
+
+        pool = ThreadPoolExecutor(max_workers=1)
+        pool.submit(lambda: None).result(timeout=5)
+        coro = operation()
+        try:
+            with patch("dataflow.core.async_utils._get_thread_pool", return_value=pool):
+                with patch.object(
+                    pool, "_adjust_thread_count", side_effect=fail_after_worker_starts
+                ):
+                    with pytest.raises(
+                        RuntimeError, match="start failed after admission"
+                    ):
+                        async_safe_run(coro)
+            assert inspect.getcoroutinestate(coro) == inspect.CORO_RUNNING
+        finally:
+            release.set()
+            pool.shutdown(wait=True)
+            coro.close()
+        assert completed.is_set()
+        assert inspect.getcoroutinestate(coro) == inspect.CORO_CLOSED
 
 
 class TestEnsureAsync:

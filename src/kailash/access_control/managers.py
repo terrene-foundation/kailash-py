@@ -167,7 +167,7 @@ class AccessControlManager:
         )
 
         # Evaluate using configured strategy
-        decision = self.rule_evaluator.evaluate_rules(
+        decision = self.rule_evaluator.evaluate(
             applicable_rules,
             user,
             "workflow",
@@ -225,7 +225,7 @@ class AccessControlManager:
         applicable_rules = self._get_applicable_rules("node", node_id, permission)
 
         # Evaluate using configured strategy
-        decision = self.rule_evaluator.evaluate_rules(
+        decision = self.rule_evaluator.evaluate(
             applicable_rules,
             user,
             "node",

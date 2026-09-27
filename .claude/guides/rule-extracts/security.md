@@ -276,6 +276,28 @@ legitimate non-decisions that MUST NOT, and a proof the scan reached production
 text. Calibration is honest about reach — see loom#1455: it catches the plain shape
 that real decay takes, not an author who wants to route around it.
 
+### Enumerate by what BINDS A SOCKET, not by what a middleware hook reaches
+
+A second way the enumeration comes back short, distinct from forgetting a site:
+enumerating along the wrong axis. When sweeping for un-gated HTTP servers, the
+reflex is to enumerate what the framework's auth middleware installer can reach —
+but that installer is transport-specific, so the sweep silently inherits its blind
+spot and reports a complete-looking result.
+
+Measured: `ConnectionDashboardNode` was the EIGHTH un-gated HTTP server, invisible
+to two prior sweeps (#2072, #2100) purely because it is **aiohttp** and the
+installer calls Starlette's ASGI hook. Nothing about it was hidden — it binds a
+port and serves connection-pool internals like the seven already fixed. It simply
+was not on the axis being enumerated. Shipped gate:
+`workflow_connection_pool.py:321-323,1151-1164`.
+
+The instrument that would have found it on the first pass enumerates the
+SOCKET-BINDING call, which is transport-agnostic — `app.listen` / `run_app` /
+`serve` / `bind` / `TCPSite` / `uvicorn.run` — not the middleware registration.
+Per `instrument-discipline.md` MUST-3, fire it at a known-gated server first: an
+enumeration that cannot list the seven already-fixed servers cannot be trusted to
+have found the eighth.
+
 ### Where duplication is DELIBERATE, consolidation is BLOCKED
 
 The discriminator is whether the copies are an accident or an independence property.
