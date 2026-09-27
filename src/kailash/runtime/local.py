@@ -53,7 +53,10 @@ from kailash.runtime.resource_manager import (
     _is_retry_observer_failure,
     _retry_execution_scope,
 )
-from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
+from kailash.utils.secure_logging import (
+    safe_exception_frames,
+    safe_type_name,
+)
 
 if TYPE_CHECKING:
     # Type-only imports — runtime imports stay lazy inside __init__ to
@@ -4646,8 +4649,9 @@ class LocalRuntime(
             # Validate the transformation
             warnings = injector.validate_parameters(workflow_level_params)
             if warnings and self.debug:
-                for warning in warnings:
-                    self.logger.warning(f"Parameter validation: {warning}")
+                self.logger.warning(
+                    "Parameter validation reported %d warning(s)", len(warnings)
+                )
 
         # Inject secrets into the processed parameters
         if self.secret_provider:
@@ -4737,8 +4741,8 @@ class LocalRuntime(
         if self.debug:
             self.logger.debug(
                 f"Separated parameters: "
-                f"node_specific={list(node_specific_params.keys())}, "
-                f"workflow_level={list(workflow_level_params.keys())}"
+                f"node_specific={len(node_specific_params)}, "
+                f"workflow_level={len(workflow_level_params)}"
             )
 
         return node_specific_params, workflow_level_params

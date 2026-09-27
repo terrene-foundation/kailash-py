@@ -9,6 +9,8 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Union
 
+from kailash.utils.secure_logging import safe_log_field
+
 logger = logging.getLogger(__name__)
 
 
@@ -35,7 +37,7 @@ class ParameterInjectionMixin:
         """
         self._runtime_config.update(runtime_params)
         logger.debug(
-            f"Set runtime parameters for {self.__class__.__name__}: {list(runtime_params.keys())}"
+            f"Set runtime parameters for {safe_log_field(self.__class__.__name__)}: {len(runtime_params)}"
         )
 
     def get_effective_config(self) -> Dict[str, Any]:
@@ -171,9 +173,7 @@ class ConfigurableOAuth2Node:
 
         # Create the actual OAuth2Node
         self._oauth_node = OAuth2Node(**oauth_config)
-        logger.info(
-            f"Initialized OAuth2Node with runtime config: {list(oauth_config.keys())}"
-        )
+        logger.info(f"Initialized OAuth2Node with runtime config: {len(oauth_config)}")
 
     def get_parameters(self):
         """Get parameters from the underlying OAuth2Node or default set."""
@@ -280,7 +280,7 @@ class ConfigurableAsyncSQLNode(ParameterInjectionMixin):
         # Create the actual AsyncSQLDatabaseNode
         self._sql_node = AsyncSQLDatabaseNode(**sql_config)
         logger.info(
-            f"Initialized AsyncSQLDatabaseNode with runtime config: {list(sql_config.keys())}"
+            f"Initialized AsyncSQLDatabaseNode with runtime config: {len(sql_config)}"
         )
 
     def get_parameters(self):

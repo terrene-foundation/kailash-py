@@ -100,6 +100,8 @@ Execute a workflow synchronously.
 - `soft_time_limit` -- Optional advisory deadline in seconds. Validated at the entry point: `<= 0` raises `ValueError`; when both `soft_time_limit` and `time_limit` are set, `soft_time_limit` MUST be strictly less than `time_limit`.
 - `time_limit` -- Optional unconditional kill deadline in seconds. Same validation contract.
 
+The separate `WorkflowParameterInjector.inject_parameters()` helper applies the existing workflow-input mappings to deferred nodes through `set_runtime_config()` or `set_runtime_parameters()`. Repeated calls replace prior runtime values while preserving constructor configuration; ordinary nodes remain unchanged, and injection does not initialize connections or other deferred resources. Source: `src/kailash/runtime/parameter_injector.py:378-395`, `src/kailash/runtime/parameter_injector.py:43-54`, `src/kailash/runtime/parameter_injection.py:30-51`.
+
 **Returns**: `tuple[dict[str, Any], str | None]`
 
 - Element 0: Results dictionary mapping `node_id -> node_output_dict`

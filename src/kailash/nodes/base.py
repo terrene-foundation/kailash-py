@@ -37,7 +37,11 @@ from kailash.sdk_exceptions import (
     NodeExecutionError,
     NodeValidationError,
 )
-from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
+from kailash.utils.secure_logging import (
+    safe_exception_frames,
+    safe_log_field,
+    safe_type_name,
+)
 
 # ADR-002: Module-level logger for node registration messages
 _logger = logging.getLogger(__name__)
@@ -1067,7 +1071,23 @@ class Node(ABC):
             if self._strict_unknown_params:
                 raise NodeValidationError(msg)
             else:
-                _logger.warning("[NODE] %s", msg)
+                # Sanitize each metadata field before prose/list formatting
+                # obscures JSON credential boundaries. Keep the public msg raw.
+                unknown_names = ", ".join(safe_log_field(k) for k in sorted(unknown))
+                declared_names = ", ".join(safe_log_field(k) for k in sorted(declared))
+                log_msg = (
+                    f"Unknown parameter(s) for {safe_log_field(self.__class__.__name__)}: "
+                    f"{unknown_names}. Valid parameters: {declared_names}."
+                )
+                if suggestions:
+                    log_hints = [
+                        f" '{safe_log_field(k)}' -> did you mean {', '.join(safe_log_field(name) for name in s)}?"
+                        for k, s in suggestions.items()
+                        if s
+                    ]
+                    if log_hints:
+                        log_msg += " Suggestions: " + " ".join(log_hints)
+                _logger.warning("[NODE] %s", safe_log_field(log_msg))
 
         # Phase 3: Validate resolved parameters
         validated = self._validate_resolved_parameters(resolved, params)
