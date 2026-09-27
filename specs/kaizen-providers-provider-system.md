@@ -187,5 +187,16 @@ Every candidate must pass the existing private/metadata policy before a socket
 is opened, and only the `localhost` label permits loopback. Original TLS SNI,
 certificate hostname, HTTP Host and origin pooling remain unchanged. Provider
 selection, credentials and response/error bodies are outside this connection
-fix. Source: `packages/kailash-kaizen/src/kaizen/llm/http_client.py:181-273` and
-`src/kailash/utils/http_transport.py:27-132`.
+fix. Source: `packages/kailash-kaizen/src/kaizen/llm/http_client.py:181-280` and
+`src/kailash/utils/http_transport.py:30-141`.
+
+
+`LlmHttpClient` also uses the shared Core owned HTTP diagnostic scope. Automatic
+HTTPX/HTTPCore records omit request/response payloads, including URL queries and
+response headers, while preserving fixed events and bounded status/type metadata.
+Provider behavior, original URLs, response/error bodies and raw public callbacks
+remain unchanged. Registration chains the existing LogRecord factory; unowned
+clients and caller-authored logging remain outside this scope, as detailed in
+`nexus-services.md` under "Owned HTTP dependency diagnostics". Source:
+`packages/kailash-kaizen/src/kaizen/llm/http_client.py:333-333` and
+`src/kailash/utils/http_logging.py:1-355`.

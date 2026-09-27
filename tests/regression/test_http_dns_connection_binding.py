@@ -10,12 +10,14 @@ no external traffic or MockTransport is involved.
 import asyncio
 import datetime
 import ipaddress
+import math
 import socket
 import ssl
 import threading
 from contextlib import asynccontextmanager
 from types import MethodType
 
+import anyio
 import httpcore
 import httpx
 import pytest
@@ -317,44 +319,54 @@ async def test_dns_admission_is_cancellable_and_within_connect_budget(
             done.set()
 
     async with wire(monkeypatch) as net:
-        monkeypatch.setattr(socket, "getaddrinfo", delayed)
-        async with client_for(surface, timeout=0.05 if not cancel else 2) as client:
-            task = asyncio.create_task(client.get(f"http://{HOST}:{net['port']}/ok"))
-            try:
-                assert await asyncio.to_thread(entered.wait, 1)
-                if cancel:
-                    task.cancel()
-                with pytest.raises(
-                    asyncio.CancelledError if cancel else httpx.ConnectTimeout
-                ):
-                    await asyncio.wait_for(task, 0.5)
-                assert net["connected"] == []
-            finally:
-                release.set()
-                if not task.done():
-                    task.cancel()
-                await asyncio.gather(task, return_exceptions=True)
-        # Join abandoned DNS work before fixture/socket restoration.
-        assert await asyncio.to_thread(done.wait, 1)
+        with monkeypatch.context() as scoped:
+            scoped.setattr(socket, "getaddrinfo", delayed)
+            async with client_for(surface, timeout=0.05 if not cancel else 2) as client:
+                task = asyncio.create_task(
+                    client.get(f"http://{HOST}:{net['port']}/ok")
+                )
+                try:
+                    assert await asyncio.to_thread(entered.wait, 1)
+                    if cancel:
+                        task.cancel()
+                    with pytest.raises(
+                        asyncio.CancelledError if cancel else httpx.ConnectTimeout
+                    ):
+                        await asyncio.wait_for(task, 0.5)
+                    assert net["connected"] == []
+                finally:
+                    release.set()
+                    if not task.done():
+                        task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+            # Join abandoned DNS work before fixture/socket restoration.
+            assert await asyncio.to_thread(done.wait, 1)
+    monkeypatch.undo()
+    assert socket.getaddrinfo is original
 
 
 @pytest.mark.asyncio
 async def test_all_addresses_share_one_connect_budget(monkeypatch):
-    calls = []
+    calls, deadlines = [], []
 
     async def slow_connect(self, host, port, **kwargs):
         calls.append(host)
-        await asyncio.sleep(0.04)
-        raise httpcore.ConnectError("controlled unavailable address")
+        deadlines.append(anyio.current_effective_deadline())
+        assert kwargs["timeout"] is None
+        if len(calls) == 1:
+            raise httpcore.ConnectError("controlled unavailable address")
+        await anyio.sleep_forever()
 
     monkeypatch.setattr(httpcore.AnyIOBackend, "connect_tcp", slow_connect)
     async with wire(
         monkeypatch, answers=lambda n: [PUBLIC, "8.8.8.8", "1.1.1.1"]
     ) as net:
-        async with client_for("nexus", timeout=0.06) as client:
+        async with client_for("nexus", timeout=0.5) as client:
             with pytest.raises(httpx.ConnectTimeout):
-                await client.get(f"http://{HOST}:{net['port']}/ok")
+                await asyncio.wait_for(client.get(f"http://{HOST}:{net['port']}/ok"), 2)
         assert calls == [PUBLIC, "8.8.8.8"]
+        assert all(math.isfinite(deadline) for deadline in deadlines)
+        assert deadlines[0] == deadlines[1]
         assert net["connected"] == []
 
 

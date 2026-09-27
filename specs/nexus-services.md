@@ -611,8 +611,8 @@ any private/metadata or configured blocked candidate, then connects only to the
 validated numeric addresses. The HTTP origin, Host header, response URL, TLS SNI
 and certificate hostname stay the original hostname. Redirect hops pass through
 the same guard, and pools remain separated by original origin.
-Source: `packages/kailash-nexus/src/nexus/http_client.py:188-231` and
-`src/kailash/utils/http_transport.py:27-132`.
+Source: `packages/kailash-nexus/src/nexus/http_client.py:189-233` and
+`src/kailash/utils/http_transport.py:30-141`.
 
 One connect deadline covers DNS resolution and all candidate TCP attempts.
 Cancellation may abandon an operating-system DNS lookup running in a worker,
@@ -622,5 +622,28 @@ Explicit proxy and Unix-socket transport options raise `ValueError`, since these
 paths cannot enforce destination-IP admission. `allow_loopback` remains a narrow
 local-test carve-out, not an override for arbitrary private hosts. This is the
 HttpClient contract; webhook delivery has its own contract in `nexus-channels.md`.
-Source: `src/kailash/utils/http_transport.py:27-132` and
+Source: `src/kailash/utils/http_transport.py:30-141` and
 `src/kailash/utils/network_guard.py:544-582`.
+
+
+### Owned HTTP dependency diagnostics
+
+`HttpClient` uses the shared Core `DiagnosticAsyncClient`. During owned requests,
+construction, response reads and close, the public Python LogRecord factory replaces automatic
+HTTPX/HTTPCore payload diagnostics with fixed events and bounded method, status,
+protocol and exception-type metadata before invoking the prior factory or any
+handler. It neither drops records nor changes handler configuration. Public URLs,
+headers, request bytes, responses, errors and raw trace callback data remain
+unchanged. Source: `packages/kailash-nexus/src/nexus/http_client.py:339-350` and
+`src/kailash/utils/http_logging.py:1-355`.
+
+Factory registration is process-wide, idempotent and chains the existing factory;
+its effects are scoped by ContextVar to owned operations and the installed
+HTTPX client/configuration and HTTPCore trace producers. Caller-authored logs, separate HTTPX clients
+and HTTP requests made by public auth, event, trace or body callbacks retain their
+normal logging, including hooks appended or replaced and auth reassigned after client
+construction. Stream consumers run outside the owned scope between chunks, and
+cancellation restores the context. This boundary covers the supported dependency
+producers; it does not sanitize arbitrary caller code or replacement logging
+factories that discard the registered chain. Source:
+`src/kailash/utils/http_logging.py:28-355`.

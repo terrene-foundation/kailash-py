@@ -78,6 +78,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from kailash.utils.http_logging import DiagnosticAsyncClient
 from kailash.utils.http_transport import DnsPinnedAsyncTransport
 
 # Address classification is the SHARED implementation (#2091 follow-up).
@@ -329,7 +330,7 @@ class LlmHttpClient:
         # kaizen/llm/** where httpx.AsyncClient may be constructed. The
         # grep audit (tests/unit/llm/security/
         # test_llm_http_client_uses_safe_dns_resolver.py) enforces this.
-        self._client = httpx.AsyncClient(transport=transport, timeout=timeout)
+        self._client = DiagnosticAsyncClient(transport=transport, timeout=timeout)
         self._closed = False
         self._deployment_preset = deployment_preset
 

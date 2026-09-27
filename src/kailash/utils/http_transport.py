@@ -25,6 +25,12 @@ except ImportError as exc:
     ) from exc
 
 
+from kailash.utils.http_logging import (
+    owned_http_diagnostics,
+    unowned_http_diagnostics,
+)
+
+
 class _PinnedNetworkBackend(httpcore.AsyncNetworkBackend):
     def __init__(self, resolve_addresses: Callable[[str], Sequence[str]]) -> None:
         self._resolve_addresses = resolve_addresses
@@ -38,11 +44,12 @@ class _PinnedNetworkBackend(httpcore.AsyncNetworkBackend):
         # first address cannot multiply the caller's connection time budget.
         try:
             with anyio.fail_after(timeout):
-                addresses = await anyio.to_thread.run_sync(
-                    self._resolve_addresses,
-                    self.request_url.get(),
-                    abandon_on_cancel=True,
-                )
+                with unowned_http_diagnostics():
+                    addresses = await anyio.to_thread.run_sync(
+                        self._resolve_addresses,
+                        self.request_url.get(),
+                        abandon_on_cancel=True,
+                    )
                 if not addresses:
                     raise httpcore.ConnectError("No validated TCP addresses")
                 # Enforce the callback contract before admitting ANY candidate.
@@ -107,24 +114,26 @@ class DnsPinnedAsyncTransport(httpx.AsyncHTTPTransport):
         self._pinned_backend = _PinnedNetworkBackend(resolve_addresses)
         # Own the public pool from construction. The inherited HTTPX adapter
         # supplies request/response conversion, exception mapping and aclose.
-        self._pool = httpcore.AsyncConnectionPool(
-            ssl_context=httpx.create_ssl_context(
-                verify=verify, cert=cert, trust_env=trust_env
-            ),
-            max_connections=limits.max_connections,
-            max_keepalive_connections=limits.max_keepalive_connections,
-            keepalive_expiry=limits.keepalive_expiry,
-            http1=http1,
-            http2=http2,
-            retries=retries,
-            local_address=local_address,
-            socket_options=socket_options,
-            network_backend=self._pinned_backend,
-        )
+        with owned_http_diagnostics():
+            self._pool = httpcore.AsyncConnectionPool(
+                ssl_context=httpx.create_ssl_context(
+                    verify=verify, cert=cert, trust_env=trust_env
+                ),
+                max_connections=limits.max_connections,
+                max_keepalive_connections=limits.max_keepalive_connections,
+                keepalive_expiry=limits.keepalive_expiry,
+                http1=http1,
+                http2=http2,
+                retries=retries,
+                local_address=local_address,
+                socket_options=socket_options,
+                network_backend=self._pinned_backend,
+            )
 
     async def handle_async_request(self, request):
         url = str(request.url)
-        self._validate_url(url)
+        with unowned_http_diagnostics():
+            self._validate_url(url)
         token = self._pinned_backend.request_url.set(url)
         try:
             return await super().handle_async_request(request)

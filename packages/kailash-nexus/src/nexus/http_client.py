@@ -59,6 +59,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from kailash.utils.http_logging import DiagnosticAsyncClient
 from kailash.utils.http_transport import DnsPinnedAsyncTransport
 from kailash.utils.network_guard import (
     DEFAULT_BLOCKED_NETWORKS as _DEFAULT_BLOCKED_NETWORKS,
@@ -335,7 +336,7 @@ class HttpClient:
         # follow_redirects is driven by config; the default is False because
         # every redirect is a fresh SSRF surface and the caller should opt
         # in consciously.
-        self._client = httpx.AsyncClient(
+        self._client = DiagnosticAsyncClient(
             transport=self._transport,
             timeout=timeout,
             follow_redirects=self._config.follow_redirects,
