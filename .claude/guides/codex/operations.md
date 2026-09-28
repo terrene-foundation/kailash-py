@@ -15,6 +15,25 @@ JSONL is an event stream. A process exit, completed event or nonempty output fil
 
 Installed `exec` help also exposes `--ephemeral`, `--ignore-user-config` and `--ignore-rules`. These affect persistence and loaded policy/configuration; they are not routine fixes for failures. Authentication still uses `CODEX_HOME` when user configuration is ignored. Omitted prompts or `-` read stdin; on this version, piped stdin accompanying an explicit prompt is appended as a stdin block. Preserve newlines and use shell-safe argument handling. [Noninteractive command reference](https://learn.chatgpt.com/docs/developer-commands?surface=cli)
 
+## Context size and compaction
+
+`model_context_window` declares the active model's available token window;
+`model_auto_compact_token_limit` sets when history compaction starts. Unset values
+use model defaults. Neither setting increases the model/provider's actual supported
+limit. For a model/provider that supports at least 800,000 tokens, an explicit
+800,000-token window with a suggested 700,000-token compaction threshold is:
+
+```bash
+codex -c model_context_window=800000 -c model_auto_compact_token_limit=700000
+```
+
+For persistence, set the same keys at the top level of the active user config or
+selected profile file. Start a new invocation and inspect effective configuration;
+do not assume an existing session reloads the values. The default compaction scope
+is `total`; `body_after_prefix` counts growth after the carried compaction prefix
+instead. This guide does not change either user configuration or repository defaults.
+[Configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference)
+
 ## Sessions, daemon and remote access
 
 `resume` continues saved state; `fork` creates a new session from saved context. Archive/unarchive changes session visibility, while delete permanently removes a saved session. Confirm exact session identity before a destructive operation.
