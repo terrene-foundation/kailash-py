@@ -62,11 +62,14 @@ test('Codex lifecycle and post-tool context remains deliverable', () => {
 });
 
 test('registered shell events match Bash and reject an unrelated tool name', () => {
-  for (const event of ['PreToolUse', 'PostToolUse']) {
+  for (const event of ['PreToolUse']) {
     const matcher = new RegExp(manifest.hooks[event][0].matcher);
     assert.equal(matcher.test('Bash'), true);
     assert.equal(matcher.test('mcp__example__tool'), false);
   }
+  const postMatcher = new RegExp(manifest.hooks.PostToolUse[0].matcher);
+  assert.equal(postMatcher.test('apply_patch'), true);
+  assert.equal(postMatcher.test('Bash'), false);
 });
 
 test('registered commands work from nested directories with spaces and preserve payloads', (t) => {
@@ -131,4 +134,108 @@ test('actual Bash validator denies destructive input without executing it', () =
   assert.equal(Object.hasOwn(denied, 'continue'), false);
   assert.equal(denied.hookSpecificOutput.permissionDecision, 'deny');
   assert.match(result.stderr, /STOP/);
+});
+
+test('Codex validator fails closed on malformed or missing command input', () => {
+  for (const input of ['{', 'null', '{}', JSON.stringify({tool_input:{command:{}}}), JSON.stringify({tool_input:{command:[]}})]) {
+    const result = spawnSync(process.execPath, [wrapper, '.claude/hooks/validate-bash-command.js'], { encoding:'utf8', input });
+    assert.equal(result.status, 2, `input ${input}: ${result.stderr}`);
+    const denied = JSON.parse(result.stdout);
+    assert.equal(denied.hookSpecificOutput.permissionDecision, 'deny');
+    assert.match(denied.hookSpecificOutput.permissionDecisionReason, /validation could not complete/);
+  }
+});
+
+test('CC and Gemini malformed-input handling keeps the legacy non-blocking error', () => {
+  for (const runtime of ['cc','gemini']) {
+    const result = spawnSync(process.execPath, [path.join(root,'.claude/hooks/validate-bash-command.js')], {encoding:'utf8',input:'{',env:{...process.env,COC_RUNTIME:runtime}});
+    assert.equal(result.status,1);
+    assert.equal(JSON.parse(result.stdout).continue,true);
+  }
+});
+
+function runHygiene(repo, toolInput, cwd = repo) {
+  return spawnSync(process.execPath, [path.join(root,'.claude/hooks/integration-hygiene.js')], {
+    encoding:'utf8', env:{...process.env,COC_RUNTIME:'codex',CLAUDE_PROJECT_DIR:repo},
+    input:JSON.stringify({hook_event_name:'PostToolUse',tool_name:'apply_patch',tool_input:toolInput,cwd}),
+  });
+}
+
+test('Codex hygiene scans actual patch targets including nested paths and moves', (t) => {
+  const repo=fs.mkdtempSync(path.join(os.tmpdir(),'codex-hygiene-'));
+  t.after(()=>fs.rmSync(repo,{recursive:true,force:true}));
+  const cwd=path.join(repo,'src'); fs.mkdirSync(cwd);
+  fs.writeFileSync(path.join(cwd,'bad.py'),'try:\n    operation()\nexcept: pass\n');
+  fs.writeFileSync(path.join(cwd,'moved.js'),'const FAKE_USERS = [];\n');
+  fs.writeFileSync(path.join(cwd,'clean.py'),'answer = 42\n');
+  const patch='*** Begin Patch\n*** Update File: bad.py\n@@\n+except: pass\n*** Update File: old.js\n*** Move to: moved.js\n@@\n+const FAKE_USERS = [];\n*** End Patch';
+  const flagged=runHygiene(repo,{command:patch},cwd);
+  assert.equal(flagged.status,0,flagged.stderr);
+  const context=JSON.parse(flagged.stdout).hookSpecificOutput?.additionalContext || '';
+  assert.match(context,/silent Python exception swallow/);
+  assert.match(context,/mock\/fake\/dummy constant/);
+  const clean=runHygiene(repo,{command:'*** Begin Patch\n*** Update File: clean.py\n@@\n+answer = 42\n*** End Patch'},cwd);
+  assert.equal(clean.status,0,clean.stderr);
+  assert.equal(JSON.parse(clean.stdout).hookSpecificOutput,undefined);
+});
+
+test('Codex hygiene refuses outside-root and symlink targets and reports bounded skips', (t) => {
+  const repo=fs.mkdtempSync(path.join(os.tmpdir(),'codex-hygiene-root-'));
+  const external=fs.mkdtempSync(path.join(os.tmpdir(),'codex-hygiene-external-'));
+  t.after(()=>{fs.rmSync(repo,{recursive:true,force:true});fs.rmSync(external,{recursive:true,force:true});});
+  fs.writeFileSync(path.join(external,'secret.py'),'except: pass');
+  fs.symlinkSync(external,path.join(repo,'linked'));
+  for(const target of [path.join(external,'secret.py'),'linked/secret.py']) {
+    const result=runHygiene(repo,{command:`*** Begin Patch\n*** Update File: ${target}\n@@\n+x\n*** End Patch`});
+    const context=JSON.parse(result.stdout).hookSpecificOutput?.additionalContext || '';
+    assert.match(context,/outside.*root/i);
+    assert.doesNotMatch(context,/silent Python/);
+  }
+  fs.writeFileSync(path.join(repo,'large.py'),'x'.repeat(1024*1024+1));
+  const result=runHygiene(repo,{command:'*** Begin Patch\n*** Update File: large.py\n@@\n+x\n*** End Patch'});
+  assert.match(JSON.parse(result.stdout).hookSpecificOutput.additionalContext,/size limit/);
+});
+
+test('validator adapter denies unexpected exit and synchronous timeout', (t) => {
+  const repo=fs.mkdtempSync(path.join(os.tmpdir(),'codex-validator-deadline-'));
+  t.after(()=>fs.rmSync(repo,{recursive:true,force:true}));
+  const lib=path.join(repo,'.claude/hooks/lib'); fs.mkdirSync(lib,{recursive:true});
+  const adapter=path.join(lib,'codex-hook-runtime.js'); fs.copyFileSync(wrapper,adapter);
+  const target=path.join(repo,'.claude/hooks/validate-bash-command.js');
+  fs.writeFileSync(target,'process.exit(1);');
+  const failed=spawnSync(process.execPath,[adapter,'./.claude/hooks/validate-bash-command.js'],{encoding:'utf8'});
+  assert.equal(failed.status,2);
+  assert.match(failed.stderr,/validation could not complete/);
+  fs.writeFileSync(target,'while (true) {}');
+  const hung=spawnSync(process.execPath,[adapter,'./.claude/hooks/validate-bash-command.js'],{encoding:'utf8',timeout:8000});
+  assert.equal(hung.status,2,hung.stderr);
+  assert.match(hung.stderr,/codex-hook-runtime/);
+  assert.equal(hung.error,undefined);
+});
+
+test('Codex validator input timeout denies rather than allowing unchecked input', async () => {
+  const {spawn}=require('node:child_process');
+  const child=spawn(process.execPath,[path.join(root,'.claude/hooks/validate-bash-command.js')],{env:{...process.env,COC_RUNTIME:'codex'},stdio:['pipe','pipe','pipe']});
+  let stdout=''; let stderr='';
+  child.stdout.on('data',chunk=>stdout+=chunk); child.stderr.on('data',chunk=>stderr+=chunk);
+  const code=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',resolve);});
+  assert.equal(code,2,stderr);
+  assert.equal(JSON.parse(stdout).hookSpecificOutput.permissionDecision,'deny');
+  assert.match(stderr,/timed out/);
+});
+
+test('Codex hygiene reports patch size/count limits and supports direct Write payloads', (t) => {
+  const repo=fs.mkdtempSync(path.join(os.tmpdir(),'codex-hygiene-limits-'));
+  t.after(()=>fs.rmSync(repo,{recursive:true,force:true}));
+  for (const command of ['x'.repeat(1024*1024+1),'*** Begin Patch\n'+Array.from({length:101},(_,i)=>`*** Add File: ${i}.py\n+x`).join('\n')+'\n*** End Patch']) {
+    const result=runHygiene(repo,{command});
+    assert.equal(result.status,0,result.stderr);
+    assert.match(JSON.parse(result.stdout).hookSpecificOutput.additionalContext,/limit/);
+  }
+  fs.writeFileSync(path.join(repo,'write.py'),'except: pass');
+  const result=spawnSync(process.execPath,[path.join(root,'.claude/hooks/integration-hygiene.js')],{
+    encoding:'utf8',env:{...process.env,COC_RUNTIME:'codex',CLAUDE_PROJECT_DIR:repo},
+    input:JSON.stringify({hook_event_name:'PostToolUse',tool_name:'Write',tool_input:{file_path:'write.py'},cwd:repo}),
+  });
+  assert.match(JSON.parse(result.stdout).hookSpecificOutput.additionalContext,/silent Python exception swallow/);
 });

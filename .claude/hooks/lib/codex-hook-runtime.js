@@ -9,7 +9,9 @@
  * COC_RUNTIME and CLAUDE_PROJECT_DIR are adapter-owned. The native child keeps
  * require.main behavior and stdin/stdout/stderr delivery. Exit statuses pass
  * through; missing/non-file targets, spawn errors and signals exit 2. A hook's
- * own exit 1 remains non-blocking, as documented by Codex. This wrapper cannot
+ * own exit 1 remains non-blocking except for the Bash validator: unexpected
+ * validator exits and its bounded deadline deny the unchecked command.
+ * This wrapper cannot
  * enforce anything if it is absent, untrusted, disabled, or never matched.
  * See https://learn.chatgpt.com/docs/hooks (2026-09-28).
  */
@@ -75,6 +77,9 @@ function dispatch() {
 
   const result = spawnSync(process.execPath, [resolvedTarget, ...forwardedArgs], {
     cwd: projectRoot,
+    // A validator can hang in synchronous analysis after its own input timer
+    // clears. End it before the native deadline so failure becomes exit 2.
+    timeout: resolvedTarget === path.join(projectRoot, ".claude/hooks/validate-bash-command.js") ? 4000 : undefined,
     // Transparent passthrough: the child reads the hook JSON from the wrapper's
     // own stdin and writes stdout/stderr straight back to Codex.
     stdio: "inherit",
@@ -99,7 +104,11 @@ function dispatch() {
     );
   }
 
-  // Faithful passthrough of the target hook's own exit code (0 / 1 / 2 / …).
+  if (resolvedTarget === path.join(projectRoot, ".claude/hooks/validate-bash-command.js") &&
+      result.status !== 0 && result.status !== 2) {
+    failClosed("Bash validation could not complete; command was not validated.");
+  }
+  // Other hooks retain their native warning and exit semantics.
   process.exit(result.status);
 }
 

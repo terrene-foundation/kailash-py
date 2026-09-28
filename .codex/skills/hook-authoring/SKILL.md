@@ -23,7 +23,7 @@ Authoring a new hook script under `.claude/hooks/`. Auditing an existing hook fo
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | Script location           | `.claude/hooks/<name>.js` — Anthropic-documented path, shared across all three CLIs                                   |
 | Module system             | CommonJS (`require`), matching repo convention                                                                        |
-| Timeout fallback          | Mandatory per `rules/cc-artifacts.md` Rule 7 — `setTimeout` → emit a runtime-valid non-blocking response, `process.exit(1)`              |
+| Timeout fallback          | Mandatory per `rules/cc-artifacts.md` Rule 7 — Codex PreToolUse unknown validation denies; other runtime/event fallbacks retain their contract              |
 | Stdin / stdout            | Read JSON payload from stdin; emit JSON on stdout                                                                     |
 | Halting exit (PreToolUse) | `process.exit(2)` — but ONLY via `lib/instruct-and-wait.js::emit()` shape per `rules/hook-output-discipline.md`       |
 | Halting return (post)     | `continue: false` — ONLY via the same emit() shape                                                                    |
@@ -62,11 +62,13 @@ Codex starts command hooks in the **session cwd**, which may be a nested folder.
 
 ## Codex Coverage, Trust, And Event Contracts
 
-Current official documentation includes shell/unified exec (`Bash`), `apply_patch` (`Edit`/`Write` aliases), MCP, and most local function tools. Hosted tools and specialized paths may bypass hooks. A `write_stdin` continuation does not receive a fresh PreToolUse check. Capability is not registration: this repo's `.codex/hooks.json:1-40` registers shell checks and SessionStart only. An MCP companion can evaluate calls routed through it; installing it does not intercept every native tool.
+Current official documentation includes shell/unified exec (`Bash`), `apply_patch` (`Edit`/`Write` aliases), MCP, and most local function tools. Hosted tools and specialized paths may bypass hooks. A `write_stdin` continuation does not receive a fresh PreToolUse check. Capability is not registration: this repo's `.codex/hooks.json:1-40` registers Bash validation, SessionStart, and post-edit hygiene for `apply_patch`/Edit/Write. An MCP companion can evaluate calls routed through it; installing it does not intercept every native tool.
 
 Non-managed hooks require review and trust of their exact definition through `/hooks`. Changed definitions are skipped until reviewed; project hooks also require project trust. Never auto-approve or bypass this trust during setup. Matching sources accumulate and command hooks can run concurrently. Managed hooks can be enforced by administrative requirements. These lifecycle checks are guardrails, not a complete security boundary.
 
 Use event-specific output: PreToolUse denies with `permissionDecision: "deny"` or exit 2 and stderr; it does not accept `continue` or `stopReason`. PermissionRequest has its own `decision.behavior` schema. PostToolUse feedback cannot undo an effect. Stop blocking feedback requests continuation; SessionEnd is the actual session-end event. See [Hooks](https://learn.chatgpt.com/docs/hooks) for async/MCP handlers, compaction/subagent events, and schemas.
+
+Native hygiene adapts patch targets and checks existing source files after writes; shell-generated writes are not scanned. Limits are 1 MiB per patch/file and 100 targets, with explicit skipped-scan notices. Canonical containment, no-follow file open, and descriptor identity checks reject static out-of-root targets and detected replacements; this is not complete protection against concurrent hostile ancestor mutation. Source: `.claude/hooks/integration-hygiene.js:73-159`.
 
 The local regression suite exercises adapters and output contracts, not a live model session or trusted-hook execution: `node --test .claude/test-harness/tests/codex-hook-compatibility.test.cjs`. Re-test installed CLI dispatch separately before retiring the MCP compatibility path. Policy-generation parity remains a separate distribution check; it proves neither hook trust nor native interception.
 
@@ -136,19 +138,19 @@ Command-string detectors MUST skip captured groups referencing unexpanded shell 
 
 ## Timeout Fallback
 
-Every hook MUST install a `setTimeout` that emits a runtime-valid non-blocking response and exits before the runtime's kill window. Per `rules/cc-artifacts.md` Rule 7:
+Every hook must finish before the runtime kill window. Codex PreToolUse validation failures, malformed input, and deadlines deny with canonical feedback and exit 2; unknown validation must not authorize a command. The Bash validator has a 3s input deadline and its adapter a 4s synchronous-child deadline before the native 5s limit. CC/Gemini retain the existing non-blocking fallback shown below. Source: `.claude/hooks/validate-bash-command.js:118-195`; `.claude/hooks/lib/codex-hook-runtime.js:78-116`.
 
 ```javascript
 const TIMEOUT_MS = 5000;
 const _timeout = setTimeout(() => {
-  console.log(JSON.stringify(process.env.COC_RUNTIME === "codex" ? {} : { continue: true }));
+  console.log(JSON.stringify({ continue: true }));
   process.exit(1);
 }, TIMEOUT_MS);
 ```
 
 `SessionStart` hooks may use `10000` (10s) for boot-time discovery; per-tool hooks (`PreToolUse`, `PostToolUse`) MUST stay at `5000` to avoid stalling interactive workflows. Codex registration `timeout` values are seconds; internal JavaScript timers are milliseconds. Native timeouts also bound execution. Keep repository deadlines explicit.
 
-The `setTimeout`-fallback path is the ONE legitimate raw-exit branch. It MUST emit a runtime-valid non-blocking response first; raw `process.exit(N)` from any other branch is BLOCKED per `rules/hook-output-discipline.md` MUST-NOT-1.
+The `setTimeout`-fallback path is the ONE legitimate raw-exit branch. It must emit the runtime/event-specific outcome first (denial for unknown Codex PreToolUse validation); raw `process.exit(N)` from any other branch is BLOCKED per `rules/hook-output-discipline.md` MUST-NOT-1.
 
 ## Variant Overlays
 
@@ -224,7 +226,7 @@ Per `rules/probe-driven-verification.md` MUST-4, every lexical hook detector MUS
 When auditing an existing hook:
 
 - [ ] File location is `.claude/hooks/<name>.js` (NOT `scripts/hooks/` — obsolete pre-v2.8.31)
-- [ ] Timeout fallback installed: `setTimeout` → runtime-valid output → `process.exit(1)`
+- [ ] Timeout fallback installed: Codex PreToolUse denies unknown validation; other runtimes preserve their event contract
 - [ ] CC timeout 5s (per-tool) or 10s (SessionStart); never higher than 10s
 - [ ] Every halting branch routes through `lib/instruct-and-wait.js::emit()` with all six fields
 - [ ] No `severity: "block"` returns whose `evidence` is a regex span

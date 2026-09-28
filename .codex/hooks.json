@@ -27,7 +27,7 @@
     "PermissionRequest": [],
     "PostToolUse": [
       {
-        "matcher": "^Bash$",
+        "matcher": "^(apply_patch|Edit|Write)$",
         "hooks": [
           {
             "type": "command",
