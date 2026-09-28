@@ -241,9 +241,9 @@ def query(table: str, filter: dict) -> list[dict]:
 
 ## Skill References
 
-- **[SKILL.md](../../skills/05-kailash-mcp/SKILL.md)** — MCP overview and basic server setup
-- **[mcp-structured-tools](../../skills/05-kailash-mcp/mcp-structured-tools.md)** — Tool definition patterns
-- **[mcp-authentication](../../skills/05-kailash-mcp/mcp-authentication.md)** — Auth and security
+- **[SKILL.md](../../.claude/skills/05-kailash-mcp/SKILL.md)** — MCP overview and basic server setup
+- **[mcp-structured-tools](../../.claude/skills/05-kailash-mcp/mcp-structured-tools.md)** — Tool definition patterns
+- **[mcp-authentication](../../.claude/skills/05-kailash-mcp/mcp-authentication.md)** — Auth and security
 
 ---
 

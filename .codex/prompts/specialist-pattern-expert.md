@@ -93,6 +93,6 @@ See `skills/01-core-sdk/production-readiness-patterns.md` for full code examples
 
 ## Full Documentation
 
-- `.codex/skills/01-core-sdk/` — Core SDK skills directory
-- `.codex/skills/08-nodes-reference/` — Node reference
-- `.codex/skills/31-error-troubleshooting/` — Error resolution
+- `.claude/skills/01-core-sdk/` — Core SDK skills directory
+- `.claude/skills/08-nodes-reference/` — Node reference
+- `.claude/skills/31-error-troubleshooting/` — Error resolution

@@ -111,7 +111,7 @@ For each match, verify the function has an associated probe definition (schema +
 - bag-of-words / keyword presence scoring on assistant prose
 - free-text LLM judge with no JSON-schema constraint
 
-See: `skills/12-testing-strategies/probe-driven-verification.md` (operational runbook) and `.claude/test-harness/README.md` § Probe-driven migration plan (current grace deadline 2026-05-20).
+See: `.claude/skills/12-testing-strategies/probe-driven-verification.md` (operational runbook), including the migration-plan template under § Migrating existing harnesses — the 14-day plan.
 
 ## Code Example Validation Process
 

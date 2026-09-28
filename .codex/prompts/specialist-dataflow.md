@@ -162,6 +162,6 @@ workflow.add_node("UserUpdateNode", "update", {
 
 ## Full Documentation
 
-- `.codex/skills/02-dataflow/SKILL.md` -- Complete DataFlow skill index
-- `.codex/skills/02-dataflow/dataflow-advanced-patterns.md` -- Advanced patterns
-- `.codex/skills/03-nexus/nexus-dataflow-integration.md` -- Nexus integration
+- `.claude/skills/02-dataflow/SKILL.md` -- Complete DataFlow skill index
+- `.claude/skills/02-dataflow/dataflow-advanced-patterns.md` -- Advanced patterns
+- `.claude/skills/03-nexus/nexus-dataflow-integration.md` -- Nexus integration

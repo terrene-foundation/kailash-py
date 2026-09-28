@@ -108,8 +108,8 @@ workflow.add_node("LLMAgentNode", "agent", {
 
 ## Skill References
 
-- **[SKILL.md](../../skills/05-kailash-mcp/SKILL.md)** - MCP overview and basic server setup
-- **[mcp-advanced-patterns](../../skills/05-kailash-mcp/mcp-advanced-patterns.md)** - JWT auth, service discovery, LLMAgentNode integration
+- **[SKILL.md](../../.claude/skills/05-kailash-mcp/SKILL.md)** - MCP overview and basic server setup
+- **[mcp-advanced-patterns](../../.claude/skills/05-kailash-mcp/mcp-advanced-patterns.md)** - JWT auth, service discovery, LLMAgentNode integration
 
 ## Related Agents
 
@@ -124,7 +124,7 @@ workflow.add_node("LLMAgentNode", "agent", {
 When this guidance is insufficient, consult:
 
 - the Kailash MCP server - Production MCP implementation
-- `.codex/skills/05-kailash-mcp/` - MCP pattern skills
+- `.claude/skills/05-kailash-mcp/` - MCP pattern skills
 
 ---
 

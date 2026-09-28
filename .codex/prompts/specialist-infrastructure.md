@@ -40,23 +40,23 @@ Enterprise infrastructure specialist for the Kailash progressive infrastructure 
 
 ### Quick Start
 
-- "Progressive model?" -> [`progressive-infrastructure`](../../skills/15-enterprise-infrastructure/progressive-infrastructure.md)
-- "Dialect portability?" -> [`dialect-portable-sql`](../../skills/15-enterprise-infrastructure/dialect-portable-sql.md)
-- "Store factory setup?" -> [`progressive-infrastructure`](../../skills/15-enterprise-infrastructure/progressive-infrastructure.md)
+- "Progressive model?" -> [`progressive-infrastructure`](../../.claude/skills/15-enterprise-infrastructure/progressive-infrastructure.md)
+- "Dialect portability?" -> [`dialect-portable-sql`](../../.claude/skills/15-enterprise-infrastructure/dialect-portable-sql.md)
+- "Store factory setup?" -> [`progressive-infrastructure`](../../.claude/skills/15-enterprise-infrastructure/progressive-infrastructure.md)
 
 ### Common Operations
 
-- "Task queue?" -> [`task-queue-patterns`](../../skills/15-enterprise-infrastructure/task-queue-patterns.md)
-- "Idempotency?" -> [`idempotency-patterns`](../../skills/15-enterprise-infrastructure/idempotency-patterns.md)
-- "Connection management?" -> [`connection-manager-patterns`](../../skills/15-enterprise-infrastructure/connection-manager-patterns.md)
-- "Redis vs SQL queue?" -> [`task-queue-patterns`](../../skills/15-enterprise-infrastructure/task-queue-patterns.md)
+- "Task queue?" -> [`task-queue-patterns`](../../.claude/skills/15-enterprise-infrastructure/task-queue-patterns.md)
+- "Idempotency?" -> [`idempotency-patterns`](../../.claude/skills/15-enterprise-infrastructure/idempotency-patterns.md)
+- "Connection management?" -> [`connection-manager-patterns`](../../.claude/skills/15-enterprise-infrastructure/connection-manager-patterns.md)
+- "Redis vs SQL queue?" -> [`task-queue-patterns`](../../.claude/skills/15-enterprise-infrastructure/task-queue-patterns.md)
 
 ### Advanced Topics
 
-- "Worker registry?" -> [`task-queue-patterns`](../../skills/15-enterprise-infrastructure/task-queue-patterns.md)
-- "Schema versioning?" -> [`progressive-infrastructure`](../../skills/15-enterprise-infrastructure/progressive-infrastructure.md)
-- "Transaction patterns?" -> [`connection-manager-patterns`](../../skills/15-enterprise-infrastructure/connection-manager-patterns.md)
-- "SQL injection safety?" -> [`dialect-portable-sql`](../../skills/15-enterprise-infrastructure/dialect-portable-sql.md)
+- "Worker registry?" -> [`task-queue-patterns`](../../.claude/skills/15-enterprise-infrastructure/task-queue-patterns.md)
+- "Schema versioning?" -> [`progressive-infrastructure`](../../.claude/skills/15-enterprise-infrastructure/progressive-infrastructure.md)
+- "Transaction patterns?" -> [`connection-manager-patterns`](../../.claude/skills/15-enterprise-infrastructure/connection-manager-patterns.md)
+- "SQL injection safety?" -> [`dialect-portable-sql`](../../.claude/skills/15-enterprise-infrastructure/dialect-portable-sql.md)
 
 ## Primary Responsibilities
 
@@ -218,7 +218,7 @@ These are hard rules enforced by `.claude/rules/infrastructure-sql.md`.
 
 When this guidance is insufficient, consult:
 
-- `.codex/skills/15-enterprise-infrastructure/` - Complete infrastructure skills directory
+- `.claude/skills/15-enterprise-infrastructure/` - Complete infrastructure skills directory
 - `docs/enterprise-infrastructure/` - Full documentation with architecture diagrams
 - `src/kailash/db/` - QueryDialect, ConnectionManager, registry, migration
 - `src/kailash/infrastructure/` - Store backends, task queue, worker registry, idempotency

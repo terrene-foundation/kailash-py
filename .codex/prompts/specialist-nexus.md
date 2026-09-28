@@ -185,32 +185,32 @@ Nexus has 4 transports (all implement `Transport` ABC from `nexus.transports.bas
 
 ### Patterns & Setup
 
-- `.codex/skills/03-nexus/nexus-essential-patterns.md` -- Setup, handlers, DataFlow, connections, middleware, configuration, handler support details
-- `.codex/skills/03-nexus/nexus-quickstart.md` -- Basic setup
-- `.codex/skills/03-nexus/nexus-workflow-registration.md` -- Registration patterns
-- `.codex/skills/03-nexus/nexus-multi-channel.md` -- Multi-channel architecture
-- `.codex/skills/03-nexus/golden-patterns-catalog.md` -- Top 10 patterns ranked by production usage
-- `.codex/skills/03-nexus/codegen-decision-tree.md` -- Decision tree, anti-patterns, scaffolding templates
+- `.claude/skills/03-nexus/nexus-essential-patterns.md` -- Setup, handlers, DataFlow, connections, middleware, configuration, handler support details
+- `.claude/skills/03-nexus/nexus-quickstart.md` -- Basic setup
+- `.claude/skills/03-nexus/nexus-workflow-registration.md` -- Registration patterns
+- `.claude/skills/03-nexus/nexus-multi-channel.md` -- Multi-channel architecture
+- `.claude/skills/03-nexus/golden-patterns-catalog.md` -- Top 10 patterns ranked by production usage
+- `.claude/skills/03-nexus/codegen-decision-tree.md` -- Decision tree, anti-patterns, scaffolding templates
 
 ### Channel Patterns
 
-- `.codex/skills/03-nexus/nexus-api-patterns.md` -- API deployment
-- `.codex/skills/03-nexus/nexus-cli-patterns.md` -- CLI integration
-- `.codex/skills/03-nexus/nexus-mcp-channel.md` -- MCP server
+- `.claude/skills/03-nexus/nexus-api-patterns.md` -- API deployment
+- `.claude/skills/03-nexus/nexus-cli-patterns.md` -- CLI integration
+- `.claude/skills/03-nexus/nexus-mcp-channel.md` -- MCP server
 
 ### Integration
 
-- `.codex/skills/03-nexus/nexus-dataflow-integration.md` -- DataFlow integration
-- `.codex/skills/03-nexus/nexus-sessions.md` -- Session management
+- `.claude/skills/03-nexus/nexus-dataflow-integration.md` -- DataFlow integration
+- `.claude/skills/03-nexus/nexus-sessions.md` -- Session management
 
 ### Authentication & Authorization
 
-- `.codex/skills/03-nexus/nexus-auth-plugin.md` -- NexusAuthPlugin: JWT, RBAC, SSO, tenant isolation, rate limiting, audit logging, middleware ordering, common gotchas
-- `.codex/skills/03-nexus/nexus-enterprise-features.md` -- Enterprise auth patterns
+- `.claude/skills/03-nexus/nexus-auth-plugin.md` -- NexusAuthPlugin: JWT, RBAC, SSO, tenant isolation, rate limiting, audit logging, middleware ordering, common gotchas
+- `.claude/skills/03-nexus/nexus-enterprise-features.md` -- Enterprise auth patterns
 
 ### Troubleshooting
 
-- `.codex/skills/03-nexus/nexus-troubleshooting.md` -- Common issues and solutions (startup blocking, workflow not found, port conflicts, auth injection, sandbox warnings)
+- `.claude/skills/03-nexus/nexus-troubleshooting.md` -- Common issues and solutions (startup blocking, workflow not found, port conflicts, auth injection, sandbox warnings)
 
 ## ML Integration Surface (nexus 2.2.0+, M10 W31c)
 
@@ -229,9 +229,9 @@ Nexus has 4 transports (all implement `Transport` ABC from `nexus.transports.bas
 
 When this guidance is insufficient, consult:
 
-- `.codex/skills/03-nexus/` - Complete Nexus skills directory
-- `.codex/skills/03-nexus/nexus-dataflow-integration.md` - Integration patterns
-- `.codex/skills/03-nexus/nexus-troubleshooting.md` - Troubleshooting and input mapping
+- `.claude/skills/03-nexus/` - Complete Nexus skills directory
+- `.claude/skills/03-nexus/nexus-dataflow-integration.md` - Integration patterns
+- `.claude/skills/03-nexus/nexus-troubleshooting.md` - Troubleshooting and input mapping
 
 ---
 

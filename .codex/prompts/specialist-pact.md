@@ -38,27 +38,27 @@ Expert in PACT (Principled Architecture for Constrained Trust) governance framew
 
 **Quick Start**:
 
-- "PACT setup?" -> [`pact-quickstart`](../../skills/29-pact/pact-quickstart.md)
-- "GovernanceEngine?" -> [`pact-governance-engine`](../../skills/29-pact/pact-governance-engine.md)
-- "D/T/R addresses?" -> [`pact-dtr-addressing`](../../skills/29-pact/pact-dtr-addressing.md)
+- "PACT setup?" -> [`pact-quickstart`](../../.claude/skills/29-pact/pact-quickstart.md)
+- "GovernanceEngine?" -> [`pact-governance-engine`](../../.claude/skills/29-pact/pact-governance-engine.md)
+- "D/T/R addresses?" -> [`pact-dtr-addressing`](../../.claude/skills/29-pact/pact-dtr-addressing.md)
 
 **Common Patterns**:
 
-- "Operating envelopes?" -> [`pact-envelopes`](../../skills/29-pact/pact-envelopes.md)
-- "Access enforcement?" -> [`pact-access-enforcement`](../../skills/29-pact/pact-access-enforcement.md)
-- "Governed agents?" -> [`pact-governed-agents`](../../skills/29-pact/pact-governed-agents.md)
-- "YAML org definition?" -> [`pact-quickstart`](../../skills/29-pact/pact-quickstart.md)
+- "Operating envelopes?" -> [`pact-envelopes`](../../.claude/skills/29-pact/pact-envelopes.md)
+- "Access enforcement?" -> [`pact-access-enforcement`](../../.claude/skills/29-pact/pact-access-enforcement.md)
+- "Governed agents?" -> [`pact-governed-agents`](../../.claude/skills/29-pact/pact-governed-agents.md)
+- "YAML org definition?" -> [`pact-quickstart`](../../.claude/skills/29-pact/pact-quickstart.md)
 
 **MCP Governance**:
 
-- "MCP governance?" -> [`pact-mcp-governance`](../../skills/29-pact/pact-mcp-governance.md)
-- "MCP tool policy?" -> [`pact-mcp-governance`](../../skills/29-pact/pact-mcp-governance.md)
-- "MCP audit trail?" -> [`pact-mcp-governance`](../../skills/29-pact/pact-mcp-governance.md)
+- "MCP governance?" -> [`pact-mcp-governance`](../../.claude/skills/29-pact/pact-mcp-governance.md)
+- "MCP tool policy?" -> [`pact-mcp-governance`](../../.claude/skills/29-pact/pact-mcp-governance.md)
+- "MCP audit trail?" -> [`pact-mcp-governance`](../../.claude/skills/29-pact/pact-mcp-governance.md)
 
 **Integration**:
 
-- "PACT + Kaizen?" -> [`pact-kaizen-integration`](../../skills/29-pact/pact-kaizen-integration.md)
-- "PACT + Trust?" -> [`pact-kaizen-integration`](../../skills/29-pact/pact-kaizen-integration.md)
+- "PACT + Kaizen?" -> [`pact-kaizen-integration`](../../.claude/skills/29-pact/pact-kaizen-integration.md)
+- "PACT + Trust?" -> [`pact-kaizen-integration`](../../.claude/skills/29-pact/pact-kaizen-integration.md)
 
 ## Relationship to Other Agents
 
@@ -187,5 +187,5 @@ Violations are BLOCK-level findings.
 
 ## Full Documentation
 
-- `.codex/skills/29-pact/` -- Complete PACT skill index
+- `.claude/skills/29-pact/` -- Complete PACT skill index
 - `.claude/rules/pact-governance.md` -- PACT governance rules

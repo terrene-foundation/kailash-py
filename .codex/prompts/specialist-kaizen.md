@@ -216,10 +216,10 @@ Also available via `kaizen_agents.patterns`. The deprecated `kaizen_agents.agent
 
 ## LLM Wire Layer (`kaizen.llm.LlmClient`)
 
-Below the `Delegate` API sits `kaizen.llm.LlmClient` — the four-axis `LlmDeployment` abstraction with `embed()` wire-send (`complete()` deferred per zero-tolerance Rule 2). For LlmDeployment presets, from_env precedence, dispatch pattern, or adding a new wire-send method, load `.codex/skills/04-kaizen/kaizen-llm-deployment.md` first. Authoritative spec: `specs/kaizen-llm-deployments.md`.
+Below the `Delegate` API sits `kaizen.llm.LlmClient` — the four-axis `LlmDeployment` abstraction with `embed()` wire-send (`complete()` deferred per zero-tolerance Rule 2). For LlmDeployment presets, from_env precedence, dispatch pattern, or adding a new wire-send method, load `.claude/skills/04-kaizen/kaizen-llm-deployment.md` first. Authoritative spec: `specs/kaizen-llm-deployments.md`.
 
 ## Full Documentation
 
-- `.codex/skills/04-kaizen/SKILL.md` -- Complete Kaizen skill index
-- `.codex/skills/04-kaizen/kaizen-advanced-patterns.md` -- Advanced patterns
-- `.codex/skills/04-kaizen/kaizen-llm-deployment.md` -- LLM wire layer (#498 + #462)
+- `.claude/skills/04-kaizen/SKILL.md` -- Complete Kaizen skill index
+- `.claude/skills/04-kaizen/kaizen-advanced-patterns.md` -- Advanced patterns
+- `.claude/skills/04-kaizen/kaizen-llm-deployment.md` -- LLM wire layer (#498 + #462)

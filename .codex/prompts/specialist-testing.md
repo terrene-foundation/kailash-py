@@ -61,7 +61,7 @@ grep -rEn 'def (verify|score|assert|check|probe)_[A-Za-z_]*(recommend|refus|comp
   | xargs -I {} grep -lE 'kind:\s*"contains"|re\.(search|match|findall)|str\.contains' {} 2>/dev/null
 ```
 
-Each hit MUST have a probe definition; missing probe = HIGH. For migration of legacy regex harnesses, see `.claude/test-harness/README.md` § Probe-driven migration plan (grace deadline 2026-05-20 per `probe-driven-verification.md` MUST-5).
+Each hit MUST have a probe definition; missing probe = HIGH. For migration of legacy regex harnesses, see `.claude/skills/12-testing-strategies/probe-driven-verification.md` § Migrating existing harnesses — the 14-day plan (migration template per `probe-driven-verification.md` MUST-5).
 
 ## 3-Tier Strategy
 

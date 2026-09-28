@@ -675,7 +675,7 @@ function surfaceRolesAllow(surfaceRoles, manifestRel, targetRole) {
 //   - manifest-explicit + file missing → halt (manifest defect)
 //   - manifest-null                    → skip overlay for this axis
 //   - manifest-explicit / path-mirror  → apply if file exists
-function composeArtifactBody(category, relPath, cli, lang) {
+function composeArtifactBody(category, relPath, cli, lang, { preserveSourcePaths = false } = {}) {
   const globalPath = path.join(REPO, ".claude", category, relPath);
   if (!fs.existsSync(globalPath)) return null;
   let composed = safeReadFileSync(globalPath, "utf8");
@@ -738,7 +738,9 @@ function composeArtifactBody(category, relPath, cli, lang) {
   // Preserve every subfile of authoring skills, including their examples/tables.
   const authoringReference = category === "skills" &&
     /^[^/]*-authoring\//.test(relPath);
-  const rewritten = rewriteClaudePathsForCli(stripped, cli, { preserveSourcePaths: authoringReference });
+  const rewritten = rewriteClaudePathsForCli(stripped, cli, {
+    preserveSourcePaths: preserveSourcePaths || authoringReference,
+  });
   return { body: rewritten, destRelPath };
 }
 

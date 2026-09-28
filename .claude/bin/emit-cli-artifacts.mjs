@@ -904,6 +904,23 @@ const CODEX_AGENT_STRUCTURAL_EXCLUSIONS = [
 // Both outputs use the SAME filtering and composed source. Claude model aliases
 // and hooks are not portable config keys and must never be copied into TOML.
 // ────────────────────────────────────────────────────────────────
+// Operating-spec dependencies are distributed source artifacts, independent of
+// whether a skill/command is surfaced by this CLI. Preserve explicit .claude
+// references, and relocate relative Markdown links when flattening agent groups.
+// Both Codex destinations (agents/ and prompts/) have the same directory depth.
+function rebaseCodexAgentLinks(body, sourcePath) {
+  const sourceDir = path.posix.dirname(`.claude/agents/${sourcePath}`);
+  const outputDir = ".codex/prompts";
+  return body.replace(/(\]\()([^\s)]+)(\))/g, (match, open, target, close) => {
+    if (/^(?:[a-z][a-z0-9+.-]*:|[\/#<])/i.test(target)) return match;
+    const split = target.search(/[?#]/);
+    const file = split < 0 ? target : target.slice(0, split);
+    const suffix = split < 0 ? "" : target.slice(split);
+    const resolved = path.posix.normalize(path.posix.join(sourceDir, file));
+    return `${open}${path.posix.relative(outputDir, resolved)}${suffix}${close}`;
+  });
+}
+
 function codexAgentConfig(frontmatter, body, sourcePath) {
   const name = frontmatter.name || path.basename(sourcePath, ".md");
   if (!/^[a-z][a-z0-9_-]*$/.test(name)) {
@@ -974,9 +991,12 @@ function emitCodexAgentPrompts({ outDir, exclusions, tierFilter, loomOnly, surfa
     // back to verbatim source when no overlay applies (no agents
     // overlay tree exists for `codex` axis today, but the call shape
     // mirrors emitGeminiAgents for future-proofing).
-    const composedResult = composeArtifactBody("agents", relPath, "codex", lang);
+    const composedResult = composeArtifactBody("agents", relPath, "codex", lang, {
+      preserveSourcePaths: true,
+    });
     const source = composedResult ? composedResult.body : safeReadFileSync(absPath, "utf8");
-    const { frontmatter, body } = parseFrontmatter(source);
+    const { frontmatter, body: sourceBody } = parseFrontmatter(source);
+    const body = rebaseCodexAgentLinks(sourceBody, relPath);
     const native = codexAgentConfig(frontmatter, body, relPath);
     const baseName = native.name;
     // Strip redundant trailing "-specialist" for cleaner specialist-<x> filename
@@ -1266,6 +1286,7 @@ export {
   splitFlowListOutsideQuotes,
   emitCodexAgentPrompts,
   codexAgentConfig,
+  rebaseCodexAgentLinks,
   emitGeminiAgents,
   translateCcToolsToGemini,
   translateSkillFrontmatterTools,
