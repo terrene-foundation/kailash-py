@@ -1,6 +1,6 @@
 # Codex MCP Guardrail Companion
 
-This directory contains an MCP server that enforces the same policies as `.claude/hooks/*.js`, emitted as a **fallback path** when the Codex CLI's native `hooks.json` binding is marked `under_development`.
+This directory contains an optional MCP policy companion. It evaluates calls explicitly routed to its registered tools and returns policy decisions; registration does not intercept native Codex calls or execute permitted operations. Source: `.claude/codex-mcp-guard/server.js:1107-1132`.
 
 ## Installation
 
@@ -19,49 +19,31 @@ codex-mcp-guard: @modelcontextprotocol/sdk not installed (...).
 Install via the USE template's package.json before running stdio mode.
 ```
 
-…and `MCP client for 'codex-mcp-guard' failed to start: handshaking with MCP server failed: connection closed: initialize response`. This is the **fail-closed** mode (per `zero-tolerance.md` Rule 2) — the guard refuses to start rather than running fail-open. The fix is one `npm install`; the gap is not silent corruption.
+…and `MCP client for 'codex-mcp-guard' failed to start: handshaking with MCP server failed: connection closed: initialize response`. The server refuses to start when its dependencies are unavailable; native tools are not thereby blocked. Install the locked dependencies with `npm ci`. Source: `.claude/codex-mcp-guard/server.js:1083-1096`.
 
 `engines.node >= 18` per `package.json`. The package itself is `private: true` — it is never published to npm; only consumed in-place via the USE template's `.codex-mcp-guard/` directory.
 
-## Why this exists
+## Native hooks and companion scope
 
-Codex's native hook mechanism (`hooks.json`) is flagged `codex_hooks = under_development` in Codex 0.122. Shipping `hooks.json` to a user running that version would either silently fail (the hook file is ignored) or fail loudly on schema validation — neither is acceptable for a guardrail layer.
+Current Codex documentation supports hooks for shell/unified exec (`Bash`), `apply_patch`, MCP, and most local function tools. Hosted tools and specialized paths remain outside that coverage. Non-managed hooks require definition-specific trust through `/hooks`, and project hooks require project trust. See [official Hooks documentation](https://learn.chatgpt.com/docs/hooks) (checked 2026-09-28).
 
-This companion exposes the same policy predicates through the MCP tool protocol. Codex invokes `apply_patch`, `unified_exec`, and `shell` via MCP; the MCP server intercepts, runs the policy, and returns a structured pass/block decision. The user's guardrail contract is preserved.
-
-## What's covered vs. not
-
-**In scope (wrapped):** `apply_patch`, `unified_exec`, `shell` — the three mutating primitives where guardrails are load-bearing.
-
-**Out of scope:** Read-path tools (`read`, `grep_tool`, `glob_tool`, `web_fetch`, `web_search`). Hooks with read-only policies are SKIPPED on Codex under this fallback. A user installing the USE template with `codex_hooks=under_development` receives weaker read-path coverage than the equivalent CC install. This is an explicit trade-off — see `sync-manifest.yaml` `cli_variants.hooks/*.js.codex.wraps`.
+The companion exposes `apply_patch`, `unified_exec`, and `shell` policy tools. Other tools are outside its registration; even these three native tools are not automatically redirected to MCP. A successful companion result is permission feedback, not proof the underlying operation executed. Source: `.claude/codex-mcp-guard/server.js:92-98`, `.claude/codex-mcp-guard/server.js:1107-1132`.
 
 ## Parity guarantee
 
 The `/sync` emit-time validator 13 enforces AST predicate-set equivalence between `.claude/hooks/*.js` and `server.js`'s `POLICIES` table. Every reject-condition in a hook file MUST have a matching entry here. Divergence blocks sync.
 
-## Flag graduation
+## Compatibility and migration
 
-When Codex graduates `codex_hooks` from `under_development` to `stable`:
+The historical `codex_hooks = under_development` rationale describes older clients. Current documentation calls the feature `hooks` (enabled by default); `codex_hooks` is a deprecated alias. This does not establish that a particular installation trusts or runs this repository's definitions.
 
-1. `/cli-audit` detects the graduation on the next sync.
-2. The emitter switches to native `hooks.json` emission for the MCP-guard'd rules.
-3. `.codex-mcp-guard/` is marked **deprecated** in the USE template with a banner.
-4. One release later, `.codex-mcp-guard/` is removed and `hooks.json` becomes the sole Codex guardrail path.
+Retain the companion until a reviewed migration proves policy reach, registration, hook trust, event outputs, and negative controls in the target CLI. Adapter unit tests are not live enforcement evidence. Do not remove this directory solely because a feature flag graduated.
 
-Users are expected to re-run `/sync` after a Codex-CLI upgrade to pick up the graduation.
+## Behavioral differences
 
-## Behavioral differences vs. hooks.json
+Native command hooks run subprocesses and use event-specific JSON or exit codes. Companion calls return MCP responses and only cover their explicit invocation path. Neither is a universal interception boundary. Do not reuse native PreToolUse `continue:false`: current Codex rejects it. Use documented denial output or exit 2 plus stderr. See [Hooks](https://learn.chatgpt.com/docs/hooks).
 
-| Dimension      | `hooks.json` (native)      | MCP companion (fallback)      |
-| -------------- | -------------------------- | ----------------------------- |
-| Latency        | ~sub-ms (in-process check) | ~10-50 ms (MCP round-trip)    |
-| Error format   | `reason` field in JSON     | MCP `isError: true` + content |
-| Read-path cov. | All tools                  | Mutating tools only           |
-| Process model  | Codex in-band              | Separate MCP server process   |
-
-Users on the fallback path WILL observe slightly higher tool-call latency. This is acceptable for a guardrail that would otherwise be absent.
-
-**`permissionDecision:"ask"` has no hard-block on the Codex lane.** CC's modern `hookSpecificOutput.permissionDecision:"ask"` pauses for interactive human confirmation; the MCP companion has no confirm channel, so the guard collapses a pure `"ask"` (exit 0, no `continue:false`) to the `surface` verdict — it forwards the tool AND surfaces the reason, rather than silently allowing it. A hook that must HARD-BLOCK an operation on the Codex lane MUST emit `deny` (`permissionDecision:"deny"`) or exit 2 / `continue:false` — NOT `ask`. A `"deny"` co-emitted with an `"ask"` is honored as deny (the deny gate is evaluated first).
+**`permissionDecision:"ask"` has no hard-block on the Codex lane.** CC's modern `hookSpecificOutput.permissionDecision:"ask"` pauses for interactive human confirmation; the MCP companion has no confirm channel, so the guard collapses a pure `"ask"` (exit 0, no `continue:false`) to the `surface` verdict — it returns permission feedback and surfaces the reason. For this companion's policy interpreter, use `deny` or exit 2 for hard denial; its legacy `continue:false` interpretation is not the current native PreToolUse contract. A `"deny"` co-emitted with an `"ask"` is honored as deny (the deny gate is evaluated first).
 
 ## Authoring
 
@@ -81,7 +63,7 @@ When the MCP server receives an `apply_patch` / `unified_exec` / `shell` invocat
    - `0` → allow this policy; continue to the next.
    - `2` → deny; translate the hook's stdout (canonical `instructAndWait` shape) into an MCP `isError: true` response and short-circuit.
    - other / timeout / spawn error → allow (fail-open) and append a `codex_mcp_guard_*` entry to `.claude/learning/violations.jsonl`.
-4. If all policies allow, forward the original tool call as `permit`.
+4. If all policies allow, return `permit` feedback. The server does not execute the original tool. Source: `.claude/codex-mcp-guard/server.js:1129-1132`.
 
 ### Self-check
 

@@ -100,7 +100,11 @@ function buildValidationBody({
   // pinned verbatim by settings-deny-edit-guard.test.mjs and
   // posture-gate-mutation-fence.test.mjs (both PreToolUse denies).
   const isUnblockableBlock = severity === "block" && STOP_LIKE_EVENTS.has(hookEvent);
-  const head = isUnblockableBlock
+  const isCodexPostBlock = process.env.COC_RUNTIME === "codex" &&
+    hookEvent === "PostToolUse" && severity === "block";
+  const head = isCodexPostBlock
+    ? "NOT BLOCKED — the action ALREADY RAN. Its result is withheld; report the finding."
+    : isUnblockableBlock
     ? "NOT BLOCKED — this event cannot block. Block-class finding; the output ALREADY STANDS. Correct it and report."
     : severity === "block"
       ? // Kept verbatim: it is the one head that means "did not run", and
@@ -134,8 +138,10 @@ function buildValidationBody({
 }
 
 /**
- * Build the JSON output for a hook. The caller decides exit code separately
- * (severity=block → exit 2 at PreToolUse; everything else → exit 0).
+ * Build event-specific JSON and an exit code for the caller to emit.
+ * Codex PermissionRequest uses a JSON decision at exit 0; PreToolUse denies
+ * and PostToolUse blocking feedback use exit 2. Other runtimes retain their
+ * established output contract.
  */
 function instructAndWait({
   hookEvent,
@@ -167,6 +173,36 @@ function instructAndWait({
     process.stderr.write(
       `        See agent message for required report. (${why})\n`,
     );
+  }
+
+  // Codex has event-specific contracts. In particular, PreToolUse and
+  // PermissionRequest reject `continue` (including true) rather than ignoring
+  // it. Keep the legacy CC/Gemini output below unchanged.
+  // https://learn.chatgpt.com/docs/hooks (2026-09-28).
+  if (process.env.COC_RUNTIME === "codex") {
+    if (hookEvent === "PermissionRequest") {
+      return severity === "block"
+        ? {
+            json: { hookSpecificOutput: { hookEventName: hookEvent,
+              decision: { behavior: "deny", message: validation } } },
+            exitCode: 0,
+          }
+        : { json: { systemMessage: validation }, exitCode: 0 };
+    }
+    if (hookEvent === "PreToolUse") {
+      if (severity === "block") process.stderr.write("\n" + validation + "\n");
+      return {
+        json: { hookSpecificOutput: severity === "block"
+          ? { hookEventName: hookEvent, permissionDecision: "deny",
+              permissionDecisionReason: validation }
+          : { hookEventName: hookEvent, additionalContext: validation } },
+        exitCode: severity === "block" ? 2 : 0,
+      };
+    }
+    if (hookEvent === "PostToolUse" && severity === "block") {
+      process.stderr.write("\n" + validation + "\n");
+      return { json: { decision: "block", reason: validation }, exitCode: 2 };
+    }
   }
 
   // 2. Event-aware JSON shape (mitigates CRIT-1 + #466 dropped-channel bug).

@@ -1,6 +1,6 @@
 ---
 name: hook-authoring
-description: "Authoring or auditing hooks (CC/Codex/Gemini). hooks.json registration, COC_RUNTIME, instructAndWait emit, Codex Bash-only gap + MCP-guard bijection, timeout fallback."
+description: "Authoring or auditing hooks (CC/Codex/Gemini). hooks.json registration, COC_RUNTIME, instructAndWait emit, Codex trust, event contracts + MCP-guard scope, timeout fallback."
 ---
 
 # Hook Authoring
@@ -16,14 +16,14 @@ Authoring a new hook script under `.claude/hooks/`. Auditing an existing hook fo
 | CLI    | Registration                                               | Event surface                                                              | Path env                               |
 | ------ | ---------------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------- |
 | CC     | `.claude/settings.json` `hooks` block                      | `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Stop`    | `$CLAUDE_PROJECT_DIR` exported         |
-| Codex  | `.codex/hooks.json` (repo) or `~/.codex/hooks.json` (user) | Same names; **Bash tool only** — `apply_patch` / Write / MCP do NOT fire   | NOT exported; resolve via cwd-relative |
+| Codex | `hooks.json` or inline `[hooks]` beside active config layers | Shell (`Bash`), `apply_patch`, MCP and most local functions; hosted tools excluded | Session cwd; resolve launcher from Git root |
 | Gemini | `.gemini/settings.json` `hooks` object                     | `BeforeTool` / `AfterTool` / `BeforeAgent` / `SessionStart` / `SessionEnd` | `$GEMINI_PROJECT_DIR` exported         |
 
 | Constraint                | Value                                                                                                                 |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | Script location           | `.claude/hooks/<name>.js` — Anthropic-documented path, shared across all three CLIs                                   |
 | Module system             | CommonJS (`require`), matching repo convention                                                                        |
-| Timeout fallback          | Mandatory per `rules/cc-artifacts.md` Rule 7 — `setTimeout` → emit `{continue: true}`, `process.exit(1)`              |
+| Timeout fallback          | Mandatory per `rules/cc-artifacts.md` Rule 7 — `setTimeout` → emit a runtime-valid non-blocking response, `process.exit(1)`              |
 | Stdin / stdout            | Read JSON payload from stdin; emit JSON on stdout                                                                     |
 | Halting exit (PreToolUse) | `process.exit(2)` — but ONLY via `lib/instruct-and-wait.js::emit()` shape per `rules/hook-output-discipline.md`       |
 | Halting return (post)     | `continue: false` — ONLY via the same emit() shape                                                                    |
@@ -34,14 +34,14 @@ Authoring a new hook script under `.claude/hooks/`. Auditing an existing hook fo
 The authoritative copy of every hook lives at `.claude/hooks/<name>.js`. All three CLIs reference the same file by path; what differs is the registration manifest:
 
 - CC reads `.claude/settings.json` `hooks` → command list. Working directory at hook launch is the project root; CC exports `CLAUDE_PROJECT_DIR`.
-- Codex reads `.codex/hooks.json` and invokes each Bash-lane hook through the COC_RUNTIME-delivery wrapper: `node ./.claude/hooks/lib/codex-hook-runtime.js ./.claude/hooks/<name>.js` (the wrapper stamps `COC_RUNTIME=codex` + `CLAUDE_PROJECT_DIR`, then delegates to the hook as a native child process — see § The COC_RUNTIME Contract). Codex does NOT export a project-dir env var; the wrapper's `CLAUDE_PROJECT_DIR` stamp AND the hook's own `cwd` extraction from the stdin payload both resolve the project root.
+- Codex reads trusted hook definitions from active config layers. This repository launches the adapter with `node "$(git rev-parse --show-toplevel)/.claude/hooks/lib/codex-hook-runtime.js" ./.claude/hooks/<name>.js`. The adapter pins `COC_RUNTIME=codex`, `CLAUDE_PROJECT_DIR`, and child cwd to its installed repository root; stdin retains the original session cwd. Source: `.claude/hooks/lib/codex-hook-runtime.js:38-88`.
 - Gemini reads `.gemini/settings.json` `hooks` (the `hooks` object) and renames events to its own taxonomy (`BeforeTool`, `AfterTool`). Gemini exports `GEMINI_PROJECT_DIR`.
 
 The single-source contract means every hook MUST work under all three runtimes without per-CLI source forks. The shared library `lib/runtime.js::parseHook()` validates the `COC_RUNTIME` env var (closed enum: `cc` / `codex` / `gemini`) and returns a canonical payload shape regardless of source.
 
 ## The COC_RUNTIME Contract
 
-Every hook invocation MUST set `COC_RUNTIME` to one of `cc`, `codex`, `gemini` before the script starts. Each runtime delivers it differently: CC via the process env at launch; Codex via two lanes — the **Bash lane** through the `codex-hook-runtime.js` wrapper (`.codex/hooks.json` registers `node ./.claude/hooks/lib/codex-hook-runtime.js ./.claude/hooks/<name>.js`, which stamps `COC_RUNTIME=codex`), and the **non-Bash / mutating-primitive lane** through the `codex-mcp-guard` server (which stamps it programmatically before replaying the hook). Manual invocations MUST set it explicitly. A shell env-prefix (`COC_RUNTIME=codex node …`) is BLOCKED for Codex registration — under `execvp` it becomes `argv[0]` → ENOENT → the hook silently does not run (fail-open on the git-safety lane); the plain-argv wrapper is the robust form. Silent passthrough of an unknown runtime is BLOCKED per `rules/zero-tolerance.md` Rule 3.
+Every hook invocation MUST set `COC_RUNTIME` to `cc`, `codex`, or `gemini` before the script starts. Codex native registrations use `codex-hook-runtime.js`; the MCP companion stamps the runtime when replaying policies. Manual invocations must set it explicitly. Preserve this adapter to centralize the runtime and project-root contract; do not infer a Codex `execvp` limitation from older notes. Current official command examples use shell substitution. Source: [Hooks](https://learn.chatgpt.com/docs/hooks).
 
 ```javascript
 // DO — use parseHook for the canonical shape; throws on missing COC_RUNTIME
@@ -58,29 +58,17 @@ const event = data.hook_event_name; // CLI taxonomy not normalized
 
 ## Path Resolution Across CLIs
 
-Project-dir resolution is the #1 portability pitfall. Only CC and Gemini export a project-dir env var; Codex does not. The hook resolves the project root in this order:
+Codex starts command hooks in the **session cwd**, which may be a nested folder. Resolve the adapter launcher from `git rev-parse --show-toplevel`, quote the resulting path, and let the adapter derive its repository root from its installed location. Never treat `payload.cwd` as necessarily the root. Preserve it for checks on the actual requested command. Source: `.claude/hooks/lib/codex-hook-runtime.js:38-88`; [Hooks](https://learn.chatgpt.com/docs/hooks).
 
-```javascript
-const projectDir =
-  process.env.CLAUDE_PROJECT_DIR ||
-  process.env.GEMINI_PROJECT_DIR ||
-  payload.cwd; // from stdin — Codex fallback
-```
+## Codex Coverage, Trust, And Event Contracts
 
-Codex invokes hooks with `cwd = project_root` (verified 2026-04-23) but the docs do not explicitly guarantee this. The hook MUST extract `cwd` from the stdin payload as the durable fallback. A `.codex/hooks.json` command of `node $CODEX_PROJECT_DIR/.claude/hooks/<name>.js` silently expands to `node /.claude/hooks/<name>.js` and exits `MODULE_NOT_FOUND` — the correct form routes through the wrapper: `node ./.claude/hooks/lib/codex-hook-runtime.js ./.claude/hooks/<name>.js` (cwd-relative, no env var; it also stamps `CLAUDE_PROJECT_DIR=cwd` so `parseHook().projectDir` resolves on the Codex Bash lane). This node-argv wrapper is distinct from the deferred `.claude/wrappers/*.sh.template` shell-wrapper mechanism.
+Current official documentation includes shell/unified exec (`Bash`), `apply_patch` (`Edit`/`Write` aliases), MCP, and most local function tools. Hosted tools and specialized paths may bypass hooks. A `write_stdin` continuation does not receive a fresh PreToolUse check. Capability is not registration: this repo's `.codex/hooks.json:1-40` registers shell checks and SessionStart only. An MCP companion can evaluate calls routed through it; installing it does not intercept every native tool.
 
-## Hook Coverage Gap — Codex Bash-Only
+Non-managed hooks require review and trust of their exact definition through `/hooks`. Changed definitions are skipped until reviewed; project hooks also require project trust. Never auto-approve or bypass this trust during setup. Matching sources accumulate and command hooks can run concurrently. Managed hooks can be enforced by administrative requirements. These lifecycle checks are guardrails, not a complete security boundary.
 
-Codex hooks fire on **Bash / shell tool invocations only**. The following surfaces are NOT reachable from `.codex/hooks.json`:
+Use event-specific output: PreToolUse denies with `permissionDecision: "deny"` or exit 2 and stderr; it does not accept `continue` or `stopReason`. PermissionRequest has its own `decision.behavior` schema. PostToolUse feedback cannot undo an effect. Stop blocking feedback requests continuation; SessionEnd is the actual session-end event. See [Hooks](https://learn.chatgpt.com/docs/hooks) for async/MCP handlers, compaction/subagent events, and schemas.
 
-- `apply_patch` (Codex's file-write primitive)
-- Write tool equivalents
-- MCP tool calls (servers wrapping file writes, network, etc.)
-- `web_search` / `web_fetch`
-
-For these surfaces, the `.claude/codex-mcp-guard/` MCP server is the only enforcement point — it wraps every non-Bash tool at the MCP layer and re-runs the same predicate set the Bash-layer hooks would have applied. Both surfaces together cover the full tool envelope; either alone leaves a gap.
-
-The bijection requirement is enforced by validator 13 at `/sync` emit time: every predicate function in `.claude/hooks/*.js` MUST have a coverage-equivalent reject-condition in `.claude/codex-mcp-guard/policies.json`. Divergence hard-blocks the sync.
+The local regression suite exercises adapters and output contracts, not a live model session or trusted-hook execution: `node --test .claude/test-harness/tests/codex-hook-compatibility.test.cjs`. Re-test installed CLI dispatch separately before retiring the MCP compatibility path. Policy-generation parity remains a separate distribution check; it proves neither hook trust nor native interception.
 
 ## Predicate Function Shapes (Validator-13 Bijection)
 
@@ -148,19 +136,19 @@ Command-string detectors MUST skip captured groups referencing unexpanded shell 
 
 ## Timeout Fallback
 
-Every hook MUST install a `setTimeout` that emits `{continue: true}` and exits before the runtime's kill window. Per `rules/cc-artifacts.md` Rule 7:
+Every hook MUST install a `setTimeout` that emits a runtime-valid non-blocking response and exits before the runtime's kill window. Per `rules/cc-artifacts.md` Rule 7:
 
 ```javascript
 const TIMEOUT_MS = 5000;
 const _timeout = setTimeout(() => {
-  console.log(JSON.stringify({ continue: true }));
+  console.log(JSON.stringify(process.env.COC_RUNTIME === "codex" ? {} : { continue: true }));
   process.exit(1);
 }, TIMEOUT_MS);
 ```
 
-`SessionStart` hooks may use `10000` (10s) for boot-time discovery; per-tool hooks (`PreToolUse`, `PostToolUse`) MUST stay at `5000` to avoid stalling interactive workflows. A hanging hook blocks the entire CLI session indefinitely — the timeout is the only structural escape.
+`SessionStart` hooks may use `10000` (10s) for boot-time discovery; per-tool hooks (`PreToolUse`, `PostToolUse`) MUST stay at `5000` to avoid stalling interactive workflows. Codex registration `timeout` values are seconds; internal JavaScript timers are milliseconds. Native timeouts also bound execution. Keep repository deadlines explicit.
 
-The `setTimeout`-fallback path is the ONE legitimate raw-exit branch. It MUST emit `{continue: true}` first; raw `process.exit(N)` from any other branch is BLOCKED per `rules/hook-output-discipline.md` MUST-NOT-1.
+The `setTimeout`-fallback path is the ONE legitimate raw-exit branch. It MUST emit a runtime-valid non-blocking response first; raw `process.exit(N)` from any other branch is BLOCKED per `rules/hook-output-discipline.md` MUST-NOT-1.
 
 ## Variant Overlays
 
@@ -180,7 +168,7 @@ Per `rules/cc-artifacts.md` Rule 9. Fixtures are the mechanical regression lock 
 
 ## Wrapper Status — Native Hook Registration Is Canonical
 
-Hook-level Bash wrappers were briefly authored at Phase J1 to bridge missing Codex hook events via shell shims, but **wrapper emission was deferred at Shard C (2026-05-10)** per `journal/0006-DECISION-wrapper-emission-disposition-strip.md`. The MCP-guard companion covers the non-Bash gap directly; wrappers added no coverage and required a separate runtime corpus that was never authored.
+Historical per-phase shell-wrapper decisions do not describe current native hook coverage. The native adapter remains required for this repository's runtime stamp and root resolution. Keep the MCP companion until a separately reviewed migration verifies equivalent policy reach, trust setup, and output behavior in the target CLI.
 
 New hooks MUST NOT add `.claude/wrappers/*.sh.template` files. If a future workstream requires external CLI invocation or structured-output enforcement at the hook layer, revival is documented in the journal entry — propose at `/codify`, do not assume the path is live.
 
@@ -207,9 +195,9 @@ Highest-frequency authoring bug. A new detector ships a halting branch with `pro
 
 Lexical regex against `payload.tool_input.command` cannot see shell expansion; matching `"$REPO"` as a literal string and reporting block-severity false-positives blocks in-scope work. Fix: lexical matches emit `halt-and-report`; block requires structural evidence (env var, exit code, file existence, AST shape).
 
-### 3. Bash-Only Coverage Assumed Across Tools
+### 3. Capability Mistaken For Policy Coverage
 
-Author wires a Codex enforcement path through `.codex/hooks.json` expecting `PreToolUse` to fire on `apply_patch`; it doesn't. Fix: add the same predicate to `.claude/codex-mcp-guard/policies.json` so non-Bash surfaces are covered. Validator 13 will hard-block the sync if the bijection drifts.
+Codex supporting `apply_patch` hooks does not wire this repository's Bash validators to edit tools. Match the intended event/tool, validate its distinct input shape, and prove both allowed and denied behavior through the target CLI. Do not describe an installed MCP server as a universal interceptor.
 
 ### 4. Missing Timeout Fallback
 
@@ -217,7 +205,7 @@ Hook author skips the `setTimeout` block "because the work is fast." First runti
 
 ### 5. `$CODEX_PROJECT_DIR` Referenced In Hook Registration
 
-Codex does not export a project-dir env var; `node $CODEX_PROJECT_DIR/.claude/hooks/<name>.js` silently expands to `node /.claude/hooks/<name>.js` (MODULE_NOT_FOUND). Fix: register through the wrapper — `node ./.claude/hooks/lib/codex-hook-runtime.js ./.claude/hooks/<name>.js` (cwd-relative, no env var; the wrapper stamps `CLAUDE_PROJECT_DIR` + `COC_RUNTIME`) — and rely on `payload.cwd` from stdin as the in-script fallback.
+A relative adapter launcher fails when the session starts below the repository root. Use the quoted Git-root launcher above, and test a nested working directory containing spaces. Source: `.codex/hooks.json:1-40`; `.claude/hooks/lib/codex-hook-runtime.js:38-88`.
 
 ### 6. Gemini Event Names As CC Aliases
 
@@ -225,7 +213,7 @@ Author writes `.gemini/settings.json` with `PreToolUse` / `PostToolUse` keys; Ge
 
 ### 7. Semantic Analysis In Hooks
 
-Hook attempts to reason about the meaning of agent prose, file contents, or commit messages. Hooks run synchronously with hard timeouts; semantic analysis is slow and non-deterministic, producing spurious failures that block the session. Fix: hooks check structure (path prefix, env var, exit code, AST shape); agents check semantics at gate review.
+Hook attempts to reason about the meaning of agent prose, file contents, or commit messages. Policy hooks require bounded execution; semantic analysis is slow and non-deterministic, producing spurious failures that block the session. Fix: hooks check structure (path prefix, env var, exit code, AST shape); agents check semantics at gate review.
 
 ### 8. Lexical Hook Detector Without Probe Counterpart
 
@@ -236,13 +224,13 @@ Per `rules/probe-driven-verification.md` MUST-4, every lexical hook detector MUS
 When auditing an existing hook:
 
 - [ ] File location is `.claude/hooks/<name>.js` (NOT `scripts/hooks/` — obsolete pre-v2.8.31)
-- [ ] Timeout fallback installed: `setTimeout` → `{continue: true}` → `process.exit(1)`
+- [ ] Timeout fallback installed: `setTimeout` → runtime-valid output → `process.exit(1)`
 - [ ] CC timeout 5s (per-tool) or 10s (SessionStart); never higher than 10s
 - [ ] Every halting branch routes through `lib/instruct-and-wait.js::emit()` with all six fields
 - [ ] No `severity: "block"` returns whose `evidence` is a regex span
 - [ ] Command-string detectors skip shell-variable captures (`$VAR`, `${VAR}`, `$(...)`)
 - [ ] `parseHook()` from `lib/runtime.js` used for stdin payload (validates COC_RUNTIME)
-- [ ] Project-dir resolution: `CLAUDE_PROJECT_DIR || GEMINI_PROJECT_DIR || payload.cwd`
+- [ ] Codex launcher works from a nested cwd; adapter root and session cwd stay distinct
 - [ ] Workspace-walking loops filter `instructions` AND leading-underscore meta-dirs
 - [ ] If predicate adds a reject branch, equivalent entry exists in `codex-mcp-guard/policies.json`
 - [ ] Predicate shape matches A / B / C per validator-13; new shapes update fixtures + extractor together
@@ -259,7 +247,7 @@ When auditing an existing hook:
 - `rules/hook-output-discipline.md` — instructAndWait emit shape, no raw exit, severity grounding, shell-variable skip
 - `rules/probe-driven-verification.md` MUST-4 — lexical hook detectors paired with probe-driven gate review
 - `rules/trust-posture.md` — posture state read from main checkout; hooks are the only legitimate writers
-- `agents/codex-architect.md` § Hooks Coverage — Bash-only event surface + MCP-guard fallback
+- `agents/codex-architect.md` § Hooks Coverage — native reach, trust, and MCP companion limitations
 - `agents/gemini-architect.md` § Hook Event Name Translation — CC ↔ Gemini event taxonomy
 - `agents/cc-architect.md` — CC-side hook authoring + audit responsibilities
 - `codex-mcp-guard/README.md` — POLICIES table population, validator-13, predicate shapes

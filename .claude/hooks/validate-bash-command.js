@@ -119,7 +119,7 @@ const {
 const TIMEOUT_MS = 5000;
 const timeout = setTimeout(() => {
   console.error("[HOOK TIMEOUT] validate-bash-command exceeded 5s limit");
-  console.log(JSON.stringify({ continue: true }));
+  console.log(JSON.stringify(process.env.COC_RUNTIME === "codex" ? {} : { continue: true }));
   process.exit(1);
 }, TIMEOUT_MS);
 
@@ -149,7 +149,7 @@ process.stdin.on("end", () => {
     // additionalContext — the delivered PreToolUse field; the prior
     // `validation` sibling was silently dropped (loom #466). Emit the context
     // block only when there's an advisory message.
-    const advisory = { continue: result.continue };
+    const advisory = process.env.COC_RUNTIME === "codex" ? {} : { continue: result.continue };
     if (result.message) {
       advisory.hookSpecificOutput = {
         hookEventName: "PreToolUse",
@@ -160,7 +160,7 @@ process.stdin.on("end", () => {
     process.exit(result.exitCode);
   } catch (error) {
     console.error(`[HOOK ERROR] ${error.message}`);
-    console.log(JSON.stringify({ continue: true }));
+    console.log(JSON.stringify(process.env.COC_RUNTIME === "codex" ? {} : { continue: true }));
     process.exit(1);
   }
 });
