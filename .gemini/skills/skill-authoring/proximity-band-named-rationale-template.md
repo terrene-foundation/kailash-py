@@ -58,8 +58,8 @@ planned within 14 days; v6.2 spec freeze is in effect through 2026-06-15.
 corpus-level pruning review per F23b.
 (v) Absence-of-skill-extension-host: this MUST clause codifies a CVE-class
 vulnerability in a single load-bearing prohibition; no decomposable
-sub-content. Considered hosts: - `.gemini/skills/18-security-patterns/` — rejected because the skill
-is reference-style guidance, not authoring discipline. - `.gemini/skills/skill-authoring/` — rejected because the clause
+sub-content. Considered hosts: - `.claude/skills/18-security-patterns/` — rejected because the skill
+is reference-style guidance, not authoring discipline. - `.claude/skills/skill-authoring/` — rejected because the clause
 codifies a security boundary, not skill-authoring discipline. - new skill — rejected because a single-clause skill has worse
 progressive-disclosure shape than an inline rule clause.
 ```
