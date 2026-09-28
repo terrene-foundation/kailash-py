@@ -25,18 +25,18 @@ Authoring a new skill. Auditing an existing skill for description-length, progre
 ## Directory Layout
 
 ```
-.codex/skills/<skill-name>/
+.claude/skills/<skill-name>/
 ├── SKILL.md                  ← primary entry, frontmatter-bearing
 ├── <topic-1>.md              ← progressive-disclosure depth
 ├── <topic-2>.md
 └── fixtures/                 ← optional: example inputs the skill references
 ```
 
-The directory name MUST match `name:` in SKILL.md frontmatter. Numbered prefixes (`01-`, `02-`) are conventional for ordering but not load-bearing; semantic activation uses `description:` only.
+The directory name MUST match `name:` in SKILL.md frontmatter. Numbered prefixes (`01-`, `02-`) are conventional for ordering but not load-bearing; implicit activation uses the discovered description and host policy; explicit skill invocation is also supported.
 
 ## The `description:` Field IS The Activation Mechanism
 
-Skill selection is semantic, not keyword. The model reads every skill's `description:` in the listing and selects the one whose _failure-mode language_ matches the user's intent. Keyword-dump descriptions (`"Use when asking about 'X', 'Y', 'Z', 'X with Y'"` with ≥4 quoted alternates) are BLOCKED per `rules/cc-artifacts.md` Rule 1b — they inflate the listing budget without improving activation.
+Implicit skill selection is semantic; listing budgets and discovery determine which descriptions are available. The model selects from the descriptions the host exposes and chooses the one whose _failure-mode language_ matches the user's intent. Keyword-dump descriptions (`"Use when asking about 'X', 'Y', 'Z', 'X with Y'"` with ≥4 quoted alternates) are BLOCKED per `rules/cc-artifacts.md` Rule 1b — they inflate the listing budget without improving activation.
 
 ### DO — Failure-Mode Language
 
@@ -150,7 +150,7 @@ The rule body is referenced from SKILL.md so its content reaches the model only 
 
 ## Cross-CLI Variant Overlays
 
-A skill authored at `.codex/skills/<name>/SKILL.md` is the canonical source. CLI-specific deltas live at `variants/<cli>/skills/<name>/SKILL.md` (or sub-files) and overlay only the diverging slot. See `rules/cross-cli-parity.md` and `guides/co-setup/05-variant-architecture.md` for the full overlay semantics.
+A skill authored at `.claude/skills/<name>/SKILL.md` is the canonical source. CLI-specific deltas live at `variants/<cli>/skills/<name>/SKILL.md` (or sub-files) and overlay only the diverging slot. See `rules/cross-cli-parity.md` and `guides/co-setup/05-variant-architecture.md` for the full overlay semantics.
 
 ### Slot-Marker Pattern
 
@@ -179,6 +179,14 @@ Variant files at `variants/<cli>/skills/<name>/SKILL.md` supply replacement bodi
 
 Skills follow the same pattern; today most skill content is CLI-neutral and lives in the global tree alone.
 
+## Codex Discovery And Metadata
+
+As of 2026-09-28, [official skill documentation](https://learn.chatgpt.com/docs/build-skills) describes repository/user `.agents/skills` and optional `agents/openai.yaml`. This project still emits `.codex/skills`, which the current host exposes. Do not migrate or duplicate working skills until discovery, explicit invocation and collision handling have been tested in the target standalone runtime.
+
+`agents/openai.yaml` can declare presentation metadata, invocation policy and MCP dependencies. `policy.allow_implicit_invocation: false` reserves a skill for explicit selection on supporting hosts; it is not a tool permission restriction. Native invocation is `/skills` or `$skill-name` where supported. Project description limits remain authoring conventions, not a universal native maximum.
+
+Preserve `.claude/skills` when identifying the authoring source, and distinguish it from each emitted layout. A generic path rewrite must not change source-ownership claims or another CLI's table column. Use the [Codex guide](../../../.claude/guides/codex/README.md) for the installed-versus-current capability baseline.
+
 ## Common Mistakes
 
 ### 1. Over-Long Descriptions
@@ -191,7 +199,7 @@ SKILL.md that's just a sub-file index forces the model to expand 3–5 sub-files
 
 ### 3. Tools List Mismatch
 
-SKILL.md body references `Bash` or `Write` but frontmatter only lists `Read`. The runtime grants permissions based on frontmatter; the body will trigger permission prompts the author didn't expect. Fix: scan SKILL.md + every sub-file for tool invocations; mirror the union in frontmatter.
+SKILL.md body references `Bash` or `Write` but frontmatter only lists `Read`. Tool metadata is host-specific. In Codex, source frontmatter is not an authorization grant; the current emitter strips the skill tool block, and sandbox/approval/MCP configuration governs the actual execution surface. Fix: scan SKILL.md + every sub-file for tool invocations; mirror the union in frontmatter.
 
 ### 4. CC-Native Delegation Syntax In Skill Body
 
@@ -199,7 +207,7 @@ Skill prose that bakes in `Agent(subagent_type="...")` or `Task(...)` is BLOCKED
 
 ### 5. Skill Replaces Agent Knowledge
 
-A skill is reference content. An agent is judgment + procedure. If a "skill" prescribes a workflow with conditional branches and recovery paths, it's really an agent. Fix: move workflow content to an agent file; leave the skill as the lookup table the agent reads.
+A skill can carry reusable instructions and procedures. A native custom agent supplies a separately delegated role and execution configuration. Use an agent when independent execution or a separate permission/model surface is needed; keep reusable coordination procedures in a skill.
 
 ## Audit Checklist
 
