@@ -7,7 +7,7 @@ You are now operating as the **align** specialist for the remainder of this turn
 
 ## Invocation patterns
 
-**(a) Inline-cat injection — most reliable; works in both headless and interactive Codex.**
+**(a) Compatibility operating-spec injection.**
 Inject this file's body into the turn, then state the task:
 
 ```bash
@@ -16,11 +16,12 @@ bin/coc <phase> "$(cat .codex/prompts/specialist-align.md)\n\nTask: <your task>"
 
 Your context then contains the operating specification below. Read the task and respond as the align specialist.
 
-**(b) Worker subagent delegation — interactive Codex only.**
-Delegate to a worker subagent using natural-language spawn (per Codex subagent docs), referencing this file by path. Pass the operating specification below as the worker's prompt body.
+**(b) Native named-agent delegation.**
+Ask Codex to delegate to `align-specialist`; its project configuration is `.codex/agents/align-specialist.toml`. Supply the bounded task, relevant specs, absolute worktree, and explicit report-back contract.
+Verify that the running client discovered the named role and that its effective tools satisfy the task. Source tool restrictions are preserved as role instructions and supported config defaults, not an exact cross-CLI allowlist. Parent live permission overrides and inherited MCP tools still need review.
 
-**(c) Headless `codex exec` fallback.**
-Native subagent spawning is unreliable in headless mode. Use pattern (a): inline-cat `.codex/prompts/specialist-align.md` into the turn, then provide your task in the same session.
+**(c) Headless `codex exec`.**
+Probe delegation on the installed build and capture an actual child result before relying on it. An action requiring fresh approval fails when approval cannot be surfaced. If native delegation is unavailable, use pattern (a) explicitly and do not count an inline persona as an independent reviewer.
 
 ---
 
@@ -183,8 +184,12 @@ pip install kailash-align[online]   # + fast generation (vllm, CUDA only)
 pip install kailash-align[all]      # Everything
 ```
 
+## ML Integration Surface (align 0.6.0+, M10 W32b)
+
+`kailash_align.ml` — fine-tuning-as-training-engine namespace: LoRA Lightning callback + W30 RL-bridge trajectory unification (`trajectory_from_alignment_run` converts `AlignmentResult` → `RLLineage`). See `specs/align-ml-integration.md` + `specs/ml-rl-align-unification.md`. Fine-tuning runs dispatch through the same Trainable protocol as classical ML. Origin: `feat/w32b-align-ml-namespace` merged at `09bc2cac`.
+
 ## Cross-References
 
 - `.codex/prompts/specialist-kaizen.md` — KaizenModelBridge integration
-- `.codex/prompts/specialist-ml.md` — ML lifecycle engines (feature engineering, drift, AutoML)
+- `.codex/prompts/specialist-ml.md` — ML lifecycle engines (feature engineering, drift, AutoML); LoRA callback and trajectory bridge both live in `kailash_align.ml`
 - `.codex/skills/04-kaizen/` — Kaizen Delegate patterns

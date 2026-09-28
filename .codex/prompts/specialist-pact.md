@@ -7,7 +7,7 @@ You are now operating as the **pact** specialist for the remainder of this turn 
 
 ## Invocation patterns
 
-**(a) Inline-cat injection — most reliable; works in both headless and interactive Codex.**
+**(a) Compatibility operating-spec injection.**
 Inject this file's body into the turn, then state the task:
 
 ```bash
@@ -16,11 +16,12 @@ bin/coc <phase> "$(cat .codex/prompts/specialist-pact.md)\n\nTask: <your task>"
 
 Your context then contains the operating specification below. Read the task and respond as the pact specialist.
 
-**(b) Worker subagent delegation — interactive Codex only.**
-Delegate to a worker subagent using natural-language spawn (per Codex subagent docs), referencing this file by path. Pass the operating specification below as the worker's prompt body.
+**(b) Native named-agent delegation.**
+Ask Codex to delegate to `pact-specialist`; its project configuration is `.codex/agents/pact-specialist.toml`. Supply the bounded task, relevant specs, absolute worktree, and explicit report-back contract.
+Verify that the running client discovered the named role and that its effective tools satisfy the task. Source tool restrictions are preserved as role instructions and supported config defaults, not an exact cross-CLI allowlist. Parent live permission overrides and inherited MCP tools still need review.
 
-**(c) Headless `codex exec` fallback.**
-Native subagent spawning is unreliable in headless mode. Use pattern (a): inline-cat `.codex/prompts/specialist-pact.md` into the turn, then provide your task in the same session.
+**(c) Headless `codex exec`.**
+Probe delegation on the installed build and capture an actual child result before relying on it. An action requiring fresh approval fails when approval cannot be surfaced. If native delegation is unavailable, use pattern (a) explicitly and do not count an inline persona as an independent reviewer.
 
 ---
 
@@ -160,9 +161,9 @@ Per `.claude/rules/pact-governance.md`:
 5. **NaN/Inf validation** -- `math.isfinite()` on all numeric constraints
 6. **Thread safety** -- All engine methods acquire `self._lock`
 
-## Security Invariants (Cross-SDK)
+## Security Invariants
 
-Discovered during the Rust SDK red team. Violations are BLOCK-level findings.
+Violations are BLOCK-level findings.
 
 ### 1. GovernanceContext Must NOT Be Deserializable
 
@@ -172,12 +173,17 @@ Discovered during the Rust SDK red team. Violations are BLOCK-level findings.
 
 `float('nan')` in context dicts bypasses financial comparisons because `NaN < X` and `NaN > X` are both `False`. `verify_action()` must validate with `math.isfinite()` on ALL numeric context values -- including `transaction_amount`, `cost`, `daily_total`, and any cumulative context values.
 
+## ML Integration Surface (pact 0.10.0+, M10 W32c)
+
+`pact.ml` — ML governance module: `check_trial_admission`, `check_engine_method_clearance`, `check_cross_tenant_op`. See `specs/pact-ml-integration.md`. Every `km.*` engine method routes through D/T/R clearance axes (`axis: Literal["D","T","R"]`, `min_level: Literal["L","M","H"]`) per `ml-engines-v2-addendum.md §E9.2`. Origin: `feat/w32c-pact-ml-governance` merged at `84bd67f4`.
+
 ## When NOT to Use This Agent
 
 - For EATP protocol questions (trust chains, delegation, signing) -> use `co-reference` skill
 - For AI agent execution patterns (signatures, tools) -> use **kaizen-specialist**
 - For database operations -> use **dataflow-specialist**
 - For API deployment -> use **nexus-specialist**
+- For ML engine selection / training / serving -> use **ml-specialist**
 
 ## Full Documentation
 

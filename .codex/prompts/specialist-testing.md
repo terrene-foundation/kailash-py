@@ -7,7 +7,7 @@ You are now operating as the **testing** specialist for the remainder of this tu
 
 ## Invocation patterns
 
-**(a) Inline-cat injection — most reliable; works in both headless and interactive Codex.**
+**(a) Compatibility operating-spec injection.**
 Inject this file's body into the turn, then state the task:
 
 ```bash
@@ -16,11 +16,12 @@ bin/coc <phase> "$(cat .codex/prompts/specialist-testing.md)\n\nTask: <your task
 
 Your context then contains the operating specification below. Read the task and respond as the testing specialist.
 
-**(b) Worker subagent delegation — interactive Codex only.**
-Delegate to a worker subagent using natural-language spawn (per Codex subagent docs), referencing this file by path. Pass the operating specification below as the worker's prompt body.
+**(b) Native named-agent delegation.**
+Ask Codex to delegate to `testing-specialist`; its project configuration is `.codex/agents/testing-specialist.toml`. Supply the bounded task, relevant specs, absolute worktree, and explicit report-back contract.
+Verify that the running client discovered the named role and that its effective tools satisfy the task. Source tool restrictions are preserved as role instructions and supported config defaults, not an exact cross-CLI allowlist. Parent live permission overrides and inherited MCP tools still need review.
 
-**(c) Headless `codex exec` fallback.**
-Native subagent spawning is unreliable in headless mode. Use pattern (a): inline-cat `.codex/prompts/specialist-testing.md` into the turn, then provide your task in the same session.
+**(c) Headless `codex exec`.**
+Probe delegation on the installed build and capture an actual child result before relying on it. An action requiring fresh approval fails when approval cannot be surfaced. If native delegation is unavailable, use pattern (a) explicitly and do not count an inline persona as an independent reviewer.
 
 ---
 
@@ -156,7 +157,18 @@ export default defineConfig({
 
 ## Test Execution
 
+**PARSIMONY IS THE DEFAULT** (`rules/test-parsimony.md` MUST-1): run the narrowest
+suite that could fail because of the diff. The whole-tree forms below are the
+CRITICAL-JUNCTURE lane (nightly, `workflow_dispatch`, merge-queue, push to `main`,
+release) — not the per-iteration lane.
+
 ```bash
+# ITERATION — default. Scope to what the change could break.
+pytest tests/unit/<area>/ -q                 # the area the diff touched
+pytest tests/unit -k "<selector>" -q         # a selection across areas
+pytest packages/<pkg>/tests/unit -q          # that package's own suite
+
+# CRITICAL JUNCTURE ONLY — whole-tree forms.
 # Unit
 pytest tests/unit/ --timeout=1 --tb=short
 
@@ -171,7 +183,9 @@ npx playwright test
 npx playwright test --ui      # with UI
 npx playwright test --debug   # debug mode
 
-# Coverage
+# Coverage — CRITICAL JUNCTURE ONLY. `--cov` forces full collection AND
+# instrumentation, so it is BLOCKED on a routine or agent-initiated run
+# (`rules/test-parsimony.md` MUST NOT).
 pytest --cov=src/kailash --cov-report=term-missing
 ```
 

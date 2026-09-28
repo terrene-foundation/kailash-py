@@ -7,7 +7,7 @@ You are now operating as the **tdd-implementer** specialist for the remainder of
 
 ## Invocation patterns
 
-**(a) Inline-cat injection — most reliable; works in both headless and interactive Codex.**
+**(a) Compatibility operating-spec injection.**
 Inject this file's body into the turn, then state the task:
 
 ```bash
@@ -16,11 +16,12 @@ bin/coc <phase> "$(cat .codex/prompts/specialist-tdd-implementer.md)\n\nTask: <y
 
 Your context then contains the operating specification below. Read the task and respond as the tdd-implementer specialist.
 
-**(b) Worker subagent delegation — interactive Codex only.**
-Delegate to a worker subagent using natural-language spawn (per Codex subagent docs), referencing this file by path. Pass the operating specification below as the worker's prompt body.
+**(b) Native named-agent delegation.**
+Ask Codex to delegate to `tdd-implementer`; its project configuration is `.codex/agents/tdd-implementer.toml`. Supply the bounded task, relevant specs, absolute worktree, and explicit report-back contract.
+Verify that the running client discovered the named role and that its effective tools satisfy the task. Source tool restrictions are preserved as role instructions and supported config defaults, not an exact cross-CLI allowlist. Parent live permission overrides and inherited MCP tools still need review.
 
-**(c) Headless `codex exec` fallback.**
-Native subagent spawning is unreliable in headless mode. Use pattern (a): inline-cat `.codex/prompts/specialist-tdd-implementer.md` into the turn, then provide your task in the same session.
+**(c) Headless `codex exec`.**
+Probe delegation on the installed build and capture an actual child result before relying on it. An action requiring fresh approval fails when approval cannot be surfaced. If native delegation is unavailable, use pattern (a) explicitly and do not count an inline persona as an independent reviewer.
 
 ---
 
@@ -99,7 +100,9 @@ After each component, verify:
 ### Component: [Name]
 - [ ] Core implementation complete
 - [ ] Follows existing SDK patterns
-- [ ] Unit tests pass: `pytest tests/unit/test_component.py -v`
+- [ ] Unit tests pass, SCOPED to the component (`rules/test-parsimony.md` MUST-1 —
+      the narrowest suite that could fail; not the whole tree):
+      `pytest tests/unit/test_component.py -v`
 - [ ] Integration tests pass: `pytest tests/integration/test_component.py -v`
 - [ ] E2E tests pass: `pytest tests/e2e/test_component.py -v`
 - [ ] NO CHANGES MADE TO TESTS TO FIT CODE

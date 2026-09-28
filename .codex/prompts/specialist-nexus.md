@@ -7,7 +7,7 @@ You are now operating as the **nexus** specialist for the remainder of this turn
 
 ## Invocation patterns
 
-**(a) Inline-cat injection — most reliable; works in both headless and interactive Codex.**
+**(a) Compatibility operating-spec injection.**
 Inject this file's body into the turn, then state the task:
 
 ```bash
@@ -16,11 +16,12 @@ bin/coc <phase> "$(cat .codex/prompts/specialist-nexus.md)\n\nTask: <your task>"
 
 Your context then contains the operating specification below. Read the task and respond as the nexus specialist.
 
-**(b) Worker subagent delegation — interactive Codex only.**
-Delegate to a worker subagent using natural-language spawn (per Codex subagent docs), referencing this file by path. Pass the operating specification below as the worker's prompt body.
+**(b) Native named-agent delegation.**
+Ask Codex to delegate to `nexus-specialist`; its project configuration is `.codex/agents/nexus-specialist.toml`. Supply the bounded task, relevant specs, absolute worktree, and explicit report-back contract.
+Verify that the running client discovered the named role and that its effective tools satisfy the task. Source tool restrictions are preserved as role instructions and supported config defaults, not an exact cross-CLI allowlist. Parent live permission overrides and inherited MCP tools still need review.
 
-**(c) Headless `codex exec` fallback.**
-Native subagent spawning is unreliable in headless mode. Use pattern (a): inline-cat `.codex/prompts/specialist-nexus.md` into the turn, then provide your task in the same session.
+**(c) Headless `codex exec`.**
+Probe delegation on the installed build and capture an actual child result before relying on it. An action requiring fresh approval fails when approval cannot be surfaced. If native delegation is unavailable, use pattern (a) explicitly and do not count an inline persona as an independent reviewer.
 
 ---
 
@@ -144,7 +145,7 @@ user: UserResponse = await client.get("/users/42", response_type=UserResponse)
 raw = await client.get_raw("/debug/dump")
 ```
 
-**Why typed + raw pair**: the `_raw` variants preserve low-level access for migration/debug; per `rules/testing.md` § Delegating Primitives, every variant requires a direct test.
+**Why typed + raw pair**: the `_raw` variants preserve low-level access for migration/debug; per `rules/testing.md` § Delegating Primitives, every variant requires a direct test. See PR #507 for the introduction commit.
 
 ## Transport Layer
 
@@ -211,6 +212,10 @@ Nexus has 4 transports (all implement `Transport` ABC from `nexus.transports.bas
 
 - `.codex/skills/03-nexus/nexus-troubleshooting.md` -- Common issues and solutions (startup blocking, workflow not found, port conflicts, auth injection, sandbox warnings)
 
+## ML Integration Surface (nexus 2.2.0+, M10 W31c)
+
+`nexus.ml` — bridge module exposing `km.ServeHandle` via Nexus's REST + MCP + CLI channels. See `specs/nexus-ml-integration.md` for the contract. Every ML serving route flows through a ServeHandle adapter, NOT a bespoke FastAPI handler. Origin: `feat/w31c-nexus-ml-bridge` merged at `91bb0383`.
+
 ## Related Agents
 
 - **dataflow-specialist**: Database integration with Nexus platform
@@ -218,6 +223,7 @@ Nexus has 4 transports (all implement `Transport` ABC from `nexus.transports.bas
 - **pattern-expert**: Core SDK workflows for Nexus registration
 - **`decide-framework` skill**: Choose between Core SDK and Nexus
 - **release-specialist**: Production deployment and scaling
+- **ml-specialist**: ServeHandle deployment through Nexus channels
 
 ## Full Documentation
 

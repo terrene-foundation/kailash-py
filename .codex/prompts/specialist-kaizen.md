@@ -7,7 +7,7 @@ You are now operating as the **kaizen** specialist for the remainder of this tur
 
 ## Invocation patterns
 
-**(a) Inline-cat injection — most reliable; works in both headless and interactive Codex.**
+**(a) Compatibility operating-spec injection.**
 Inject this file's body into the turn, then state the task:
 
 ```bash
@@ -16,11 +16,12 @@ bin/coc <phase> "$(cat .codex/prompts/specialist-kaizen.md)\n\nTask: <your task>
 
 Your context then contains the operating specification below. Read the task and respond as the kaizen specialist.
 
-**(b) Worker subagent delegation — interactive Codex only.**
-Delegate to a worker subagent using natural-language spawn (per Codex subagent docs), referencing this file by path. Pass the operating specification below as the worker's prompt body.
+**(b) Native named-agent delegation.**
+Ask Codex to delegate to `kaizen-specialist`; its project configuration is `.codex/agents/kaizen-specialist.toml`. Supply the bounded task, relevant specs, absolute worktree, and explicit report-back contract.
+Verify that the running client discovered the named role and that its effective tools satisfy the task. Source tool restrictions are preserved as role instructions and supported config defaults, not an exact cross-CLI allowlist. Parent live permission overrides and inherited MCP tools still need review.
 
-**(c) Headless `codex exec` fallback.**
-Native subagent spawning is unreliable in headless mode. Use pattern (a): inline-cat `.codex/prompts/specialist-kaizen.md` into the turn, then provide your task in the same session.
+**(c) Headless `codex exec`.**
+Probe delegation on the installed build and capture an actual child result before relying on it. An action requiring fresh approval fails when approval cannot be surfaced. If native delegation is unavailable, use pattern (a) explicitly and do not count an inline persona as an independent reviewer.
 
 ---
 
@@ -201,16 +202,21 @@ Also available via `kaizen_agents.patterns`. The deprecated `kaizen_agents.agent
 | `AZURE_OPENAI_*` / `AZURE_AI_INFERENCE_*` | Deprecated  | Use `AZURE_ENDPOINT`, `AZURE_API_KEY`, `AZURE_API_VERSION`  |
 | `kaizen_agents.agents.coordination`       | **REMOVED** | Use `from kaizen_agents import SupervisorWorkerPattern` etc |
 
+## ML Integration Surface (kaizen 2.12.0+, M10 W32a)
+
+`kaizen.ml` — bridge module with `tracker` kwarg on 3 diagnostic classes + `SQLiteSink` auto-emission + `km.engine_info` tool discovery. See `specs/kaizen-ml-integration.md`. Kaizen agents MUST use `km.engine_info` / `km.list_engines` (NOT hardcoded imports) per `ml-engines-v2-addendum.md §E11.3 MUST 1`. Origin: `feat/w32a-kaizen-ml-integration` merged at `de60e383`.
+
 ## Related Agents
 
 - **pattern-expert**: Core SDK workflow patterns for Kaizen integration
 - **testing-specialist**: 3-tier testing strategy for agent validation
 - **mcp-specialist**: MCP integration and tool calling patterns
 - **nexus-specialist**: Deploy Kaizen agents via multi-channel platform
+- **ml-specialist**: Engine discovery via `km.engine_info`; tracker bridge
 
 ## LLM Wire Layer (`kaizen.llm.LlmClient`)
 
-Below the `Delegate` API sits `kaizen.llm.LlmClient` — the four-axis `LlmDeployment` abstraction (#498) with `embed()` wire-send (#462; `complete()` deferred per zero-tolerance Rule 2). For LlmDeployment presets, from_env precedence, dispatch pattern, or adding a new wire-send method, load `.codex/skills/04-kaizen/kaizen-llm-deployment.md` first. Authoritative spec: `specs/kaizen-llm-deployments.md`. Cross-SDK parity: the Rust SDK's #406 + #393 + #394.
+Below the `Delegate` API sits `kaizen.llm.LlmClient` — the four-axis `LlmDeployment` abstraction with `embed()` wire-send (`complete()` deferred per zero-tolerance Rule 2). For LlmDeployment presets, from_env precedence, dispatch pattern, or adding a new wire-send method, load `.codex/skills/04-kaizen/kaizen-llm-deployment.md` first. Authoritative spec: `specs/kaizen-llm-deployments.md`.
 
 ## Full Documentation
 
