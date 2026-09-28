@@ -75,11 +75,23 @@ function dispatch() {
     );
   }
 
+  // Child deadlines are separate from the native 30s registration budget.
+  // Native zsh diagnosis (2026-09-28): Node startup took ~4950ms; the same
+  // sentinel with isolated empty shell startup took ~693ms. Preserve normal
+  // shell initialization and leave outer margin instead of weakening it.
+  // A JavaScript timer inside a hook cannot preempt synchronous hook work.
+  const childDeadlineMs = new Map([
+    [path.join(projectRoot, ".claude/hooks/validate-bash-command.js"), 4000],
+    [path.join(projectRoot, ".claude/hooks/integration-hygiene.js"), 10000],
+    [path.join(projectRoot, ".claude/hooks/session-start.js"), 20000],
+  ]).get(resolvedTarget);
+
   const result = spawnSync(process.execPath, [resolvedTarget, ...forwardedArgs], {
     cwd: projectRoot,
-    // A validator can hang in synchronous analysis after its own input timer
-    // clears. End it before the native deadline so failure becomes exit 2.
-    timeout: resolvedTarget === path.join(projectRoot, ".claude/hooks/validate-bash-command.js") ? 4000 : undefined,
+    timeout: childDeadlineMs,
+    // spawnSync otherwise waits indefinitely if a timed-out child ignores
+    // SIGTERM. Known bounded hooks must terminate before the outer deadline.
+    killSignal: childDeadlineMs === undefined ? undefined : "SIGKILL",
     // Transparent passthrough: the child reads the hook JSON from the wrapper's
     // own stdin and writes stdout/stderr straight back to Codex.
     stdio: "inherit",
@@ -93,6 +105,9 @@ function dispatch() {
   });
 
   if (result.error) {
+    if (result.error.code === "ETIMEDOUT") {
+      failClosed(`hook child timed out after ${childDeadlineMs}ms`);
+    }
     // Spawn itself failed (e.g. node not found on PATH). Fail closed.
     failClosed(`failed to spawn target hook: ${String(result.error)}`);
   }

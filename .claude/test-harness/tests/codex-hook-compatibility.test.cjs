@@ -239,3 +239,48 @@ test('Codex hygiene reports patch size/count limits and supports direct Write pa
   });
   assert.match(JSON.parse(result.stdout).hookSpecificOutput.additionalContext,/silent Python exception swallow/);
 });
+
+test('native budget includes shell startup before bounded validation', (t) => {
+  const repo=fs.mkdtempSync(path.join(os.tmpdir(),'codex-startup-budget-'));
+  t.after(()=>fs.rmSync(repo,{recursive:true,force:true}));
+  assert.equal(spawnSync('git',['init','-q',repo]).status,0);
+  const lib=path.join(repo,'.claude/hooks/lib');fs.mkdirSync(lib,{recursive:true});
+  fs.copyFileSync(wrapper,path.join(lib,'codex-hook-runtime.js'));
+  fs.writeFileSync(path.join(repo,'.claude/hooks/validate-bash-command.js'),
+    "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,2500);process.stdout.write('validated');");
+  const native=manifest.hooks.PreToolUse[0].hooks[0];
+  // A four-second startup plus a valid 2.5-second child exceeds the old native
+  // five-second window, while each stage individually fits its own budget.
+  const result=spawnSync('/bin/sh',['-c',`sleep 4\nexec ${native.command}`],{
+    cwd:repo,input:'{}',encoding:'utf8',timeout:native.timeout*1000,
+  });
+  assert.equal(result.status,0,result.stderr);
+  assert.equal(result.error,undefined);
+  assert.equal(result.stdout,'validated');
+});
+
+test('SessionStart and hygiene have real deadlines even during synchronous work', async (t) => {
+  const {spawn}=require('node:child_process');
+  const repo=fs.mkdtempSync(path.join(os.tmpdir(),'codex-lifecycle-deadline-'));
+  t.after(()=>fs.rmSync(repo,{recursive:true,force:true}));
+  const lib=path.join(repo,'.claude/hooks/lib');fs.mkdirSync(lib,{recursive:true});
+  const adapter=path.join(lib,'codex-hook-runtime.js');fs.copyFileSync(wrapper,adapter);
+  await Promise.all([['session-start.js',20000,'SessionStart'],['integration-hygiene.js',10000,'PostToolUse']].map(async ([name,budget,event])=>{
+    fs.writeFileSync(path.join(repo,'.claude/hooks',name), 'process.exit(1);');
+    const warning=spawnSync(process.execPath,[adapter,`./.claude/hooks/${name}`],{encoding:'utf8'});
+    assert.equal(warning.status,1,`${event}: warning status changed`);
+    fs.writeFileSync(path.join(repo,'.claude/hooks',name),
+      "process.on('SIGTERM',()=>{});const end=Date.now()+22000;while(Date.now()<end){};process.stdout.write('completed past deadline');");
+    const outerMs=manifest.hooks[event][0].hooks[0].timeout*1000;
+    assert.ok(outerMs>=budget+10000,`${event}: no startup allowance`);
+    const child=spawn(process.execPath,[adapter,`./.claude/hooks/${name}`],{stdio:['ignore','pipe','pipe']});
+    let stdout='';let stderr='';
+    child.stdout.on('data',chunk=>stdout+=chunk);child.stderr.on('data',chunk=>stderr+=chunk);
+    const started=Date.now();
+    const code=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',resolve);});
+    assert.equal(code,2,`${event}: ${stdout} ${stderr}`);
+    assert.match(stderr,/ETIMEDOUT|timed out/);
+    assert.equal(stdout,'');
+    assert.ok(Date.now()-started>=budget-500,`${event}: terminated before intended child budget`);
+  }));
+});
