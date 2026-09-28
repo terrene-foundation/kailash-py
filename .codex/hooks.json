@@ -5,40 +5,38 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ./.claude/hooks/lib/codex-hook-runtime.js ./.claude/hooks/session-start.js"
+            "command": "node \"$(git rev-parse --show-toplevel)/.claude/hooks/lib/codex-hook-runtime.js\" ./.claude/hooks/session-start.js",
+            "timeout": 10
           }
         ]
       }
     ],
-
     "UserPromptSubmit": [],
-
     "PreToolUse": [
       {
-        "matcher": "shell",
+        "matcher": "^Bash$",
         "hooks": [
           {
             "type": "command",
-            "command": "node ./.claude/hooks/lib/codex-hook-runtime.js ./.claude/hooks/validate-bash-command.js"
+            "command": "node \"$(git rev-parse --show-toplevel)/.claude/hooks/lib/codex-hook-runtime.js\" ./.claude/hooks/validate-bash-command.js",
+            "timeout": 5
           }
         ]
       }
     ],
-
     "PermissionRequest": [],
-
     "PostToolUse": [
       {
-        "matcher": "shell",
+        "matcher": "^(apply_patch|Edit|Write)$",
         "hooks": [
           {
             "type": "command",
-            "command": "node ./.claude/hooks/lib/codex-hook-runtime.js ./.claude/hooks/integration-hygiene.js"
+            "command": "node \"$(git rev-parse --show-toplevel)/.claude/hooks/lib/codex-hook-runtime.js\" ./.claude/hooks/integration-hygiene.js",
+            "timeout": 5
           }
         ]
       }
     ],
-
     "Stop": []
   }
 }

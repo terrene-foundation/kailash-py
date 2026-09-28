@@ -1,63 +1,19 @@
 #!/usr/bin/env node
 /**
- * codex-hook-runtime.js — Codex Bash-lane COC_RUNTIME delivery wrapper (#820 AC3).
+ * Native Codex hook adapter. The registration resolves this file from the Git
+ * root because Codex starts commands in the session cwd, possibly a subfolder.
+ * Resolve repo-relative target paths from this installed wrapper, not from cwd
+ * or an inherited project-directory variable. Run the child at that root while
+ * preserving the original stdin payload (including the session cwd).
  *
- * PROBLEM (forward-compat, not a live bug today):
- *   `.claude/hooks/lib/runtime.js::parseHook` validates `process.env.COC_RUNTIME`
- *   against the closed enum {cc,codex,gemini} and THROWS when it is unset. No
- *   shipped hook adopts parseHook yet, but the moment a native Codex Bash-lane
- *   hook (session-start / validate-bash-command / provenance-capture-tool /
- *   integration-hygiene) does, it would throw "COC_RUNTIME env not set" — and on
- *   the git-safety `validate-bash-command` hook that is a FAIL-OPEN regression
- *   (the dangerous command runs because the guard crashed).
- *
- * WHY NOT A SHELL ENV-PREFIX:
- *   The obvious form `COC_RUNTIME=codex node ./.claude/hooks/<h>.js` is a SHELL
- *   construct. Codex executes `type:"command"` hooks via `execvp(argv)` (verified
- *   against developers.openai.com/codex/config-advanced; #820). Under execvp the
- *   whole string is split into argv and `COC_RUNTIME=codex` becomes argv[0] →
- *   ENOENT → the Bash-lane hook SILENTLY does not run (fail-open). So the env MUST
- *   be stamped by a real process, never a shell prefix.
- *
- * THIS WRAPPER (robust under BOTH shell and execvp — it is a plain argv command):
- *   .codex/hooks.json registers each Bash-lane hook as
- *     node ./.claude/hooks/lib/codex-hook-runtime.js ./.claude/hooks/<target>.js
- *   argv[0]="node" always resolves; the wrapper stamps COC_RUNTIME=codex into a
- *   real child-process env, then delegates to the target hook as a NATIVE child
- *   process. Single source of COC_RUNTIME truth for the Codex Bash lane; needs no
- *   per-hook edits.
- *
- * WHY A CHILD PROCESS (spawnSync + stdio:'inherit') AND NOT in-process require():
- *   - `provenance-capture-tool.js` gates its main logic on `require.main === module`;
- *     an in-process require() would leave require.main pointing at THIS wrapper, so
- *     the hook's main body would never run.
- *   - stdio:'inherit' passes the wrapper's own fd 0/1/2 straight to the child, so
- *     the hook JSON on stdin, the hook's stdout/stderr, and its exit code all flow
- *     through UNCHANGED and NATIVE. An exit-2 deny / continue:false survives the
- *     wrapper byte-for-byte.
- *
- * FAIL-CLOSED (never silently exit 0) — SCOPE: the three WRAPPER-INTERCEPTABLE
- * failures. If the target path is missing / not a regular file, or the child
- * cannot be spawned, or it is killed by a signal (no exit code), the wrapper
- * surfaces the error on stderr and exits 2 — the PreToolUse block contract
- * (validate-bash-command.js uses exit 2 = block). On the git-safety lane a
- * wrapper-level failure therefore BLOCKS rather than letting the command through.
- * Exiting 0 on a delegation failure is BLOCKED (zero-tolerance Rule 3).
- *   NOT remapped: a target that LOADS then throws exits 1, which the wrapper passes
- *   through faithfully as 1. That is CORRECT, not a fail-open — native `node
- *   <hook>.js` behaves identically, and exit 1 is the legitimate "warn, non-blocking"
- *   semantics validate-bash-command / integration-hygiene rely on; remapping it to 2
- *   would clobber that contract.
- *   SELF-ABSENCE: dead code cannot intercept its own absence — if THIS wrapper file
- *   is itself missing downstream (sync miss / erroneous purge), `node <missing>`
- *   exits 1 and may fail-open, dropping every wrapped hook at once. The wrapper is
- *   therefore load-bearing for the git-safety lane and MUST ship (it is in the
- *   synced `hooks/lib/**` tier, NOT loom_only) and belongs on any sync-integrity
- *   allowlist that guards the git-safety hooks.
- *
- * Origin: #820 AC3 (2026-07-13). The server.js half (ACs 1/2/4) stamps
- * COC_RUNTIME programmatically for the non-Bash MCP lane; this is the Bash-lane
- * counterpart. See .claude/agents/codex-architect.md § Hooks Coverage.
+ * COC_RUNTIME and CLAUDE_PROJECT_DIR are adapter-owned. The native child keeps
+ * require.main behavior and stdin/stdout/stderr delivery. Exit statuses pass
+ * through; missing/non-file targets, spawn errors and signals exit 2. A hook's
+ * own exit 1 remains non-blocking except for the Bash validator: unexpected
+ * validator exits and its bounded deadline deny the unchecked command.
+ * This wrapper cannot
+ * enforce anything if it is absent, untrusted, disabled, or never matched.
+ * See https://learn.chatgpt.com/docs/hooks (2026-09-28).
  */
 
 "use strict";
@@ -94,10 +50,8 @@ function dispatch() {
     );
   }
 
-  // Resolve relative to the invocation cwd (Codex invokes hooks with
-  // cwd=project_root; the child inherits the same cwd so its own relative
-  // resolution matches this existence check).
-  const resolvedTarget = path.resolve(process.cwd(), targetArg);
+  const projectRoot = fs.realpathSync(path.resolve(__dirname, "../../.."));
+  const resolvedTarget = path.resolve(projectRoot, targetArg);
   // isFile(), not existsSync(): a DIRECTORY (or any non-file) target passes an
   // existence check, but `node <dir>` exits 1 (MODULE_NOT_FOUND) — non-blocking =
   // fail-OPEN on the git-safety lane. Stat and require a regular file so a
@@ -121,23 +75,20 @@ function dispatch() {
     );
   }
 
-  const result = spawnSync("node", [resolvedTarget, ...forwardedArgs], {
+  const result = spawnSync(process.execPath, [resolvedTarget, ...forwardedArgs], {
+    cwd: projectRoot,
+    // A validator can hang in synchronous analysis after its own input timer
+    // clears. End it before the native deadline so failure becomes exit 2.
+    timeout: resolvedTarget === path.join(projectRoot, ".claude/hooks/validate-bash-command.js") ? 4000 : undefined,
     // Transparent passthrough: the child reads the hook JSON from the wrapper's
     // own stdin and writes stdout/stderr straight back to Codex.
     stdio: "inherit",
-    // The single COC_RUNTIME stamp for the Codex Bash lane. parseHook validates
-    // this against {cc,codex,gemini}; `codex` is the correct enforcement-lane label.
-    // CLAUDE_PROJECT_DIR stamp mirrors the MCP-guard sibling (server.js): on the
-    // Codex Bash lane neither CLAUDE_PROJECT_DIR nor GEMINI_PROJECT_DIR is set, so
-    // runtime.js::parseHook().projectDir would fall through to CODEX_HOME (~/.codex
-    // — the wrong dir) for any future parseHook adopter. Codex invokes hooks with
-    // cwd=project_root, so process.cwd() IS the project root; preserve an inherited
-    // value if one is present. (parseHook already exposes stdin `data.cwd`
-    // separately, so validate-bash-command's git-safety path is unaffected either way.)
+    // Pin the root of this installed adapter, even if the parent process has
+    // a CLAUDE_PROJECT_DIR belonging to a different checkout.
     env: {
       ...process.env,
       COC_RUNTIME: "codex",
-      CLAUDE_PROJECT_DIR: process.env.CLAUDE_PROJECT_DIR || process.cwd(),
+      CLAUDE_PROJECT_DIR: projectRoot,
     },
   });
 
@@ -153,7 +104,11 @@ function dispatch() {
     );
   }
 
-  // Faithful passthrough of the target hook's own exit code (0 / 1 / 2 / …).
+  if (resolvedTarget === path.join(projectRoot, ".claude/hooks/validate-bash-command.js") &&
+      result.status !== 0 && result.status !== 2) {
+    failClosed("Bash validation could not complete; command was not validated.");
+  }
+  // Other hooks retain their native warning and exit semantics.
   process.exit(result.status);
 }
 

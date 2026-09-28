@@ -33,12 +33,21 @@ const timeout = setTimeout(() => {
 
 let input = "";
 process.stdin.setEncoding("utf8");
-process.stdin.on("data", (chunk) => (input += chunk));
+process.stdin.on("data", (chunk) => {
+  input += chunk;
+  if (process.env.COC_RUNTIME === "codex" && Buffer.byteLength(input) > 2 * 1024 * 1024) {
+    fs.writeSync(1, JSON.stringify({ hookSpecificOutput: {
+      hookEventName: "PostToolUse",
+      additionalContext: "Hygiene scan skipped: hook input size limit exceeded.",
+    } }) + "\n");
+    process.exit(0);
+  }
+});
 process.stdin.on("end", () => {
   clearTimeout(timeout);
   try {
     const data = JSON.parse(input);
-    const result = checkFile(data);
+    const result = process.env.COC_RUNTIME === "codex" ? checkCodexFiles(data) : checkFile(data);
     // Surface advisories to the agent via additionalContext — the delivered
     // PostToolUse field; the prior `validation` sibling was silently dropped
     // (loom #466). Render the message objects to text; emit no context block
@@ -61,30 +70,104 @@ process.stdin.on("end", () => {
   }
 });
 
+// Native Codex apply_patch carries patch text in tool_input.command, not
+// file_path. Inspect only bounded, existing in-root targets; never execute or
+// interpret shell commands. PostToolUse advisories cannot undo the edit.
+const MAX_SCAN_BYTES = 1024 * 1024;
+const MAX_SCAN_FILES = 100;
+function scanNotice(message) {
+  return { severity: "warn", rule: "hook-coverage", message };
+}
+function isScannableSource(filePath) {
+  return [".py", ".rs", ".ts", ".tsx", ".js", ".jsx", ".rb"].includes(path.extname(filePath).toLowerCase()) &&
+    !/(migrations?\/|tests?\/|__tests__\/|test_|_test\.|\.spec\.|\.test\.)/.test(filePath);
+}
+function checkCodexFiles(data) {
+  const targets = [];
+  if (data.tool_name === "apply_patch") {
+    const patch = data.tool_input?.command;
+    if (typeof patch !== "string" || Buffer.byteLength(patch) > MAX_SCAN_BYTES ||
+        !patch.startsWith("*** Begin Patch\n") || !patch.trimEnd().endsWith("*** End Patch")) {
+      return { messages: [scanNotice("Hygiene scan skipped: unsupported patch or size limit.")] };
+    }
+    for (const line of patch.split("\n")) {
+      const match = line.match(/^\*\*\* (Add File|Update File|Move to): (.+)$/);
+      if (!match) continue;
+      if (match[1] === "Move to" && targets.length) targets[targets.length - 1] = match[2];
+      else targets.push(match[2]);
+      if (targets.length > MAX_SCAN_FILES) {
+        return { messages: [scanNotice("Hygiene scan skipped: patch target count limit exceeded.")] };
+      }
+    }
+  } else if (["Edit", "Write"].includes(data.tool_name) && typeof data.tool_input?.file_path === "string") {
+    targets.push(data.tool_input.file_path);
+  } else {
+    return { messages: [scanNotice("Hygiene scan skipped: no supported edit payload; Bash writes are not scanned.")] };
+  }
+  const messages = [];
+  let boundary;
+  try {
+    boundary = fs.realpathSync(process.env.CLAUDE_PROJECT_DIR || data.cwd || process.cwd());
+  } catch {
+    return { messages: [scanNotice("Hygiene scan skipped: repository root is unavailable.")] };
+  }
+  for (const target of new Set(targets)) {
+    let fd;
+    try {
+      const canonical = fs.realpathSync(path.resolve(data.cwd || boundary, target));
+      const relative = path.relative(boundary, canonical);
+      if (relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative)) {
+        messages.push(scanNotice("Hygiene scan skipped: target is outside the repository root."));
+        continue;
+      }
+      if (!isScannableSource(canonical)) continue;
+      const before = fs.statSync(canonical);
+      if (!before.isFile() || before.size > MAX_SCAN_BYTES) {
+        messages.push(scanNotice("Hygiene scan skipped: target is not a regular file or exceeds the size limit."));
+        continue;
+      }
+      // Pin the opened file before reading and reject leaf symlinks. Compare
+      // identity and canonical path again before reading to detect replacements.
+      // This is not an OS sandbox against concurrent hostile ancestor mutation.
+      fd = fs.openSync(canonical, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+      const opened = fs.fstatSync(fd);
+      if (!opened.isFile() || opened.dev !== before.dev || opened.ino !== before.ino ||
+          fs.realpathSync(canonical) !== canonical) {
+        messages.push(scanNotice("Hygiene scan skipped: target changed during inspection."));
+        continue;
+      }
+      const buffer = Buffer.alloc(MAX_SCAN_BYTES + 1);
+      let used = 0;
+      while (used < buffer.length) {
+        const count = fs.readSync(fd, buffer, used, buffer.length - used, null);
+        if (count === 0) break;
+        used += count;
+      }
+      if (used > MAX_SCAN_BYTES) {
+        messages.push(scanNotice("Hygiene scan skipped: file grew past the size limit."));
+        continue;
+      }
+      messages.push(...checkFile(data, { filePath: canonical, content: buffer.toString("utf8", 0, used) }).messages);
+    } catch {
+      messages.push(scanNotice("Hygiene scan skipped: target was deleted, unreadable, or changed during inspection."));
+    } finally {
+      if (fd !== undefined) fs.closeSync(fd);
+    }
+  }
+  return { messages };
+}
+
 // ---------------------------------------------------------------------------
 // Main check dispatcher
 // ---------------------------------------------------------------------------
 
-function checkFile(data) {
-  const filePath = data.tool_input?.file_path || "";
-  const ext = path.extname(filePath).toLowerCase();
-
-  const sourceExts = [".py", ".rs", ".ts", ".tsx", ".js", ".jsx", ".rb"];
-  if (!sourceExts.includes(ext)) return { messages: [] };
-
-  // Skip migration, test, and generated files -- they have legitimate
-  // reasons to contain patterns this hook would otherwise flag.
-  if (
-    /(migrations?\/|tests?\/|__tests__\/|test_|_test\.|\.spec\.|\.test\.)/.test(
-      filePath,
-    )
-  ) {
-    return { messages: [] };
-  }
+function checkFile(data, loaded) {
+  const filePath = loaded ? loaded.filePath : data.tool_input?.file_path || "";
+  if (!isScannableSource(filePath)) return { messages: [] };
 
   let content = "";
   try {
-    content = fs.readFileSync(filePath, "utf8");
+    content = loaded ? loaded.content : fs.readFileSync(filePath, "utf8");
   } catch {
     return { messages: [] }; // file deleted or unreadable; nothing to check
   }

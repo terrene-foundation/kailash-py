@@ -115,9 +115,26 @@ const {
   COORD_MODE_RX,
 } = require("./lib/guard-path-scope.js");
 
-// Timeout handling for PreToolUse hooks (5 second limit)
-const TIMEOUT_MS = 5000;
+// Codex treats exit 1 as non-blocking. Unknown validation must deny, while
+// CC/Gemini retain their existing error behavior. Avoid echoing malformed input.
+function failCodexValidation(reason) {
+  const out = instructAndWait({
+    hookEvent: "PreToolUse",
+    severity: "block",
+    what_happened: "Command validation could not complete.",
+    why: reason,
+    agent_must_report: ["Report that the command was not validated or run."],
+    agent_must_wait: "Repair the validation input or hook before retrying.",
+    user_summary: "Command blocked because validation could not complete.",
+  });
+  fs.writeSync(1, JSON.stringify(out.json) + "\n");
+  process.exit(out.exitCode);
+}
+
+// Leave margin for the adapter's 4s child deadline and native 5s timeout.
+const TIMEOUT_MS = process.env.COC_RUNTIME === "codex" ? 3000 : 5000;
 const timeout = setTimeout(() => {
+  if (process.env.COC_RUNTIME === "codex") failCodexValidation("Validation input timed out.");
   console.error("[HOOK TIMEOUT] validate-bash-command exceeded 5s limit");
   console.log(JSON.stringify({ continue: true }));
   process.exit(1);
@@ -125,11 +142,21 @@ const timeout = setTimeout(() => {
 
 let input = "";
 process.stdin.setEncoding("utf8");
-process.stdin.on("data", (chunk) => (input += chunk));
+process.stdin.on("data", (chunk) => {
+  input += chunk;
+  if (process.env.COC_RUNTIME === "codex" && Buffer.byteLength(input) > 1024 * 1024) {
+    failCodexValidation("Hook input exceeds the validation size limit.");
+  }
+});
 process.stdin.on("end", () => {
   clearTimeout(timeout);
   try {
     const data = JSON.parse(input);
+    if (process.env.COC_RUNTIME === "codex" &&
+        (!data || typeof data !== "object" || Array.isArray(data) ||
+         typeof data.tool_input?.command !== "string")) {
+      failCodexValidation("Expected a hook payload with a string tool_input.command.");
+    }
     const result = validateBashCommand(data);
     // If result is structured for instruct-and-wait, use canonical shape
     if (result.severity) {
@@ -149,7 +176,7 @@ process.stdin.on("end", () => {
     // additionalContext — the delivered PreToolUse field; the prior
     // `validation` sibling was silently dropped (loom #466). Emit the context
     // block only when there's an advisory message.
-    const advisory = { continue: result.continue };
+    const advisory = process.env.COC_RUNTIME === "codex" ? {} : { continue: result.continue };
     if (result.message) {
       advisory.hookSpecificOutput = {
         hookEventName: "PreToolUse",
@@ -159,8 +186,11 @@ process.stdin.on("end", () => {
     console.log(JSON.stringify(advisory));
     process.exit(result.exitCode);
   } catch (error) {
+    if (process.env.COC_RUNTIME === "codex") {
+      failCodexValidation("Invalid hook payload or an internal validation error.");
+    }
     console.error(`[HOOK ERROR] ${error.message}`);
-    console.log(JSON.stringify({ continue: true }));
+    console.log(JSON.stringify(process.env.COC_RUNTIME === "codex" ? {} : { continue: true }));
     process.exit(1);
   }
 });

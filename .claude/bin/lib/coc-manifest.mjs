@@ -675,7 +675,7 @@ function surfaceRolesAllow(surfaceRoles, manifestRel, targetRole) {
 //   - manifest-explicit + file missing → halt (manifest defect)
 //   - manifest-null                    → skip overlay for this axis
 //   - manifest-explicit / path-mirror  → apply if file exists
-function composeArtifactBody(category, relPath, cli, lang) {
+function composeArtifactBody(category, relPath, cli, lang, { preserveSourcePaths = false } = {}) {
   const globalPath = path.join(REPO, ".claude", category, relPath);
   if (!fs.existsSync(globalPath)) return null;
   let composed = safeReadFileSync(globalPath, "utf8");
@@ -733,7 +733,14 @@ function composeArtifactBody(category, relPath, cli, lang) {
   // Shared-runtime paths (hooks, learning, VERSION, bin, sync markers,
   // rules, guides, codex-mcp-guard) stay `.claude/` since they're
   // consumed identically across all three CLIs.
-  const rewritten = rewriteClaudePathsForCli(stripped, cli);
+  // Authoring references describe SOURCE ownership and compare all CLI layouts.
+  // Rewriting these makes an emitted copy claim it is the authoritative source.
+  // Preserve every subfile of authoring skills, including their examples/tables.
+  const authoringReference = category === "skills" &&
+    /^[^/]*-authoring\//.test(relPath);
+  const rewritten = rewriteClaudePathsForCli(stripped, cli, {
+    preserveSourcePaths: preserveSourcePaths || authoringReference,
+  });
   return { body: rewritten, destRelPath };
 }
 
@@ -747,13 +754,11 @@ function composeArtifactBody(category, relPath, cli, lang) {
 // or `x.claude/skills/`. NOT markdown-fence-aware: rewrites apply
 // uniformly to prose AND fenced code blocks. This is intentional for
 // command/skill emission (the consumer's runtime paths are CLI-specific
-// regardless of where the reference appears). If a future source command
-// needs to document the loom-side authoring path verbatim (e.g., "loom
-// authors land skills at .claude/skills/"), wrap the literal in a
-// `<!-- noemit -->` slot or substitute with `&period;claude` so the
-// regex no longer matches.
-function rewriteClaudePathsForCli(body, cli) {
-  if (cli !== "codex" && cli !== "gemini") return body;
+// regardless of where the reference appears). Authoring references use the
+// explicit preserveSourcePaths option above: their source ownership, comparison
+// tables, quoted examples and fenced code must not change with the reader's CLI.
+function rewriteClaudePathsForCli(body, cli, { preserveSourcePaths = false } = {}) {
+  if (preserveSourcePaths || (cli !== "codex" && cli !== "gemini")) return body;
   // commands path differs: codex calls them "prompts", gemini calls them "commands".
   const commandsTarget = cli === "codex" ? "prompts" : "commands";
   return body
@@ -781,7 +786,9 @@ function rewriteClaudePathsForCli(body, cli) {
     // PY-3-A2: `.claude/agents/<group>/<name>.md` does NOT map onto
     // `.{cli}/agents/<group>/<name>.md` on EITHER lane — the old rewrite
     // produced a path shape neither emitter ever writes:
-    //   codex  — has NO `agents/` namespace at all. emitCodexAgentPrompts writes
+    //   codex  — compatibility references continue to use operating-spec prompts.
+    //            Native `.codex/agents/<name>.toml` also exists; this rewrite keeps
+    //            Markdown links pointing at readable Markdown. The emitter writes
     //            `.codex/prompts/specialist-<short>.md`, where <short> drops a
     //            trailing "-specialist" (dataflow-specialist → specialist-dataflow).
     //   gemini — emitGeminiAgents writes `.gemini/agents/<name>.md`, FLAT: the
@@ -806,11 +813,8 @@ function rewriteClaudePathsForCli(body, cli) {
     )
     // Bare-directory form (a citation naming the dir, not a specific agent).
     // Gemini's `.gemini/agents/` IS a real namespace, so this is correct there.
-    // On codex it is NOT — codex has no agents dir — but the only occurrences are
-    // the consumer-owned `.claude/agents/project/` paths in sync-from-template.md,
-    // whose correct codex target depends on whether Codex supports consumer-owned
-    // project agents at all. That is UNRESOLVED, so this is left as-is rather than
-    // guessed; see the S22-W4-EXEC lane report.
+    // Codex also has a native agents directory; concrete Markdown citations above
+    // keep the compatibility prompt mapping rather than pretending TOML is Markdown.
     .replace(/(^|[^a-zA-Z0-9._/-])\.claude\/agents\//g, `$1.${cli}/agents/`);
 }
 

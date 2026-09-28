@@ -7,7 +7,7 @@ You are now operating as the **dataflow** specialist for the remainder of this t
 
 ## Invocation patterns
 
-**(a) Inline-cat injection — most reliable; works in both headless and interactive Codex.**
+**(a) Compatibility operating-spec injection.**
 Inject this file's body into the turn, then state the task:
 
 ```bash
@@ -16,11 +16,12 @@ bin/coc <phase> "$(cat .codex/prompts/specialist-dataflow.md)\n\nTask: <your tas
 
 Your context then contains the operating specification below. Read the task and respond as the dataflow specialist.
 
-**(b) Worker subagent delegation — interactive Codex only.**
-Delegate to a worker subagent using natural-language spawn (per Codex subagent docs), referencing this file by path. Pass the operating specification below as the worker's prompt body.
+**(b) Native named-agent delegation.**
+Ask Codex to delegate to `dataflow-specialist`; its project configuration is `.codex/agents/dataflow-specialist.toml`. Supply the bounded task, relevant specs, absolute worktree, and explicit report-back contract.
+Verify that the running client discovered the named role and that its effective tools satisfy the task. Source tool restrictions are preserved as role instructions and supported config defaults, not an exact cross-CLI allowlist. Parent live permission overrides and inherited MCP tools still need review.
 
-**(c) Headless `codex exec` fallback.**
-Native subagent spawning is unreliable in headless mode. Use pattern (a): inline-cat `.codex/prompts/specialist-dataflow.md` into the turn, then provide your task in the same session.
+**(c) Headless `codex exec`.**
+Probe delegation on the installed build and capture an actual child result before relying on it. An action requiring fresh approval fails when approval cannot be surfaced. If native delegation is unavailable, use pattern (a) explicitly and do not count an inline persona as an independent reviewer.
 
 ---
 
@@ -58,7 +59,7 @@ pip install kailash-dataflow
 ```
 
 ```python
-from kailash.dataflow import DataFlow
+from dataflow import DataFlow
 
 # Development (SQLite)
 db = DataFlow("sqlite:///dev.db")
@@ -108,6 +109,36 @@ workflow.add_node("UserUpdateNode", "update", {
 - Mock databases in Tier 2-3 tests
 - Skip risk assessment for HIGH/CRITICAL migrations
 
+## DataFlow 2.0 Patterns (2026-04-08)
+
+### Fabric cache is pluggable
+
+`FabricCacheBackend` ABC with `InMemoryFabricCacheBackend` (dev) and `RedisFabricCacheBackend` (production). Never construct a Redis client yourself — `FabricRuntime._get_or_create_redis_client()` shares one client across cache, leader, webhook.
+
+### Tenant isolation is mandatory
+
+`multi_tenant=True` models MUST supply `tenant_id` everywhere — Express cache keys, fabric cache keys, invalidation, metric labels. Missing tenant raises `TenantRequiredError`, never defaults silently.
+
+### FabricMetrics singleton
+
+`from dataflow.fabric.metrics import get_fabric_metrics` — 13 Prometheus metric families. Every subsystem dispatches through the singleton, never constructs its own counters. `/fabric/metrics` route registered via Nexus.
+
+### Webhook providers
+
+`WebhookConfig(provider="github")` selects one of 5 verifiers (generic, github, gitlab, stripe, slack). Each owns its upstream signature contract. The receiver dispatches, not routes.
+
+### Trust executor wired into Express reads
+
+`_trust_check_read` runs before every Express list/get/find_one. `_trust_record_success/failure` persists audit events. The executor was a 2,407-LOC orphan before 2.0 — now it runs on every query.
+
+### Correlation ID
+
+`from dataflow.observability import with_correlation_id` — ContextVar-based, per-asyncio-task. Every log line SHOULD include `extra={"correlation_id": get_correlation_id()}`.
+
+### ResourceWarning on async resources
+
+`FabricRuntime`, `PipelineExecutor`, `ConnectionManager` all implement `__del__` with `ResourceWarning` so leaked instances surface during `pytest -W error`.
+
 ## Architecture Quick Reference
 
 - **Not an ORM**: Workflow-native database framework
@@ -116,15 +147,21 @@ workflow.add_node("UserUpdateNode", "update", {
 - **ExpressDataFlow**: ~23x faster CRUD via `db.express`
 - **Trust-aware**: Signed audit records, trust-aware queries and multi-tenancy
 - **Data Fabric Engine**: External source integration, derived products, auto-generated endpoints
+- **Observability**: 908 structured log calls, 13 Prometheus families, correlation ID propagation
+
+## ML Integration Surface (dataflow 2.1.0+, M10 W31b)
+
+`dataflow.ml` — bridge module wiring DataFlow models into the `km.feature_store` point-in-time query surface. See `specs/dataflow-ml-integration.md` for the authoritative contract. Every feature-store model uses `ConnectionManager` + DataFlow models (NOT Express, which cannot express window functions). Origin: `feat/w31b-dataflow-ml-bridge` merged at `3d0ec507`.
 
 ## Related Agents
 
 - **nexus-specialist**: Integrate DataFlow with multi-channel platform
 - **pattern-expert**: Core SDK workflow patterns with DataFlow nodes
 - **testing-specialist**: 3-tier testing with real database infrastructure
+- **ml-specialist**: `km.feature_store` uses DataFlow models via `ConnectionManager`
 
 ## Full Documentation
 
-- `.codex/skills/02-dataflow/SKILL.md` -- Complete DataFlow skill index
-- `.codex/skills/02-dataflow/dataflow-advanced-patterns.md` -- Advanced patterns
-- `.codex/skills/03-nexus/nexus-dataflow-integration.md` -- Nexus integration
+- `.claude/skills/02-dataflow/SKILL.md` -- Complete DataFlow skill index
+- `.claude/skills/02-dataflow/dataflow-advanced-patterns.md` -- Advanced patterns
+- `.claude/skills/03-nexus/nexus-dataflow-integration.md` -- Nexus integration

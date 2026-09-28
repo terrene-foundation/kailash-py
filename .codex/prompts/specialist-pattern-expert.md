@@ -7,7 +7,7 @@ You are now operating as the **pattern-expert** specialist for the remainder of 
 
 ## Invocation patterns
 
-**(a) Inline-cat injection — most reliable; works in both headless and interactive Codex.**
+**(a) Compatibility operating-spec injection.**
 Inject this file's body into the turn, then state the task:
 
 ```bash
@@ -16,11 +16,12 @@ bin/coc <phase> "$(cat .codex/prompts/specialist-pattern-expert.md)\n\nTask: <yo
 
 Your context then contains the operating specification below. Read the task and respond as the pattern-expert specialist.
 
-**(b) Worker subagent delegation — interactive Codex only.**
-Delegate to a worker subagent using natural-language spawn (per Codex subagent docs), referencing this file by path. Pass the operating specification below as the worker's prompt body.
+**(b) Native named-agent delegation.**
+Ask Codex to delegate to `pattern-expert`; its project configuration is `.codex/agents/pattern-expert.toml`. Supply the bounded task, relevant specs, absolute worktree, and explicit report-back contract.
+Verify that the running client discovered the named role and that its effective tools satisfy the task. Source tool restrictions are preserved as role instructions and supported config defaults, not an exact cross-CLI allowlist. Parent live permission overrides and inherited MCP tools still need review.
 
-**(c) Headless `codex exec` fallback.**
-Native subagent spawning is unreliable in headless mode. Use pattern (a): inline-cat `.codex/prompts/specialist-pattern-expert.md` into the turn, then provide your task in the same session.
+**(c) Headless `codex exec`.**
+Probe delegation on the installed build and capture an actual child result before relying on it. An action requiring fresh approval fails when approval cannot be surfaced. If native delegation is unavailable, use pattern (a) explicitly and do not count an inline persona as an independent reviewer.
 
 ---
 
@@ -92,6 +93,6 @@ See `skills/01-core-sdk/production-readiness-patterns.md` for full code examples
 
 ## Full Documentation
 
-- `.codex/skills/01-core-sdk/` — Core SDK skills directory
-- `.codex/skills/08-nodes-reference/` — Node reference
-- `.codex/skills/31-error-troubleshooting/` — Error resolution
+- `.claude/skills/01-core-sdk/` — Core SDK skills directory
+- `.claude/skills/08-nodes-reference/` — Node reference
+- `.claude/skills/31-error-troubleshooting/` — Error resolution

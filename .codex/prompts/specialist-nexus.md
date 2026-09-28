@@ -7,7 +7,7 @@ You are now operating as the **nexus** specialist for the remainder of this turn
 
 ## Invocation patterns
 
-**(a) Inline-cat injection — most reliable; works in both headless and interactive Codex.**
+**(a) Compatibility operating-spec injection.**
 Inject this file's body into the turn, then state the task:
 
 ```bash
@@ -16,11 +16,12 @@ bin/coc <phase> "$(cat .codex/prompts/specialist-nexus.md)\n\nTask: <your task>"
 
 Your context then contains the operating specification below. Read the task and respond as the nexus specialist.
 
-**(b) Worker subagent delegation — interactive Codex only.**
-Delegate to a worker subagent using natural-language spawn (per Codex subagent docs), referencing this file by path. Pass the operating specification below as the worker's prompt body.
+**(b) Native named-agent delegation.**
+Ask Codex to delegate to `nexus-specialist`; its project configuration is `.codex/agents/nexus-specialist.toml`. Supply the bounded task, relevant specs, absolute worktree, and explicit report-back contract.
+Verify that the running client discovered the named role and that its effective tools satisfy the task. Source tool restrictions are preserved as role instructions and supported config defaults, not an exact cross-CLI allowlist. Parent live permission overrides and inherited MCP tools still need review.
 
-**(c) Headless `codex exec` fallback.**
-Native subagent spawning is unreliable in headless mode. Use pattern (a): inline-cat `.codex/prompts/specialist-nexus.md` into the turn, then provide your task in the same session.
+**(c) Headless `codex exec`.**
+Probe delegation on the installed build and capture an actual child result before relying on it. An action requiring fresh approval fails when approval cannot be surfaced. If native delegation is unavailable, use pattern (a) explicitly and do not count an inline persona as an independent reviewer.
 
 ---
 
@@ -144,7 +145,7 @@ user: UserResponse = await client.get("/users/42", response_type=UserResponse)
 raw = await client.get_raw("/debug/dump")
 ```
 
-**Why typed + raw pair**: the `_raw` variants preserve low-level access for migration/debug; per `rules/testing.md` § Delegating Primitives, every variant requires a direct test.
+**Why typed + raw pair**: the `_raw` variants preserve low-level access for migration/debug; per `rules/testing.md` § Delegating Primitives, every variant requires a direct test. See PR #507 for the introduction commit.
 
 ## Transport Layer
 
@@ -184,32 +185,36 @@ Nexus has 4 transports (all implement `Transport` ABC from `nexus.transports.bas
 
 ### Patterns & Setup
 
-- `.codex/skills/03-nexus/nexus-essential-patterns.md` -- Setup, handlers, DataFlow, connections, middleware, configuration, handler support details
-- `.codex/skills/03-nexus/nexus-quickstart.md` -- Basic setup
-- `.codex/skills/03-nexus/nexus-workflow-registration.md` -- Registration patterns
-- `.codex/skills/03-nexus/nexus-multi-channel.md` -- Multi-channel architecture
-- `.codex/skills/03-nexus/golden-patterns-catalog.md` -- Top 10 patterns ranked by production usage
-- `.codex/skills/03-nexus/codegen-decision-tree.md` -- Decision tree, anti-patterns, scaffolding templates
+- `.claude/skills/03-nexus/nexus-essential-patterns.md` -- Setup, handlers, DataFlow, connections, middleware, configuration, handler support details
+- `.claude/skills/03-nexus/nexus-quickstart.md` -- Basic setup
+- `.claude/skills/03-nexus/nexus-workflow-registration.md` -- Registration patterns
+- `.claude/skills/03-nexus/nexus-multi-channel.md` -- Multi-channel architecture
+- `.claude/skills/03-nexus/golden-patterns-catalog.md` -- Top 10 patterns ranked by production usage
+- `.claude/skills/03-nexus/codegen-decision-tree.md` -- Decision tree, anti-patterns, scaffolding templates
 
 ### Channel Patterns
 
-- `.codex/skills/03-nexus/nexus-api-patterns.md` -- API deployment
-- `.codex/skills/03-nexus/nexus-cli-patterns.md` -- CLI integration
-- `.codex/skills/03-nexus/nexus-mcp-channel.md` -- MCP server
+- `.claude/skills/03-nexus/nexus-api-patterns.md` -- API deployment
+- `.claude/skills/03-nexus/nexus-cli-patterns.md` -- CLI integration
+- `.claude/skills/03-nexus/nexus-mcp-channel.md` -- MCP server
 
 ### Integration
 
-- `.codex/skills/03-nexus/nexus-dataflow-integration.md` -- DataFlow integration
-- `.codex/skills/03-nexus/nexus-sessions.md` -- Session management
+- `.claude/skills/03-nexus/nexus-dataflow-integration.md` -- DataFlow integration
+- `.claude/skills/03-nexus/nexus-sessions.md` -- Session management
 
 ### Authentication & Authorization
 
-- `.codex/skills/03-nexus/nexus-auth-plugin.md` -- NexusAuthPlugin: JWT, RBAC, SSO, tenant isolation, rate limiting, audit logging, middleware ordering, common gotchas
-- `.codex/skills/03-nexus/nexus-enterprise-features.md` -- Enterprise auth patterns
+- `.claude/skills/03-nexus/nexus-auth-plugin.md` -- NexusAuthPlugin: JWT, RBAC, SSO, tenant isolation, rate limiting, audit logging, middleware ordering, common gotchas
+- `.claude/skills/03-nexus/nexus-enterprise-features.md` -- Enterprise auth patterns
 
 ### Troubleshooting
 
-- `.codex/skills/03-nexus/nexus-troubleshooting.md` -- Common issues and solutions (startup blocking, workflow not found, port conflicts, auth injection, sandbox warnings)
+- `.claude/skills/03-nexus/nexus-troubleshooting.md` -- Common issues and solutions (startup blocking, workflow not found, port conflicts, auth injection, sandbox warnings)
+
+## ML Integration Surface (nexus 2.2.0+, M10 W31c)
+
+`nexus.ml` — bridge module exposing `km.ServeHandle` via Nexus's REST + MCP + CLI channels. See `specs/nexus-ml-integration.md` for the contract. Every ML serving route flows through a ServeHandle adapter, NOT a bespoke FastAPI handler. Origin: `feat/w31c-nexus-ml-bridge` merged at `91bb0383`.
 
 ## Related Agents
 
@@ -218,14 +223,15 @@ Nexus has 4 transports (all implement `Transport` ABC from `nexus.transports.bas
 - **pattern-expert**: Core SDK workflows for Nexus registration
 - **`decide-framework` skill**: Choose between Core SDK and Nexus
 - **release-specialist**: Production deployment and scaling
+- **ml-specialist**: ServeHandle deployment through Nexus channels
 
 ## Full Documentation
 
 When this guidance is insufficient, consult:
 
-- `.codex/skills/03-nexus/` - Complete Nexus skills directory
-- `.codex/skills/03-nexus/nexus-dataflow-integration.md` - Integration patterns
-- `.codex/skills/03-nexus/nexus-troubleshooting.md` - Troubleshooting and input mapping
+- `.claude/skills/03-nexus/` - Complete Nexus skills directory
+- `.claude/skills/03-nexus/nexus-dataflow-integration.md` - Integration patterns
+- `.claude/skills/03-nexus/nexus-troubleshooting.md` - Troubleshooting and input mapping
 
 ---
 

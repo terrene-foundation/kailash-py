@@ -4,6 +4,10 @@ Depth file for `rules/agents.md` § "MUST: A Dispatched Agent's Result Is Not Re
 
 This is the **spawn-configuration** sibling of `redteam-dispatch-evidence-gate.md` Axis 1. That axis covers an agent that ERRORED and returned nothing. This one covers TWO ways a SUCCEEDING agent still returns nothing usable: it produced its full report and had no return path (mode 1, below), or it stalled before writing and returned a status fragment (mode 2). Same rule family (`evidence-first-claims.md` MUST-3: an empty return is zero evidence), different and more dangerous cause: nothing anywhere reports a failure.
 
+## Codex addressing and delivery
+
+The `name`/`toolUseId` measurements below describe Claude Code's teammate/task modes; do not generalize them to Codex. For Codex child agents, use the current host's returned agent ID and supported result/message path, and inspect the actual report. For an independently initialized Codex session, use `codex queue --thread SESSION_UUID --message TEXT`. A successful queue receipt proves acceptance only; acknowledgement, delivered results and integration are separate states. See `skills/codex-coordination/SKILL.md` for the bounded procedure. Named custom agents in `.codex/agents/*.toml` are supported by current Codex; their names are not evidence of the Claude Code teammate failure below.
+
 ## The failure mode
 
 An orchestrator fans out N agents, passing `name:` to each so they stay addressable. Every agent runs, does competent work, and writes its final report. The orchestrator receives, from each, only:

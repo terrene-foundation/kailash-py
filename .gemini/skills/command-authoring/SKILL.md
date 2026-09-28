@@ -19,8 +19,8 @@ Authoring a new slash command. Auditing an existing command for line cap, neutra
 
 | CLI    | On-disk path                   | Format   | Slash invocation                                                                                                                                 | Frontmatter shape                                                             |
 | ------ | ------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| CC     | `.gemini/commands/<name>.md`   | Markdown | `/<name>`                                                                                                                                        | YAML: `name:` + `description:` + optional `argument-hint:` / `allowed-tools:` |
-| Codex  | `.codex/prompts/<name>.md`     | Markdown | `bin/coc <name> "<prompt>"` (deprecated upstream: `/prompts:<name>` is no longer loaded by Codex CLI 0.128+ — `bin/coc` dispatcher is canonical) | Same YAML, preserved from source                                              |
+| CC     | `.claude/commands/<name>.md`   | Markdown | `/<name>`                                                                                                                                        | YAML: `name:` + `description:` + optional `argument-hint:` / `allowed-tools:` |
+| Codex  | `.codex/prompts/<name>.md`     | Markdown | `bin/coc <name> "<prompt>"` (project dispatcher; repo-local prompt copies are reference content, not a native slash-command contract) | Same YAML, preserved from source                                              |
 | Gemini | `.gemini/commands/<name>.toml` | TOML     | `/<name>`                                                                                                                                        | `name`, `description`, `prompt = '''…'''`, optional `tools = [...]`           |
 
 | Constraint       | Value                                                                                                                                           |
@@ -33,12 +33,12 @@ Authoring a new slash command. Auditing an existing command for line cap, neutra
 
 ## Single Source, Three Emissions
 
-The authoritative copy lives at `.gemini/commands/<name>.md`. The emitter `.claude/bin/emit-cli-artifacts.mjs` (driven by `coc-sync` Step 6.6) produces:
+The authoritative copy lives at `.claude/commands/<name>.md`. The emitter `.claude/bin/emit-cli-artifacts.mjs` (driven by `coc-sync` Step 6.6) produces:
 
 - `.codex/prompts/<name>.md` — Markdown passthrough with Codex-native adaptations from `variants/codex/commands/<name>.md` overlays (if any).
 - `.gemini/commands/<name>.toml` — TOML wrap of the same body inside a triple-single-quote `prompt` block; YAML frontmatter is converted to TOML keys.
 
-Both consumers read the source body. Anything CC-native that appears in the body — `Agent(subagent_type=…)`, `Task(…)`, `TodoWrite(…)` — leaks into Codex/Gemini emissions and is unparseable there.
+Preserve source ownership paths in authoring explanations and cross-CLI tables; never rewrite the CC source column to a generated Codex path. Both consumers read the source body. Anything CC-native that appears in the body — `Agent(subagent_type=…)`, `Task(…)`, `TodoWrite(…)` — leaks into Codex/Gemini emissions and is unparseable there.
 
 ## Frontmatter Discipline
 
@@ -50,7 +50,7 @@ description: "Load phase 04 (validate) for the current workspace. Red team testi
 ---
 ```
 
-The `description:` is what appears in the CC `/help` listing and in Codex's `/prompts` enumeration. Failure-mode language ("Red team testing"; "Production hardening for frontend") wins over generic noun phrases ("Validation command"; "Hardening utility").
+The `description:` supplies listing metadata on supporting hosts. Repo-local Codex prompt copies are not automatically listed; use native skills for discoverable reusable instructions. Failure-mode language ("Red team testing"; "Production hardening for frontend") wins over generic noun phrases ("Validation command"; "Hardening utility").
 
 ### Argument Hint
 
@@ -66,7 +66,7 @@ argument-hint: "[shard-id]"
 
 ### Allowed Tools (Rare)
 
-`allowed-tools:` restricts which tools the agent may invoke during the command body. Default is unrestricted. Use only when the command genuinely shouldn't reach for, e.g., `Bash` or `Write`. Most commands omit it.
+`allowed-tools:` has host-specific semantics; a CC command permission declaration is not a Codex sandbox or tool restriction. Check effective host permissions separately. Use only when the command genuinely shouldn't reach for, e.g., `Bash` or `Write`. Most commands omit it.
 
 ## Body Discipline — ≤150 Lines
 
@@ -135,22 +135,22 @@ Variant files supply replacement bodies only for the slots that diverge. Unoverr
 
 ## Native-Primitive Carve-Outs
 
-Some CC commands map to a CLI's own native primitive — emitting a `.codex/prompts/<name>.md` or `.gemini/commands/<name>.toml` for them would shadow the native path. Per `.gemini/agents/codex-architect.md` § Codex-Native Primitives:
+Some CC commands map to a CLI's own native primitive — emitting a `.codex/prompts/<name>.md` or `.gemini/commands/<name>.toml` for them would shadow the native path. Per `.claude/agents/codex-architect.md` § Native primitives:
 
-- **`/review`** → `codex review --uncommitted --base main` (Codex native). Do NOT emit a `.codex/prompts/review.md`.
+- **`/review`** → `codex review --uncommitted` OR `codex review --base <integration-branch>` OR `codex review --commit <SHA>` (Codex native). Do NOT emit a `.codex/prompts/review.md`.
 - **`/security-review`** → architect-decided; check the per-CLI exclusions list before adding.
 
-The exclusion mechanism lives in `.claude/sync-manifest.yaml::cli_emit_exclusions.{codex,gemini}` as a glob list. New commands that have a native counterpart MUST add a `commands/<name>.md` exclusion entry for the relevant CLI.
+The owning distribution manifest supplies `cli_emit_exclusions.{codex,gemini}` as a glob list; consumers use their narrowed projection. New commands that have a native counterpart MUST add a `commands/<name>.md` exclusion entry for the relevant CLI.
 
-## Wrapper Status — Native Prompts Are Canonical
+## Codex Phase Dispatcher And Native Skills
 
-Bash wrappers (`bin/coc-<name>`, e.g. `bin/coc-analyze` invoking `codex exec --json --output-schema=…`) were authored at Phase J1 but **wrapper emission was deferred at Shard C 2026-05-10** per `journal/0006-DECISION-wrapper-emission-disposition-strip.md`. Reasons: the wrappers' runtime dependency `.codex/developer-instructions/` was never authored; the native prompt surface covers all 28 commands; manifest emit_to declarations were stubs.
+This project's `bin/coc <phase>` is the external phase dispatcher. It runs `codex exec` with JSONL, a per-phase response schema and the project-document budget (`bin/coc:96-100`). Existing phase shims reuse that dispatcher; adding another per-phase shell implementation would duplicate it.
 
-Treat `.claude/wrappers/*.sh.template` as historical. New commands MUST NOT add wrapper templates. If a future workstream requires structured-output enforcement or external CLI invocation, revival is documented in the journal entry — propose at `/codify`, do not assume it's live.
+Custom prompts are deprecated compatibility content. This does not remove Codex's built-in slash commands or native skills. New reusable instructions can use a native skill with explicit invocation metadata, while phase automation retains its response-schema contract. See `.claude/guides/codex/README.md` and `.claude/skills/codex-coordination/SKILL.md` for current invocation and delivery behavior.
 
 ## Sync Manifest Wiring
 
-Every new command MUST be added to `.claude/sync-manifest.yaml` under the appropriate tier block. The tiers determine which USE templates receive the command:
+At the owning distribution repository, every new command MUST be added to its `.claude/sync-manifest.yaml` under the appropriate tier block. A consuming repository receives a narrowed projection and MUST NOT create or copy an owning parsing manifest. Record local source/emitted changes for the distribution package instead. The tiers determine which USE templates receive the command:
 
 ```yaml
 # .claude/sync-manifest.yaml
@@ -187,7 +187,7 @@ Glob form is supported (`commands/i-*.md`). The emitter honors exclusions at sou
 | Always-on boundary enforcement                              | Rule       |
 | Deterministic hook firing on tool event / session lifecycle | Hook       |
 
-If a "command" file grows judgment rubrics, scoring criteria, or conditional branching with recovery paths, it's an agent in disguise. Move the body into `.gemini/agents/<name>.md` and shrink the command to a 20-line dispatch (`Delegate to <name>-specialist with the user's input as the prompt.`).
+If a "command" file grows judgment rubrics, scoring criteria, or conditional branching with recovery paths, it's an agent in disguise. Move the body into its authoring source `.claude/agents/<name>.md` (native Codex agent emission uses `.codex/agents/<name>.toml`) and shrink the command to a 20-line dispatch (`Delegate to <name>-specialist with the user's input as the prompt.`).
 
 ## Common Mistakes
 
@@ -201,7 +201,7 @@ Most frequent. Reference tables, exhaustive option lists, multi-page review rubr
 
 ### 3. Missing Sync-Manifest Entry
 
-New command in `.gemini/commands/` but not in `sync-manifest.yaml` ships to nobody — emitter scans tier-listed files only. Fix: add `commands/<name>.md` to the correct tier; verify with a dry-run emission against one USE target.
+New command in `.claude/commands/` but not in `sync-manifest.yaml` ships to nobody — emitter scans tier-listed files only. Fix: add `commands/<name>.md` to the correct tier; verify with a dry-run emission against one USE target.
 
 ### 4. Native-Primitive Shadow
 
@@ -237,7 +237,7 @@ When auditing an existing command:
 - `rules/cc-artifacts.md` Rule 1 — description char caps + listing-budget pressure
 - `rules/cross-cli-artifact-hygiene.md` — neutral phrasing requirement
 - `rules/cross-cli-parity.md` — variant overlay semantics
-- `agents/codex-architect.md` § Codex-Native Primitives — carve-out table
+- `agents/codex-architect.md` § Native primitives — carve-out table
 - `agents/gemini-architect.md` § Gemini-Native Primitives — Gemini equivalents
 - `bin/emit-cli-artifacts.mjs` — emitter source of truth
 - `skill-authoring` (F1) — sibling meta-skill, same shape conventions
