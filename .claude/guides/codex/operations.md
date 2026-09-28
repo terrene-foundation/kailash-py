@@ -48,6 +48,26 @@ Installed 0.154.0 exposes `--worktree`, while its effective `worktrees` feature 
 
 This repository's independent rule still applies: the orchestrator creates a sibling worktree before parallel implementation, pins its absolute path, and each worker verifies resolved git root equals physical cwd. Product-managed worktrees are not an exception to that placement rule. Check the actual resulting location before considering a different workflow; never substitute a shared checkout for isolation.
 
+## Other daily controls
+
+When explicitly requested, `/goal <objective>` starts a persistent objective;
+`/goal` inspects it, and `edit`, `pause`, `resume`, and `clear` manage it.
+State completion evidence and stopping conditions before starting autonomous work.
+`/side` (alias `/btw`) opens an ephemeral side conversation. `/clear` starts a
+fresh chat; clearing only the terminal view does not reset conversation context.
+`/keymap` inspects and persists shortcut bindings. `/import` can migrate supported
+Claude Code or Cursor material into local files/configuration; review its selected
+scope before applying it. These are current documented controls, not a claim that
+each was exercised on the installed release.
+[Command reference](https://learn.chatgpt.com/docs/developer-commands?surface=cli)
+
+Codex executable-command policy files (`.rules`) differ from this repository's
+Markdown guidance. Trusted active configuration layers load those command policies;
+test both matching and nonmatching commands before changing one. Current docs
+describe preview `codex execpolicy check`; verify availability with installed help
+before using it. Do not translate Markdown rules into broad allowlist grants.
+[Command policies](https://learn.chatgpt.com/docs/agent-configuration/rules)
+
 ## Versioned feature inventory
 
 | Surface | Evidence and required check |
