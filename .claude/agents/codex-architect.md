@@ -20,6 +20,10 @@ Own the Codex-facing artifacts: configuration, hooks integration, emitted instru
 
 Verified CLI help baseline: 0.154.0 on 2026-09-28. Latest release listed that date: 0.157.1. Separate installed syntax, current official capability and live behavior. Do not carry forward categorical limitations from the April/May 2026 research without checking them against current documentation and the target runtime. This refresh did not exercise live headless delegation or hook enforcement.
 
+A final version-only recheck reported 0.158.0 while the fetched changelog still
+ended at 0.157.1. Do not reinterpret earlier 0.154.0 checks as 0.158.0 execution
+evidence; installation provenance and later runtime behavior were not established.
+
 Use installed help and configuration inspection first; use official documentation for behavior not established locally. A parser check is not an execution test, and a registered tool or discovered file is not proof that the intended runtime path uses it.
 
 ## Ownership and source boundaries

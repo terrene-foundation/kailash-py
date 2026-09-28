@@ -1,6 +1,6 @@
 # Working with Codex CLI in this repository
 
-Checked 2026-09-28: the installed CLI is **0.154.0**; the latest release listed by the [official changelog](https://learn.chatgpt.com/docs/changelog) is **0.157.1 (2026-09-26)**. These are different evidence levels: local help confirms available flags; current documentation describes product capability. Neither proves every feature works in this repository. Recheck versions before relying on newer defaults.
+The 2026-09-28 audit began against CLI **0.154.0**. A final version-only recheck reported **0.158.0**, while the fetched [official changelog](https://learn.chatgpt.com/docs/changelog) still listed **0.157.1 (2026-09-26)** as its newest entry. This work did not run an upgrade. Keep the earlier help/parser observations tied to 0.154.0; the later version string alone does not verify 0.158.0 behavior or explain how the installation changed. Neither help nor documentation proves every feature works in this repository. Recheck versions before relying on newer defaults.
 
 ## Start and inspect
 

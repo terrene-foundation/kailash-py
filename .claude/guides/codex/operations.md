@@ -2,6 +2,10 @@
 
 Evidence date: 2026-09-28. Local help was checked on 0.154.0; current official documentation and the latest listed release (0.157.1) can describe newer behavior. No automatic upgrade is implied.
 
+A later version-only check in the same audit returned `codex-cli 0.158.0`.
+The fetched official changelog still ended at 0.157.1. Earlier help and parser
+checks remain 0.154.0 evidence; no 0.158.0 runtime behavior is certified here.
+
 ## Headless automation
 
 ```bash
@@ -79,7 +83,7 @@ before using it. Do not translate Markdown rules into broad allowlist grants.
 | Goals/plugins | Exposed product workflows; availability/configuration and task authorization still apply |
 | Doctor/update | Present in local help; diagnose before changing installation |
 | Worktrees | Local feature was experimental/disabled; later release defaults differ |
-| 0.155–0.157 UI changes | Consult release notes for voice/task controls, daemon changes, usage/UI, imports and fork behavior; do not assume installed 0.154.0 has them |
+| 0.155–0.157 UI changes | Consult release notes for voice/task controls, daemon changes, usage/UI, imports and fork behavior; do not assume the audited 0.154.0 has them |
 | 0.157.1 | Latest listed release on audit date; no patch-specific feature highlight was supplied |
 
 Use `codex --version`, `codex features list`, the relevant subcommand help, current official references, and a scoped behavioral probe together. Record what was tested and what remains documentation-only. Avoid fixed model recommendations: model availability and account configuration change independently of this guide.
