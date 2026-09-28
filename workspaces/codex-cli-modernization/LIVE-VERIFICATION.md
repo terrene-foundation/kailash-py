@@ -8,7 +8,7 @@ The original native turn reported `hook timed out after 5s` for PreToolUse and P
 
 A native sentinel using the normal shell completed in 5,343 ms: Node began at +4,950 ms and stdin EOF arrived 115 ms later. The identical sentinel with an empty shell configuration in an isolated process completed in 764 ms. This demonstrates that shell initialization can exhaust the old native 5-second allowance; the tested stdin path did not hang. The real shell configuration was not changed.
 
-The actual SessionStart adapter took 5.03 seconds normally. Adding controlled delays before its real synchronous subprocesses produced 15.87 seconds despite its internal 10-second JavaScript timer. That timer cannot preempt synchronous work. A wrapper-enforced child deadline is therefore needed in addition to an outer launcher allowance.
+A direct SessionStart adapter subprocess baseline took 5.03 seconds under a read-only diagnostic sandbox; denied write-side initialization may finish earlier than an unrestricted launch. Adding controlled delays before its real synchronous subprocesses produced 15.87 seconds despite its internal 10-second JavaScript timer. That timer cannot preempt synchronous work. A wrapper-enforced child deadline is therefore needed in addition to an outer launcher allowance.
 
 ## Native discovery and agent delivery
 
@@ -46,3 +46,11 @@ The persistent native run completed with these observed events:
 | Named reviewer | actual config read and result delivered; child PreToolUse completed |
 
 Parent thread: `01a0e765-0c94-70a0-b5dc-5286a8ef7ce8`; reviewer: `01a0e766-3ad4-7150-8344-e289471de86d`. This second thread/start omitted an explicit sandbox override, while the isolated user config selected workspace-write. The child's current turn_context still recorded workspace-write, network_access false, approval never. The named role's read-only setting therefore did not establish a read-only child in either tested configuration. No mutating child probe was attempted. Keep the documented requirement to inspect effective permissions; do not describe role instructions or TOML defaults as enforced tool isolation.
+
+## Adversarial review findings
+
+One concurrent test run returned exit 2 without the expected policy JSON; the isolated actual-denial and allow controls passed. The timeout explanation is an inference because that original assertion did not retain stderr. Test fixtures now use synchronous Atomics.wait instead of CPU busy loops and preserve stderr/status on invalid output. The production validator deadline was not loosened, and timeout is not accepted as proof that a particular policy predicate ran.
+
+A later independent wrapper probe found a concrete alias-classification defect: the same known-validator fixture returned exit 2 through its relative and canonical absolute paths, but exit 3 through the macOS /var alias of /private/var. The lexical target comparison missed the validator-specific deadline and unexpected-exit handling. The shipped relative native registration was not bypassed in this probe. The fix resolves canonical identity consistently for both the requested target and known-handler identities, uses it for spawning, and retains the strictest role/deadline when known handlers share one physical file. Regression controls cover aliases, linked registrations and unrelated generic targets with absent known handlers.
+
+Strict-config control: the documented 800000/700000 context/compaction overrides were accepted by CLI 0.158.0 (exit 0); an invented key returned exit 1 with `unknown configuration field`. This verifies parser support only, not provider capacity or an actual 800k request. Overrides were process-local and did not change the real user configuration.
