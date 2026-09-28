@@ -67,3 +67,7 @@ Loom was read-only. Its port guidance, source map, acceptance matrix, patches,
 file hashes and final dev/cleanup receipts are in the user-requested work-consol
 pickup. Loom's extra filters, handlers, variants and ownership validators need
 their own targeted port; this repository's checks do not certify that repository.
+
+## Follow-up runtime verification
+
+The subsequent [live verification receipt](LIVE-VERIFICATION.md) supersedes the unrun status above for the specific native paths it exercised. It also records the timeout defect discovered after this original gate, its fix and repeat checks. Preserve the original gate evidence rather than retroactively treating it as live certification.

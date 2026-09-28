@@ -131,7 +131,8 @@ function failCodexValidation(reason) {
   process.exit(out.exitCode);
 }
 
-// Leave margin for the adapter's 4s child deadline and native 5s timeout.
+// Leave margin for the adapter's 4s child deadline. The native 30s budget
+// separately includes login-shell startup and adapter initialization.
 const TIMEOUT_MS = process.env.COC_RUNTIME === "codex" ? 3000 : 5000;
 const timeout = setTimeout(() => {
   if (process.env.COC_RUNTIME === "codex") failCodexValidation("Validation input timed out.");

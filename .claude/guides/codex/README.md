@@ -50,7 +50,7 @@ Current Codex supports named custom agents in `.codex/agents/*.toml` and the use
 
 When the named specialist is discovered, request it by name with a bounded task, relevant specs/rules, absolute worktree and explicit return contract. If the current host does not expose named roles, delegate through its available child-agent tool and pass the specialist's operating specification. Reading `.codex/prompts/specialist-<name>.md` into a turn is a compatibility technique, not a parallel worker.
 
-Headless delegation is not categorically prohibited. It is also not verified by `codex exec --help`: test discovery, dispatch and delivered results in the intended host/version before depending on it in automation. This documentation refresh did not exercise live headless delegation.
+Headless delegation is not categorically prohibited. It is also not verified by `codex exec --help`: test discovery, dispatch and delivered results in the intended host/version before depending on it in automation. A follow-up on CLI 0.158.0 verified persistent app-server named-reviewer dispatch and a delivered result; the tested `codex exec --ephemeral` path failed with a missing rollout. See the [live verification receipt](../../../workspaces/codex-cli-modernization/LIVE-VERIFICATION.md) for the exact host and permission limits.
 
 ## Phase commands and reviews
 

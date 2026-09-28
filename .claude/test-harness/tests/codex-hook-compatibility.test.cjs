@@ -9,11 +9,23 @@ const wrapper = path.join(root, '.claude/hooks/lib/codex-hook-runtime.js');
 const outputModule = path.join(root, '.claude/hooks/lib/instruct-and-wait.js');
 const manifest = JSON.parse(fs.readFileSync(path.join(root, '.codex/hooks.json')));
 
+function parseOutput(result) {
+  let parsed;
+  assert.doesNotThrow(() => { parsed = JSON.parse(result.stdout); },
+    `Invalid hook JSON (status ${result.status}); stderr: ${result.stderr}; stdout: ${result.stdout}`);
+  return parsed;
+}
+
+test('invalid hook JSON diagnostics preserve stderr and exit status', () => {
+  assert.throws(() => parseOutput({status:2,stdout:'',stderr:'deadline diagnostic'}),
+    /status 2.*stderr: deadline diagnostic/);
+});
+
 function output(runtime, hookEvent, severity) {
   const payload = { hookEvent, severity, what_happened: 'known finding', why: 'test policy', agent_must_report: ['report'], agent_must_wait: 'wait' };
   const result = spawnSync(process.execPath, ['-e', `const {instructAndWait}=require(process.argv[1]); process.stdout.write(JSON.stringify(instructAndWait(JSON.parse(process.argv[2]))));`, outputModule, JSON.stringify(payload)], { encoding: 'utf8', env: { ...process.env, COC_RUNTIME: runtime } });
   assert.equal(result.status, 0, result.stderr);
-  return JSON.parse(result.stdout);
+  return parseOutput(result);
 }
 
 test('Codex PreToolUse deny and context contain only supported output fields', () => {
@@ -89,7 +101,7 @@ test('registered commands work from nested directories with spaces and preserve 
     const command = manifest.hooks[event][0].hooks[0].command;
     const result = spawnSync('/bin/sh', ['-c', command], { cwd: nested, input, encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: '/wrong/inherited/root' } });
     assert.equal(result.status, 0, result.stderr);
-    const actual = JSON.parse(result.stdout);
+    const actual = parseOutput(result);
     assert.equal(actual.runtime, 'codex');
     assert.equal(actual.root, fs.realpathSync(repo));
     assert.equal(actual.cwd, fs.realpathSync(repo));
@@ -122,7 +134,7 @@ test('actual Bash validator emits Codex-compatible output on the legacy allow pa
     encoding: 'utf8', input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'echo compatibility-probe' }, cwd: root }),
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(Object.hasOwn(JSON.parse(result.stdout), 'continue'), false);
+  assert.equal(Object.hasOwn(parseOutput(result), 'continue'), false);
 });
 
 test('actual Bash validator denies destructive input without executing it', () => {
@@ -130,7 +142,7 @@ test('actual Bash validator denies destructive input without executing it', () =
     encoding: 'utf8', input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'rm -rf /' }, cwd: root }),
   });
   assert.equal(result.status, 2, result.stderr);
-  const denied = JSON.parse(result.stdout);
+  const denied = parseOutput(result);
   assert.equal(Object.hasOwn(denied, 'continue'), false);
   assert.equal(denied.hookSpecificOutput.permissionDecision, 'deny');
   assert.match(result.stderr, /STOP/);
@@ -140,7 +152,7 @@ test('Codex validator fails closed on malformed or missing command input', () =>
   for (const input of ['{', 'null', '{}', JSON.stringify({tool_input:{command:{}}}), JSON.stringify({tool_input:{command:[]}})]) {
     const result = spawnSync(process.execPath, [wrapper, '.claude/hooks/validate-bash-command.js'], { encoding:'utf8', input });
     assert.equal(result.status, 2, `input ${input}: ${result.stderr}`);
-    const denied = JSON.parse(result.stdout);
+    const denied = parseOutput(result);
     assert.equal(denied.hookSpecificOutput.permissionDecision, 'deny');
     assert.match(denied.hookSpecificOutput.permissionDecisionReason, /validation could not complete/);
   }
@@ -150,7 +162,7 @@ test('CC and Gemini malformed-input handling keeps the legacy non-blocking error
   for (const runtime of ['cc','gemini']) {
     const result = spawnSync(process.execPath, [path.join(root,'.claude/hooks/validate-bash-command.js')], {encoding:'utf8',input:'{',env:{...process.env,COC_RUNTIME:runtime}});
     assert.equal(result.status,1);
-    assert.equal(JSON.parse(result.stdout).continue,true);
+    assert.equal(parseOutput(result).continue,true);
   }
 });
 
@@ -171,12 +183,12 @@ test('Codex hygiene scans actual patch targets including nested paths and moves'
   const patch='*** Begin Patch\n*** Update File: bad.py\n@@\n+except: pass\n*** Update File: old.js\n*** Move to: moved.js\n@@\n+const FAKE_USERS = [];\n*** End Patch';
   const flagged=runHygiene(repo,{command:patch},cwd);
   assert.equal(flagged.status,0,flagged.stderr);
-  const context=JSON.parse(flagged.stdout).hookSpecificOutput?.additionalContext || '';
+  const context=parseOutput(flagged).hookSpecificOutput?.additionalContext || '';
   assert.match(context,/silent Python exception swallow/);
   assert.match(context,/mock\/fake\/dummy constant/);
   const clean=runHygiene(repo,{command:'*** Begin Patch\n*** Update File: clean.py\n@@\n+answer = 42\n*** End Patch'},cwd);
   assert.equal(clean.status,0,clean.stderr);
-  assert.equal(JSON.parse(clean.stdout).hookSpecificOutput,undefined);
+  assert.equal(parseOutput(clean).hookSpecificOutput,undefined);
 });
 
 test('Codex hygiene refuses outside-root and symlink targets and reports bounded skips', (t) => {
@@ -187,13 +199,13 @@ test('Codex hygiene refuses outside-root and symlink targets and reports bounded
   fs.symlinkSync(external,path.join(repo,'linked'));
   for(const target of [path.join(external,'secret.py'),'linked/secret.py']) {
     const result=runHygiene(repo,{command:`*** Begin Patch\n*** Update File: ${target}\n@@\n+x\n*** End Patch`});
-    const context=JSON.parse(result.stdout).hookSpecificOutput?.additionalContext || '';
+    const context=parseOutput(result).hookSpecificOutput?.additionalContext || '';
     assert.match(context,/outside.*root/i);
     assert.doesNotMatch(context,/silent Python/);
   }
   fs.writeFileSync(path.join(repo,'large.py'),'x'.repeat(1024*1024+1));
   const result=runHygiene(repo,{command:'*** Begin Patch\n*** Update File: large.py\n@@\n+x\n*** End Patch'});
-  assert.match(JSON.parse(result.stdout).hookSpecificOutput.additionalContext,/size limit/);
+  assert.match(parseOutput(result).hookSpecificOutput.additionalContext,/size limit/);
 });
 
 test('validator adapter denies unexpected exit and synchronous timeout', (t) => {
@@ -206,7 +218,7 @@ test('validator adapter denies unexpected exit and synchronous timeout', (t) => 
   const failed=spawnSync(process.execPath,[adapter,'./.claude/hooks/validate-bash-command.js'],{encoding:'utf8'});
   assert.equal(failed.status,2);
   assert.match(failed.stderr,/validation could not complete/);
-  fs.writeFileSync(target,'while (true) {}');
+  fs.writeFileSync(target,'Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,Infinity);');
   const hung=spawnSync(process.execPath,[adapter,'./.claude/hooks/validate-bash-command.js'],{encoding:'utf8',timeout:8000});
   assert.equal(hung.status,2,hung.stderr);
   assert.match(hung.stderr,/codex-hook-runtime/);
@@ -220,7 +232,7 @@ test('Codex validator input timeout denies rather than allowing unchecked input'
   child.stdout.on('data',chunk=>stdout+=chunk); child.stderr.on('data',chunk=>stderr+=chunk);
   const code=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',resolve);});
   assert.equal(code,2,stderr);
-  assert.equal(JSON.parse(stdout).hookSpecificOutput.permissionDecision,'deny');
+  assert.equal(parseOutput({stdout,stderr,status:code}).hookSpecificOutput.permissionDecision,'deny');
   assert.match(stderr,/timed out/);
 });
 
@@ -230,12 +242,116 @@ test('Codex hygiene reports patch size/count limits and supports direct Write pa
   for (const command of ['x'.repeat(1024*1024+1),'*** Begin Patch\n'+Array.from({length:101},(_,i)=>`*** Add File: ${i}.py\n+x`).join('\n')+'\n*** End Patch']) {
     const result=runHygiene(repo,{command});
     assert.equal(result.status,0,result.stderr);
-    assert.match(JSON.parse(result.stdout).hookSpecificOutput.additionalContext,/limit/);
+    assert.match(parseOutput(result).hookSpecificOutput.additionalContext,/limit/);
   }
   fs.writeFileSync(path.join(repo,'write.py'),'except: pass');
   const result=spawnSync(process.execPath,[path.join(root,'.claude/hooks/integration-hygiene.js')],{
     encoding:'utf8',env:{...process.env,COC_RUNTIME:'codex',CLAUDE_PROJECT_DIR:repo},
     input:JSON.stringify({hook_event_name:'PostToolUse',tool_name:'Write',tool_input:{file_path:'write.py'},cwd:repo}),
   });
-  assert.match(JSON.parse(result.stdout).hookSpecificOutput.additionalContext,/silent Python exception swallow/);
+  assert.match(parseOutput(result).hookSpecificOutput.additionalContext,/silent Python exception swallow/);
+});
+
+test('native budget includes shell startup before bounded validation', (t) => {
+  const repo=fs.mkdtempSync(path.join(os.tmpdir(),'codex-startup-budget-'));
+  t.after(()=>fs.rmSync(repo,{recursive:true,force:true}));
+  assert.equal(spawnSync('git',['init','-q',repo]).status,0);
+  const lib=path.join(repo,'.claude/hooks/lib');fs.mkdirSync(lib,{recursive:true});
+  fs.copyFileSync(wrapper,path.join(lib,'codex-hook-runtime.js'));
+  fs.writeFileSync(path.join(repo,'.claude/hooks/validate-bash-command.js'),
+    "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,2500);process.stdout.write('validated');");
+  const native=manifest.hooks.PreToolUse[0].hooks[0];
+  // A four-second startup plus a valid 2.5-second child exceeds the old native
+  // five-second window, while each stage individually fits its own budget.
+  const result=spawnSync('/bin/sh',['-c',`sleep 4\nexec ${native.command}`],{
+    cwd:repo,input:'{}',encoding:'utf8',timeout:native.timeout*1000,
+  });
+  assert.equal(result.status,0,result.stderr);
+  assert.equal(result.error,undefined);
+  assert.equal(result.stdout,'validated');
+});
+
+test('SessionStart and hygiene have real deadlines even during synchronous work', async (t) => {
+  const {spawn}=require('node:child_process');
+  const repo=fs.mkdtempSync(path.join(os.tmpdir(),'codex-lifecycle-deadline-'));
+  t.after(()=>fs.rmSync(repo,{recursive:true,force:true}));
+  const lib=path.join(repo,'.claude/hooks/lib');fs.mkdirSync(lib,{recursive:true});
+  const adapter=path.join(lib,'codex-hook-runtime.js');fs.copyFileSync(wrapper,adapter);
+  await Promise.all([['session-start.js',20000,'SessionStart'],['integration-hygiene.js',10000,'PostToolUse']].map(async ([name,budget,event])=>{
+    fs.writeFileSync(path.join(repo,'.claude/hooks',name), 'process.exit(1);');
+    const warning=spawnSync(process.execPath,[adapter,`./.claude/hooks/${name}`],{encoding:'utf8'});
+    assert.equal(warning.status,1,`${event}: warning status changed`);
+    fs.writeFileSync(path.join(repo,'.claude/hooks',name),
+      "process.on('SIGTERM',()=>{});Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,22000);process.stdout.write('completed past deadline');");
+    const outerMs=manifest.hooks[event][0].hooks[0].timeout*1000;
+    assert.ok(outerMs>=budget+10000,`${event}: no startup allowance`);
+    const child=spawn(process.execPath,[adapter,`./.claude/hooks/${name}`],{stdio:['ignore','pipe','pipe']});
+    let stdout='';let stderr='';
+    child.stdout.on('data',chunk=>stdout+=chunk);child.stderr.on('data',chunk=>stderr+=chunk);
+    const started=Date.now();
+    const code=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',resolve);});
+    assert.equal(code,2,`${event}: ${stdout} ${stderr}`);
+    assert.match(stderr,/ETIMEDOUT|timed out/);
+    assert.equal(stdout,'');
+    assert.ok(Date.now()-started>=budget-500,`${event}: terminated before intended child budget`);
+  }));
+});
+
+function aliasFixture(t, externalTarget = false) {
+  const repo=fs.mkdtempSync(path.join(os.tmpdir(),'codex-hook-alias-'));
+  t.after(()=>fs.rmSync(repo,{recursive:true,force:true}));
+  const lib=path.join(repo,'.claude/hooks/lib');fs.mkdirSync(lib,{recursive:true});
+  const adapter=path.join(lib,'codex-hook-runtime.js');fs.copyFileSync(wrapper,adapter);
+  const registered=path.join(repo,'.claude/hooks/validate-bash-command.js');
+  let target=registered;
+  if(externalTarget) {
+    const outside=fs.mkdtempSync(path.join(os.tmpdir(),'codex-hook-physical-'));
+    t.after(()=>fs.rmSync(outside,{recursive:true,force:true}));
+    target=path.join(outside,'validator.js');
+    fs.symlinkSync(target,registered);
+  }
+  const alias=path.join(repo,'validator-alias.js');fs.symlinkSync(target,alias);
+  return {adapter,target,alias};
+}
+
+test('validator aliases retain fail-closed exit classification including linked registrations', (t) => {
+  for(const externalTarget of [false,true]) {
+    const {adapter,target,alias}=aliasFixture(t,externalTarget);
+    fs.writeFileSync(target,'process.exit(3);');
+    for(const spelling of [alias,target]) {
+      const result=spawnSync(process.execPath,[adapter,spelling],{encoding:'utf8'});
+      assert.equal(result.status,2,`${spelling}: ${result.stderr}`);
+      assert.match(result.stderr,/validation could not complete/);
+    }
+  }
+});
+
+test('validator aliases retain the child deadline including linked registrations', async (t) => {
+  const {spawn}=require('node:child_process');
+  await Promise.all([false,true].map(async externalTarget=>{
+    const {adapter,target,alias}=aliasFixture(t,externalTarget);
+    fs.writeFileSync(target,"Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,4500);process.stdout.write('deadline skipped');");
+    const child=spawn(process.execPath,[adapter,alias],{stdio:['ignore','pipe','pipe']});
+    let stdout='';let stderr='';
+    child.stdout.on('data',chunk=>stdout+=chunk);child.stderr.on('data',chunk=>stderr+=chunk);
+    const code=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',resolve);});
+    assert.equal(code,2,`${stdout} ${stderr}`);
+    assert.equal(stdout,'');
+    assert.match(stderr,/timed out after 4000ms/);
+  }));
+});
+
+test('generic aliases preserve exit statuses when known hooks are absent', (t) => {
+  const repo=fs.mkdtempSync(path.join(os.tmpdir(),'codex-generic-alias-'));
+  t.after(()=>fs.rmSync(repo,{recursive:true,force:true}));
+  const lib=path.join(repo,'.claude/hooks/lib');fs.mkdirSync(lib,{recursive:true});
+  const adapter=path.join(lib,'codex-hook-runtime.js');fs.copyFileSync(wrapper,adapter);
+  const target=path.join(repo,'generic.js');const alias=path.join(repo,'alias.js');
+  fs.symlinkSync(target,alias);
+  for(const code of [0,1,2]) {
+    fs.writeFileSync(target,`process.stdout.write(process.argv[1]);process.exit(${code});`);
+    const result=spawnSync(process.execPath,[adapter,alias],{encoding:'utf8'});
+    assert.equal(result.status,code,result.stderr);
+    assert.equal(result.stdout,fs.realpathSync(target));
+  }
 });
