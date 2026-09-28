@@ -296,3 +296,62 @@ test('SessionStart and hygiene have real deadlines even during synchronous work'
     assert.ok(Date.now()-started>=budget-500,`${event}: terminated before intended child budget`);
   }));
 });
+
+function aliasFixture(t, externalTarget = false) {
+  const repo=fs.mkdtempSync(path.join(os.tmpdir(),'codex-hook-alias-'));
+  t.after(()=>fs.rmSync(repo,{recursive:true,force:true}));
+  const lib=path.join(repo,'.claude/hooks/lib');fs.mkdirSync(lib,{recursive:true});
+  const adapter=path.join(lib,'codex-hook-runtime.js');fs.copyFileSync(wrapper,adapter);
+  const registered=path.join(repo,'.claude/hooks/validate-bash-command.js');
+  let target=registered;
+  if(externalTarget) {
+    const outside=fs.mkdtempSync(path.join(os.tmpdir(),'codex-hook-physical-'));
+    t.after(()=>fs.rmSync(outside,{recursive:true,force:true}));
+    target=path.join(outside,'validator.js');
+    fs.symlinkSync(target,registered);
+  }
+  const alias=path.join(repo,'validator-alias.js');fs.symlinkSync(target,alias);
+  return {adapter,target,alias};
+}
+
+test('validator aliases retain fail-closed exit classification including linked registrations', (t) => {
+  for(const externalTarget of [false,true]) {
+    const {adapter,target,alias}=aliasFixture(t,externalTarget);
+    fs.writeFileSync(target,'process.exit(3);');
+    for(const spelling of [alias,target]) {
+      const result=spawnSync(process.execPath,[adapter,spelling],{encoding:'utf8'});
+      assert.equal(result.status,2,`${spelling}: ${result.stderr}`);
+      assert.match(result.stderr,/validation could not complete/);
+    }
+  }
+});
+
+test('validator aliases retain the child deadline including linked registrations', async (t) => {
+  const {spawn}=require('node:child_process');
+  await Promise.all([false,true].map(async externalTarget=>{
+    const {adapter,target,alias}=aliasFixture(t,externalTarget);
+    fs.writeFileSync(target,"Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,4500);process.stdout.write('deadline skipped');");
+    const child=spawn(process.execPath,[adapter,alias],{stdio:['ignore','pipe','pipe']});
+    let stdout='';let stderr='';
+    child.stdout.on('data',chunk=>stdout+=chunk);child.stderr.on('data',chunk=>stderr+=chunk);
+    const code=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',resolve);});
+    assert.equal(code,2,`${stdout} ${stderr}`);
+    assert.equal(stdout,'');
+    assert.match(stderr,/timed out after 4000ms/);
+  }));
+});
+
+test('generic aliases preserve exit statuses when known hooks are absent', (t) => {
+  const repo=fs.mkdtempSync(path.join(os.tmpdir(),'codex-generic-alias-'));
+  t.after(()=>fs.rmSync(repo,{recursive:true,force:true}));
+  const lib=path.join(repo,'.claude/hooks/lib');fs.mkdirSync(lib,{recursive:true});
+  const adapter=path.join(lib,'codex-hook-runtime.js');fs.copyFileSync(wrapper,adapter);
+  const target=path.join(repo,'generic.js');const alias=path.join(repo,'alias.js');
+  fs.symlinkSync(target,alias);
+  for(const code of [0,1,2]) {
+    fs.writeFileSync(target,`process.stdout.write(process.argv[1]);process.exit(${code});`);
+    const result=spawnSync(process.execPath,[adapter,alias],{encoding:'utf8'});
+    assert.equal(result.status,code,result.stderr);
+    assert.equal(result.stdout,fs.realpathSync(target));
+  }
+});

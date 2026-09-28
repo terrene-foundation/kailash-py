@@ -51,13 +51,14 @@ function dispatch() {
   }
 
   const projectRoot = fs.realpathSync(path.resolve(__dirname, "../../.."));
-  const resolvedTarget = path.resolve(projectRoot, targetArg);
+  let resolvedTarget = path.resolve(projectRoot, targetArg);
   // isFile(), not existsSync(): a DIRECTORY (or any non-file) target passes an
   // existence check, but `node <dir>` exits 1 (MODULE_NOT_FOUND) — non-blocking =
   // fail-OPEN on the git-safety lane. Stat and require a regular file so a
   // misconfigured hooks.json entry fails CLOSED (exit 2), not open.
   let targetStat = null;
   try {
+    resolvedTarget = fs.realpathSync(resolvedTarget);
     targetStat = fs.statSync(resolvedTarget);
   } catch {
     targetStat = null; // ENOENT etc. → not found → fail closed below (never open)
@@ -80,11 +81,29 @@ function dispatch() {
   // sentinel with isolated empty shell startup took ~693ms. Preserve normal
   // shell initialization and leave outer margin instead of weakening it.
   // A JavaScript timer inside a hook cannot preempt synchronous hook work.
-  const childDeadlineMs = new Map([
-    [path.join(projectRoot, ".claude/hooks/validate-bash-command.js"), 4000],
-    [path.join(projectRoot, ".claude/hooks/integration-hygiene.js"), 10000],
-    [path.join(projectRoot, ".claude/hooks/session-start.js"), 20000],
-  ]).get(resolvedTarget);
+  // Resolve both sides of role classification through the same resolver.
+  // Aliases (including a registered symlink to an external file) retain their
+  // role. This is identity classification, not a filesystem containment fence;
+  // canonicalization does not prevent a subsequent check-to-use path swap.
+  const matchingHooks = [
+    ["validate-bash-command.js", 4000, true],
+    ["integration-hygiene.js", 10000, false],
+    ["session-start.js", 20000, false],
+  ].filter(([name]) => {
+    try {
+      return fs.realpathSync(path.join(projectRoot, ".claude/hooks", name)) === resolvedTarget;
+    } catch (error) {
+      // Generic dispatch is supported even when unrelated known hooks are absent.
+      if (error.code === "ENOENT" || error.code === "ENOTDIR") return false;
+      throw error;
+    }
+  });
+  // If registrations share one physical file, retain the strictest deadline
+  // and the validator role instead of letting a later entry overwrite them.
+  const childDeadlineMs = matchingHooks.length
+    ? Math.min(...matchingHooks.map(([, deadline]) => deadline))
+    : undefined;
+  const isValidator = matchingHooks.some(([, , validator]) => validator);
 
   const result = spawnSync(process.execPath, [resolvedTarget, ...forwardedArgs], {
     cwd: projectRoot,
@@ -119,7 +138,7 @@ function dispatch() {
     );
   }
 
-  if (resolvedTarget === path.join(projectRoot, ".claude/hooks/validate-bash-command.js") &&
+  if (isValidator &&
       result.status !== 0 && result.status !== 2) {
     failClosed("Bash validation could not complete; command was not validated.");
   }

@@ -38,7 +38,7 @@ Authoring a new hook script under `.claude/hooks/`. Auditing an existing hook fo
 The authoritative copy of every hook lives at `.claude/hooks/<name>.js`. All three CLIs reference the same file by path; what differs is the registration manifest:
 
 - CC reads `.claude/settings.json` `hooks` → command list. Working directory at hook launch is the project root; CC exports `CLAUDE_PROJECT_DIR`.
-- Codex reads trusted hook definitions from active config layers. This repository launches the adapter with `node "$(git rev-parse --show-toplevel)/.claude/hooks/lib/codex-hook-runtime.js" ./.claude/hooks/<name>.js`. The adapter pins `COC_RUNTIME=codex`, `CLAUDE_PROJECT_DIR`, and child cwd to its installed repository root; stdin retains the original session cwd. Source: `.claude/hooks/lib/codex-hook-runtime.js:41-105`.
+- Codex reads trusted hook definitions from active config layers. This repository launches the adapter with `node "$(git rev-parse --show-toplevel)/.claude/hooks/lib/codex-hook-runtime.js" ./.claude/hooks/<name>.js`. The adapter pins `COC_RUNTIME=codex`, `CLAUDE_PROJECT_DIR`, and child cwd to its installed repository root; stdin retains the original session cwd. Source: `.claude/hooks/lib/codex-hook-runtime.js:43-124`.
 - Gemini reads `.gemini/settings.json` `hooks` (the `hooks` object) and renames events to its own taxonomy (`BeforeTool`, `AfterTool`). Gemini exports `GEMINI_PROJECT_DIR`.
 
 The single-source contract means every hook MUST work under all three runtimes without per-CLI source forks. The shared library `lib/runtime.js::parseHook()` validates the `COC_RUNTIME` env var (closed enum: `cc` / `codex` / `gemini`) and returns a canonical payload shape regardless of source.
@@ -62,7 +62,9 @@ const event = data.hook_event_name; // CLI taxonomy not normalized
 
 ## Path Resolution Across CLIs
 
-Codex starts command hooks in the **session cwd**, which may be a nested folder. Resolve the adapter launcher from `git rev-parse --show-toplevel`, quote the resulting path, and let the adapter derive its repository root from its installed location. Never treat `payload.cwd` as necessarily the root. Preserve it for checks on the actual requested command. Source: `.claude/hooks/lib/codex-hook-runtime.js:41-105`; [Hooks](https://learn.chatgpt.com/docs/hooks).
+Codex starts command hooks in the **session cwd**, which may be a nested folder. Resolve the adapter launcher from `git rev-parse --show-toplevel`, quote the resulting path, and let the adapter derive its repository root from its installed location. Never treat `payload.cwd` as necessarily the root. Preserve it for checks on the actual requested command. Source: `.claude/hooks/lib/codex-hook-runtime.js:43-124`; [Hooks](https://learn.chatgpt.com/docs/hooks).
+
+The adapter resolves both the requested hook and known registration paths with `realpathSync`, then uses that canonical identity for execution, deadlines, and validator exit handling. Symlink aliases retain the same role, including a registration pointing to an external physical file. Generic hooks remain supported when unrelated known hooks are absent. This identity check does not enforce containment or prevent a check-to-use path swap. Source: `.claude/hooks/lib/codex-hook-runtime.js:53-146`.
 
 ## Codex Coverage, Trust, And Event Contracts
 
@@ -142,7 +144,7 @@ Command-string detectors MUST skip captured groups referencing unexpanded shell 
 
 ## Timeout Fallback
 
-Every hook must finish before the runtime kill window. Codex PreToolUse validation failures, malformed input, and deadlines deny with canonical feedback and exit 2; unknown validation must not authorize a command. The Bash validator keeps its 3s input deadline. Its adapter enforces child deadlines of 4s for validation, 10s for hygiene, and 20s for SessionStart. Every native registration has a separate 30s outer budget that includes login-shell and adapter startup. Bounded children are killed even if synchronous work prevents their own JavaScript timer or signal handler from running. Ordinary lifecycle/advisory exit codes remain unchanged. This margin is not a guarantee under arbitrary scheduling delays. CC/Gemini retain the existing non-blocking fallback shown below. Source: `.claude/hooks/validate-bash-command.js:118-196`; `.claude/hooks/lib/codex-hook-runtime.js:78-129`; `.codex/hooks.json:1-40`.
+Every hook must finish before the runtime kill window. Codex PreToolUse validation failures, malformed input, and deadlines deny with canonical feedback and exit 2; unknown validation must not authorize a command. The Bash validator keeps its 3s input deadline. Its adapter enforces child deadlines of 4s for validation, 10s for hygiene, and 20s for SessionStart. Every native registration has a separate 30s outer budget that includes login-shell and adapter startup. Bounded children are killed even if synchronous work prevents their own JavaScript timer or signal handler from running. Ordinary lifecycle/advisory exit codes remain unchanged. This margin is not a guarantee under arbitrary scheduling delays. CC/Gemini retain the existing non-blocking fallback shown below. Source: `.claude/hooks/validate-bash-command.js:118-196`; `.claude/hooks/lib/codex-hook-runtime.js:79-146`; `.codex/hooks.json:1-40`.
 
 ```javascript
 const TIMEOUT_MS = 5000;
@@ -152,7 +154,7 @@ const _timeout = setTimeout(() => {
 }, TIMEOUT_MS);
 ```
 
-The CC/Gemini JavaScript fallback examples retain their existing 5s per-tool / 10s SessionStart limits. They are not Codex outer registration limits. Codex registration `timeout` values are seconds; child deadlines and internal JavaScript timers are milliseconds. Do not equate these nested budgets or infer that a JavaScript timer interrupts synchronous work. Native login-shell startup was measured at nearly 5s before Node in the 2026-09-28 diagnosis; increasing only the outer timeout would still leave lifecycle children unbounded. Source: `.claude/hooks/lib/codex-hook-runtime.js:78-111`.
+The CC/Gemini JavaScript fallback examples retain their existing 5s per-tool / 10s SessionStart limits. They are not Codex outer registration limits. Codex registration `timeout` values are seconds; child deadlines and internal JavaScript timers are milliseconds. Do not equate these nested budgets or infer that a JavaScript timer interrupts synchronous work. Native login-shell startup was measured at nearly 5s before Node in the 2026-09-28 diagnosis; increasing only the outer timeout would still leave lifecycle children unbounded. Source: `.claude/hooks/lib/codex-hook-runtime.js:79-128`.
 
 The `setTimeout`-fallback path is the ONE legitimate raw-exit branch. It must emit the runtime/event-specific outcome first (denial for unknown Codex PreToolUse validation); raw `process.exit(N)` from any other branch is BLOCKED per `rules/hook-output-discipline.md` MUST-NOT-1.
 
@@ -207,11 +209,11 @@ Codex supporting `apply_patch` hooks does not wire this repository's Bash valida
 
 ### 4. Missing Timeout Fallback
 
-A JavaScript fallback alone cannot interrupt synchronous work. Keep the runtime-specific fallback and enforce registered Codex child deadlines from the adapter, leaving a separate native startup allowance. Source: `.claude/hooks/lib/codex-hook-runtime.js:78-111`.
+A JavaScript fallback alone cannot interrupt synchronous work. Keep the runtime-specific fallback and enforce registered Codex child deadlines from the adapter, leaving a separate native startup allowance. Source: `.claude/hooks/lib/codex-hook-runtime.js:79-128`.
 
 ### 5. `$CODEX_PROJECT_DIR` Referenced In Hook Registration
 
-A relative adapter launcher fails when the session starts below the repository root. Use the quoted Git-root launcher above, and test a nested working directory containing spaces. Source: `.codex/hooks.json:1-40`; `.claude/hooks/lib/codex-hook-runtime.js:41-105`.
+A relative adapter launcher fails when the session starts below the repository root. Use the quoted Git-root launcher above, and test a nested working directory containing spaces. Source: `.codex/hooks.json:1-40`; `.claude/hooks/lib/codex-hook-runtime.js:43-124`.
 
 ### 6. Gemini Event Names As CC Aliases
 
