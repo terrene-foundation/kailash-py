@@ -4,10 +4,15 @@
 # Configuration profiles: --profile NAME loads $CODEX_HOME/NAME.config.toml.
 # See https://learn.chatgpt.com/docs/config-file/config-basic
 
-# Raise AGENTS.md project-doc cap from the 32 KiB default to 64 KiB. Emission
-# is ~53,620 B steady-state post-F4 (9 CRIT rules); 64 KiB leaves 11,916 B headroom.
-# Per .claude/rules/agents.md and .claude/agents/codex-architect.md § AGENTS.md Size Cap.
+# Raise the project-document cap from the 32 KiB default to 64 KiB.
+# Recheck the composed instruction size and effective loaded budget after emission.
 project_doc_max_bytes = 65536
+
+# Optional top-level settings belong before the first [table].
+# Default model: select an available model through the current host or --model.
+# Approval policy is separate from sandbox permissions and managed constraints.
+# This commented example is not an active permission change.
+# approval_policy = "on-request"
 
 # Compatibility MCP adapter. Its declared tools are apply_patch, unified_exec
 # and shell; registration does not establish interception of native tool calls.
@@ -15,10 +20,3 @@ project_doc_max_bytes = 65536
 [mcp_servers.codex-mcp-guard]
 command = "node"
 args = ["./.codex-mcp-guard/server.js"]
-
-# Default model. Override per-session via `codex --model`.
-# Select an available model through the current host; no fixed model is pinned.
-
-# Approval policy is separate from sandbox permissions and managed constraints.
-# This commented example is not an active permission change.
-# approval_policy = "on-request"
