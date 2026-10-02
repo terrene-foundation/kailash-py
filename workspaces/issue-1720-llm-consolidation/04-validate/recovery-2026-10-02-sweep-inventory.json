@@ -1,0 +1,662 @@
+{
+  "timestamp": "2026-10-02T14:53:59.175181+00:00",
+  "refs": {
+    "argv": [
+      "git",
+      "for-each-ref",
+      "--format=%(refname) %(objectname) %(upstream)",
+      "refs/heads",
+      "refs/remotes/origin"
+    ],
+    "rc": 0,
+    "stdout": "refs/heads/chore/csq16-recovery-runtime-audit cdcaeac6baf63911d1f43ed99542002bdcd361a1 \nrefs/heads/chore/csq16-recovery-storage-audit cdcaeac6baf63911d1f43ed99542002bdcd361a1 \nrefs/heads/chore/csq16-recovery-sweep cdcaeac6baf63911d1f43ed99542002bdcd361a1 \nrefs/heads/dev cdcaeac6baf63911d1f43ed99542002bdcd361a1 refs/remotes/origin/dev\nrefs/heads/fix/d1-runtime-ci-validation 4df93818243fec527590876c0022f6d1f8cacb5a \nrefs/heads/fix/d1-source-gate-closure 4df93818243fec527590876c0022f6d1f8cacb5a \nrefs/heads/fix/d1-storage-ci-path 4df93818243fec527590876c0022f6d1f8cacb5a \nrefs/heads/fix/d1-trust-log-hygiene 4df93818243fec527590876c0022f6d1f8cacb5a \nrefs/heads/main 50f98afe403a468bb478462182b73ebc4e0287d1 refs/remotes/origin/main\nrefs/remotes/origin/HEAD 50f98afe403a468bb478462182b73ebc4e0287d1 \nrefs/remotes/origin/dev cdcaeac6baf63911d1f43ed99542002bdcd361a1 \nrefs/remotes/origin/main 50f98afe403a468bb478462182b73ebc4e0287d1 \nrefs/remotes/origin/promote/2026-09-11-cont30 4df93818243fec527590876c0022f6d1f8cacb5a \n",
+    "stderr": ""
+  },
+  "worktrees": [
+    {
+      "label": "MAIN",
+      "registration": "worktree MAIN\nHEAD cdcaeac6baf63911d1f43ed99542002bdcd361a1\nbranch refs/heads/dev",
+      "status": {
+        "argv": [
+          "git",
+          "-C",
+          "MAIN",
+          "status",
+          "--porcelain=v1",
+          "--untracked-files=all"
+        ],
+        "rc": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "dev_ancestry": {
+        "argv": [
+          "git",
+          "-C",
+          "MAIN",
+          "merge-base",
+          "--is-ancestor",
+          "HEAD",
+          "origin/dev"
+        ],
+        "rc": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "dev_divergence": {
+        "argv": [
+          "git",
+          "-C",
+          "MAIN",
+          "rev-list",
+          "--left-right",
+          "--count",
+          "origin/dev...HEAD"
+        ],
+        "rc": 0,
+        "stdout": "0\t0\n",
+        "stderr": ""
+      }
+    },
+    {
+      "label": "csq16-promotion-verification",
+      "registration": "worktree csq16-promotion-verification\nHEAD 4df93818243fec527590876c0022f6d1f8cacb5a\nbranch refs/heads/fix/d1-trust-log-hygiene",
+      "status": {
+        "argv": [
+          "git",
+          "-C",
+          "csq16-promotion-verification",
+          "status",
+          "--porcelain=v1",
+          "--untracked-files=all"
+        ],
+        "rc": 0,
+        "stdout": " M packages/kailash-dataflow/pyproject.toml\n M packages/kailash-dataflow/src/dataflow/adapters/base_adapter.py\n M packages/kailash-dataflow/src/dataflow/adapters/mongodb.py\n M packages/kailash-dataflow/src/dataflow/adapters/mysql.py\n M packages/kailash-dataflow/src/dataflow/cache/async_redis_adapter.py\n M packages/kailash-dataflow/src/dataflow/cache/auto_detection.py\n M packages/kailash-dataflow/src/dataflow/cache/redis_manager.py\n M packages/kailash-dataflow/src/dataflow/core/engine.py\n M packages/kailash-dataflow/src/dataflow/core/nodes.py\n M packages/kailash-dataflow/src/dataflow/core/schema_comparator.py\n M packages/kailash-dataflow/src/dataflow/core/type_introspection.py\n M packages/kailash-dataflow/src/dataflow/core/type_processor.py\n M packages/kailash-dataflow/src/dataflow/features/express.py\n M packages/kailash-dataflow/src/dataflow/platform/inspector.py\n M packages/kailash-dataflow/src/dataflow/platform/resilience.py\n M packages/kailash-dataflow/src/dataflow/trust/query_wrapper.py\n M packages/kailash-dataflow/tests/regression/test_issue_2107_dataflow_del_finalizers.py\n M packages/kailash-dataflow/tests/regression/test_issue_2210_bulk_upsert_statement_capacity.py\n M packages/kailash-dataflow/tests/regression/test_sqlite_address_consumer_parity.py\n M packages/kailash-dataflow/tests/regression/test_sqlite_schema_url_classification.py\n M packages/kailash-dataflow/tests/unit/adapters/test_base_adapter_hierarchy.py\n M packages/kailash-dataflow/tests/unit/adapters/test_mysql_transaction_hardening.py\n M packages/kailash-dataflow/tests/unit/adapters/test_postgresql_adapter.py\n M packages/kailash-dataflow/tests/unit/cache/test_auto_detection.py\n M packages/kailash-dataflow/tests/unit/core/test_credential_provider_config.py\n M packages/kailash-dataflow/tests/unit/core/test_dataflow_engine_lock_integration.py\n M packages/kailash-dataflow/tests/unit/features/test_resource_warning.py\n M packages/kailash-dataflow/tests/unit/migrations/test_auto_migration_system_lock_integration.py\n M packages/kailash-dataflow/tests/unit/test_express_cache_wiring.py\n M packages/kailash-dataflow/tests/unit/test_inspector_model_introspection.py\n M packages/kailash-dataflow/tests/unit/trust/test_query_executor.py\n M packages/kailash-kaizen/pyproject.toml\n M packages/kailash-kaizen/tests/unit/trust/adversarial/test_constraint_gaming.py\n M packages/kailash-kaizen/tests/unit/trust/test_external_agent_rate_limiter.py\n M packages/kailash-mcp/pyproject.toml\n M packages/kailash-ml/pyproject.toml\n M packages/kailash-nexus/pyproject.toml\n M packages/kailash-nexus/src/nexus/core.py\n M packages/kailash-nexus/src/nexus/transports/websocket.py\n M packages/kailash-nexus/tests/unit/transports/test_websocket.py\n M packages/kailash-pact/tests/unit/governance/test_sqlite_stores.py\n M pyproject.toml\n M specs/core-runtime.md\n M specs/dataflow-cache.md\n M specs/dataflow-core.md\n M specs/dataflow-express.md\n M specs/dataflow-models.md\n M specs/middleware.md\n M specs/nexus-channels.md\n M specs/pact-enforcement.md\n M specs/trust-crypto.md\n M src/kailash/access_control.py\n M src/kailash/access_control/managers.py\n M src/kailash/access_control/rule_evaluators.py\n M src/kailash/api/workflow_api.py\n M src/kailash/channels/api_channel.py\n M src/kailash/gateway/enhanced_gateway.py\n M src/kailash/middleware/communication/realtime.py\n M src/kailash/middleware/core/agent_ui.py\n M src/kailash/middleware/gateway/durable_request.py\n M src/kailash/nodes/base.py\n M src/kailash/nodes/base_async.py\n M src/kailash/nodes/data/async_sql.py\n M src/kailash/nodes/mixins.py\n M src/kailash/nodes/mixins/security.py\n M src/kailash/nodes/security/_log_identity.py\n M src/kailash/nodes/validation.py\n M src/kailash/runtime/async_local.py\n M src/kailash/runtime/hierarchical_switch_executor.py\n M src/kailash/runtime/local.py\n M src/kailash/runtime/mixins/cycle_execution.py\n M src/kailash/runtime/scheduler.py\n M src/kailash/servers/enterprise_workflow_server.py\n M src/kailash/servers/workflow_server.py\n M src/kailash/tracking/manager.py\n M src/kailash/trust/constraints/builtin.py\n M src/kailash/trust/constraints/dimension.py\n M src/kailash/trust/constraints/evaluator.py\n M src/kailash/trust/governance/policy_engine.py\n M src/kailash/trust/governance/rate_limiter.py\n M src/kailash/trust/pact/engine.py\n M src/kailash/trust/pact/stores/sqlite.py\n M src/kailash/workflow/cyclic_runner.py\n M src/kailash/workflow/dlq.py\n M tests/regression/test_backup_restore_clearance.py\n M tests/regression/test_channel_shutdown_reports_reality.py\n M tests/regression/test_durable_execution_quickstart.py\n M tests/regression/test_issue_1248_localruntime_cross_loop_pool_disposal.py\n M tests/regression/test_issue_2006_null_default_override.py\n M tests/regression/test_issue_2013_inert_auth_control.py\n M tests/regression/test_issue_2025_unauthenticated_proxy_route.py\n M tests/regression/test_issue_2072_fail_closed_server_auth.py\n M tests/regression/test_issue_2075_pool_registry_lifecycle.py\n M tests/regression/test_issue_2081_sync_bridge_join_is_legible.py\n M tests/regression/test_issue_2087_segment_parameter_traversal.py\n M tests/regression/test_issue_2088_sink_side_log_sanitizing.py\n M tests/regression/test_issue_2107_del_finalizers_no_close.py\n M tests/regression/test_issue_2112_dashboard_api_auth.py\n M tests/regression/test_issue_2114_non_ascii_api_key.py\n M tests/regression/test_issue_2145_session_ownership.py\n M tests/regression/test_issue_871_sqlite_jobstore_security.py\n M tests/regression/test_issue_942_execute_sync_wait_for_warning.py\n M tests/regression/test_redteam_2026_08_09_integration_findings.py\n M tests/security/test_connection_validation.py\n M tests/tier2_integration/tracking/test_tracking_consolidated.py\n M tests/trust/integration/test_lifecycle.py\n M tests/trust/pact/unit/test_sqlite_stores.py\n M tests/trust/plane/integration/test_compliance_export.py\n M uv.lock\n?? packages/kailash-dataflow/tests/integration/test_cache_prefix_forwarding.py\n?? packages/kailash-dataflow/tests/integration/test_inspector_catalog_backends.py\n?? packages/kailash-dataflow/tests/integration/test_mongodb_failed_connect_cleanup.py\n?? packages/kailash-dataflow/tests/integration/test_mongodb_health_failure_contract.py\n?? packages/kailash-dataflow/tests/integration/test_redis_concurrent_close.py\n?? packages/kailash-dataflow/tests/integration/test_redis_namespace_clear.py\n?? packages/kailash-dataflow/tests/integration/test_redis_url_authentication.py\n?? packages/kailash-dataflow/tests/regression/test_circuit_breaker_half_open_deadline.py\n?? packages/kailash-dataflow/tests/regression/test_displaced_sql_cleanup_retry.py\n?? packages/kailash-dataflow/tests/regression/test_generated_model_value_validation.py\n?? packages/kailash-dataflow/tests/regression/test_generic_json_field_roundtrip.py\n?? packages/kailash-dataflow/tests/regression/test_inspector_physical_truth.py\n?? packages/kailash-dataflow/tests/regression/test_optional_schema_nullability.py\n?? packages/kailash-dataflow/tests/regression/test_retry_config_snapshot.py\n?? packages/kailash-dataflow/tests/regression/test_trust_column_metadata.py\n?? packages/kailash-dataflow/tests/unit/adapters/test_mongodb_diagnostic_siblings.py\n?? packages/kailash-dataflow/tests/unit/adapters/test_mongodb_lifecycle.py\n?? packages/kailash-dataflow/tests/unit/cache/test_auto_detection_diagnostics.py\n?? packages/kailash-dataflow/tests/unit/cache/test_redis_diagnostic_privacy.py\n?? packages/kailash-dataflow/tests/unit/cache/test_redis_owned_close.py\n?? packages/kailash-dataflow/tests/unit/cache/test_redis_url_config.py\n?? packages/kailash-kaizen/tests/unit/trust/test_ci_validation_boundaries.py\n?? packages/kailash-nexus/tests/regression/test_websocket_diagnostic_privacy.py\n?? src/kailash/utils/async_close.py\n?? src/kailash/utils/log_identity.py\n?? tests/regression/test_agent_ui_execution_resource_ownership.py\n?? tests/regression/test_agent_ui_public_cancellation.py\n?? tests/regression/test_api_channel_concurrent_terminal_close.py\n?? tests/regression/test_api_channel_terminal_ownership.py\n?? tests/regression/test_current_codeql_diagnostic_sinks.py\n?? tests/regression/test_governance_engine_store_ownership.py\n?? tests/regression/test_legacy_node_validation_diagnostics.py\n?? tests/regression/test_nexus_failed_initialization_cleanup.py\n?? tests/regression/test_node_logging_mixin_namespace.py\n?? tests/regression/test_pool_cleanup_diagnostic_truth.py\n?? tests/regression/test_realtime_webhook_signature_bytes.py\n?? tests/regression/test_runtime_node_metadata_log_privacy.py\n?? tests/regression/test_runtime_watchdog_log_format.py\n?? tests/regression/test_runtime_watchdog_source_privacy.py\n?? tests/regression/test_same_loop_sql_owner_cleanup.py\n?? tests/regression/test_sqlite_bootstrap_and_dlq_close.py\n?? tests/regression/test_sqlite_native_uri_database_parameter.py\n?? tests/regression/test_sqlite_worker_disposal.py\n?? tests/regression/test_strict_connection_failure_propagation.py\n?? tests/regression/test_strict_cycle_validation_propagation.py\n",
+        "stderr": ""
+      },
+      "dev_ancestry": {
+        "argv": [
+          "git",
+          "-C",
+          "csq16-promotion-verification",
+          "merge-base",
+          "--is-ancestor",
+          "HEAD",
+          "origin/dev"
+        ],
+        "rc": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "dev_divergence": {
+        "argv": [
+          "git",
+          "-C",
+          "csq16-promotion-verification",
+          "rev-list",
+          "--left-right",
+          "--count",
+          "origin/dev...HEAD"
+        ],
+        "rc": 0,
+        "stdout": "20\t0\n",
+        "stderr": ""
+      }
+    },
+    {
+      "label": "csq16-recovery-runtime-audit",
+      "registration": "worktree csq16-recovery-runtime-audit\nHEAD cdcaeac6baf63911d1f43ed99542002bdcd361a1\nbranch refs/heads/chore/csq16-recovery-runtime-audit",
+      "status": {
+        "argv": [
+          "git",
+          "-C",
+          "csq16-recovery-runtime-audit",
+          "status",
+          "--porcelain=v1",
+          "--untracked-files=all"
+        ],
+        "rc": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "dev_ancestry": {
+        "argv": [
+          "git",
+          "-C",
+          "csq16-recovery-runtime-audit",
+          "merge-base",
+          "--is-ancestor",
+          "HEAD",
+          "origin/dev"
+        ],
+        "rc": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "dev_divergence": {
+        "argv": [
+          "git",
+          "-C",
+          "csq16-recovery-runtime-audit",
+          "rev-list",
+          "--left-right",
+          "--count",
+          "origin/dev...HEAD"
+        ],
+        "rc": 0,
+        "stdout": "0\t0\n",
+        "stderr": ""
+      }
+    },
+    {
+      "label": "csq16-recovery-storage-audit",
+      "registration": "worktree csq16-recovery-storage-audit\nHEAD cdcaeac6baf63911d1f43ed99542002bdcd361a1\nbranch refs/heads/chore/csq16-recovery-storage-audit",
+      "status": {
+        "argv": [
+          "git",
+          "-C",
+          "csq16-recovery-storage-audit",
+          "status",
+          "--porcelain=v1",
+          "--untracked-files=all"
+        ],
+        "rc": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "dev_ancestry": {
+        "argv": [
+          "git",
+          "-C",
+          "csq16-recovery-storage-audit",
+          "merge-base",
+          "--is-ancestor",
+          "HEAD",
+          "origin/dev"
+        ],
+        "rc": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "dev_divergence": {
+        "argv": [
+          "git",
+          "-C",
+          "csq16-recovery-storage-audit",
+          "rev-list",
+          "--left-right",
+          "--count",
+          "origin/dev...HEAD"
+        ],
+        "rc": 0,
+        "stdout": "0\t0\n",
+        "stderr": ""
+      }
+    },
+    {
+      "label": "csq16-recovery-sweep",
+      "registration": "worktree csq16-recovery-sweep\nHEAD cdcaeac6baf63911d1f43ed99542002bdcd361a1\nbranch refs/heads/chore/csq16-recovery-sweep",
+      "status": {
+        "argv": [
+          "git",
+          "-C",
+          "csq16-recovery-sweep",
+          "status",
+          "--porcelain=v1",
+          "--untracked-files=all"
+        ],
+        "rc": 0,
+        "stdout": "?? workspaces/issue-1720-llm-consolidation/04-validate/recovery-2026-10-02-sweep-github.json\n",
+        "stderr": ""
+      },
+      "dev_ancestry": {
+        "argv": [
+          "git",
+          "-C",
+          "csq16-recovery-sweep",
+          "merge-base",
+          "--is-ancestor",
+          "HEAD",
+          "origin/dev"
+        ],
+        "rc": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "dev_divergence": {
+        "argv": [
+          "git",
+          "-C",
+          "csq16-recovery-sweep",
+          "rev-list",
+          "--left-right",
+          "--count",
+          "origin/dev...HEAD"
+        ],
+        "rc": 0,
+        "stdout": "0\t0\n",
+        "stderr": ""
+      }
+    },
+    {
+      "label": "csq16-runtime-ci",
+      "registration": "worktree csq16-runtime-ci\nHEAD 4df93818243fec527590876c0022f6d1f8cacb5a\nbranch refs/heads/fix/d1-runtime-ci-validation",
+      "status": {
+        "argv": [
+          "git",
+          "-C",
+          "csq16-runtime-ci",
+          "status",
+          "--porcelain=v1",
+          "--untracked-files=all"
+        ],
+        "rc": 0,
+        "stdout": " M .github/workflows/security-tests.yml\n M .github/workflows/test-kailash-align.yml\n M .github/workflows/test-kailash-kaizen.yml\n M .github/workflows/test-kailash-ml.yml\n M .github/workflows/test-with-infrastructure.yml\n M .github/workflows/trust-plane.yml\n M .github/workflows/trust-tests.yml\n M docker/Dockerfile.mcp-server\n M docker/docker-compose.sdk-dev.yml\n M docker/healthcheck-nginx.conf\n M docker/init-sdk-dev-db.sql\n M docker/mock-api-server/Dockerfile\n M packages/kailash-dataflow/src/dataflow/core/nodes.py\n M packages/kailash-dataflow/src/dataflow/core/type_processor.py\n M packages/kailash-dataflow/tests/unit/adapters/test_base_adapter_hierarchy.py\n M packages/kailash-dataflow/tests/unit/migrations/test_migration_bug_006_unit.py\n M packages/kailash-dataflow/tests/unit/migrations/test_migration_performance_tracker.py\n M packages/kailash-dataflow/tests/unit/test_express_cache_wiring.py\n M packages/kailash-kaizen/tests/unit/trust/adversarial/test_constraint_gaming.py\n M packages/kailash-kaizen/tests/unit/trust/test_external_agent_rate_limiter.py\n M packages/kailash-mcp/src/kailash_mcp/platform_server.py\n M packages/kailash-nexus/pyproject.toml\n M packages/kailash-pact/tests/unit/governance/test_sqlite_stores.py\n M pyproject.toml\n M specs/core-runtime.md\n M specs/dataflow-cache.md\n M specs/nexus-channels.md\n M specs/pact-enforcement.md\n M src/kailash/access_control.py\n M src/kailash/access_control/managers.py\n M src/kailash/access_control/rule_evaluators.py\n M src/kailash/api/workflow_api.py\n M src/kailash/channels/api_channel.py\n M src/kailash/nodes/base.py\n M src/kailash/nodes/base_async.py\n M src/kailash/nodes/data/async_sql.py\n M src/kailash/nodes/mixins.py\n M src/kailash/nodes/mixins/security.py\n M src/kailash/nodes/security/_log_identity.py\n M src/kailash/runtime/access_controlled.py\n M src/kailash/runtime/async_local.py\n M src/kailash/runtime/hierarchical_switch_executor.py\n M src/kailash/runtime/local.py\n M src/kailash/runtime/mixins/cycle_execution.py\n M src/kailash/servers/enterprise_workflow_server.py\n M src/kailash/servers/workflow_server.py\n M src/kailash/tracking/manager.py\n M src/kailash/trust/constraints/builtin.py\n M src/kailash/trust/governance/policy_engine.py\n M src/kailash/trust/governance/rate_limiter.py\n M src/kailash/trust/pact/engine.py\n M src/kailash/trust/pact/stores/sqlite.py\n M src/kailash/workflow/cyclic_runner.py\n M tests/regression/test_backup_restore_clearance.py\n M tests/regression/test_issue_1248_localruntime_cross_loop_pool_disposal.py\n M tests/regression/test_issue_2072_fail_closed_server_auth.py\n M tests/regression/test_issue_2075_pool_registry_lifecycle.py\n M tests/regression/test_issue_942_execute_sync_wait_for_warning.py\n M tests/regression/test_redteam_2026_08_09_integration_findings.py\n M tests/security/test_connection_validation.py\n M tests/tier2_integration/runtime/test_access_controlled.py\n M tests/tier2_integration/tracking/test_tracking_consolidated.py\n M tests/trust/integration/test_lifecycle.py\n M tests/trust/pact/unit/test_sqlite_stores.py\n M tests/trust/plane/integration/test_compliance_export.py\n M uv.lock\n?? packages/kailash-kaizen/tests/unit/trust/test_ci_validation_boundaries.py\n?? scripts/ci/sdk_infrastructure.py\n?? src/kailash/access_control/metadata.py\n?? src/kailash/utils/async_close.py\n?? src/kailash/utils/log_identity.py\n?? tests/regression/test_access_controlled_runtime_enforcement.py\n?? tests/regression/test_api_channel_concurrent_terminal_close.py\n?? tests/regression/test_api_channel_terminal_ownership.py\n?? tests/regression/test_governance_engine_store_ownership.py\n?? tests/regression/test_mcp_platform_sse_cli.py\n?? tests/regression/test_node_logging_mixin_namespace.py\n?? tests/regression/test_runtime_node_metadata_log_privacy.py\n?? tests/regression/test_runtime_watchdog_log_format.py\n?? tests/regression/test_runtime_watchdog_source_privacy.py\n?? tests/regression/test_same_loop_sql_owner_cleanup.py\n?? tests/regression/test_sdk_infrastructure_cleanup.py\n?? tests/regression/test_sqlite_native_uri_database_parameter.py\n?? tests/regression/test_sqlite_worker_disposal.py\n?? tests/regression/test_strict_connection_failure_propagation.py\n?? tests/regression/test_strict_cycle_validation_propagation.py\n",
+        "stderr": ""
+      },
+      "dev_ancestry": {
+        "argv": [
+          "git",
+          "-C",
+          "csq16-runtime-ci",
+          "merge-base",
+          "--is-ancestor",
+          "HEAD",
+          "origin/dev"
+        ],
+        "rc": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "dev_divergence": {
+        "argv": [
+          "git",
+          "-C",
+          "csq16-runtime-ci",
+          "rev-list",
+          "--left-right",
+          "--count",
+          "origin/dev...HEAD"
+        ],
+        "rc": 0,
+        "stdout": "20\t0\n",
+        "stderr": ""
+      }
+    },
+    {
+      "label": "csq16-source-integration",
+      "registration": "worktree csq16-source-integration\nHEAD 4df93818243fec527590876c0022f6d1f8cacb5a\nbranch refs/heads/fix/d1-source-gate-closure",
+      "status": {
+        "argv": [
+          "git",
+          "-C",
+          "csq16-source-integration",
+          "status",
+          "--porcelain=v1",
+          "--untracked-files=all"
+        ],
+        "rc": 0,
+        "stdout": " M .github/workflows/security-tests.yml\n M .github/workflows/test-kailash-align.yml\n M .github/workflows/test-kailash-kaizen.yml\n M .github/workflows/test-kailash-ml.yml\n M .github/workflows/test-with-infrastructure.yml\n M .github/workflows/trust-plane.yml\n M .github/workflows/trust-tests.yml\n M docker/Dockerfile.mcp-server\n M docker/docker-compose.sdk-dev.yml\n M docker/healthcheck-nginx.conf\n M docker/init-sdk-dev-db.sql\n M docker/mock-api-server/Dockerfile\n M packages/kailash-dataflow/pyproject.toml\n M packages/kailash-dataflow/src/dataflow/adapters/base_adapter.py\n M packages/kailash-dataflow/src/dataflow/adapters/mongodb.py\n M packages/kailash-dataflow/src/dataflow/adapters/mysql.py\n M packages/kailash-dataflow/src/dataflow/cache/async_redis_adapter.py\n M packages/kailash-dataflow/src/dataflow/cache/auto_detection.py\n M packages/kailash-dataflow/src/dataflow/cache/redis_manager.py\n M packages/kailash-dataflow/src/dataflow/core/engine.py\n M packages/kailash-dataflow/src/dataflow/core/nodes.py\n M packages/kailash-dataflow/src/dataflow/core/protected_engine.py\n M packages/kailash-dataflow/src/dataflow/core/schema_comparator.py\n M packages/kailash-dataflow/src/dataflow/core/type_introspection.py\n M packages/kailash-dataflow/src/dataflow/core/type_processor.py\n M packages/kailash-dataflow/src/dataflow/core/workflow_binding.py\n M packages/kailash-dataflow/src/dataflow/features/express.py\n M packages/kailash-dataflow/src/dataflow/platform/inspector.py\n M packages/kailash-dataflow/src/dataflow/platform/resilience.py\n M packages/kailash-dataflow/src/dataflow/testing/simple_test_utils.py\n M packages/kailash-dataflow/src/dataflow/trust/query_wrapper.py\n M packages/kailash-dataflow/tests/regression/test_issue_2107_dataflow_del_finalizers.py\n M packages/kailash-dataflow/tests/regression/test_issue_2210_bulk_upsert_statement_capacity.py\n M packages/kailash-dataflow/tests/regression/test_sqlite_address_consumer_parity.py\n M packages/kailash-dataflow/tests/regression/test_sqlite_schema_url_classification.py\n M packages/kailash-dataflow/tests/unit/adapters/test_base_adapter_hierarchy.py\n M packages/kailash-dataflow/tests/unit/adapters/test_mysql_transaction_hardening.py\n M packages/kailash-dataflow/tests/unit/adapters/test_postgresql_adapter.py\n M packages/kailash-dataflow/tests/unit/cache/test_auto_detection.py\n M packages/kailash-dataflow/tests/unit/core/test_credential_provider_config.py\n M packages/kailash-dataflow/tests/unit/core/test_dataflow_engine_lock_integration.py\n M packages/kailash-dataflow/tests/unit/core/test_sqlite_basic.py\n M packages/kailash-dataflow/tests/unit/features/test_resource_warning.py\n M packages/kailash-dataflow/tests/unit/migrations/test_auto_migration_system_lock_integration.py\n M packages/kailash-dataflow/tests/unit/migrations/test_migration_bug_006_unit.py\n M packages/kailash-dataflow/tests/unit/migrations/test_migration_performance_tracker.py\n M packages/kailash-dataflow/tests/unit/test_engine_migration_errors.py\n M packages/kailash-dataflow/tests/unit/test_express_cache_wiring.py\n M packages/kailash-dataflow/tests/unit/test_inspector_model_introspection.py\n M packages/kailash-dataflow/tests/unit/trust/test_query_executor.py\n M packages/kailash-kaizen/pyproject.toml\n M packages/kailash-kaizen/tests/unit/trust/adversarial/test_constraint_gaming.py\n M packages/kailash-kaizen/tests/unit/trust/test_external_agent_rate_limiter.py\n M packages/kailash-mcp/pyproject.toml\n M packages/kailash-mcp/src/kailash_mcp/platform_server.py\n M packages/kailash-ml/pyproject.toml\n M packages/kailash-ml/src/kailash_ml/interop.py\n M packages/kailash-ml/tests/unit/test_interop.py\n M packages/kailash-nexus/pyproject.toml\n M packages/kailash-nexus/src/nexus/core.py\n M packages/kailash-nexus/src/nexus/transports/websocket.py\n M packages/kailash-nexus/tests/unit/transports/test_websocket.py\n M packages/kailash-pact/tests/unit/governance/test_sqlite_stores.py\n M pyproject.toml\n M specs/core-runtime.md\n M specs/dataflow-cache.md\n M specs/dataflow-core.md\n M specs/dataflow-express.md\n M specs/dataflow-models.md\n M specs/middleware.md\n M specs/nexus-channels.md\n M specs/pact-enforcement.md\n M specs/trust-crypto.md\n M src/kailash/access_control.py\n M src/kailash/access_control/managers.py\n M src/kailash/access_control/rule_evaluators.py\n M src/kailash/api/workflow_api.py\n M src/kailash/channels/api_channel.py\n M src/kailash/channels/cli_channel.py\n M src/kailash/channels/mcp_channel.py\n M src/kailash/gateway/enhanced_gateway.py\n M src/kailash/middleware/communication/realtime.py\n M src/kailash/middleware/core/agent_ui.py\n M src/kailash/middleware/gateway/durable_request.py\n M src/kailash/nodes/base.py\n M src/kailash/nodes/base_async.py\n M src/kailash/nodes/data/async_sql.py\n M src/kailash/nodes/mixins.py\n M src/kailash/nodes/mixins/security.py\n M src/kailash/nodes/security/_log_identity.py\n M src/kailash/nodes/validation.py\n M src/kailash/runtime/access_controlled.py\n M src/kailash/runtime/async_local.py\n M src/kailash/runtime/hierarchical_switch_executor.py\n M src/kailash/runtime/local.py\n M src/kailash/runtime/mixins/cycle_execution.py\n M src/kailash/runtime/scheduler.py\n M src/kailash/servers/enterprise_workflow_server.py\n M src/kailash/servers/workflow_server.py\n M src/kailash/tracking/manager.py\n M src/kailash/trust/constraints/builtin.py\n M src/kailash/trust/constraints/dimension.py\n M src/kailash/trust/constraints/evaluator.py\n M src/kailash/trust/governance/policy_engine.py\n M src/kailash/trust/governance/rate_limiter.py\n M src/kailash/trust/pact/engine.py\n M src/kailash/trust/pact/stores/sqlite.py\n M src/kailash/workflow/cyclic_runner.py\n M src/kailash/workflow/dlq.py\n M tests/regression/test_async_sql_type_diagnostic_privacy.py\n M tests/regression/test_backup_restore_clearance.py\n M tests/regression/test_channel_shutdown_reports_reality.py\n M tests/regression/test_durable_execution_quickstart.py\n M tests/regression/test_issue_1248_localruntime_cross_loop_pool_disposal.py\n M tests/regression/test_issue_2006_null_default_override.py\n M tests/regression/test_issue_2013_inert_auth_control.py\n M tests/regression/test_issue_2025_unauthenticated_proxy_route.py\n M tests/regression/test_issue_2072_fail_closed_server_auth.py\n M tests/regression/test_issue_2075_pool_registry_lifecycle.py\n M tests/regression/test_issue_2081_sync_bridge_join_is_legible.py\n M tests/regression/test_issue_2087_segment_parameter_traversal.py\n M tests/regression/test_issue_2088_sink_side_log_sanitizing.py\n M tests/regression/test_issue_2107_del_finalizers_no_close.py\n M tests/regression/test_issue_2108_api_key_verification.py\n M tests/regression/test_issue_2112_dashboard_api_auth.py\n M tests/regression/test_issue_2114_non_ascii_api_key.py\n M tests/regression/test_issue_2145_session_ownership.py\n M tests/regression/test_issue_713_module_import_then_async_ddl.py\n M tests/regression/test_issue_713_subsystems_follow_runtime_swap.py\n M tests/regression/test_issue_750_express_list_cache_invalidation.py\n M tests/regression/test_issue_871_sqlite_jobstore_security.py\n M tests/regression/test_issue_942_execute_sync_wait_for_warning.py\n M tests/regression/test_issue_workflow_parameters_envelope_parity.py\n M tests/regression/test_redteam_2026_08_09_integration_findings.py\n M tests/security/test_connection_validation.py\n M tests/tier2_integration/runtime/test_access_controlled.py\n M tests/tier2_integration/tracking/test_tracking_consolidated.py\n M tests/trust/integration/test_lifecycle.py\n M tests/trust/pact/unit/test_sqlite_stores.py\n M tests/trust/plane/integration/test_compliance_export.py\n M uv.lock\n?? packages/kailash-dataflow/tests/integration/test_cache_prefix_forwarding.py\n?? packages/kailash-dataflow/tests/integration/test_inspector_catalog_backends.py\n?? packages/kailash-dataflow/tests/integration/test_mongodb_failed_connect_cleanup.py\n?? packages/kailash-dataflow/tests/integration/test_mongodb_health_failure_contract.py\n?? packages/kailash-dataflow/tests/integration/test_redis_concurrent_close.py\n?? packages/kailash-dataflow/tests/integration/test_redis_namespace_clear.py\n?? packages/kailash-dataflow/tests/integration/test_redis_url_authentication.py\n?? packages/kailash-dataflow/tests/regression/test_circuit_breaker_half_open_deadline.py\n?? packages/kailash-dataflow/tests/regression/test_displaced_sql_cleanup_retry.py\n?? packages/kailash-dataflow/tests/regression/test_generated_model_value_validation.py\n?? packages/kailash-dataflow/tests/regression/test_generic_json_field_roundtrip.py\n?? packages/kailash-dataflow/tests/regression/test_inspector_physical_truth.py\n?? packages/kailash-dataflow/tests/regression/test_optional_schema_nullability.py\n?? packages/kailash-dataflow/tests/regression/test_public_workflow_test_utilities.py\n?? packages/kailash-dataflow/tests/regression/test_retry_config_snapshot.py\n?? packages/kailash-dataflow/tests/regression/test_trust_column_metadata.py\n?? packages/kailash-dataflow/tests/unit/adapters/test_mongodb_diagnostic_siblings.py\n?? packages/kailash-dataflow/tests/unit/adapters/test_mongodb_lifecycle.py\n?? packages/kailash-dataflow/tests/unit/cache/test_auto_detection_diagnostics.py\n?? packages/kailash-dataflow/tests/unit/cache/test_redis_diagnostic_privacy.py\n?? packages/kailash-dataflow/tests/unit/cache/test_redis_owned_close.py\n?? packages/kailash-dataflow/tests/unit/cache/test_redis_url_config.py\n?? packages/kailash-kaizen/tests/unit/trust/test_ci_validation_boundaries.py\n?? packages/kailash-nexus/tests/regression/test_websocket_diagnostic_privacy.py\n?? scripts/ci/sdk_infrastructure.py\n?? src/kailash/utils/async_close.py\n?? src/kailash/utils/log_identity.py\n?? tests/regression/test_access_controlled_runtime_enforcement.py\n?? tests/regression/test_agent_ui_execution_resource_ownership.py\n?? tests/regression/test_agent_ui_public_cancellation.py\n?? tests/regression/test_api_channel_concurrent_terminal_close.py\n?? tests/regression/test_api_channel_terminal_ownership.py\n?? tests/regression/test_channel_exception_diagnostic_privacy.py\n?? tests/regression/test_current_codeql_diagnostic_sinks.py\n?? tests/regression/test_governance_engine_store_ownership.py\n?? tests/regression/test_legacy_node_validation_diagnostics.py\n?? tests/regression/test_mcp_platform_sse_cli.py\n?? tests/regression/test_nexus_failed_initialization_cleanup.py\n?? tests/regression/test_node_logging_mixin_namespace.py\n?? tests/regression/test_pool_cleanup_diagnostic_truth.py\n?? tests/regression/test_realtime_webhook_signature_bytes.py\n?? tests/regression/test_runtime_node_metadata_log_privacy.py\n?? tests/regression/test_runtime_watchdog_log_format.py\n?? tests/regression/test_runtime_watchdog_source_privacy.py\n?? tests/regression/test_same_loop_sql_owner_cleanup.py\n?? tests/regression/test_sdk_infrastructure_cleanup.py\n?? tests/regression/test_sqlite_bootstrap_and_dlq_close.py\n?? tests/regression/test_sqlite_native_uri_database_parameter.py\n?? tests/regression/test_sqlite_worker_disposal.py\n?? tests/regression/test_strict_connection_failure_propagation.py\n?? tests/regression/test_strict_cycle_validation_propagation.py\n?? workspaces/issue-1720-llm-consolidation/04-validate/csq16-cache-key-format-decision.md\n?? workspaces/issue-1720-llm-consolidation/04-validate/csq16-codeql-current-false-positive-decision.md\n?? workspaces/issue-1720-llm-consolidation/04-validate/csq16-current-hash-guard-control.json\n?? workspaces/issue-1720-llm-consolidation/04-validate/csq16-current-high-boundary-probe.json\n?? workspaces/issue-1720-llm-consolidation/04-validate/csq16-current-high-triage-receipt.json\n?? workspaces/issue-1720-llm-consolidation/04-validate/csq16-scoped-review-checkpoint.json\n?? workspaces/issue-1720-llm-consolidation/journal/0017-DISCOVERY-promotion-checks-and-error-paths.md\n",
+        "stderr": ""
+      },
+      "dev_ancestry": {
+        "argv": [
+          "git",
+          "-C",
+          "csq16-source-integration",
+          "merge-base",
+          "--is-ancestor",
+          "HEAD",
+          "origin/dev"
+        ],
+        "rc": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "dev_divergence": {
+        "argv": [
+          "git",
+          "-C",
+          "csq16-source-integration",
+          "rev-list",
+          "--left-right",
+          "--count",
+          "origin/dev...HEAD"
+        ],
+        "rc": 0,
+        "stdout": "20\t0\n",
+        "stderr": ""
+      }
+    },
+    {
+      "label": "csq16-storage-ci",
+      "registration": "worktree csq16-storage-ci\nHEAD 4df93818243fec527590876c0022f6d1f8cacb5a\nbranch refs/heads/fix/d1-storage-ci-path",
+      "status": {
+        "argv": [
+          "git",
+          "-C",
+          "csq16-storage-ci",
+          "status",
+          "--porcelain=v1",
+          "--untracked-files=all"
+        ],
+        "rc": 0,
+        "stdout": " M packages/kailash-dataflow/src/dataflow/adapters/base_adapter.py\n M packages/kailash-dataflow/src/dataflow/adapters/mongodb.py\n M packages/kailash-dataflow/src/dataflow/cache/async_redis_adapter.py\n M packages/kailash-dataflow/src/dataflow/cache/auto_detection.py\n M packages/kailash-dataflow/src/dataflow/cache/redis_manager.py\n M packages/kailash-dataflow/src/dataflow/core/engine.py\n M packages/kailash-dataflow/src/dataflow/core/nodes.py\n M packages/kailash-dataflow/src/dataflow/core/protected_engine.py\n M packages/kailash-dataflow/src/dataflow/core/schema_comparator.py\n M packages/kailash-dataflow/src/dataflow/core/type_introspection.py\n M packages/kailash-dataflow/src/dataflow/core/type_processor.py\n M packages/kailash-dataflow/src/dataflow/core/workflow_binding.py\n M packages/kailash-dataflow/src/dataflow/features/express.py\n M packages/kailash-dataflow/src/dataflow/platform/inspector.py\n M packages/kailash-dataflow/src/dataflow/platform/resilience.py\n M packages/kailash-dataflow/src/dataflow/testing/simple_test_utils.py\n M packages/kailash-dataflow/src/dataflow/trust/query_wrapper.py\n M packages/kailash-dataflow/tests/regression/test_sqlite_address_consumer_parity.py\n M packages/kailash-dataflow/tests/regression/test_sqlite_schema_url_classification.py\n M packages/kailash-dataflow/tests/unit/cache/test_auto_detection.py\n M packages/kailash-dataflow/tests/unit/test_express_cache_wiring.py\n M packages/kailash-dataflow/tests/unit/test_inspector_model_introspection.py\n M packages/kailash-dataflow/tests/unit/trust/test_query_executor.py\n M packages/kailash-kaizen/tests/unit/trust/adversarial/test_constraint_gaming.py\n M packages/kailash-ml/pyproject.toml\n M packages/kailash-ml/src/kailash_ml/interop.py\n M packages/kailash-ml/tests/unit/test_interop.py\n M packages/kailash-nexus/src/nexus/transports/websocket.py\n M packages/kailash-nexus/tests/unit/transports/test_websocket.py\n M pyproject.toml\n M specs/dataflow-cache.md\n M specs/dataflow-core.md\n M specs/dataflow-express.md\n M specs/dataflow-models.md\n M specs/middleware.md\n M specs/trust-crypto.md\n M src/kailash/access_control.py\n M src/kailash/access_control/managers.py\n M src/kailash/access_control/rule_evaluators.py\n M src/kailash/api/workflow_api.py\n M src/kailash/channels/api_channel.py\n M src/kailash/gateway/enhanced_gateway.py\n M src/kailash/middleware/communication/realtime.py\n M src/kailash/middleware/core/agent_ui.py\n M src/kailash/middleware/gateway/durable_request.py\n M src/kailash/nodes/data/async_sql.py\n M src/kailash/runtime/async_local.py\n M src/kailash/runtime/hierarchical_switch_executor.py\n M src/kailash/runtime/local.py\n M src/kailash/servers/enterprise_workflow_server.py\n M src/kailash/servers/workflow_server.py\n M src/kailash/trust/constraints/builtin.py\n M src/kailash/trust/constraints/dimension.py\n M src/kailash/trust/constraints/evaluator.py\n M src/kailash/trust/governance/policy_engine.py\n M tests/regression/test_async_sql_type_diagnostic_privacy.py\n M tests/regression/test_issue_2025_unauthenticated_proxy_route.py\n M tests/regression/test_issue_2088_sink_side_log_sanitizing.py\n M tests/regression/test_issue_2108_api_key_verification.py\n M tests/regression/test_issue_2145_session_ownership.py\n M tests/regression/test_issue_713_module_import_then_async_ddl.py\n M tests/regression/test_issue_713_subsystems_follow_runtime_swap.py\n M tests/regression/test_issue_750_express_list_cache_invalidation.py\n M tests/regression/test_issue_workflow_parameters_envelope_parity.py\n M tests/trust/integration/test_lifecycle.py\n M tests/trust/plane/integration/test_compliance_export.py\n M uv.lock\n?? packages/kailash-dataflow/src/dataflow/core/schema_inspection.py\n?? packages/kailash-dataflow/tests/integration/test_cache_prefix_forwarding.py\n?? packages/kailash-dataflow/tests/integration/test_inspector_catalog_backends.py\n?? packages/kailash-dataflow/tests/integration/test_mongodb_failed_connect_cleanup.py\n?? packages/kailash-dataflow/tests/integration/test_mongodb_health_failure_contract.py\n?? packages/kailash-dataflow/tests/integration/test_redis_concurrent_close.py\n?? packages/kailash-dataflow/tests/integration/test_redis_namespace_clear.py\n?? packages/kailash-dataflow/tests/integration/test_redis_url_authentication.py\n?? packages/kailash-dataflow/tests/regression/test_circuit_breaker_half_open_deadline.py\n?? packages/kailash-dataflow/tests/regression/test_displaced_sql_cleanup_retry.py\n?? packages/kailash-dataflow/tests/regression/test_generated_model_value_validation.py\n?? packages/kailash-dataflow/tests/regression/test_generic_json_field_roundtrip.py\n?? packages/kailash-dataflow/tests/regression/test_inspector_physical_truth.py\n?? packages/kailash-dataflow/tests/regression/test_optional_schema_nullability.py\n?? packages/kailash-dataflow/tests/regression/test_public_workflow_test_utilities.py\n?? packages/kailash-dataflow/tests/regression/test_retry_config_snapshot.py\n?? packages/kailash-dataflow/tests/regression/test_schema_inspection_cleanup_ownership.py\n?? packages/kailash-dataflow/tests/regression/test_trust_column_metadata.py\n?? packages/kailash-dataflow/tests/unit/adapters/test_mongodb_diagnostic_siblings.py\n?? packages/kailash-dataflow/tests/unit/adapters/test_mongodb_lifecycle.py\n?? packages/kailash-dataflow/tests/unit/cache/test_auto_detection_diagnostics.py\n?? packages/kailash-dataflow/tests/unit/cache/test_redis_diagnostic_privacy.py\n?? packages/kailash-dataflow/tests/unit/cache/test_redis_owned_close.py\n?? packages/kailash-dataflow/tests/unit/cache/test_redis_url_config.py\n?? packages/kailash-kaizen/tests/unit/trust/test_ci_validation_boundaries.py\n?? packages/kailash-nexus/tests/regression/test_websocket_diagnostic_privacy.py\n?? src/kailash/utils/async_close.py\n?? src/kailash/utils/log_identity.py\n?? tests/regression/test_agent_ui_execution_resource_ownership.py\n?? tests/regression/test_agent_ui_public_cancellation.py\n?? tests/regression/test_current_codeql_diagnostic_sinks.py\n?? tests/regression/test_realtime_webhook_signature_bytes.py\n?? workspaces/issue-1720-llm-consolidation/04-validate/csq16-cache-key-format-decision.md\n",
+        "stderr": ""
+      },
+      "dev_ancestry": {
+        "argv": [
+          "git",
+          "-C",
+          "csq16-storage-ci",
+          "merge-base",
+          "--is-ancestor",
+          "HEAD",
+          "origin/dev"
+        ],
+        "rc": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "dev_divergence": {
+        "argv": [
+          "git",
+          "-C",
+          "csq16-storage-ci",
+          "rev-list",
+          "--left-right",
+          "--count",
+          "origin/dev...HEAD"
+        ],
+        "rc": 0,
+        "stdout": "20\t0\n",
+        "stderr": ""
+      }
+    }
+  ],
+  "todos": [],
+  "pending": [],
+  "session_notes": [
+    {
+      "path": "workspaces/issue-1720-llm-consolidation/.session-notes",
+      "mtime": 1790952703.4914944,
+      "text": "# Session Notes \u2014 cont-33 (WIP ceilings re-based onto LANES; d684ce20f reconciled)\n\n## cont-33 \u2014 the work-ledger / WIP-discipline change (READ FIRST)\n\n**Co-owner directive:** ceilings bind worktrees and branches, NOT agents; every repo's work\nledger must let a lane pack DEPTH (more agents, more tasks/issues per lane); each lane is a\nMINI-ORCHESTRATOR, not a single serial worker. Landed `d94f597ff`.\n\nThe ledger's ROW SHAPE was the binding constraint. The old\n`track \u2192 agent \u2192 branch \u2192 status` admitted exactly ONE agent and ONE task per ceiling-bound\nunit, so an orchestrator filling it CORRECTLY was structurally prevented from packing depth.\n`orchestration-launch-ledger.md` MUST-1 is now LANE-keyed\n(`lane \u2192 branch \u2192 TASK SET \u2192 AGENT ROSTER \u2192 status`) and MUST-6 carries the contract.\n`autonomous-execution.md` Rule 1 was amended in the same change: the shard budget binds one\nAGENT's implementation pass, NOT one worktree \u2014 that sentence would otherwise have forbidden\npacking. `agents.md` \u00a7 Triad carries the always-on pointer (baseline, loads every session);\nthe `fleet-drain` Stop advisory carries it at the refill moment.\n\n**Three bounds that did NOT move:** per-AGENT shard budget; adaptive concurrency back-off (a\nRATE signal, not a WIP ceiling \u2014 depth is packed over a lane's life, not fired at once); joint\nrevert-safety on the lane's single branch.\n\n**Deliberately NOT built:** a dispatch-time under-packing detector. Under-packing is a property\nof the DISPATCHABLE SET, which is nowhere in the tool-call input, so any detector would infer a\ncounterfactual and be non-discriminating. Recorded in the Wiring as DECLINED, not deferred \u2014\ndo not \"finish\" it.\n\n**UNVERIFIED and owed:** `emit.mjs --all --dry-run` did NOT change its reported byte count after\n5000 bytes were appended to a baseline rule (control), so it is not measuring this repo's rule\nedits despite `REPO` resolving to the repo root. The headroom figures quoted mid-session are\nWITHDRAWN. If the gate really is inert here, `rule-authoring.md` Rule 10's proximity-band\nverdicts in this repo are unfounded. Lane L2 is investigating.\n\n## cont-32 (d684ce20f reconciled; codify backlog cleared; a self-correction)\n\n## Where we are\n\n**The d684ce20f security residual is CLOSED as a question.** All five archived findings were\nverified per-finding against `origin/dev` by independent lanes, each using an executed probe with\na control rather than reading code. Four were already fixed on dev; one was genuinely open and is\nnow fixed and landed.\n\n**Fleet: primary checkout only** (plus lane C's worktree if it is still listed \u2014 reap it).\nNo `fix/*` remote heads. `dev` \u2192 `main` promotion gap is large and still owner-gated.\n\n## The d684ce20f verdict table (do NOT re-verify; this is the durable record)\n\n| Finding | Verdict | Evidence |\n| --- | --- | --- |\n| RT-276-1 CRITICAL (read-only view) | CLOSED (earlier, lane L13) | `ReadOnlyAttributeProxy` |\n| RT-276-3 HIGH (internals via fallthrough) | **CLOSED** | 7 private names resolve on raw engine, all denied through view; allowed pole works; escape routes closed; 41+37+36 tests |\n| RT-277-1 HIGH (pickle/deepcopy) | **CLOSED \u2014 dev is WIDER than the archived fix** | dev's `__reduce__` also blocks shallow copy, which the archived `__deepcopy__` alone would have left open |\n| RT-277-2 HIGH (`from_dict` warning) | **CLOSED** | docstring + runtime warning; mutation drops it to 0 |\n| RT-SERVE-1 HIGH (batch cap) | **CLOSED** | `_MAX_BATCH_PRODUCTS = 50` enforced at `serving.py:503` before fan-out; landed via `edf37fa3e`, independently re-derived |\n| RT-3a MED (rate-limit coercion) | **WAS OPEN \u2192 FIXED** (lane A, merged `f844ba302`) | fail-closed, not fail-open; see below |\n| RT-1b (cursor dedup) + sub-issue | **WAS OPEN \u2192 FIXED** (lane B, merged `3603cbc29`) | the sub-issue was far worse than the finding |\n| RT-6a LOW (empty-list bulk) | **WAS OPEN \u2192 FIXED** (lane C, merged `91fb53a30`) | wider than the finding: all FOUR bulk methods, and three of them really did dispatch a node on `[]` |\n\n**The \"5 HIGH\" in the commit subject is unrecoverable and probably an off-by-one.** Its own body\nlabels only FOUR HIGH (RT-276-3, RT-277-1, RT-277-2, RT-SERVE-1). `RT-276-2` is missing from the\nnumbering sequence (276-1 \u2192 276-3). No document carrying the RT-* taxonomy exists anywhere in the\narchived tree \u2014 searched with a control grep that fired (6 hits for a known-present token), so the\nempty result is real. Do not go looking again; do not invent a fifth.\n\n## Landed this session (all pushed + fetch-verified)\n\n- `f3c3c16e7` test(pact): the mirror suite called `from_dict` bare, so deleting the security\n  warning left it GREEN. It looked like redundancy it was not.\n- `d12940438` test(dataflow): the batch-cap test derived its input from the constant under test,\n  so it passed for EVERY cap. Mutating to `10**9` left it green (115s runtime proved the mutation\n  reached the code). Now pinned: widening to 10000 reds.\n- `70591d790` codify: 4 folds + the triage report; 18 `.pending/` candidates cleared; #2084 closed.\n- `3603cbc29` merge lane B: sync REST pagination.\n- `bbec11e4b` **Revert** of `9b78c8011` \u2014 see \u00a7 The mistake.\n- `2907b83e9` fix(api): pagination param coercion escaped as raw builtins (regression from B).\n- `f844ba302` merge lane A: fail-closed rate-limit/cost coercion.\n\n## The mistake \u2014 read this before touching async pagination\n\nLane B found the async pagination path broken and DELIBERATELY STOPPED, saying it needed its own\nlane with review. **I overrode that and was wrong.** I committed a fix that was a NO-OP in\nproduction: `_extract_metadata` reads `response[\"content\"]`/`[\"headers\"]`, but the real\n`AsyncHTTPRequestNode` nests those inside `result[\"response\"]` (`http.py:1058-1062`).\n\nMy test passed only because my own double returned a shape the real transport never produces. I\nwrote a contract-pin test meant to catch exactly that and pinned the WRONG AXIS \u2014 signature\nPARAMETERS, while the mismatch was in the RETURN shape. That is the defect codified into\n`rules/testing.md` **in this same session**. Mutation testing did not save me: both mutations ran\nagainst the same wrong-shaped double, so neither could discriminate.\n\nWorse: fixing the shape ARMS a latent credential-exfiltration path, because\n`_handle_async_pagination` follows a response-body-supplied link with the caller's headers and no\norigin validation. The reverted test asserted following that link as CORRECT.\n\n**Lesson for the next session: lane B's judgment was better than the orchestrator's. When a lane\nsays \"this needs its own shard with review\", that is evidence, not an obstacle.**\n\n## OPEN WORK \u2014 durable, filed, do not re-derive\n\n1. **#2230 (HIGH)** \u2014 async REST path: `RESTClientNode.async_run` returns `data=None` on EVERY\n   call (verified against the real transport shape); `AsyncRESTClientNode` cannot be constructed\n   at all (verified with the sync sibling as control). **Carries a hard ordering constraint: the\n   link-following guard must land BEFORE or WITH the shape fix, never after.**\n2. **#2231 (MED)** \u2014 sync pagination residuals: node-parameter auth (`auth_type`/`auth_token`)\n   dropped on follow-up pages \u2192 unauthenticated 401 \u2192 silent page-1 (the very bug B fixed,\n   surviving for that route); single-slot cursor dedup defeated by an A/B cycle; unmasked\n   exception sink (parity, NOT a demonstrated leak); a fourth silent swallow site; in-place\n   aliasing; a page-path test that never asserts `params`.\n3. **Disclosure note for the owner:** `bbec11e4b`'s commit body describes the latent\n   credential-exfiltration vector, including a sample payload, and **kailash-py is public**. It is\n   not exploitable in shipped code (the shape bug keeps the path unreachable, and the commit says\n   so), but if a private advisory is preferred, that text is the thing to consider rewriting.\n\n## cont-33 STATUS \u2014 two lanes LANDED, a third in flight\n\n**Landed and drained:** L2 `4ff0aa0d7` (27 identifier-budget sites) \u00b7 L1 `613468d4d`\n(#2230 + #2231 + redirect hardening) \u00b7 `dab1b679d` (red-test fix, below).\n\n**L3 `fix/rest-guard-parity` IN FLIGHT** \u2014 12 findings from two independent gate reviews\n(adversarial security + correctness) of `613468d4d`. One packed lane per MUST-6.\n\n### The shape of the L3 finding set, in one sentence\n\nThe origin guard L1 landed is **correct inside its own loop and bypassed at every surface\noutside it** \u2014 almost every finding is `security.md` \u00a7 Enforcement-Surface Parity.\n\n- **S-HIGH-1** `allow_redirects` reached 1 of 5 request sites (confirmed: it appears EXACTLY\n  ONCE in `rest.py` and that is the one `=False`); `RESTClientNode` does not even DECLARE the\n  parameter, so a user cannot turn the control on.\n- **S-HIGH-2** cookies defeat the sticky rule from underneath \u2014 session pools are\n  process-global and reused, zero jar suppression in `nodes/api/`, so the jar re-attaches the\n  origin cookie BELOW the header strip. Also cross-caller.\n- **S-HIGH-3** DONE (R1): credential strip inverted from a 6-name denylist to a 10-name\n  allowlist. RED showed 9 vendor credentials forwarded verbatim. `X-Tenant` now dropped\n  (deliberate, pinning test flipped with a do-not-restore comment). The `api_key_header`\n  special case became dead under an allowlist and was deleted in 3 places, contract test kept.\n- S-MED-4/5/6/7, C-F2/F3/F5/F7, and the one DESIGN call (C-F4) \u2014 see `lane-ledger.md`.\n\n### Traced and REJECTED \u2014 do not re-raise\n\n`PROXY_CREDENTIAL_HEADERS` (`utils/proxy_guard.py:184`, used at `api/gateway.py:916`) is the\nsame denylist SHAPE but NOT the same failure mode, and the module documents the asymmetry in\nplace: a reverse proxy forwards to a CONFIGURED backend (not an attacker-chosen host),\n`forward_credentials=False` is the real control, and an allowlist there would break every\nbackend relying on a custom application header. It is known-incomplete BY DESIGN. Left\nuntouched deliberately.\n\n### Known false positives \u2014 verify before chasing either\n\n1. **`framework-first.md` hook: \"raw SQL string detected\"** fires on EVERY edit to\n   `src/kailash/nodes/api/rest.py`. There is no DB work in that file \u2014 it matches something\n   else in it. Seen by the orchestrator and two sub-agents. Do NOT restructure code to\n   silence it; if it is worth fixing, fix the hook's matcher.\n\n2. **Pyright \"unknown import symbol\" / \"is not defined\" on NEW symbols \u2014 3 instances this\n   session, all false.** Pyright resolves `kailash`/`dataflow` against the INSTALLED\n   site-packages copy, which predates any symbol a lane just added. Measured examples:\n   `identifier_budget_for` reported unknown while defined at `adapters/dialect.py:597` and\n   imported correctly; `NodeParameter` reported undefined while imported at line 28 and the\n   suite passing 17/17. **The discriminating check is to RUN it** \u2014 `python -c \"from X import Y\"`\n   plus the actual test \u2014 not to read the diagnostic. This is the same site-packages trap the\n   lanes hit directly, which is why several now ship in-process provenance guards asserting\n   `__file__` resolves under the checkout.\n\n## SUPERSEDED \u2014 the original cont-33 dispatch (kept for the packing rationale)\n\n4 dispatchable tasks went to 2 ceiling slots, not 4 \u2014 the first application of MUST-6.\n\n| lane | branch | tasks | why packed this way |\n| --- | --- | --- | --- |\n| L1-rest | `fix/rest-pagination` | #2230, #2231 | CO-LOCATED, not merely packed: both touch `src/kailash/nodes/api/rest.py`, so splitting them across branches would GUARANTEE a conflict |\n| L2-df | `fix/dataflow-warns` | #1971, emit-forensics | packed by disjointness: `packages/kailash-dataflow/**` and `.claude/bin/**` share no file with each other or with L1 |\n\nBoth briefed as mini-orchestrators (fan out internally, waves of ~3). On completion: merge\n`--no-ff` into dev, push, reap the worktree, delete the branch local+remote, re-census.\n\n**L1 carries a HARD ORDERING CONSTRAINT \u2014 do not let it reorder.** #2230's shape fix ARMS a\nlatent credential-exfiltration path (`_handle_async_pagination` follows a response-body link\nwith the caller's headers, no origin validation), unreachable today ONLY because the shape bug\nkeeps the link out of metadata. The origin guard lands BEFORE or WITH the shape fix, never\nafter. A prior attempt shipped the shape fix without the guard and was reverted (`bbec11e4b`).\n\n## NOT DISPATCHABLE \u2014 landed, awaiting promotion (verified cont-33)\n\n#2220 / #2221 / #2222 / #2225 / #2226 / #2227 read OPEN on GitHub but every one has a landing\ncommit on `origin/dev` (checked by `git log --grep` per issue). They close when the promotion\nreaches `main`. Do NOT re-dispatch them.\n\n## FLEET (as of cont-33 dispatch)\n\nPrimary checkout only. No `fix/*` remote heads, no lane worktrees, `.kailash-py-wt/` empty.\nRemote heads are `dev`, `main`, and the held `promote/2026-09-11-cont30`. Tree clean apart from\nthe untracked `.git-merge-msg.tmp` (owner-gated removal).\n\nLane C landed as `91fb53a30`. It needed ONE resume: its work was complete and staged but\nuncommitted, because a pre-commit isort rewrite aborted its first commit while the wrapper still\nexited 0 \u2014 the exact trap in \u00a7 Traps. It caught that on its own `git rev-parse HEAD` check after\nbeing resumed. Per `agents.md` \u00a7 Agent-Result-Delivery a stalled lane is RESUMED, never\nre-dispatched; that is what recovered ~57 minutes of completed work.\n\n**Pre-existing WARN on the bulk path, flagged by lane C, NOT in its diff and still open:**\n`packages/kailash-dataflow/src/dataflow/migrations/sync_ddl_executor.py:583` and\n`features/bulk.py:1570,1574` emit `identifier.unknown_dialect_budget` warnings (#1971) on every\nrun. Live WARN output per `observability.md` Rule 5 \u2014 worth a lane.\n\n## Owner-gated \u2014 surfaced, NOT agent-actionable\n\n- **Promote #2229.** It is now materially stale: 22 commits on `dev` are NOT in it, including the\n  fail-closed audit-chain fix, the #2220 closure, and the L5 pool-leak work. `mergeStateStatus=BEHIND`,\n  `reviewDecision=REVIEW_REQUIRED`, CodeQL red on 4 pre-existing advisories.\n  **Recommendation: cut a FRESH `promote/<date>` branch at then-current `dev` rather than merging\n  #2229 as it stands**, so one gate run carries the whole wave instead of stranding 22 commits.\n- The archive-ref / stash prune; audit-chain keying; kaizen 2.47.0; AccessDecision schema.\n- `! rm .git-merge-msg.tmp` (the state-file guard blocks the agent on the `.git-` prefix).\n\n## STANDING ORDER (D0) \u2014 unchanged\n\nLAND ALL branches/refs/worktrees into `dev` and DRAIN on completion. Landing in `dev` costs ZERO\nCI. NEVER open a PR against `dev`. `dev` \u2192 `main` is the ONE owner-gated promotion.\n\n## Traps carried forward\n\n- A `dev \u2192 main` promotion DELETES the trunk (`delete_branch_on_merge` + PR head IS `dev`): always\n  cut a `promote/<date>` branch.\n- A pre-commit auto-formatter that modifies a staged file ABORTS the commit; `tail -N` hides the\n  line and a following no-op push reads \"Everything up-to-date\". Verify HEAD advanced + fetch.\n- **`git stash` is UNSAFE here \u2014 the stack is shared across all worktrees** (`worktree-isolation.md`\n  Rule 9). I used it once this session before the hook caught me. Capture to a patch file\n  (`git diff > x.patch` / `git apply`) or a `cp` backup instead. Lane A got this right unprompted.\n- Never name scratch files `.git*` (state-file guard trips on the prefix).\n- Pre-commit runs Tier-1 tests, so a commit can exceed a 120s foreground timeout. Background it\n  and verify HEAD afterwards rather than assuming failure.\n"
+    }
+  ],
+  "spec_roots": [],
+  "tools": {
+    "tools/sweep-redteam.py": true,
+    ".claude/bin/spec-corpus-conformance.mjs": false,
+    ".claude/bin/lib/loom-links.mjs": false
+  },
+  "stable_tags": [
+    "v2.65.0",
+    "v2.64.0",
+    "v2.63.0",
+    "v2.62.0",
+    "v2.61.0",
+    "v2.60.1",
+    "v2.60.0",
+    "v2.59.0",
+    "v2.58.1",
+    "v2.58.0",
+    "v2.57.0",
+    "v2.56.0",
+    "v2.55.0",
+    "v2.54.0",
+    "v2.53.0",
+    "v2.52.0",
+    "v2.51.0",
+    "v2.50.0",
+    "v2.49.0",
+    "v2.48.1",
+    "v2.48.0",
+    "v2.47.0",
+    "v2.46.0",
+    "v2.45.6",
+    "v2.45.5",
+    "v2.45.4",
+    "v2.45.3",
+    "v2.45.2",
+    "v2.45.1",
+    "v2.45.0",
+    "v2.44.1",
+    "v2.44.0",
+    "v2.43.1",
+    "v2.43.0",
+    "v2.42.0",
+    "v2.41.1",
+    "v2.41.0",
+    "v2.40.1",
+    "v2.40.0",
+    "v2.39.1",
+    "v2.39.0",
+    "v2.38.3",
+    "v2.38.2",
+    "v2.38.1",
+    "v2.38.0",
+    "v2.37.0",
+    "v2.36.0",
+    "v2.35.0",
+    "v2.34.2",
+    "v2.34.1",
+    "v2.34.0",
+    "v2.33.1",
+    "v2.33.0",
+    "v2.32.0",
+    "v2.31.0",
+    "v2.30.0",
+    "v2.29.4",
+    "v2.29.3",
+    "v2.29.2",
+    "v2.29.1",
+    "v2.29.0",
+    "v2.28.4",
+    "v2.28.3",
+    "v2.28.2",
+    "v2.28.1",
+    "v2.28.0",
+    "v2.27.0",
+    "v2.26.2",
+    "v2.26.1",
+    "v2.26.0",
+    "v2.25.2",
+    "v2.25.1",
+    "v2.25.0",
+    "v2.24.1",
+    "v2.24.0",
+    "v2.23.0",
+    "v2.22.1",
+    "v2.22.0",
+    "v2.21.3",
+    "v2.21.2",
+    "v2.21.1",
+    "v2.21.0",
+    "v2.20.3",
+    "v2.20.2",
+    "v2.20.1",
+    "v2.20.0",
+    "v2.19.0",
+    "v2.18.1",
+    "v2.18.0",
+    "v2.17.0",
+    "v2.16.1",
+    "v2.16.0",
+    "v2.15.0",
+    "v2.14.1",
+    "v2.14.0",
+    "v2.13.5",
+    "v2.13.4",
+    "v2.13.3",
+    "v2.13.2",
+    "v2.13.1",
+    "v2.13.0",
+    "v2.12.0",
+    "v2.11.3",
+    "v2.11.2",
+    "v2.11.1",
+    "v2.11.0",
+    "v2.10.0",
+    "v2.9.2",
+    "v2.9.1",
+    "v2.9.0",
+    "v2.8.12",
+    "v2.8.11",
+    "v2.8.10",
+    "v2.8.9",
+    "v2.8.8",
+    "v2.8.7",
+    "v2.8.6",
+    "v2.8.5",
+    "v2.8.4",
+    "v2.8.3",
+    "v2.8.2",
+    "v2.8.1",
+    "v2.8.0",
+    "v2.7.0",
+    "v2.6.0",
+    "v2.5.1",
+    "v2.5.0",
+    "v2.4.1",
+    "v2.4.0",
+    "v2.3.4",
+    "v2.3.3",
+    "v2.3.2",
+    "v2.3.1",
+    "v2.3.0",
+    "v2.2.1",
+    "v2.2.0",
+    "v2.1.0",
+    "v2.0.0",
+    "v1.1.2",
+    "v1.1.1",
+    "v1.0.0",
+    "v0.13.0",
+    "v0.12.5",
+    "v0.12.4",
+    "v0.12.3",
+    "v0.12.2",
+    "v0.12.1",
+    "v0.12.0",
+    "v0.11.0",
+    "v0.10.17",
+    "v0.10.16",
+    "v0.10.15",
+    "v0.10.14",
+    "v0.10.13",
+    "v0.10.12",
+    "v0.10.11",
+    "v0.10.10",
+    "v0.10.9",
+    "v0.10.8",
+    "v0.10.7",
+    "v0.10.6",
+    "v0.10.5",
+    "v0.10.4",
+    "v0.10.3",
+    "v0.10.2",
+    "v0.10.1",
+    "v0.10.0",
+    "v0.9.31",
+    "v0.9.30",
+    "v0.9.29",
+    "v0.9.28",
+    "v0.9.27",
+    "v0.9.26",
+    "v0.9.25",
+    "v0.9.24",
+    "v0.9.23",
+    "v0.9.22",
+    "v0.9.21",
+    "v0.9.20",
+    "v0.9.19",
+    "v0.9.18",
+    "v0.9.17",
+    "v0.9.16",
+    "v0.9.15",
+    "v0.9.14",
+    "v0.9.12",
+    "v0.9.11",
+    "v0.9.9",
+    "v0.9.8",
+    "v0.9.7",
+    "v0.9.6",
+    "v0.9.5",
+    "v0.9.4",
+    "v0.9.3",
+    "v0.9.2",
+    "v0.9.1",
+    "v0.9.0",
+    "v0.8.7",
+    "v0.8.6",
+    "v0.8.5",
+    "v0.8.4",
+    "v0.8.3",
+    "v0.8.2",
+    "v0.8.1",
+    "v0.8.0",
+    "v0.7.14",
+    "v0.7.13",
+    "v0.7.8",
+    "v0.7.7",
+    "v0.7.2",
+    "v0.7.1",
+    "v0.7.0",
+    "v0.6.8",
+    "v0.6.7",
+    "v0.6.6",
+    "v0.6.5",
+    "v0.6.4",
+    "v0.6.3",
+    "v0.6.2",
+    "v0.6.1",
+    "v0.6.0",
+    "v0.5.6",
+    "v0.5.5",
+    "v0.5.4",
+    "v0.5.3",
+    "v0.5.0",
+    "v0.4.2",
+    "v0.4.1",
+    "v0.4.0",
+    "v0.3.2",
+    "v0.3.1",
+    "v0.3.0",
+    "v0.2.2",
+    "v0.2.1",
+    "v0.2.0",
+    "v0.1.6",
+    "v0.1.5",
+    "v0.1.4",
+    "v0.1.3",
+    "v0.1.2",
+    "v0.1.1",
+    "v0.1.0"
+  ],
+  "release_changes": {
+    "argv": [
+      "git",
+      "log",
+      "--oneline",
+      "v2.65.0..HEAD",
+      "--",
+      "src/",
+      "packages/*/src"
+    ],
+    "rc": 0,
+    "stdout": "e4a789e73 fix(dataflow): retain native runtime ownership during registry execution\nfbbce26c1 fix(runtime): await owned cleanup once across gateway and caller loops\ncde4d563e docs(runtime): clarify loop replacement and synchronous call rejection\nde32ea737 fix(runtime): report deferred persistence failures on every error path\na5c1bbc11 fix(runtime): finish async resource cleanup on its owning loop\ne966efb98 fix(runtime): persist cancelled executions using terminal run state\n3a6aef257 fix(runtime): finish audit and context cleanup on task cancellation\nc6857465b fix(runtime): record native async audit outcomes without exception payloads\ne6c9d47e5 fix(security): preserve masked audit logger identities across producers\nd75c72837 fix(runtime): emit enabled audit events through valid nodes\n209d5e054 fix(security): mask audit metadata before log formatting\n496047bab fix(runtime): preserve deferred injection and protect parameter diagnostics\n7bfa052ea fix(trust): isolate cached decisions and fence revoked in-flight results\n658162fff refactor(runtime): remove unused retry timing initializers\n3ee5bc485 fix(security): reject non-string node parameter names\n676da6ede fix(trust): preserve key identity through checked file descriptors\n350ad605f fix(security): sanitize metadata HTML with bounded stable parsing\n9f6b069d5 fix(logging): mask and bound workflow and resource diagnostics\na35604592 fix(sqlite): preserve nested transaction ownership and completion admission\n21ee01682 fix(http): isolate automatic diagnostics from caller callbacks\nb05f02798 fix(http): bind validated DNS answers to TCP connections\nea4f09514 fix(runtime): verify trust before replay and isolate loop admission\nef2f89cce fix(runtime): checkpoint cyclic progress by iteration\n1ea7f5dd7 fix(runtime): preserve attempt controls and policy during cycles\n2545588b0 fix(workflow): keep convergence payloads out of diagnostics\n5ec8e125c fix(gateway): omit request error payloads from automatic logs\nb134a9518 fix(workflow): execute acyclic plans and protect cycle diagnostics\n467bda018 fix(runtime): preserve retry attempt and observer ownership\n171079f03 fix(sql): sanitize type diagnostics and close test-owned resources\nc7078698f fix(sqlite): preserve database identity and connection ownership\nec01c3b87 fix(runtime): share durable controls across conditional execution\n74c330005 fix(runtime): assign conditional fallback to the existing run owner\n9279d92c3 fix(runtime): omit payloads from automatic diagnostics\n14e916aaf fix(runtime): validate async signal inputs before consuming messages\n15960d947 fix(security): integrate reviewed Python diagnostic privacy\ne0bd3d42a fix(security): keep Python exception payloads out of automatic logs\nfae7559cd fix(security): integrate reviewed path and diagnostic hardening\n69aa36db0 fix(security): canonicalize path boundaries and omit diagnostic payloads\n5b4fae098 fix(auth): integrate reviewed MFA diagnostic privacy\n12188f730 fix(auth): omit delivery payloads from MFA diagnostics\n8ed016700 fix(nodes): integrate reviewed constructor and runtime input separation\ne4eedbf73 fix(logging): omit record values and exception payloads from node diagnostics\na1e2124dc fix(runtime): require literal booleans for drift overrides\n1050bc1d8 fix(nodes): separate constructor settings from execution inputs\n4ee0bda4c fix(runtime): enforce execution controls and finish owned timers\nfcee1a249 fix(logging): land reviewed gateway and event log sanitization\nec9e5adea fix(gateway): bind application owners and drain every lifespan path\na32a24d0a fix(runtime): land reviewed content failure propagation\nebab03c87 fix(runtime): preserve content failures across execution strategies\ne7c1085b0 fix(runtime): land reviewed transient loop and cancellation cleanup\n9e82f072f fix(runtime): drain transient node loops and preserve caller cancellation\nf87b8ba2a fix(logging): sanitize gateway and governance event diagnostics\n21c2fc68e fix(servers): land reviewed socket ownership and websocket lifecycle repairs\n428304edc fix(servers): own socket probes and handle normal websocket disconnects\n58c745790 fix(gateway): release owned runtimes on failed lifespans and shutdown\nb64c55e63 fix(trust): keep beneficiary identities out of diagnostic logs\n8f7762505 fix(runtime): land reviewed finite bridge deadline validation\nc8b2377fb fix(runtime): reject unusable sync bridge deadlines\na1ba6c826 fix(auth): explain missing aiohttp server dependency\n13687209e fix(runtime): land reviewed early validation and warning contracts\n322b40365 fix(runtime): validate configuration before acquiring resources\n19af410b8 fix(auth): preserve aiohttp request identity across key APIs\ne30256691 fix(ci): make formatter results independent of import batch shape\nc49954f9c fix(ci): land reviewed network and audio gate repairs\n9eaa4d4ee fix(network): preserve embedded address policy and localhost transport parity\nb31c191f9 fix(runtime): own coroutine creation and preserve caller loops\nd02980968 fix(security): unify credential scanning across error sinks\nfc93ee8ff fix(tracking): distinguish closed sqlite storage from leaks\na98075487 fix(runtime): retain edge pool identities across cleanup\ne2f0a4291 fix(runtime): land reviewed loop-owned HTTP pool lifecycle\na5aa64f4b fix(core): preserve owner-loop resources through explicit cleanup\n7278bdb3e fix(trust): land audit identifier validation and dialect parity\n025d9c92a fix(trust): reject uncreatable audit identifiers before initialization\n839a039a3 fix(kaizen): land resolved TypedDict semantics and fail-closed annotations\n2b3157e82 fix(kaizen): resolve nested type contracts consistently\nfcf1ec06b fix(pact): land fail-closed role authority and trusted restore parity\nd902d412a fix(pact): require role identities across authorization paths\naf2009163 fix(pact): restore clearance snapshots without weakening live grants\n7c2377918 docs(security): explain optional pandas rejection path\n23989ed67 fix(pact): restore must not re-authorise backed-up KSPs (#2238)\n6406f41fe fix(pact): fail closed when a named parent/definer address does not resolve (#2238)\nc8c632624 merge: frozen constraint dataclasses hold immutable collections (#2225)\n3b9d08213 fix(pact): refuse an envelope whose named authority does not exist (#2238)\nc8bda0827 fix(trust): make frozen constraint dataclasses hold immutable collections (#2225)\nfda270683 merge: five more verifiers that passed on an input they never read (lane L-verify)\n625aebb14 merge: stop sanitize_input manufacturing the tag it strips (lane L-crypto)\ne2a23b8fc fix(trust): five more verifiers that passed on an input they never read (#2221)\n49ec15d71 fix(trust): a caller must not be able to choose the bytes of a constraint log record\n6461474e1 docs(security): sweep the enumerable fingerprint call sites, correct what they promise\n82c431886 fix(trust): escape dashboard timestamps instead of trusting a cross-file invariant\n49c385832 docs(security): stop the fingerprint docstrings claiming a property they never had\n47decb8b5 fix(security): stop the path-traversal guard logging the attack into its own record\nce040fdf3 merge: carry the origin guard to every surface outside its own loop (lane L3)\n5b3ce05d7 fix(security): stop sanitize_input manufacturing the tag it strips (#2173)\n81acadbee fix(api): carry the origin guard to every surface outside its own loop\n34d55f5f6 fix(edge): the MFA and RBAC compliance checks certified every location\nfb9fabe77 fix(api): the origin guard must also govern the hops the transport takes\n416a6951e fix(api): repair the async REST path and the sync pagination residuals\nf844ba302 merge: fail-closed coercion for rate-limit and cost values (lane A)\n2907b83e9 fix(api): pagination param coercion escaped as raw builtins after the narrowing\nbbec11e4b Revert \"fix(api): async pagination never found a next link \u2014 at BOTH sites\"\n9b78c8011 fix(api): async pagination never found a next link \u2014 at BOTH sites\n37447ab82 fix(pact): fail closed with a named field on malformed ctx numerics\nc1dfa34bb fix(api): make REST paginate=True actually fetch page 2+\n04b68f2c8 merge: pool leaks on loop-change and closed-but-counted, fixed at the registry (lane L5)\nf658eaca2 fix(core): gate the idle-pool reaper by loop ownership; stamp before publish\n65da354c3 fix(core): \"a different event loop\" is not \"a dead event loop\"\n15df4a610 merge: verify_chain detects a wipe, resume gate no longer vacuously true (lane L10)\n9c8b16088 fix(trust): sweep empty-passes siblings + bounded-eviction false alarm (#2221 F2/F3)\naf236e819 fix(trust): fail-closed on absence for audit-chain, resume gate, and health check (#2221)\nf42f6b6be fix(pact): derive DelegationRecord capabilities from the enforced permitted set (#2225)\n94c8bbcf1 fix(dataflow): move the live-pool guard into the primitive, not its callers\n1d2092e56 merge: PactEngine.governance is genuinely read-only; three proxy-escape routes closed (lane L1)\ne58678367 fix(pact): close to_workflow_node handle leak; correct reachability claim (#2227)\nba3b63484 merge: PythonCodeNode first-execution import cost, security-neutral (lane L7)\n8e2a65eaf fix(dataflow): pool registry counted adapter objects, not live pools\n593d103e6 fix(security): preserve the exact pandas verdict and stop caching partial resolution\n726bcf8d7 fix(code): close the sandbox escape the lazy module proxy opened\ndce46e761 docs(pact): pin the FrozenMapping residual an adversarial pass found\n09cb4d736 fix(pact): close envelope escalation and two proxy-bypass routes (#2226, #2227)\n39dae98e5 perf(code): stop importing the ML stack on every PythonCodeNode execution\n47169e1f7 fix(access-control): stop calling the deprecated evaluate_rules shim internally\n4f7f47994 fix(runtime,nodes,tracking,middleware,workflow): finalizers must warn and return, never close\nebb02b45c fix(middleware): repair every AccessDecision construction and audit call in MiddlewareAccessControlManager\n",
+    "stderr": ""
+  },
+  "promotion_count": {
+    "argv": [
+      "git",
+      "rev-list",
+      "--count",
+      "--first-parent",
+      "origin/main..origin/dev"
+    ],
+    "rc": 0,
+    "stdout": "244\n",
+    "stderr": ""
+  }
+}
