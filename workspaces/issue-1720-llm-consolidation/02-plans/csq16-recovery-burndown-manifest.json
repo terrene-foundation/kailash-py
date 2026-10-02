@@ -1,0 +1,14 @@
+{
+  "_schema": "burndown-manifest/v1",
+  "target": "workspaces/issue-1720-llm-consolidation/02-plans/csq16-recovery-burndown.md",
+  "pages": [
+    "CSQ16 recovery"
+  ],
+  "sources": [
+    {
+      "path": "csq16-recovery-register.json",
+      "kind": "register",
+      "precedence": 0
+    }
+  ]
+}
