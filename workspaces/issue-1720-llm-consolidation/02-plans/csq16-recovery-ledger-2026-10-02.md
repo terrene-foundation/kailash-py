@@ -58,3 +58,24 @@ Runtime audit proposes R1 access, R2 strict runtime, R3 SQLite ownership, R4 HTT
 - Reaped empty setup refs `chore/csq16-recovery-runtime-audit`, `chore/csq16-recovery-storage-audit`, `chore/csq16-recovery-sweep`: each exactly equals dev SHA and has no registered worktree. Original dirty worktrees untouched.
 
 - Independent `fix/csq16-trust-recovery` worker owns R8 constraints/governance policy then R9 PACT store ownership, with separate bounded commits, explicit PACT/infrastructure consultation and Trestle. Root owns landing/reaping and report receipt.
+
+- Additional isolated workers: `fix/csq16-retry-recovery` owns new R14 overall retry deadline (resource_manager only); `fix/csq16-agentui-recovery` owns R5 middleware lifecycle then R10 Nexus ctor cleanup. Both based on narrowed hook a49ee5eeb, scoped specs/specialists, explicit final report return paths. Root owns shared secure_logging fallback fix separately.
+
+## Current technical receipts (2026-10-03 continuation)
+
+| Shard | Recorded state | Evidence / dependency |
+| --- | --- | --- |
+| R1 access | Committed `610f1de0a`; documentation correction pending | 223 Trestle tests; two correctness and two static security passes |
+| R2 strict runtime | Committed `67fb11f48` | 118 focused tests; full Core hook5162pass; two correctness passes |
+| R3 runtime / SQL | SQL `09b70d104`; runtime final integration checking | SQL251 tests; runtime teardown warning is explicit open dependency |
+| R4 HTTP lifecycle | Committed `a96673341` | 99 focused tests, four negative controls; independent reviews pending |
+| R5 / R10 | Independent lifecycle worker running | AgentUI / Nexus constructor ownership |
+| R6 diagnostics / controls | `7c9814a7f`, `b0e9adb5e`, `d4abd70ba` | Followup136tests; shared logging fallback fixed separately by root,31tests |
+| R8 / R9 | R8 `c173af79e`; R9 worker running | Trust constraints / PACT owned-store lifetime |
+| R14 retry deadline | Independent worker running | New dependency defect; not an omitted original dirty file |
+| S1 / Count | S1 `b91f949c2`; identifier followup `c3ace367b` | Count147focused tests; SQL identifier review pending |
+| S2 resilience | `3a4f251eb` | 74 focused tests; independent review pending |
+| S3 constraints | `e28ca81a7`, `f66689407`, `73b5bea03` | Composition fixed; direct executor sinks still open |
+| S4 Redis | Worker running | Isolated real Redis provisioning; no shared service changes |
+
+The separate headless adversarial review returned concrete findings but its final attempt was interrupted by the CLI safety filter. No clean verdict is counted from that process. The permitted follow-up is static review of repaired source and existing test assertions; no retry of the blocked action.
