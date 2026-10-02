@@ -21,6 +21,19 @@
 # so the `entry:` keeps its original argv shape without indirection.
 set -euo pipefail
 
+# Opt in to fleet execution for the expensive pytest hook. Keep the argv and
+# exit status intact; a missing launcher must fail rather than run locally.
+# Unset the opt-in remotely to prevent recursion if a caller reuses this wrapper.
+if [ "${KAILASH_TRESTLE_TESTS:-0}" = "1" ] &&
+   [ "${1:-}" = "-m" ] && [ "${2:-}" = "pytest" ]; then
+  exec trestle run -- env -u KAILASH_TRESTLE_TESTS UV_LINK_MODE=copy uv run --frozen \
+    --extra dev --extra server --extra http-client \
+    --extra db-postgres --extra db-mysql --extra db-sqlite --extra redis \
+    --extra trust --extra auth --extra auth-azure --extra monitoring \
+    --extra telemetry --extra scheduler --extra mcp --extra data \
+    --extra rfc3161 --extra dataflow --extra nexus --extra kaizen python "$@"
+fi
+
 # Resolve the main checkout root via git-common-dir (worktree-safe).
 GIT_COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null || true)
 if [ -z "${GIT_COMMON_DIR}" ]; then

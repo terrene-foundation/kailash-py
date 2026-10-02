@@ -1,0 +1,14 @@
+{
+  "_schema": "burndown-manifest/v1",
+  "target": "csq16-recovery-burndown.md",
+  "pages": [
+    "CSQ16 recovery"
+  ],
+  "sources": [
+    {
+      "path": "csq16-recovery-register.json",
+      "kind": "register",
+      "precedence": 0
+    }
+  ]
+}

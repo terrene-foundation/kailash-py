@@ -1,0 +1,35 @@
+{
+  "_generated": "2026-10-02",
+  "_authority": "agent",
+  "_note": "Frozen recovery worktree population; merged branch ancestry excludes uncommitted content. Signed off reserved for owner acceptance.",
+  "items": [
+    {
+      "id": "CSQ16-PROMOTION",
+      "page": "CSQ16 recovery",
+      "status": "In progress",
+      "title": "Reconcile and reap promotion-verification",
+      "evidence": "csq16-recovery-ledger-2026-10-02.md"
+    },
+    {
+      "id": "CSQ16-RUNTIME",
+      "page": "CSQ16 recovery",
+      "status": "In progress",
+      "title": "Reconcile and reap runtime-ci",
+      "evidence": "csq16-recovery-ledger-2026-10-02.md"
+    },
+    {
+      "id": "CSQ16-SOURCE",
+      "page": "CSQ16 recovery",
+      "status": "In progress",
+      "title": "Reconcile and reap source-integration",
+      "evidence": "csq16-recovery-ledger-2026-10-02.md"
+    },
+    {
+      "id": "CSQ16-STORAGE",
+      "page": "CSQ16 recovery",
+      "status": "In progress",
+      "title": "Reconcile and reap storage-ci",
+      "evidence": "csq16-recovery-ledger-2026-10-02.md"
+    }
+  ]
+}

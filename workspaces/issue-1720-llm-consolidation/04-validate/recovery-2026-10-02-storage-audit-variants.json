@@ -1,0 +1,1490 @@
+[
+  {
+    "path": "packages/kailash-dataflow/pyproject.toml",
+    "dev_sha256": "def2da94fa9a6ce8cf77be3abf11341fb14b999bf4ccb4ab734e6bf6ac1d4679",
+    "variants": [
+      {
+        "sha256": "3f4583696970004a693aea859498fff0626956be624ab7b05a66c352aeabc1ad",
+        "trees": [
+          "source-integration",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "def2da94fa9a6ce8cf77be3abf11341fb14b999bf4ccb4ab734e6bf6ac1d4679",
+        "trees": [
+          "storage-ci",
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/src/dataflow/adapters/base_adapter.py",
+    "dev_sha256": "edd0388dbc27ad5e42aa925643441a9eea14c5b274daab7ed435e0ee2f3f9c03",
+    "variants": [
+      {
+        "sha256": "68c4b9176c76d9149b1f0197ed3ae287e94fac61f94adb273ccf25db9ba22412",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "edd0388dbc27ad5e42aa925643441a9eea14c5b274daab7ed435e0ee2f3f9c03",
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/src/dataflow/adapters/mongodb.py",
+    "dev_sha256": "b79f28b72d528a72612f66a1c0679a22c183a0a1b2abbfa5a9f4b5165d1f19c2",
+    "variants": [
+      {
+        "sha256": "72e2b618a8f34e0a520ea792181a4d60ed66ed5668847f0399ffa60e3615dc67",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "b79f28b72d528a72612f66a1c0679a22c183a0a1b2abbfa5a9f4b5165d1f19c2",
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/src/dataflow/adapters/mysql.py",
+    "dev_sha256": "5fe09330b3f48e260e9eb0c6c4bb18df49dfd6578cb1e6934dfa1a84ad49bd0a",
+    "variants": [
+      {
+        "sha256": "5f7e5505c777d1deae68fb917f7cc30d8e1dbbc0413e382596465abd295f99dd",
+        "trees": [
+          "source-integration",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "5fe09330b3f48e260e9eb0c6c4bb18df49dfd6578cb1e6934dfa1a84ad49bd0a",
+        "trees": [
+          "storage-ci",
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/src/dataflow/cache/async_redis_adapter.py",
+    "dev_sha256": "5af851a667f8a5773f529a428f272f332021af088a6659e677da9cdc516ba7ff",
+    "variants": [
+      {
+        "sha256": "b866338f3fe59cb15f0ffbfbf8ddf4dcafa188c46d4dc7ff4d1ebce9e44f9656",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "5af851a667f8a5773f529a428f272f332021af088a6659e677da9cdc516ba7ff",
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/src/dataflow/cache/auto_detection.py",
+    "dev_sha256": "8b2ff1e6483c01bc6eae9a0ed649046a4ca87d93096809f34990b7d08fbcec71",
+    "variants": [
+      {
+        "sha256": "7a46cd51962a7c4be31517828e89bd54f1ac5560f350beef70781647ccb079fa",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "8b2ff1e6483c01bc6eae9a0ed649046a4ca87d93096809f34990b7d08fbcec71",
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/src/dataflow/cache/redis_manager.py",
+    "dev_sha256": "9280b1fb884b06ffa82b4f8eed4cc48681c56280660b90dbd31771f8616025f7",
+    "variants": [
+      {
+        "sha256": "6defafaa2dd622d27218342bd51549a151376542877f10b528a38f5070859386",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "9280b1fb884b06ffa82b4f8eed4cc48681c56280660b90dbd31771f8616025f7",
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/src/dataflow/core/engine.py",
+    "dev_sha256": "a52d17eda0d86514fec8481635feca5aa99b0a0092ca7b238e1f3e37cf2fb6b3",
+    "variants": [
+      {
+        "sha256": "469e23aac18cd803f2648079ea781c00c063bff6507661415d09b381ad5b34a6",
+        "trees": [
+          "source-integration",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "132aeb748f2de8be3a0a58de57bd31d6e51f96542987fd0299010fc8b57de567",
+        "trees": [
+          "storage-ci"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "a52d17eda0d86514fec8481635feca5aa99b0a0092ca7b238e1f3e37cf2fb6b3",
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/src/dataflow/core/nodes.py",
+    "dev_sha256": "0001b318d758ab5072228c5ca3e9df8e3357f795c7709a39c66cadb6dedb0bf0",
+    "variants": [
+      {
+        "sha256": "ddd21b647595b3e0dfad65d5f1b5c1ecda048f8362300c842ebb586869536511",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "317b53c08d7f20a19b2463433d04271becd83f7dec2481932798bc1316ff8d18",
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": false
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/src/dataflow/core/protected_engine.py",
+    "dev_sha256": "f8cb38ad4a1fcedd2a3ae0dc76467e523e44b19913e8d0416994492f955f483f",
+    "variants": [
+      {
+        "sha256": "c506bae00e970355f819104ed264a6c4fac2cbf5c1a27a92639aed369a1c49e9",
+        "trees": [
+          "source-integration",
+          "storage-ci"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "f8cb38ad4a1fcedd2a3ae0dc76467e523e44b19913e8d0416994492f955f483f",
+        "trees": [
+          "runtime-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/src/dataflow/core/schema_comparator.py",
+    "dev_sha256": "16322d24d0931192ac2304f23f871b79cbc0b53433ad0ca6a0c243a6bade7d3d",
+    "variants": [
+      {
+        "sha256": "f8089042088f57ce307646e7a629c26602d81819868dbef07fcecccbad649e96",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "16322d24d0931192ac2304f23f871b79cbc0b53433ad0ca6a0c243a6bade7d3d",
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/src/dataflow/core/schema_inspection.py",
+    "dev_sha256": null,
+    "variants": [
+      {
+        "sha256": null,
+        "trees": [
+          "source-integration",
+          "runtime-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": true
+      },
+      {
+        "sha256": "d771a1eeb30e48bff08d47f87371e2e95e67ace890cb819db611a1126bc0166c",
+        "trees": [
+          "storage-ci"
+        ],
+        "equals_dev": false
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/src/dataflow/core/type_introspection.py",
+    "dev_sha256": "9559826f097884917401aeb89852fdb807c446973ba690c1e0ebdd4b471a7acf",
+    "variants": [
+      {
+        "sha256": "645d1e4ec7db9414278418e2fc159f17506821a8cf15c9f628450d798d750686",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "9559826f097884917401aeb89852fdb807c446973ba690c1e0ebdd4b471a7acf",
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/src/dataflow/core/type_processor.py",
+    "dev_sha256": "4d5515fd55ad6529e7b1a635f46402b279cdb086e4a1de77445a89c75909275f",
+    "variants": [
+      {
+        "sha256": "e4573c2f0e7adbe39c85507507a3bc6fe6e051ac723ae581ea02937899121b77",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "runtime-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/src/dataflow/core/workflow_binding.py",
+    "dev_sha256": "944df6b0945e827e99e6a983493f722a73944dea0f7a88301032db34077b68b0",
+    "variants": [
+      {
+        "sha256": "77d2d27067950f8a7acf934e8749914603b5536299724d16a676d901da35d0e6",
+        "trees": [
+          "source-integration",
+          "storage-ci"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "944df6b0945e827e99e6a983493f722a73944dea0f7a88301032db34077b68b0",
+        "trees": [
+          "runtime-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/src/dataflow/features/express.py",
+    "dev_sha256": "712e1d3c6cbf142285d259c8d9aef1138cd96a3308b7e52396f7fc2a3825502a",
+    "variants": [
+      {
+        "sha256": "a2dfc3acb51a2928576a5b2c62d3539ac16f7ff5b3914d419c2e063485dffd2c",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "712e1d3c6cbf142285d259c8d9aef1138cd96a3308b7e52396f7fc2a3825502a",
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/src/dataflow/platform/inspector.py",
+    "dev_sha256": "2d6479fc901869eba2a2ce0531cb375cfc6c2df7470fe2cd37d641de34dbaa2b",
+    "variants": [
+      {
+        "sha256": "f1803806f192b48513d671ed5becabde8944b160c4e480a13ead303f9791d37c",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "2d6479fc901869eba2a2ce0531cb375cfc6c2df7470fe2cd37d641de34dbaa2b",
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/src/dataflow/platform/resilience.py",
+    "dev_sha256": "87a82f12a13afd8b10f023d8c319fbb70bcb75a143a1ee78fe0c461712ef887c",
+    "variants": [
+      {
+        "sha256": "3c378002d09e6a2b38f461662210f838557aa3f7ee8f10a4ebd22a18d2ebff21",
+        "trees": [
+          "source-integration"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "528fb299a18510e9021d79789891a8236364322dbee857f3cad58af36c05d4ca",
+        "trees": [
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "87a82f12a13afd8b10f023d8c319fbb70bcb75a143a1ee78fe0c461712ef887c",
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/src/dataflow/testing/simple_test_utils.py",
+    "dev_sha256": "2eb126cef6469f46ff6da81302c3eebd9be1082116b041f1bd6390f2a7a83633",
+    "variants": [
+      {
+        "sha256": "3976688f61b9cf7e71c404a321596899fc61024833ce442d96c359766ef5400d",
+        "trees": [
+          "source-integration",
+          "storage-ci"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "2eb126cef6469f46ff6da81302c3eebd9be1082116b041f1bd6390f2a7a83633",
+        "trees": [
+          "runtime-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/src/dataflow/trust/query_wrapper.py",
+    "dev_sha256": "bb190f1953d273361df124908816bac643cb4461c722a4c6f08e6d7fa3b2c1ba",
+    "variants": [
+      {
+        "sha256": "b2ddfb2c330dcead46e9cc3880f7997ef4d9599c7eb1fb2aa6632ff0b01728e6",
+        "trees": [
+          "source-integration",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "5ba37d1f1fd3c0070ac737f7a502e743504a4ebe2dd38c71e8d42a0040d02cce",
+        "trees": [
+          "storage-ci"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "bb190f1953d273361df124908816bac643cb4461c722a4c6f08e6d7fa3b2c1ba",
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/integration/test_cache_prefix_forwarding.py",
+    "dev_sha256": null,
+    "variants": [
+      {
+        "sha256": "83092b7094520dd9c81cf7c7fe608a710ab90c51df9676566aba7ec7faa655fd",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": null,
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/integration/test_inspector_catalog_backends.py",
+    "dev_sha256": null,
+    "variants": [
+      {
+        "sha256": "b4338e04b24d031d5d222d6eac6e4b01b401640160f2924f0cc0226c7aebda21",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": null,
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/integration/test_mongodb_failed_connect_cleanup.py",
+    "dev_sha256": null,
+    "variants": [
+      {
+        "sha256": "ad34db675081434e752eebec6918ba86f3f89eb341a271559fcb49e003663691",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": null,
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/integration/test_mongodb_health_failure_contract.py",
+    "dev_sha256": null,
+    "variants": [
+      {
+        "sha256": "f218f55e0c2e17a343ef7b942f04dc5820180e6737cf2bf72e6fcead0d09daf1",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": null,
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/integration/test_redis_concurrent_close.py",
+    "dev_sha256": null,
+    "variants": [
+      {
+        "sha256": "d179a42a465be8a2aa0ee7a72896414b1bb37b007c5e890d746b2ac9c6fa525f",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": null,
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/integration/test_redis_namespace_clear.py",
+    "dev_sha256": null,
+    "variants": [
+      {
+        "sha256": "6a99b4bca8ab063adbaf6210dfeeba9ef100f33d88031cefaf525e57e788932f",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": null,
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/integration/test_redis_url_authentication.py",
+    "dev_sha256": null,
+    "variants": [
+      {
+        "sha256": "414d29468f3979a4e3ec4943e351ba634e68e1d7dc2709e6e176bfa94f72f05f",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": null,
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/regression/test_circuit_breaker_half_open_deadline.py",
+    "dev_sha256": null,
+    "variants": [
+      {
+        "sha256": "a18472e158cfe84a50c19f5259b0d981fa6d2e5d300420d3955648185d081f8e",
+        "trees": [
+          "source-integration"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "a8adf2519bfaec28f5bda77a03afab1ce8c6a933adaa1af8dfaaa882fcb125fe",
+        "trees": [
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": null,
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/regression/test_displaced_sql_cleanup_retry.py",
+    "dev_sha256": null,
+    "variants": [
+      {
+        "sha256": "4afd570e199642779300a88ee09ed062c68b9abdc8b2de3def7717eb8df7cbb0",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": null,
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/regression/test_generated_model_value_validation.py",
+    "dev_sha256": null,
+    "variants": [
+      {
+        "sha256": "88a9a13179cb0621b3affc460b687dd34d651a027cae833f4179b94035f749a4",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": null,
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/regression/test_generic_json_field_roundtrip.py",
+    "dev_sha256": null,
+    "variants": [
+      {
+        "sha256": "e740c14d400c3fbf1025553f3752d3ec9260ac9bc78f3b945bb726ed6879c629",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": null,
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/regression/test_inspector_physical_truth.py",
+    "dev_sha256": null,
+    "variants": [
+      {
+        "sha256": "3e4563c07ca2b161d2ecf7fab0efb3a8b6c771f0c56ce1569fe5c8ec8067fdf1",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": null,
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/regression/test_issue_2107_dataflow_del_finalizers.py",
+    "dev_sha256": "0ef0056e6bc55962c4fb252df0f9e5692a1d75e74edded7c52e09496c04ebfcb",
+    "variants": [
+      {
+        "sha256": "eccf7b467b8cb0f38041ea652afcb9122dc0eb99b8f77c4c9841ae2daf99f158",
+        "trees": [
+          "source-integration",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "0ef0056e6bc55962c4fb252df0f9e5692a1d75e74edded7c52e09496c04ebfcb",
+        "trees": [
+          "storage-ci",
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/regression/test_issue_2210_bulk_upsert_statement_capacity.py",
+    "dev_sha256": "0a6afe8397c782b769476b98be8110b65f45379ccc5898099ed3da921ba74df8",
+    "variants": [
+      {
+        "sha256": "1542a520edd4be727a84b34064aa39ce20e78cacd6d3b372b06fad087791a348",
+        "trees": [
+          "source-integration",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "0a6afe8397c782b769476b98be8110b65f45379ccc5898099ed3da921ba74df8",
+        "trees": [
+          "storage-ci",
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/regression/test_optional_schema_nullability.py",
+    "dev_sha256": null,
+    "variants": [
+      {
+        "sha256": "047fb573b4eca69d468481e2c71514763ae7cff5429da3fb2b3d09265e33d9e0",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": null,
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/regression/test_public_workflow_test_utilities.py",
+    "dev_sha256": null,
+    "variants": [
+      {
+        "sha256": "41cf1bea2ea4ed556b9db4504c4a49a153eb4d91a8ced05b466b4c1c2220080b",
+        "trees": [
+          "source-integration",
+          "storage-ci"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": null,
+        "trees": [
+          "runtime-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/regression/test_retry_config_snapshot.py",
+    "dev_sha256": null,
+    "variants": [
+      {
+        "sha256": "91816679d263b507b4900f8f7d3f861e2dd8666ae3e44ff84c2efb7df5196d33",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": null,
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/regression/test_schema_inspection_cleanup_ownership.py",
+    "dev_sha256": null,
+    "variants": [
+      {
+        "sha256": null,
+        "trees": [
+          "source-integration",
+          "runtime-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": true
+      },
+      {
+        "sha256": "3f084d2d28c63d973a129775dada424612fd5d753148e0216c65ce8a14b7a107",
+        "trees": [
+          "storage-ci"
+        ],
+        "equals_dev": false
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/regression/test_sqlite_address_consumer_parity.py",
+    "dev_sha256": "178effccc489089e916866f7a5a4f3c4cd712d35e1eb8882d69e57836f9c355a",
+    "variants": [
+      {
+        "sha256": "a94fd25daf37bed88596c36c181cfd012864bc6d4eb8f561dcc418360a515cc9",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "178effccc489089e916866f7a5a4f3c4cd712d35e1eb8882d69e57836f9c355a",
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/regression/test_sqlite_schema_url_classification.py",
+    "dev_sha256": "807d5707d7fe0bc25f33b7188fe46e2672848e3cfd999250fe595bc048b64add",
+    "variants": [
+      {
+        "sha256": "01246cf470a191a5809029be413a2d403b5f48cf2a21be46b73f4c74b5bd8574",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "807d5707d7fe0bc25f33b7188fe46e2672848e3cfd999250fe595bc048b64add",
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/regression/test_trust_column_metadata.py",
+    "dev_sha256": null,
+    "variants": [
+      {
+        "sha256": "8791237e7f0cce76a0f4856c8d95758b4c801958fc2584ca33116d20b13dcdc7",
+        "trees": [
+          "source-integration",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "59101c801d3891a7c2acca9dae2c375f7fb2cf21d5f81569a44266eff10094e0",
+        "trees": [
+          "storage-ci"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": null,
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/unit/adapters/test_base_adapter_hierarchy.py",
+    "dev_sha256": "ce71b4c73fa386b98d36acb32c2b235e49c95ca09039b62055bf706b611cbc78",
+    "variants": [
+      {
+        "sha256": "4fbb7708a1270b574a7d12834e032904863def8d516766b52e2ed7824420f311",
+        "trees": [
+          "source-integration",
+          "runtime-ci"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "ce71b4c73fa386b98d36acb32c2b235e49c95ca09039b62055bf706b611cbc78",
+        "trees": [
+          "storage-ci"
+        ],
+        "equals_dev": true
+      },
+      {
+        "sha256": "e77daa144140b1939ea2d97779ee196404b38f877f2026b50f4866e137c8c289",
+        "trees": [
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/unit/adapters/test_mongodb_diagnostic_siblings.py",
+    "dev_sha256": null,
+    "variants": [
+      {
+        "sha256": "35265f7b53f2fb50d3f2df43d453a2471951ab1ce5043edd9315e2da8250a0a5",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": null,
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/unit/adapters/test_mongodb_lifecycle.py",
+    "dev_sha256": null,
+    "variants": [
+      {
+        "sha256": "9f3de7de62c7f6d01ead577791282deb2ec1ab5ccc1d536fd63aa07051d23b52",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": null,
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/unit/adapters/test_mysql_transaction_hardening.py",
+    "dev_sha256": "a2407487e95218ef30229e3f150a8cdc27e1c7c9b05b94717c56ae6dc19fa770",
+    "variants": [
+      {
+        "sha256": "d277922e921e60657947f695edae90d5ad0c2cb849690b4d3e81632c640118de",
+        "trees": [
+          "source-integration",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "a2407487e95218ef30229e3f150a8cdc27e1c7c9b05b94717c56ae6dc19fa770",
+        "trees": [
+          "storage-ci",
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/unit/adapters/test_postgresql_adapter.py",
+    "dev_sha256": "f00c66db1386e2095bc46f8d482d0efcafe87e3b7d111be5eabcbd0c4dfaf22a",
+    "variants": [
+      {
+        "sha256": "cdeb69aa2c399a2ee6f9ffa59b51b64889ec991951cb6b97576a3aa61638a12b",
+        "trees": [
+          "source-integration",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "f00c66db1386e2095bc46f8d482d0efcafe87e3b7d111be5eabcbd0c4dfaf22a",
+        "trees": [
+          "storage-ci",
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/unit/cache/test_auto_detection.py",
+    "dev_sha256": "40c6886418cc1ecf1084221b9540e03074948da718821dd195b4d829488eaed4",
+    "variants": [
+      {
+        "sha256": "1ea8d18bde5b7f4d668145e2548d0519d176a4412c1b525e5736e809ff379c2b",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "40c6886418cc1ecf1084221b9540e03074948da718821dd195b4d829488eaed4",
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/unit/cache/test_auto_detection_diagnostics.py",
+    "dev_sha256": null,
+    "variants": [
+      {
+        "sha256": "54ed78c91f6e480b4a5224c862091240cad839bcf5db348032225ad50a01b308",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": null,
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/unit/cache/test_redis_diagnostic_privacy.py",
+    "dev_sha256": null,
+    "variants": [
+      {
+        "sha256": "ccdabe462fc5b7e9f9af58a9f8bed797d604fb3801d4b6ff720a9414050dd1ff",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": null,
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/unit/cache/test_redis_owned_close.py",
+    "dev_sha256": null,
+    "variants": [
+      {
+        "sha256": "915f2524895891f6b4982f2656f0eb42a858ecec9e48e27034b9b5f396e1ee57",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": null,
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/unit/cache/test_redis_url_config.py",
+    "dev_sha256": null,
+    "variants": [
+      {
+        "sha256": "334edf0bb5d92528558cd63078c6b22d2f262b5e9855dcead698497f90c99ca7",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": null,
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/unit/core/test_credential_provider_config.py",
+    "dev_sha256": "969b429d06780e72d6464dc7808bfc331ca7150fe6a3f20630a5a30fb7f4efdd",
+    "variants": [
+      {
+        "sha256": "ede6139b6b923bac019d611987a775fb86f597ae9b238f149ce4896661931b09",
+        "trees": [
+          "source-integration",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "969b429d06780e72d6464dc7808bfc331ca7150fe6a3f20630a5a30fb7f4efdd",
+        "trees": [
+          "storage-ci",
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/unit/core/test_dataflow_engine_lock_integration.py",
+    "dev_sha256": "6b5e712f20ca765eac15237f2f6cb55540af857a807b00574ea453f500d9051b",
+    "variants": [
+      {
+        "sha256": "8dc165818c28373ffd630c10407295f2b1680af0ef0d48c4d9ae61eaad0ecde0",
+        "trees": [
+          "source-integration",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "6b5e712f20ca765eac15237f2f6cb55540af857a807b00574ea453f500d9051b",
+        "trees": [
+          "storage-ci",
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/unit/core/test_sqlite_basic.py",
+    "dev_sha256": "065f8e9db7320942c0d450a53465581bf1b14763d023bf75ba65a443d7e93ab7",
+    "variants": [
+      {
+        "sha256": "e2ca5d3358de4df1feb92ea2b0bc06724e688f5c9f2d726f7b8c0aff7b986cc4",
+        "trees": [
+          "source-integration"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "065f8e9db7320942c0d450a53465581bf1b14763d023bf75ba65a443d7e93ab7",
+        "trees": [
+          "storage-ci",
+          "runtime-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/unit/features/test_resource_warning.py",
+    "dev_sha256": "68b6ca2c41d6442dc168f060ba28989dedd21b33634a6cd0aaff680b16dce965",
+    "variants": [
+      {
+        "sha256": "131e181c496926e7bba771d1c474b44d5b90cf07f5d5bd9afc602d4463580d5c",
+        "trees": [
+          "source-integration",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "68b6ca2c41d6442dc168f060ba28989dedd21b33634a6cd0aaff680b16dce965",
+        "trees": [
+          "storage-ci",
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/unit/migrations/test_auto_migration_system_lock_integration.py",
+    "dev_sha256": "1c56a16c1d90b76baf14c676d513c38be3ec10cce5ea194976d0fdd400627797",
+    "variants": [
+      {
+        "sha256": "e66083c452a3002d6a420a57c79f9b6bb8c02950fdd95c10af0b5bf95a58ad4d",
+        "trees": [
+          "source-integration",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "1c56a16c1d90b76baf14c676d513c38be3ec10cce5ea194976d0fdd400627797",
+        "trees": [
+          "storage-ci",
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/unit/migrations/test_migration_bug_006_unit.py",
+    "dev_sha256": "9990f7a2faf75ecf0dedec0007b5922f7d2265b0a79ddb5efecdb46d3d6e036f",
+    "variants": [
+      {
+        "sha256": "7971a5a5791a2722e24bab55b7dbb8146c1cd8e57a7fa1e909713b7ac21eeb2f",
+        "trees": [
+          "source-integration",
+          "runtime-ci"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "9990f7a2faf75ecf0dedec0007b5922f7d2265b0a79ddb5efecdb46d3d6e036f",
+        "trees": [
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/unit/migrations/test_migration_performance_tracker.py",
+    "dev_sha256": "ec2e386baaf93293bc2bb060c6eb8201723143c996b18fe6d4ac0637f1ed74ab",
+    "variants": [
+      {
+        "sha256": "2e2a90ba61b59f87d9056fdd171811b1135fe212d780948c082fa7a18a1935a5",
+        "trees": [
+          "source-integration",
+          "runtime-ci"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "ec2e386baaf93293bc2bb060c6eb8201723143c996b18fe6d4ac0637f1ed74ab",
+        "trees": [
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/unit/test_engine_migration_errors.py",
+    "dev_sha256": "485139244390ba8edeee5583f6201b8c404b96125c81347472b4bd84ac0f1079",
+    "variants": [
+      {
+        "sha256": "77a5352cc72bae938e22eaa16192982fb51bc2d4a2fbab38e630773b68796c8d",
+        "trees": [
+          "source-integration"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "485139244390ba8edeee5583f6201b8c404b96125c81347472b4bd84ac0f1079",
+        "trees": [
+          "storage-ci",
+          "runtime-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/unit/test_express_cache_wiring.py",
+    "dev_sha256": "c6771dcb2f2753ba33be50fd4fcc0022e3203510bb92a85b1d9ad4a5ebf0dc43",
+    "variants": [
+      {
+        "sha256": "5efef8e4d00d6881f7e370247465732e78de684c914bb455f5bf3fb80732a7ec",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "runtime-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/unit/test_inspector_model_introspection.py",
+    "dev_sha256": "62f058c0e89c0813aec7e41b3ecd1310017606d041958ea891e404b1d889d914",
+    "variants": [
+      {
+        "sha256": "124ed6d42df8943d622c06315ec46cc906008e8e29779c380fbc69a380655f31",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "62f058c0e89c0813aec7e41b3ecd1310017606d041958ea891e404b1d889d914",
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "packages/kailash-dataflow/tests/unit/trust/test_query_executor.py",
+    "dev_sha256": "a0b13cf22d272c72a1c783d0e81b167bb34cc35ab3dacb5d0debb48616a7e9fa",
+    "variants": [
+      {
+        "sha256": "4f03ca8d0711c7d3b7a20f7548e7ca6e00e388eccbdac2efff922d9c7377b494",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "a0b13cf22d272c72a1c783d0e81b167bb34cc35ab3dacb5d0debb48616a7e9fa",
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "specs/dataflow-cache.md",
+    "dev_sha256": "80ddee519098fa7d8cda3ce0ac36c68fabe69714585714413ecb2654a747c2aa",
+    "variants": [
+      {
+        "sha256": "e1f0af9c75e54c54cc32b27970d244128fd9b7add04011a70a34d0d25138f850",
+        "trees": [
+          "source-integration",
+          "runtime-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "51b2933a0424c6e23ac553f4fd5c835d0d342872cde632db9432a78b88b6d2ff",
+        "trees": [
+          "storage-ci"
+        ],
+        "equals_dev": false
+      }
+    ]
+  },
+  {
+    "path": "specs/dataflow-core.md",
+    "dev_sha256": "d7d519663556ba8592ae08a1e506778f274d0cf6e2947cf2ae502588b3c2fa00",
+    "variants": [
+      {
+        "sha256": "a8b28fe1dc73d53b12a804adebf0d4e6c1adf4755f21ed1e8b7cc69462e753b4",
+        "trees": [
+          "source-integration"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "7e9c54b7d98005c9be309186341634e7b3c6dc4fba40dc78a7feddd43eb8bf24",
+        "trees": [
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "d7d519663556ba8592ae08a1e506778f274d0cf6e2947cf2ae502588b3c2fa00",
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "specs/dataflow-express.md",
+    "dev_sha256": "e24323c1f82b1e1e64d3ac0c23389b7ab180d75d8e9856aa46372bfec0453f85",
+    "variants": [
+      {
+        "sha256": "d160c6cbd23845575db39fec06d4f0612634a0f1bb67796d8dc0b70af7faf355",
+        "trees": [
+          "source-integration",
+          "storage-ci",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "e24323c1f82b1e1e64d3ac0c23389b7ab180d75d8e9856aa46372bfec0453f85",
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  },
+  {
+    "path": "specs/dataflow-models.md",
+    "dev_sha256": "9695d5d80fc8943b2698813beee7fd1bbb96508355a022465e270dc9d9e08978",
+    "variants": [
+      {
+        "sha256": "9035faefc3197439e5c202d0c0593725821790c6a2ffbd689c72e454800d1342",
+        "trees": [
+          "source-integration",
+          "promotion-verification"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "86bfce5d044da6dd640eeb357c51673e15efbf5e5f5ca01550756bff051c9caa",
+        "trees": [
+          "storage-ci"
+        ],
+        "equals_dev": false
+      },
+      {
+        "sha256": "9695d5d80fc8943b2698813beee7fd1bbb96508355a022465e270dc9d9e08978",
+        "trees": [
+          "runtime-ci"
+        ],
+        "equals_dev": true
+      }
+    ]
+  }
+]

@@ -70,3 +70,72 @@ def test_find_venv_python_uses_git_common_dir_resolution():
         f"Other resolution mechanisms (readlink, GIT_DIR, find . -maxdepth) "
         f"are NOT worktree-safe. See rules/git.md § Pre-Commit Hook Workarounds."
     )
+
+
+@pytest.mark.regression
+def test_trestle_pytest_routing_preserves_arguments_and_failure(tmp_path):
+    """The opt-in sends the exact hook arguments and propagates fleet failure."""
+    import json
+    import os
+    import subprocess
+    import sys
+
+    launcher = tmp_path / "trestle"
+    receipt = tmp_path / "arguments.json"
+    launcher.write_text(
+        f"#!{sys.executable}\n"
+        "import json, os, sys\n"
+        "with open(os.environ['TRESTLE_ARGUMENTS'], 'w') as output:\n"
+        "    json.dump(sys.argv[1:], output)\n"
+        "sys.exit(23)\n"
+    )
+    launcher.chmod(0o755)
+    arguments = ["-m", "pytest", "tests/unit/", "-m", "not (slow or integration)"]
+    result = subprocess.run(
+        [str(REPO_ROOT / "scripts/development/find-venv-python.sh"), *arguments],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PATH": f"{tmp_path}:{os.environ['PATH']}",
+            "KAILASH_TRESTLE_TESTS": "1",
+            "TRESTLE_ARGUMENTS": str(receipt),
+        },
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 23, result.stderr
+    expected_extras = [
+        "dev",
+        "server",
+        "http-client",
+        "db-postgres",
+        "db-mysql",
+        "db-sqlite",
+        "redis",
+        "trust",
+        "auth",
+        "auth-azure",
+        "monitoring",
+        "telemetry",
+        "scheduler",
+        "mcp",
+        "data",
+        "rfc3161",
+        "dataflow",
+        "nexus",
+        "kaizen",
+    ]
+    assert json.loads(receipt.read_text()) == [
+        "run",
+        "--",
+        "env",
+        "-u",
+        "KAILASH_TRESTLE_TESTS",
+        "UV_LINK_MODE=copy",
+        "uv",
+        "run",
+        "--frozen",
+        *[argument for extra in expected_extras for argument in ("--extra", extra)],
+        "python",
+        *arguments,
+    ]

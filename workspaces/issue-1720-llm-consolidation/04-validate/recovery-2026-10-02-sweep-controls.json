@@ -1,0 +1,18 @@
+{
+  "kailash.workflow.builder.WorkflowBuilder": [],
+  "kailash.workflow.builder.CSQ16KnownAbsentControl": [
+    {
+      "category": "orphan",
+      "evidence": "ast.walk found no ClassDef/FunctionDef/Assign named 'CSQ16KnownAbsentControl' in 3 candidate file(s)",
+      "source": null,
+      "spec": "specs/core-workflows.md",
+      "spec_line": 1,
+      "symbol": "kailash.workflow.builder.CSQ16KnownAbsentControl"
+    }
+  ],
+  "control_verdict": "PASS: existing class has no orphan; absent class yields orphan",
+  "git_controls": {
+    "equal_head": 0,
+    "dev_not_ancestor_main": 1
+  }
+}

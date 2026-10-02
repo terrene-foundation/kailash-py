@@ -1,0 +1,3783 @@
+{
+  "csq16-promotion-verification": [
+    {
+      "path": "packages/kailash-dataflow/pyproject.toml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "3f4583696970004a693aea859498fff0626956be624ab7b05a66c352aeabc1ad"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/adapters/base_adapter.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "68c4b9176c76d9149b1f0197ed3ae287e94fac61f94adb273ccf25db9ba22412"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/adapters/mongodb.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "72e2b618a8f34e0a520ea792181a4d60ed66ed5668847f0399ffa60e3615dc67"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/adapters/mysql.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "5f7e5505c777d1deae68fb917f7cc30d8e1dbbc0413e382596465abd295f99dd"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/cache/async_redis_adapter.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "b866338f3fe59cb15f0ffbfbf8ddf4dcafa188c46d4dc7ff4d1ebce9e44f9656"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/cache/auto_detection.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "7a46cd51962a7c4be31517828e89bd54f1ac5560f350beef70781647ccb079fa"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/cache/redis_manager.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "6defafaa2dd622d27218342bd51549a151376542877f10b528a38f5070859386"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/engine.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "469e23aac18cd803f2648079ea781c00c063bff6507661415d09b381ad5b34a6"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/nodes.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "ddd21b647595b3e0dfad65d5f1b5c1ecda048f8362300c842ebb586869536511"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/schema_comparator.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "f8089042088f57ce307646e7a629c26602d81819868dbef07fcecccbad649e96"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/type_introspection.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "645d1e4ec7db9414278418e2fc159f17506821a8cf15c9f628450d798d750686"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/type_processor.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "e4573c2f0e7adbe39c85507507a3bc6fe6e051ac723ae581ea02937899121b77"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/features/express.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "a2dfc3acb51a2928576a5b2c62d3539ac16f7ff5b3914d419c2e063485dffd2c"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/platform/inspector.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "f1803806f192b48513d671ed5becabde8944b160c4e480a13ead303f9791d37c"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/platform/resilience.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "528fb299a18510e9021d79789891a8236364322dbee857f3cad58af36c05d4ca"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/trust/query_wrapper.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "b2ddfb2c330dcead46e9cc3880f7997ef4d9599c7eb1fb2aa6632ff0b01728e6"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_issue_2107_dataflow_del_finalizers.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "eccf7b467b8cb0f38041ea652afcb9122dc0eb99b8f77c4c9841ae2daf99f158"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_issue_2210_bulk_upsert_statement_capacity.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "1542a520edd4be727a84b34064aa39ce20e78cacd6d3b372b06fad087791a348"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_sqlite_address_consumer_parity.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "a94fd25daf37bed88596c36c181cfd012864bc6d4eb8f561dcc418360a515cc9"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_sqlite_schema_url_classification.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "01246cf470a191a5809029be413a2d403b5f48cf2a21be46b73f4c74b5bd8574"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/adapters/test_base_adapter_hierarchy.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "e77daa144140b1939ea2d97779ee196404b38f877f2026b50f4866e137c8c289"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/adapters/test_mysql_transaction_hardening.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "d277922e921e60657947f695edae90d5ad0c2cb849690b4d3e81632c640118de"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/adapters/test_postgresql_adapter.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "cdeb69aa2c399a2ee6f9ffa59b51b64889ec991951cb6b97576a3aa61638a12b"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/cache/test_auto_detection.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "1ea8d18bde5b7f4d668145e2548d0519d176a4412c1b525e5736e809ff379c2b"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/core/test_credential_provider_config.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "ede6139b6b923bac019d611987a775fb86f597ae9b238f149ce4896661931b09"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/core/test_dataflow_engine_lock_integration.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "8dc165818c28373ffd630c10407295f2b1680af0ef0d48c4d9ae61eaad0ecde0"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/features/test_resource_warning.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "131e181c496926e7bba771d1c474b44d5b90cf07f5d5bd9afc602d4463580d5c"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/migrations/test_auto_migration_system_lock_integration.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "e66083c452a3002d6a420a57c79f9b6bb8c02950fdd95c10af0b5bf95a58ad4d"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/test_express_cache_wiring.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "5efef8e4d00d6881f7e370247465732e78de684c914bb455f5bf3fb80732a7ec"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/test_inspector_model_introspection.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "124ed6d42df8943d622c06315ec46cc906008e8e29779c380fbc69a380655f31"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/trust/test_query_executor.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "4f03ca8d0711c7d3b7a20f7548e7ca6e00e388eccbdac2efff922d9c7377b494"
+    },
+    {
+      "path": "packages/kailash-kaizen/pyproject.toml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "7832a0225ea5cdd2635f3fd876f38c9a7bc52b996c922ad2245868bd22175a59"
+    },
+    {
+      "path": "packages/kailash-kaizen/tests/unit/trust/adversarial/test_constraint_gaming.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "d6f4b65da7787311a9e92e61041fb30306705da08fe00e8faa406f4a44da3164"
+    },
+    {
+      "path": "packages/kailash-kaizen/tests/unit/trust/test_external_agent_rate_limiter.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "c58445bd9b366db4d014e3c3bfb03697389e5505868cc0ea3f2eb6ca4fed5802"
+    },
+    {
+      "path": "packages/kailash-mcp/pyproject.toml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "305921ec388b92d484e68a207c4034b33d7030dc78f084dad58590e3e34906f4"
+    },
+    {
+      "path": "packages/kailash-ml/pyproject.toml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "351ed3624a049739b5a81f7d8fb40a6efa68559ed1bf1181f812123b118ace14"
+    },
+    {
+      "path": "packages/kailash-nexus/pyproject.toml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "bb696626ce20b6df161a9e13231ceb8bccd620434c9ed5786b4185d4e355c39c"
+    },
+    {
+      "path": "packages/kailash-nexus/src/nexus/core.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "8f842cf871e680c346149d266cf5401c3033f297d36eaa0cf3115cdd73b8557e"
+    },
+    {
+      "path": "packages/kailash-nexus/src/nexus/transports/websocket.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "397f23a8608959e3c2ecc5b90393068623ac647d3f7150302f52f9e0bd08a84c"
+    },
+    {
+      "path": "packages/kailash-nexus/tests/unit/transports/test_websocket.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "0f66eb73f894d8cda43ab2062de0a08578725ffb154689aa5fec82473489590a"
+    },
+    {
+      "path": "packages/kailash-pact/tests/unit/governance/test_sqlite_stores.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "de33500e7c98ae6ef6778101b48a226272d3242841dc9eb20f7c8b8545d1acb0"
+    },
+    {
+      "path": "pyproject.toml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "227c5b32cb2df2039577bc90e9c29f9f46726a2e10b69c32cea1657f525e901e"
+    },
+    {
+      "path": "specs/core-runtime.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "1618c9f08ceb19a43ffa5e3495184fe3dfb0accc8e3ce6e8f46335e97bd3fba9"
+    },
+    {
+      "path": "specs/dataflow-cache.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "e1f0af9c75e54c54cc32b27970d244128fd9b7add04011a70a34d0d25138f850"
+    },
+    {
+      "path": "specs/dataflow-core.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "7e9c54b7d98005c9be309186341634e7b3c6dc4fba40dc78a7feddd43eb8bf24"
+    },
+    {
+      "path": "specs/dataflow-express.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "d160c6cbd23845575db39fec06d4f0612634a0f1bb67796d8dc0b70af7faf355"
+    },
+    {
+      "path": "specs/dataflow-models.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "9035faefc3197439e5c202d0c0593725821790c6a2ffbd689c72e454800d1342"
+    },
+    {
+      "path": "specs/middleware.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "28841795f38b6de379ac360e141d2433de5167f9e2b40d29ca2f223b849c5812"
+    },
+    {
+      "path": "specs/nexus-channels.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "6f425395e26e4fb18698c75c7ddf8584abccd676047de12f4ed18cfe66875f88"
+    },
+    {
+      "path": "specs/pact-enforcement.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "602f8324792365d85b6cfb24f8c383125291ff9864d4a798c67707ed3adca502"
+    },
+    {
+      "path": "specs/trust-crypto.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "16812e229bd0403d503e91195de2b8119c29b76eae22360c21503845d15f39fe"
+    },
+    {
+      "path": "src/kailash/access_control.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "4f6183c8d24f2ca2067e066148cf88799e72d185ed60c42ee96bdcc811435c60"
+    },
+    {
+      "path": "src/kailash/access_control/managers.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "9ab39b0a8fe9b93983f63a5ea2757a94f02bd7c74162df76d934bd11c3ebbbf0"
+    },
+    {
+      "path": "src/kailash/access_control/rule_evaluators.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "d1cc607be1809fe3971dc15972fc35581fcf22ceed881143572b31bf3e1124d0"
+    },
+    {
+      "path": "src/kailash/api/workflow_api.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "f530ee8663566ada127edca890458e303a356ab54592ccf593026d0138f95d05"
+    },
+    {
+      "path": "src/kailash/channels/api_channel.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "87762349a425d6f162564cfc4fe40dc282daac87e9a7577fb533b17974c74951"
+    },
+    {
+      "path": "src/kailash/gateway/enhanced_gateway.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "41a3c090b39dbfef0651f79638db89dc5f7dc9e68ef1272e859be8583bb1f9f9"
+    },
+    {
+      "path": "src/kailash/middleware/communication/realtime.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "81db77cba81dd258bf5f6d32c048f466c737b2c78368373e22fe8fc8d61dd71d"
+    },
+    {
+      "path": "src/kailash/middleware/core/agent_ui.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "708cb8fbbc32e613e766f3bbbe11bb6d44b5e14854776a60550f195482704f1b"
+    },
+    {
+      "path": "src/kailash/middleware/gateway/durable_request.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "8428dc2e4afe3aa224608bdc41c37ae7d812a39a16984c3dfaf40dd9512ea575"
+    },
+    {
+      "path": "src/kailash/nodes/base.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "718826779bc432b679a7f04c7129c2b3eefa67cd907418afb9617e1e8d03ff33"
+    },
+    {
+      "path": "src/kailash/nodes/base_async.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "ea6ece3beb890d8392fa619e6133f18143765d59d0506f13b28dfa8b0e7bef27"
+    },
+    {
+      "path": "src/kailash/nodes/data/async_sql.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "a142886ab41a07a0c4a18ddf213ddad1289fae9487ca2aeaceed5d6441e0a743"
+    },
+    {
+      "path": "src/kailash/nodes/mixins.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "272e3eed10609a838b0484611f1043aa64e7e4093c5592bca7aab0685baaafcb"
+    },
+    {
+      "path": "src/kailash/nodes/mixins/security.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "9af3f85edb9c0dd824a04c5450c0ebbf9c2525a10ac2c2572e03081755e3dd65"
+    },
+    {
+      "path": "src/kailash/nodes/security/_log_identity.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "1db4d3f1046471f1c8a219e044162676b69297159f672951d2d4b6a1c12d4348"
+    },
+    {
+      "path": "src/kailash/nodes/validation.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "88824940e25895e197f823b97b9f595799d8f8f3c8d0047d5e99a66102ebbd76"
+    },
+    {
+      "path": "src/kailash/runtime/async_local.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "947eaff439e4e4e027b8fb3461a3d6c3f50dcc762adf308d9b6affef49a7093e"
+    },
+    {
+      "path": "src/kailash/runtime/hierarchical_switch_executor.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "fdf64efbf82ca3d87e5285ee98b6411f5084a3d86acf2ffa6f70ddc98b859029"
+    },
+    {
+      "path": "src/kailash/runtime/local.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "8b77cd7acce8eaef249cc5e27c3686d15e3fb526a0079bc68975c2e37ce21f32"
+    },
+    {
+      "path": "src/kailash/runtime/mixins/cycle_execution.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "1b7aea8171e439f6aa8b29af1b238658893ab9e90a323b6c5046ab827a9ebf16"
+    },
+    {
+      "path": "src/kailash/runtime/scheduler.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "c1c07cefeb08c6785e7b059256ccc140494f369d4a489e1120027d04e6014125"
+    },
+    {
+      "path": "src/kailash/servers/enterprise_workflow_server.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "77938c161eb00541d625ecd9d64b1c4ca802edc991b9749051b662c89d7b01fb"
+    },
+    {
+      "path": "src/kailash/servers/workflow_server.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "0a1b77a97937ed3735af2fc9ea8099a53fa5efed7520bc62659db7c21c865f58"
+    },
+    {
+      "path": "src/kailash/tracking/manager.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "7d3b9fad4126146c218f3c81ea76bf218f67f71a3f2de089ab90ebb36413e797"
+    },
+    {
+      "path": "src/kailash/trust/constraints/builtin.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "c69913698b709f9b64b973805dd45f8e4456f55d6613702bb968cfa0407ff39d"
+    },
+    {
+      "path": "src/kailash/trust/constraints/dimension.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "2e46507eb47f7760e160643ca93e2aae1b04a78ea9dfc051f8c003901a73ba19"
+    },
+    {
+      "path": "src/kailash/trust/constraints/evaluator.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "17ce9bb36435c7509fb79d57ec510daef11e97318154dd85ad1a7e7bb51c5296"
+    },
+    {
+      "path": "src/kailash/trust/governance/policy_engine.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "ca8da0bc84f7f2ea16c558b191755236357434045c3350597de7f16c9f4e3919"
+    },
+    {
+      "path": "src/kailash/trust/governance/rate_limiter.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "8504a472220ad5c37aef8b6a680a33245a4b9a49b9fcb1e87b83241dcbb66024"
+    },
+    {
+      "path": "src/kailash/trust/pact/engine.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "2c3ff0cc870c78484a4c01c1c0d051b4a44c6d4925955b794b5e359a917e5e25"
+    },
+    {
+      "path": "src/kailash/trust/pact/stores/sqlite.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "3d6b3a57445a315d808216504b6a914f2c84f4016e896e5c2d5d3c09191f9c72"
+    },
+    {
+      "path": "src/kailash/workflow/cyclic_runner.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "a8ad9116d5f68ade5c31aa657d94b0fe287cd3161845529220903db9acb5a079"
+    },
+    {
+      "path": "src/kailash/workflow/dlq.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "72493c3c2b354d0fab4388b213e79103499f730fd93e390c7b9fc59469eabe0e"
+    },
+    {
+      "path": "tests/regression/test_backup_restore_clearance.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "616334ee32ed09ecd7e09eb2ba7ddad46925cedc81e6a3d2603dfbe11e86cefa"
+    },
+    {
+      "path": "tests/regression/test_channel_shutdown_reports_reality.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "4d225d79648dacc4eee3deceab13966bb98ec157f4964c773ce20b9cbccb5650"
+    },
+    {
+      "path": "tests/regression/test_durable_execution_quickstart.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "9c3441045e380b5e1f3d442f40b6014dcc75d78b0ec7ad5125ed78c734545a80"
+    },
+    {
+      "path": "tests/regression/test_issue_1248_localruntime_cross_loop_pool_disposal.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "f0cb7dba012b2d5b0f0ce1121a1d2f22a38bf640c2814dfbe761701d555bcf21"
+    },
+    {
+      "path": "tests/regression/test_issue_2006_null_default_override.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "c48bac3b3d2046bff2bb2a3a022b8e3387e757281f6350e7bf933d1a70336cd4"
+    },
+    {
+      "path": "tests/regression/test_issue_2013_inert_auth_control.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "47172e0559647503387649483094db0f83e24e8b17d6cef5aebdce4e539a3e4c"
+    },
+    {
+      "path": "tests/regression/test_issue_2025_unauthenticated_proxy_route.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "25bcc211209ddd1a27ea724604fafa5215d70e89d609832fecd8abb0af2912fe"
+    },
+    {
+      "path": "tests/regression/test_issue_2072_fail_closed_server_auth.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "5f7ad59b7d9c292db6c13999c71bdfab0bbd72da9cb12070dfe6944e422db6d3"
+    },
+    {
+      "path": "tests/regression/test_issue_2075_pool_registry_lifecycle.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "4b0356ec9a0c56855255c6ab10938df5907fa23f98f796035405a55b39db6d3d"
+    },
+    {
+      "path": "tests/regression/test_issue_2081_sync_bridge_join_is_legible.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "b6c5f1b4f00f8bfc4be0c8ac5ba77cebcc00650c798ddb92c1451fb13587d9d4"
+    },
+    {
+      "path": "tests/regression/test_issue_2087_segment_parameter_traversal.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "eeecf76b0a6594d198a86c8d12b11b9d7ee1e62afa895d138036c64f2d4f09d5"
+    },
+    {
+      "path": "tests/regression/test_issue_2088_sink_side_log_sanitizing.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "d6dcd1d837378cf65973041a839fc65dba885a7b483bcc7f66d950f895aef91f"
+    },
+    {
+      "path": "tests/regression/test_issue_2107_del_finalizers_no_close.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "57ade094d007ab64508006f7918d1f77b73f386b053fbe68f0326f9eb1d6b514"
+    },
+    {
+      "path": "tests/regression/test_issue_2112_dashboard_api_auth.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "544415b5a80c366e29fc6bc0a9b86fcdcc9bbf67449865e2de636cb939dd82e8"
+    },
+    {
+      "path": "tests/regression/test_issue_2114_non_ascii_api_key.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "6f001be3bd35c5a0419e3ff5c8c90b02d90e19080f0ddc7a370e6af2559a208c"
+    },
+    {
+      "path": "tests/regression/test_issue_2145_session_ownership.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "7c02b4a2296fd4535f61b307caf38c710891c0fe7209a3ab60524c56dcf1a121"
+    },
+    {
+      "path": "tests/regression/test_issue_871_sqlite_jobstore_security.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "85e9e11b29fc4843f5a92640a90929f12e04ad6aef171dddd50838c673644a6f"
+    },
+    {
+      "path": "tests/regression/test_issue_942_execute_sync_wait_for_warning.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "b303d0cc01876e42c0ba609e77c15e4faa9f855ff9ecf19b746f8fa7d8210b0d"
+    },
+    {
+      "path": "tests/regression/test_redteam_2026_08_09_integration_findings.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "c4a66fca0ff628f2bf5801456a8a3eee70e456d2e682101885a5bb62f90a834a"
+    },
+    {
+      "path": "tests/security/test_connection_validation.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "c96ed7918ae4520bbe02b50171a7d3135c58bfc0cc860cb808192a45a34a46a0"
+    },
+    {
+      "path": "tests/tier2_integration/tracking/test_tracking_consolidated.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "56e9ffb57060d708d453f5b1d749314398ad900e383c91e16d97f5300e30ddf8"
+    },
+    {
+      "path": "tests/trust/integration/test_lifecycle.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "9a8bc838499fd6f8ddaf3ed105817e32d9818a6ad07a6e40dc156a4ca162f9e5"
+    },
+    {
+      "path": "tests/trust/pact/unit/test_sqlite_stores.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "1ad24fbbc218ccfeb8bf2ce5ed22c976543c7d6ede577a647716043bdb76222a"
+    },
+    {
+      "path": "tests/trust/plane/integration/test_compliance_export.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "3f1a43ec8d4c910e8fb5f50e21c22a1d0593e659fa7633d9c96877367748a151"
+    },
+    {
+      "path": "uv.lock",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "a169b691b1e35527bdc3ef09f1d970ab415792b706627bd92f4db3c2d5c2c9a7"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/integration/test_cache_prefix_forwarding.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "83092b7094520dd9c81cf7c7fe608a710ab90c51df9676566aba7ec7faa655fd"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/integration/test_inspector_catalog_backends.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "b4338e04b24d031d5d222d6eac6e4b01b401640160f2924f0cc0226c7aebda21"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/integration/test_mongodb_failed_connect_cleanup.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "ad34db675081434e752eebec6918ba86f3f89eb341a271559fcb49e003663691"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/integration/test_mongodb_health_failure_contract.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "f218f55e0c2e17a343ef7b942f04dc5820180e6737cf2bf72e6fcead0d09daf1"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/integration/test_redis_concurrent_close.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "d179a42a465be8a2aa0ee7a72896414b1bb37b007c5e890d746b2ac9c6fa525f"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/integration/test_redis_namespace_clear.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "6a99b4bca8ab063adbaf6210dfeeba9ef100f33d88031cefaf525e57e788932f"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/integration/test_redis_url_authentication.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "414d29468f3979a4e3ec4943e351ba634e68e1d7dc2709e6e176bfa94f72f05f"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_circuit_breaker_half_open_deadline.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "a8adf2519bfaec28f5bda77a03afab1ce8c6a933adaa1af8dfaaa882fcb125fe"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_displaced_sql_cleanup_retry.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "4afd570e199642779300a88ee09ed062c68b9abdc8b2de3def7717eb8df7cbb0"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_generated_model_value_validation.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "88a9a13179cb0621b3affc460b687dd34d651a027cae833f4179b94035f749a4"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_generic_json_field_roundtrip.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "e740c14d400c3fbf1025553f3752d3ec9260ac9bc78f3b945bb726ed6879c629"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_inspector_physical_truth.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "3e4563c07ca2b161d2ecf7fab0efb3a8b6c771f0c56ce1569fe5c8ec8067fdf1"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_optional_schema_nullability.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "047fb573b4eca69d468481e2c71514763ae7cff5429da3fb2b3d09265e33d9e0"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_retry_config_snapshot.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "91816679d263b507b4900f8f7d3f861e2dd8666ae3e44ff84c2efb7df5196d33"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_trust_column_metadata.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "8791237e7f0cce76a0f4856c8d95758b4c801958fc2584ca33116d20b13dcdc7"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/adapters/test_mongodb_diagnostic_siblings.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "35265f7b53f2fb50d3f2df43d453a2471951ab1ce5043edd9315e2da8250a0a5"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/adapters/test_mongodb_lifecycle.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "9f3de7de62c7f6d01ead577791282deb2ec1ab5ccc1d536fd63aa07051d23b52"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/cache/test_auto_detection_diagnostics.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "54ed78c91f6e480b4a5224c862091240cad839bcf5db348032225ad50a01b308"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/cache/test_redis_diagnostic_privacy.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "ccdabe462fc5b7e9f9af58a9f8bed797d604fb3801d4b6ff720a9414050dd1ff"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/cache/test_redis_owned_close.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "915f2524895891f6b4982f2656f0eb42a858ecec9e48e27034b9b5f396e1ee57"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/cache/test_redis_url_config.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "334edf0bb5d92528558cd63078c6b22d2f262b5e9855dcead698497f90c99ca7"
+    },
+    {
+      "path": "packages/kailash-kaizen/tests/unit/trust/test_ci_validation_boundaries.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "977f579f12b2846fe20cc1740ba10a9b4edc02aa1e5676cc9222c7b6a8d124eb"
+    },
+    {
+      "path": "packages/kailash-nexus/tests/regression/test_websocket_diagnostic_privacy.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "bfc04a53fae7464b309610363f6cb46202470d5f7fc0d65dd791ce4e5bf80f61"
+    },
+    {
+      "path": "src/kailash/utils/async_close.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "7334ca73d03bd49c3a9e5380701393abf6596ad2d24799613b0e13bf86b12572"
+    },
+    {
+      "path": "src/kailash/utils/log_identity.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "543fc9635b5f91014ae0fcb07a0ae12039e7e528f4a3a66a955c8842b00f23db"
+    },
+    {
+      "path": "tests/regression/test_agent_ui_execution_resource_ownership.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "bd94307d8cfa60035b754f9e9b4d7c1f8ef37111eb664ed1ba3cb850b78cf9b1"
+    },
+    {
+      "path": "tests/regression/test_agent_ui_public_cancellation.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "7ea209506e238ef4ec099f903343b058184fb6552f56daf55841aa20d403ee0d"
+    },
+    {
+      "path": "tests/regression/test_api_channel_concurrent_terminal_close.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "bf307350361a83bfce0d4f3da18e861cb96155559b955bb69f3037f819aba23a"
+    },
+    {
+      "path": "tests/regression/test_api_channel_terminal_ownership.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "ea00baf1e4fad174d3a371d06f33d90ce2e919a253d9ec72147b4350153bd5e3"
+    },
+    {
+      "path": "tests/regression/test_current_codeql_diagnostic_sinks.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "d557b97999a24013d1ec180036bdc2c294afeb65dacd4ba44d1aefa544ae855a"
+    },
+    {
+      "path": "tests/regression/test_governance_engine_store_ownership.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "be64463a189abb4cba0a420f489c55213757f5eef7a148bc0979e5d724bbad0b"
+    },
+    {
+      "path": "tests/regression/test_legacy_node_validation_diagnostics.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "d30cfd900334778cb34cfae9104c9c8fb7edae097c3d36cb7ce2be4172c88e22"
+    },
+    {
+      "path": "tests/regression/test_nexus_failed_initialization_cleanup.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "593e9160feb1f6062d3da09adf98e933f7e1911b9b7623d39fff5695f5de6b18"
+    },
+    {
+      "path": "tests/regression/test_node_logging_mixin_namespace.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "5b3f85f594b7521f35b2d8ca426369de5a8360122d2ec11baed474ed664a4e74"
+    },
+    {
+      "path": "tests/regression/test_pool_cleanup_diagnostic_truth.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "48d6e9dd0f46a12873829c1c1de2c41b01343aeb3880432ea24643078aa5a5a3"
+    },
+    {
+      "path": "tests/regression/test_realtime_webhook_signature_bytes.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "5501d5e277832d3561f01873a160f377f8893a29d04832cada776b2648373207"
+    },
+    {
+      "path": "tests/regression/test_runtime_node_metadata_log_privacy.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "8afaa8b9b599f4f4c3c54ef3792f60426d33389cf71deaf40916fc5b527426e0"
+    },
+    {
+      "path": "tests/regression/test_runtime_watchdog_log_format.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "7839eba71497758a2ef5c23de5a7260f23e7a32c2b9e9af2eb745314de415882"
+    },
+    {
+      "path": "tests/regression/test_runtime_watchdog_source_privacy.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "9df77c0c431830f7ec023e0becfa1ede3853ba3fb82097c17d95bdfffe9479a4"
+    },
+    {
+      "path": "tests/regression/test_same_loop_sql_owner_cleanup.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "9413645bbe4df3901ac2f7beaf189ac12ef567b95c98de22951275126be0d66d"
+    },
+    {
+      "path": "tests/regression/test_sqlite_bootstrap_and_dlq_close.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "cdc3c29c28de28c0e0896c496069c2cd3ad14639336fc865d8f4b6a71d40921e"
+    },
+    {
+      "path": "tests/regression/test_sqlite_native_uri_database_parameter.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "ca68442a527cba7d918959c7eaa7bdd72a1d5625c12223a9f9d1157deb6b36f5"
+    },
+    {
+      "path": "tests/regression/test_sqlite_worker_disposal.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "e481901d365259eaaa9111c1577e2d9f9c3437221b5115d55f9c1d2c6d4f48ee"
+    },
+    {
+      "path": "tests/regression/test_strict_connection_failure_propagation.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "776ea0636eecd7594d9da8060c53699d5418edfdba879c0a79c253241f66c043"
+    },
+    {
+      "path": "tests/regression/test_strict_cycle_validation_propagation.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "91e6b23f8f0b9c1eea2c0a1abca0a671fbdef643f3db4d42f6a302cf1e2d1020"
+    }
+  ],
+  "csq16-runtime-ci": [
+    {
+      "path": ".github/workflows/security-tests.yml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "a36e221c5221c04fe8a3b5c2d18ebae2cd82b3c64950a5ad69815ddd6471321a"
+    },
+    {
+      "path": ".github/workflows/test-kailash-align.yml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "1e1878987d0958c0f5ca36d8a00ddeb2e3e593b85f2d993be199e23f120cd80c"
+    },
+    {
+      "path": ".github/workflows/test-kailash-kaizen.yml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "716e8e5ac4493e09aae340e70716fc5ecdf3930f1e952cd5212ce5dad9f85d61"
+    },
+    {
+      "path": ".github/workflows/test-kailash-ml.yml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "303bdb26b20b097ecfad2f89a57b2db7f85c093fff06a17ada987ded1ab8f8d3"
+    },
+    {
+      "path": ".github/workflows/test-with-infrastructure.yml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "d9a3cef87bfedeaa64d2a298d8fb1a453f77510e77c600fe78f1406b818aeb99"
+    },
+    {
+      "path": ".github/workflows/trust-plane.yml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "b7b5b85f96410e3ab7d1b8bc01066f6ce5a7150d8782b8194014063f99dd13a2"
+    },
+    {
+      "path": ".github/workflows/trust-tests.yml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "f98307e7bf41221a27a019c245db3fd3382b070fedb9f8657f98e5d8bf816812"
+    },
+    {
+      "path": "docker/Dockerfile.mcp-server",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "903cc578f73ebdac0812e7b8d333705fdfa0da4f20cf15601064de481e737492"
+    },
+    {
+      "path": "docker/docker-compose.sdk-dev.yml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "53eb136e938ab50050c7a189484e9b8fcda71172c4adefc97a70f3df48906186"
+    },
+    {
+      "path": "docker/healthcheck-nginx.conf",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "860223cf4b2b7627f70a6b041669da38be324dbd9b375c7f35c510768478a74f"
+    },
+    {
+      "path": "docker/init-sdk-dev-db.sql",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "d0a41803cfbb9a81cbe737f10f4be113b6d92a8fc28cea5a1eca6e213d00b083"
+    },
+    {
+      "path": "docker/mock-api-server/Dockerfile",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "7bfd3d3f9c91f496be90c8e646828f65e6f0f64890538b8e31b721767dd21c1a"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/nodes.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "317b53c08d7f20a19b2463433d04271becd83f7dec2481932798bc1316ff8d18"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/type_processor.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "e4573c2f0e7adbe39c85507507a3bc6fe6e051ac723ae581ea02937899121b77"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/adapters/test_base_adapter_hierarchy.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "4fbb7708a1270b574a7d12834e032904863def8d516766b52e2ed7824420f311"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/migrations/test_migration_bug_006_unit.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "7971a5a5791a2722e24bab55b7dbb8146c1cd8e57a7fa1e909713b7ac21eeb2f"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/migrations/test_migration_performance_tracker.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "2e2a90ba61b59f87d9056fdd171811b1135fe212d780948c082fa7a18a1935a5"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/test_express_cache_wiring.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "5efef8e4d00d6881f7e370247465732e78de684c914bb455f5bf3fb80732a7ec"
+    },
+    {
+      "path": "packages/kailash-kaizen/tests/unit/trust/adversarial/test_constraint_gaming.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "d6f4b65da7787311a9e92e61041fb30306705da08fe00e8faa406f4a44da3164"
+    },
+    {
+      "path": "packages/kailash-kaizen/tests/unit/trust/test_external_agent_rate_limiter.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "c58445bd9b366db4d014e3c3bfb03697389e5505868cc0ea3f2eb6ca4fed5802"
+    },
+    {
+      "path": "packages/kailash-mcp/src/kailash_mcp/platform_server.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "aa669dcfb345127146286d5cd31ccae0c6011371218876a4d39141fe265c1a66"
+    },
+    {
+      "path": "packages/kailash-nexus/pyproject.toml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "7f79a80843048d100107bb00b3fd898951ae7814e11345b24c7f70e2ab73c1ba"
+    },
+    {
+      "path": "packages/kailash-pact/tests/unit/governance/test_sqlite_stores.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "de33500e7c98ae6ef6778101b48a226272d3242841dc9eb20f7c8b8545d1acb0"
+    },
+    {
+      "path": "pyproject.toml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "76ef91b6555cd4ee37aaa3bcd721ca9cb2ad78f4e166e75e33c479183d3dfa40"
+    },
+    {
+      "path": "specs/core-runtime.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "1618c9f08ceb19a43ffa5e3495184fe3dfb0accc8e3ce6e8f46335e97bd3fba9"
+    },
+    {
+      "path": "specs/dataflow-cache.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "e1f0af9c75e54c54cc32b27970d244128fd9b7add04011a70a34d0d25138f850"
+    },
+    {
+      "path": "specs/nexus-channels.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "6f425395e26e4fb18698c75c7ddf8584abccd676047de12f4ed18cfe66875f88"
+    },
+    {
+      "path": "specs/pact-enforcement.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "602f8324792365d85b6cfb24f8c383125291ff9864d4a798c67707ed3adca502"
+    },
+    {
+      "path": "src/kailash/access_control.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "f3f30302943c5f8408c4c0f4aa1a6ec42e30263d64b81af23e8721d73e127f84"
+    },
+    {
+      "path": "src/kailash/access_control/managers.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "9ab39b0a8fe9b93983f63a5ea2757a94f02bd7c74162df76d934bd11c3ebbbf0"
+    },
+    {
+      "path": "src/kailash/access_control/rule_evaluators.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "70b6f2cbd548ff3e512dcd32db921e1b7fea537d9d7d642fa5dd83b001e776b8"
+    },
+    {
+      "path": "src/kailash/api/workflow_api.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "f530ee8663566ada127edca890458e303a356ab54592ccf593026d0138f95d05"
+    },
+    {
+      "path": "src/kailash/channels/api_channel.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "87762349a425d6f162564cfc4fe40dc282daac87e9a7577fb533b17974c74951"
+    },
+    {
+      "path": "src/kailash/nodes/base.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "718826779bc432b679a7f04c7129c2b3eefa67cd907418afb9617e1e8d03ff33"
+    },
+    {
+      "path": "src/kailash/nodes/base_async.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "ea6ece3beb890d8392fa619e6133f18143765d59d0506f13b28dfa8b0e7bef27"
+    },
+    {
+      "path": "src/kailash/nodes/data/async_sql.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "971fb486e671508b1354da5c1482117115ce69f312014ff89c6c02919033eb24"
+    },
+    {
+      "path": "src/kailash/nodes/mixins.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "272e3eed10609a838b0484611f1043aa64e7e4093c5592bca7aab0685baaafcb"
+    },
+    {
+      "path": "src/kailash/nodes/mixins/security.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "9af3f85edb9c0dd824a04c5450c0ebbf9c2525a10ac2c2572e03081755e3dd65"
+    },
+    {
+      "path": "src/kailash/nodes/security/_log_identity.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "1db4d3f1046471f1c8a219e044162676b69297159f672951d2d4b6a1c12d4348"
+    },
+    {
+      "path": "src/kailash/runtime/access_controlled.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "07d81fb4780c702b7beee7547f0f6ad877e3162eb0050b57078c6cd52043f6d4"
+    },
+    {
+      "path": "src/kailash/runtime/async_local.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "947eaff439e4e4e027b8fb3461a3d6c3f50dcc762adf308d9b6affef49a7093e"
+    },
+    {
+      "path": "src/kailash/runtime/hierarchical_switch_executor.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "fdf64efbf82ca3d87e5285ee98b6411f5084a3d86acf2ffa6f70ddc98b859029"
+    },
+    {
+      "path": "src/kailash/runtime/local.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "1a602f3f23affa26c9193258dc8ea9120168d3463afcf80aaab654ef53b8eaa4"
+    },
+    {
+      "path": "src/kailash/runtime/mixins/cycle_execution.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "1b7aea8171e439f6aa8b29af1b238658893ab9e90a323b6c5046ab827a9ebf16"
+    },
+    {
+      "path": "src/kailash/servers/enterprise_workflow_server.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "77938c161eb00541d625ecd9d64b1c4ca802edc991b9749051b662c89d7b01fb"
+    },
+    {
+      "path": "src/kailash/servers/workflow_server.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "0a1b77a97937ed3735af2fc9ea8099a53fa5efed7520bc62659db7c21c865f58"
+    },
+    {
+      "path": "src/kailash/tracking/manager.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "7d3b9fad4126146c218f3c81ea76bf218f67f71a3f2de089ab90ebb36413e797"
+    },
+    {
+      "path": "src/kailash/trust/constraints/builtin.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "94d3cf4115789c74ee6402ff261e28a07818938acef013234d801ae89a4ce6f4"
+    },
+    {
+      "path": "src/kailash/trust/governance/policy_engine.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "ca8da0bc84f7f2ea16c558b191755236357434045c3350597de7f16c9f4e3919"
+    },
+    {
+      "path": "src/kailash/trust/governance/rate_limiter.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "8504a472220ad5c37aef8b6a680a33245a4b9a49b9fcb1e87b83241dcbb66024"
+    },
+    {
+      "path": "src/kailash/trust/pact/engine.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "2c3ff0cc870c78484a4c01c1c0d051b4a44c6d4925955b794b5e359a917e5e25"
+    },
+    {
+      "path": "src/kailash/trust/pact/stores/sqlite.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "3d6b3a57445a315d808216504b6a914f2c84f4016e896e5c2d5d3c09191f9c72"
+    },
+    {
+      "path": "src/kailash/workflow/cyclic_runner.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "a8ad9116d5f68ade5c31aa657d94b0fe287cd3161845529220903db9acb5a079"
+    },
+    {
+      "path": "tests/regression/test_backup_restore_clearance.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "616334ee32ed09ecd7e09eb2ba7ddad46925cedc81e6a3d2603dfbe11e86cefa"
+    },
+    {
+      "path": "tests/regression/test_issue_1248_localruntime_cross_loop_pool_disposal.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "f0cb7dba012b2d5b0f0ce1121a1d2f22a38bf640c2814dfbe761701d555bcf21"
+    },
+    {
+      "path": "tests/regression/test_issue_2072_fail_closed_server_auth.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "5f7ad59b7d9c292db6c13999c71bdfab0bbd72da9cb12070dfe6944e422db6d3"
+    },
+    {
+      "path": "tests/regression/test_issue_2075_pool_registry_lifecycle.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "4b0356ec9a0c56855255c6ab10938df5907fa23f98f796035405a55b39db6d3d"
+    },
+    {
+      "path": "tests/regression/test_issue_942_execute_sync_wait_for_warning.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "b303d0cc01876e42c0ba609e77c15e4faa9f855ff9ecf19b746f8fa7d8210b0d"
+    },
+    {
+      "path": "tests/regression/test_redteam_2026_08_09_integration_findings.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "c4a66fca0ff628f2bf5801456a8a3eee70e456d2e682101885a5bb62f90a834a"
+    },
+    {
+      "path": "tests/security/test_connection_validation.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "c96ed7918ae4520bbe02b50171a7d3135c58bfc0cc860cb808192a45a34a46a0"
+    },
+    {
+      "path": "tests/tier2_integration/runtime/test_access_controlled.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "5433373f26d0d538b40540cb5554f8ca73600b6eb1cf2412a0c875583ab7f982"
+    },
+    {
+      "path": "tests/tier2_integration/tracking/test_tracking_consolidated.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "56e9ffb57060d708d453f5b1d749314398ad900e383c91e16d97f5300e30ddf8"
+    },
+    {
+      "path": "tests/trust/integration/test_lifecycle.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "9a8bc838499fd6f8ddaf3ed105817e32d9818a6ad07a6e40dc156a4ca162f9e5"
+    },
+    {
+      "path": "tests/trust/pact/unit/test_sqlite_stores.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "1ad24fbbc218ccfeb8bf2ce5ed22c976543c7d6ede577a647716043bdb76222a"
+    },
+    {
+      "path": "tests/trust/plane/integration/test_compliance_export.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "3f1a43ec8d4c910e8fb5f50e21c22a1d0593e659fa7633d9c96877367748a151"
+    },
+    {
+      "path": "uv.lock",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "8a5b360f3a754c12127e301439e3bc16ee32f25de58812aac604d5fa674da287"
+    },
+    {
+      "path": "packages/kailash-kaizen/tests/unit/trust/test_ci_validation_boundaries.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "3d07ec1a3d4ecc823466fb63e195564d2d0fc4af38fbdeb62b0d49f4df55847a"
+    },
+    {
+      "path": "scripts/ci/sdk_infrastructure.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "2bf9ff438a8cc760eace90da42c3bb1c80ec407c27fa840e1904336c5dd0c7c7"
+    },
+    {
+      "path": "src/kailash/access_control/metadata.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "5c95dd28e1c49228ef53e25f1633d880e2e4610735be00600475c4942a0ddb57"
+    },
+    {
+      "path": "src/kailash/utils/async_close.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "7334ca73d03bd49c3a9e5380701393abf6596ad2d24799613b0e13bf86b12572"
+    },
+    {
+      "path": "src/kailash/utils/log_identity.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "543fc9635b5f91014ae0fcb07a0ae12039e7e528f4a3a66a955c8842b00f23db"
+    },
+    {
+      "path": "tests/regression/test_access_controlled_runtime_enforcement.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "16a7ad020ca2e14e36b17948313ac8bfa9c9096a1d7bc45909dca208453356c8"
+    },
+    {
+      "path": "tests/regression/test_api_channel_concurrent_terminal_close.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "bf307350361a83bfce0d4f3da18e861cb96155559b955bb69f3037f819aba23a"
+    },
+    {
+      "path": "tests/regression/test_api_channel_terminal_ownership.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "ea00baf1e4fad174d3a371d06f33d90ce2e919a253d9ec72147b4350153bd5e3"
+    },
+    {
+      "path": "tests/regression/test_governance_engine_store_ownership.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "be64463a189abb4cba0a420f489c55213757f5eef7a148bc0979e5d724bbad0b"
+    },
+    {
+      "path": "tests/regression/test_mcp_platform_sse_cli.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "4bb4a96b8e63d1b840d269fb41de007c76e7ad5c4006050083ed6d693b9ae288"
+    },
+    {
+      "path": "tests/regression/test_node_logging_mixin_namespace.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "5b3f85f594b7521f35b2d8ca426369de5a8360122d2ec11baed474ed664a4e74"
+    },
+    {
+      "path": "tests/regression/test_runtime_node_metadata_log_privacy.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "8afaa8b9b599f4f4c3c54ef3792f60426d33389cf71deaf40916fc5b527426e0"
+    },
+    {
+      "path": "tests/regression/test_runtime_watchdog_log_format.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "7839eba71497758a2ef5c23de5a7260f23e7a32c2b9e9af2eb745314de415882"
+    },
+    {
+      "path": "tests/regression/test_runtime_watchdog_source_privacy.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "9df77c0c431830f7ec023e0becfa1ede3853ba3fb82097c17d95bdfffe9479a4"
+    },
+    {
+      "path": "tests/regression/test_same_loop_sql_owner_cleanup.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "9413645bbe4df3901ac2f7beaf189ac12ef567b95c98de22951275126be0d66d"
+    },
+    {
+      "path": "tests/regression/test_sdk_infrastructure_cleanup.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "041f598e8b32f63a37267752a104452ecc7d307088b87e9838455765a1a9ae85"
+    },
+    {
+      "path": "tests/regression/test_sqlite_native_uri_database_parameter.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "ca68442a527cba7d918959c7eaa7bdd72a1d5625c12223a9f9d1157deb6b36f5"
+    },
+    {
+      "path": "tests/regression/test_sqlite_worker_disposal.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "e481901d365259eaaa9111c1577e2d9f9c3437221b5115d55f9c1d2c6d4f48ee"
+    },
+    {
+      "path": "tests/regression/test_strict_connection_failure_propagation.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "776ea0636eecd7594d9da8060c53699d5418edfdba879c0a79c253241f66c043"
+    },
+    {
+      "path": "tests/regression/test_strict_cycle_validation_propagation.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "91e6b23f8f0b9c1eea2c0a1abca0a671fbdef643f3db4d42f6a302cf1e2d1020"
+    }
+  ],
+  "csq16-source-integration": [
+    {
+      "path": ".github/workflows/security-tests.yml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "a36e221c5221c04fe8a3b5c2d18ebae2cd82b3c64950a5ad69815ddd6471321a"
+    },
+    {
+      "path": ".github/workflows/test-kailash-align.yml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "1e1878987d0958c0f5ca36d8a00ddeb2e3e593b85f2d993be199e23f120cd80c"
+    },
+    {
+      "path": ".github/workflows/test-kailash-kaizen.yml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "716e8e5ac4493e09aae340e70716fc5ecdf3930f1e952cd5212ce5dad9f85d61"
+    },
+    {
+      "path": ".github/workflows/test-kailash-ml.yml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "303bdb26b20b097ecfad2f89a57b2db7f85c093fff06a17ada987ded1ab8f8d3"
+    },
+    {
+      "path": ".github/workflows/test-with-infrastructure.yml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "d9a3cef87bfedeaa64d2a298d8fb1a453f77510e77c600fe78f1406b818aeb99"
+    },
+    {
+      "path": ".github/workflows/trust-plane.yml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "b7b5b85f96410e3ab7d1b8bc01066f6ce5a7150d8782b8194014063f99dd13a2"
+    },
+    {
+      "path": ".github/workflows/trust-tests.yml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "f98307e7bf41221a27a019c245db3fd3382b070fedb9f8657f98e5d8bf816812"
+    },
+    {
+      "path": "docker/Dockerfile.mcp-server",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "903cc578f73ebdac0812e7b8d333705fdfa0da4f20cf15601064de481e737492"
+    },
+    {
+      "path": "docker/docker-compose.sdk-dev.yml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "53eb136e938ab50050c7a189484e9b8fcda71172c4adefc97a70f3df48906186"
+    },
+    {
+      "path": "docker/healthcheck-nginx.conf",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "860223cf4b2b7627f70a6b041669da38be324dbd9b375c7f35c510768478a74f"
+    },
+    {
+      "path": "docker/init-sdk-dev-db.sql",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "d0a41803cfbb9a81cbe737f10f4be113b6d92a8fc28cea5a1eca6e213d00b083"
+    },
+    {
+      "path": "docker/mock-api-server/Dockerfile",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "7bfd3d3f9c91f496be90c8e646828f65e6f0f64890538b8e31b721767dd21c1a"
+    },
+    {
+      "path": "packages/kailash-dataflow/pyproject.toml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "3f4583696970004a693aea859498fff0626956be624ab7b05a66c352aeabc1ad"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/adapters/base_adapter.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "68c4b9176c76d9149b1f0197ed3ae287e94fac61f94adb273ccf25db9ba22412"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/adapters/mongodb.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "72e2b618a8f34e0a520ea792181a4d60ed66ed5668847f0399ffa60e3615dc67"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/adapters/mysql.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "5f7e5505c777d1deae68fb917f7cc30d8e1dbbc0413e382596465abd295f99dd"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/cache/async_redis_adapter.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "b866338f3fe59cb15f0ffbfbf8ddf4dcafa188c46d4dc7ff4d1ebce9e44f9656"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/cache/auto_detection.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "7a46cd51962a7c4be31517828e89bd54f1ac5560f350beef70781647ccb079fa"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/cache/redis_manager.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "6defafaa2dd622d27218342bd51549a151376542877f10b528a38f5070859386"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/engine.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "469e23aac18cd803f2648079ea781c00c063bff6507661415d09b381ad5b34a6"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/nodes.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "ddd21b647595b3e0dfad65d5f1b5c1ecda048f8362300c842ebb586869536511"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/protected_engine.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "c506bae00e970355f819104ed264a6c4fac2cbf5c1a27a92639aed369a1c49e9"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/schema_comparator.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "f8089042088f57ce307646e7a629c26602d81819868dbef07fcecccbad649e96"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/type_introspection.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "645d1e4ec7db9414278418e2fc159f17506821a8cf15c9f628450d798d750686"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/type_processor.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "e4573c2f0e7adbe39c85507507a3bc6fe6e051ac723ae581ea02937899121b77"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/workflow_binding.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "77d2d27067950f8a7acf934e8749914603b5536299724d16a676d901da35d0e6"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/features/express.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "a2dfc3acb51a2928576a5b2c62d3539ac16f7ff5b3914d419c2e063485dffd2c"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/platform/inspector.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "f1803806f192b48513d671ed5becabde8944b160c4e480a13ead303f9791d37c"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/platform/resilience.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "3c378002d09e6a2b38f461662210f838557aa3f7ee8f10a4ebd22a18d2ebff21"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/testing/simple_test_utils.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "3976688f61b9cf7e71c404a321596899fc61024833ce442d96c359766ef5400d"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/trust/query_wrapper.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "b2ddfb2c330dcead46e9cc3880f7997ef4d9599c7eb1fb2aa6632ff0b01728e6"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_issue_2107_dataflow_del_finalizers.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "eccf7b467b8cb0f38041ea652afcb9122dc0eb99b8f77c4c9841ae2daf99f158"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_issue_2210_bulk_upsert_statement_capacity.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "1542a520edd4be727a84b34064aa39ce20e78cacd6d3b372b06fad087791a348"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_sqlite_address_consumer_parity.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "a94fd25daf37bed88596c36c181cfd012864bc6d4eb8f561dcc418360a515cc9"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_sqlite_schema_url_classification.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "01246cf470a191a5809029be413a2d403b5f48cf2a21be46b73f4c74b5bd8574"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/adapters/test_base_adapter_hierarchy.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "4fbb7708a1270b574a7d12834e032904863def8d516766b52e2ed7824420f311"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/adapters/test_mysql_transaction_hardening.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "d277922e921e60657947f695edae90d5ad0c2cb849690b4d3e81632c640118de"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/adapters/test_postgresql_adapter.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "cdeb69aa2c399a2ee6f9ffa59b51b64889ec991951cb6b97576a3aa61638a12b"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/cache/test_auto_detection.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "1ea8d18bde5b7f4d668145e2548d0519d176a4412c1b525e5736e809ff379c2b"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/core/test_credential_provider_config.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "ede6139b6b923bac019d611987a775fb86f597ae9b238f149ce4896661931b09"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/core/test_dataflow_engine_lock_integration.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "8dc165818c28373ffd630c10407295f2b1680af0ef0d48c4d9ae61eaad0ecde0"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/core/test_sqlite_basic.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "e2ca5d3358de4df1feb92ea2b0bc06724e688f5c9f2d726f7b8c0aff7b986cc4"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/features/test_resource_warning.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "131e181c496926e7bba771d1c474b44d5b90cf07f5d5bd9afc602d4463580d5c"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/migrations/test_auto_migration_system_lock_integration.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "e66083c452a3002d6a420a57c79f9b6bb8c02950fdd95c10af0b5bf95a58ad4d"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/migrations/test_migration_bug_006_unit.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "7971a5a5791a2722e24bab55b7dbb8146c1cd8e57a7fa1e909713b7ac21eeb2f"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/migrations/test_migration_performance_tracker.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "2e2a90ba61b59f87d9056fdd171811b1135fe212d780948c082fa7a18a1935a5"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/test_engine_migration_errors.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "77a5352cc72bae938e22eaa16192982fb51bc2d4a2fbab38e630773b68796c8d"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/test_express_cache_wiring.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "5efef8e4d00d6881f7e370247465732e78de684c914bb455f5bf3fb80732a7ec"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/test_inspector_model_introspection.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "124ed6d42df8943d622c06315ec46cc906008e8e29779c380fbc69a380655f31"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/trust/test_query_executor.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "4f03ca8d0711c7d3b7a20f7548e7ca6e00e388eccbdac2efff922d9c7377b494"
+    },
+    {
+      "path": "packages/kailash-kaizen/pyproject.toml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "7832a0225ea5cdd2635f3fd876f38c9a7bc52b996c922ad2245868bd22175a59"
+    },
+    {
+      "path": "packages/kailash-kaizen/tests/unit/trust/adversarial/test_constraint_gaming.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "d6f4b65da7787311a9e92e61041fb30306705da08fe00e8faa406f4a44da3164"
+    },
+    {
+      "path": "packages/kailash-kaizen/tests/unit/trust/test_external_agent_rate_limiter.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "c58445bd9b366db4d014e3c3bfb03697389e5505868cc0ea3f2eb6ca4fed5802"
+    },
+    {
+      "path": "packages/kailash-mcp/pyproject.toml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "305921ec388b92d484e68a207c4034b33d7030dc78f084dad58590e3e34906f4"
+    },
+    {
+      "path": "packages/kailash-mcp/src/kailash_mcp/platform_server.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "aa669dcfb345127146286d5cd31ccae0c6011371218876a4d39141fe265c1a66"
+    },
+    {
+      "path": "packages/kailash-ml/pyproject.toml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "351ed3624a049739b5a81f7d8fb40a6efa68559ed1bf1181f812123b118ace14"
+    },
+    {
+      "path": "packages/kailash-ml/src/kailash_ml/interop.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "3e5304c0ab3bfc63da219ffd7209955f7babcfd0ce7d530150435cbbf6467acf"
+    },
+    {
+      "path": "packages/kailash-ml/tests/unit/test_interop.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "a966025eff0c769a8d3fd6d60e4bea264a4e930c29394699e39b813028cce8bd"
+    },
+    {
+      "path": "packages/kailash-nexus/pyproject.toml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "bb696626ce20b6df161a9e13231ceb8bccd620434c9ed5786b4185d4e355c39c"
+    },
+    {
+      "path": "packages/kailash-nexus/src/nexus/core.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "8f842cf871e680c346149d266cf5401c3033f297d36eaa0cf3115cdd73b8557e"
+    },
+    {
+      "path": "packages/kailash-nexus/src/nexus/transports/websocket.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "397f23a8608959e3c2ecc5b90393068623ac647d3f7150302f52f9e0bd08a84c"
+    },
+    {
+      "path": "packages/kailash-nexus/tests/unit/transports/test_websocket.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "0f66eb73f894d8cda43ab2062de0a08578725ffb154689aa5fec82473489590a"
+    },
+    {
+      "path": "packages/kailash-pact/tests/unit/governance/test_sqlite_stores.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "de33500e7c98ae6ef6778101b48a226272d3242841dc9eb20f7c8b8545d1acb0"
+    },
+    {
+      "path": "pyproject.toml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "227c5b32cb2df2039577bc90e9c29f9f46726a2e10b69c32cea1657f525e901e"
+    },
+    {
+      "path": "specs/core-runtime.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "1618c9f08ceb19a43ffa5e3495184fe3dfb0accc8e3ce6e8f46335e97bd3fba9"
+    },
+    {
+      "path": "specs/dataflow-cache.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "e1f0af9c75e54c54cc32b27970d244128fd9b7add04011a70a34d0d25138f850"
+    },
+    {
+      "path": "specs/dataflow-core.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "a8b28fe1dc73d53b12a804adebf0d4e6c1adf4755f21ed1e8b7cc69462e753b4"
+    },
+    {
+      "path": "specs/dataflow-express.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "d160c6cbd23845575db39fec06d4f0612634a0f1bb67796d8dc0b70af7faf355"
+    },
+    {
+      "path": "specs/dataflow-models.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "9035faefc3197439e5c202d0c0593725821790c6a2ffbd689c72e454800d1342"
+    },
+    {
+      "path": "specs/middleware.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "28841795f38b6de379ac360e141d2433de5167f9e2b40d29ca2f223b849c5812"
+    },
+    {
+      "path": "specs/nexus-channels.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "6f425395e26e4fb18698c75c7ddf8584abccd676047de12f4ed18cfe66875f88"
+    },
+    {
+      "path": "specs/pact-enforcement.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "602f8324792365d85b6cfb24f8c383125291ff9864d4a798c67707ed3adca502"
+    },
+    {
+      "path": "specs/trust-crypto.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "16812e229bd0403d503e91195de2b8119c29b76eae22360c21503845d15f39fe"
+    },
+    {
+      "path": "src/kailash/access_control.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "4f6183c8d24f2ca2067e066148cf88799e72d185ed60c42ee96bdcc811435c60"
+    },
+    {
+      "path": "src/kailash/access_control/managers.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "9ab39b0a8fe9b93983f63a5ea2757a94f02bd7c74162df76d934bd11c3ebbbf0"
+    },
+    {
+      "path": "src/kailash/access_control/rule_evaluators.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "d1cc607be1809fe3971dc15972fc35581fcf22ceed881143572b31bf3e1124d0"
+    },
+    {
+      "path": "src/kailash/api/workflow_api.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "f530ee8663566ada127edca890458e303a356ab54592ccf593026d0138f95d05"
+    },
+    {
+      "path": "src/kailash/channels/api_channel.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "d4ead598a95e396fff7863c6af103dfa728f26dfcebafb98a527db0b712031cf"
+    },
+    {
+      "path": "src/kailash/channels/cli_channel.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "a23eaa700c01b768e7710c1c60d57ab4bedc5952c87dd7f1a3f05495c39963f6"
+    },
+    {
+      "path": "src/kailash/channels/mcp_channel.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "8ca1e1d77ed4074e48a546cac30932a446926418d99218d3224823618232840f"
+    },
+    {
+      "path": "src/kailash/gateway/enhanced_gateway.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "41a3c090b39dbfef0651f79638db89dc5f7dc9e68ef1272e859be8583bb1f9f9"
+    },
+    {
+      "path": "src/kailash/middleware/communication/realtime.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "81db77cba81dd258bf5f6d32c048f466c737b2c78368373e22fe8fc8d61dd71d"
+    },
+    {
+      "path": "src/kailash/middleware/core/agent_ui.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "708cb8fbbc32e613e766f3bbbe11bb6d44b5e14854776a60550f195482704f1b"
+    },
+    {
+      "path": "src/kailash/middleware/gateway/durable_request.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "8428dc2e4afe3aa224608bdc41c37ae7d812a39a16984c3dfaf40dd9512ea575"
+    },
+    {
+      "path": "src/kailash/nodes/base.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "718826779bc432b679a7f04c7129c2b3eefa67cd907418afb9617e1e8d03ff33"
+    },
+    {
+      "path": "src/kailash/nodes/base_async.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "ea6ece3beb890d8392fa619e6133f18143765d59d0506f13b28dfa8b0e7bef27"
+    },
+    {
+      "path": "src/kailash/nodes/data/async_sql.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "a142886ab41a07a0c4a18ddf213ddad1289fae9487ca2aeaceed5d6441e0a743"
+    },
+    {
+      "path": "src/kailash/nodes/mixins.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "272e3eed10609a838b0484611f1043aa64e7e4093c5592bca7aab0685baaafcb"
+    },
+    {
+      "path": "src/kailash/nodes/mixins/security.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "9af3f85edb9c0dd824a04c5450c0ebbf9c2525a10ac2c2572e03081755e3dd65"
+    },
+    {
+      "path": "src/kailash/nodes/security/_log_identity.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "1db4d3f1046471f1c8a219e044162676b69297159f672951d2d4b6a1c12d4348"
+    },
+    {
+      "path": "src/kailash/nodes/validation.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "88824940e25895e197f823b97b9f595799d8f8f3c8d0047d5e99a66102ebbd76"
+    },
+    {
+      "path": "src/kailash/runtime/access_controlled.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "07d81fb4780c702b7beee7547f0f6ad877e3162eb0050b57078c6cd52043f6d4"
+    },
+    {
+      "path": "src/kailash/runtime/async_local.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "947eaff439e4e4e027b8fb3461a3d6c3f50dcc762adf308d9b6affef49a7093e"
+    },
+    {
+      "path": "src/kailash/runtime/hierarchical_switch_executor.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "fdf64efbf82ca3d87e5285ee98b6411f5084a3d86acf2ffa6f70ddc98b859029"
+    },
+    {
+      "path": "src/kailash/runtime/local.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "8b77cd7acce8eaef249cc5e27c3686d15e3fb526a0079bc68975c2e37ce21f32"
+    },
+    {
+      "path": "src/kailash/runtime/mixins/cycle_execution.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "1b7aea8171e439f6aa8b29af1b238658893ab9e90a323b6c5046ab827a9ebf16"
+    },
+    {
+      "path": "src/kailash/runtime/scheduler.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "c1c07cefeb08c6785e7b059256ccc140494f369d4a489e1120027d04e6014125"
+    },
+    {
+      "path": "src/kailash/servers/enterprise_workflow_server.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "77938c161eb00541d625ecd9d64b1c4ca802edc991b9749051b662c89d7b01fb"
+    },
+    {
+      "path": "src/kailash/servers/workflow_server.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "0a1b77a97937ed3735af2fc9ea8099a53fa5efed7520bc62659db7c21c865f58"
+    },
+    {
+      "path": "src/kailash/tracking/manager.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "7d3b9fad4126146c218f3c81ea76bf218f67f71a3f2de089ab90ebb36413e797"
+    },
+    {
+      "path": "src/kailash/trust/constraints/builtin.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "c69913698b709f9b64b973805dd45f8e4456f55d6613702bb968cfa0407ff39d"
+    },
+    {
+      "path": "src/kailash/trust/constraints/dimension.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "2e46507eb47f7760e160643ca93e2aae1b04a78ea9dfc051f8c003901a73ba19"
+    },
+    {
+      "path": "src/kailash/trust/constraints/evaluator.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "17ce9bb36435c7509fb79d57ec510daef11e97318154dd85ad1a7e7bb51c5296"
+    },
+    {
+      "path": "src/kailash/trust/governance/policy_engine.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "ca8da0bc84f7f2ea16c558b191755236357434045c3350597de7f16c9f4e3919"
+    },
+    {
+      "path": "src/kailash/trust/governance/rate_limiter.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "8504a472220ad5c37aef8b6a680a33245a4b9a49b9fcb1e87b83241dcbb66024"
+    },
+    {
+      "path": "src/kailash/trust/pact/engine.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "2c3ff0cc870c78484a4c01c1c0d051b4a44c6d4925955b794b5e359a917e5e25"
+    },
+    {
+      "path": "src/kailash/trust/pact/stores/sqlite.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "3d6b3a57445a315d808216504b6a914f2c84f4016e896e5c2d5d3c09191f9c72"
+    },
+    {
+      "path": "src/kailash/workflow/cyclic_runner.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "a8ad9116d5f68ade5c31aa657d94b0fe287cd3161845529220903db9acb5a079"
+    },
+    {
+      "path": "src/kailash/workflow/dlq.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "72493c3c2b354d0fab4388b213e79103499f730fd93e390c7b9fc59469eabe0e"
+    },
+    {
+      "path": "tests/regression/test_async_sql_type_diagnostic_privacy.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "6c570c9ed91600d1e6aa6c692935677bdc1b8ccc376a9c06f4d7ae45f307ad03"
+    },
+    {
+      "path": "tests/regression/test_backup_restore_clearance.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "616334ee32ed09ecd7e09eb2ba7ddad46925cedc81e6a3d2603dfbe11e86cefa"
+    },
+    {
+      "path": "tests/regression/test_channel_shutdown_reports_reality.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "4d225d79648dacc4eee3deceab13966bb98ec157f4964c773ce20b9cbccb5650"
+    },
+    {
+      "path": "tests/regression/test_durable_execution_quickstart.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "9c3441045e380b5e1f3d442f40b6014dcc75d78b0ec7ad5125ed78c734545a80"
+    },
+    {
+      "path": "tests/regression/test_issue_1248_localruntime_cross_loop_pool_disposal.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "f0cb7dba012b2d5b0f0ce1121a1d2f22a38bf640c2814dfbe761701d555bcf21"
+    },
+    {
+      "path": "tests/regression/test_issue_2006_null_default_override.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "c48bac3b3d2046bff2bb2a3a022b8e3387e757281f6350e7bf933d1a70336cd4"
+    },
+    {
+      "path": "tests/regression/test_issue_2013_inert_auth_control.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "47172e0559647503387649483094db0f83e24e8b17d6cef5aebdce4e539a3e4c"
+    },
+    {
+      "path": "tests/regression/test_issue_2025_unauthenticated_proxy_route.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "25bcc211209ddd1a27ea724604fafa5215d70e89d609832fecd8abb0af2912fe"
+    },
+    {
+      "path": "tests/regression/test_issue_2072_fail_closed_server_auth.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "5f7ad59b7d9c292db6c13999c71bdfab0bbd72da9cb12070dfe6944e422db6d3"
+    },
+    {
+      "path": "tests/regression/test_issue_2075_pool_registry_lifecycle.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "4b0356ec9a0c56855255c6ab10938df5907fa23f98f796035405a55b39db6d3d"
+    },
+    {
+      "path": "tests/regression/test_issue_2081_sync_bridge_join_is_legible.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "b6c5f1b4f00f8bfc4be0c8ac5ba77cebcc00650c798ddb92c1451fb13587d9d4"
+    },
+    {
+      "path": "tests/regression/test_issue_2087_segment_parameter_traversal.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "eeecf76b0a6594d198a86c8d12b11b9d7ee1e62afa895d138036c64f2d4f09d5"
+    },
+    {
+      "path": "tests/regression/test_issue_2088_sink_side_log_sanitizing.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "d6dcd1d837378cf65973041a839fc65dba885a7b483bcc7f66d950f895aef91f"
+    },
+    {
+      "path": "tests/regression/test_issue_2107_del_finalizers_no_close.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "57ade094d007ab64508006f7918d1f77b73f386b053fbe68f0326f9eb1d6b514"
+    },
+    {
+      "path": "tests/regression/test_issue_2108_api_key_verification.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "3701e3073c8841aecfd4e5a11394ff42abecd0b23f75bb860ddd0911aebc8b6c"
+    },
+    {
+      "path": "tests/regression/test_issue_2112_dashboard_api_auth.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "544415b5a80c366e29fc6bc0a9b86fcdcc9bbf67449865e2de636cb939dd82e8"
+    },
+    {
+      "path": "tests/regression/test_issue_2114_non_ascii_api_key.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "6f001be3bd35c5a0419e3ff5c8c90b02d90e19080f0ddc7a370e6af2559a208c"
+    },
+    {
+      "path": "tests/regression/test_issue_2145_session_ownership.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "7c02b4a2296fd4535f61b307caf38c710891c0fe7209a3ab60524c56dcf1a121"
+    },
+    {
+      "path": "tests/regression/test_issue_713_module_import_then_async_ddl.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "013adf9940f5e43c03f29927918b1baee2ffc80b251bc740483b09a303ea622c"
+    },
+    {
+      "path": "tests/regression/test_issue_713_subsystems_follow_runtime_swap.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "6d7e16dd0d1ad75d60fa1c62177c63ff847f009a778d43e15d3f11e6e357f3aa"
+    },
+    {
+      "path": "tests/regression/test_issue_750_express_list_cache_invalidation.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "f1a41f9ef224dd8eddd6695fed005d3b1445cd06e21394df15ef945257d4abff"
+    },
+    {
+      "path": "tests/regression/test_issue_871_sqlite_jobstore_security.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "85e9e11b29fc4843f5a92640a90929f12e04ad6aef171dddd50838c673644a6f"
+    },
+    {
+      "path": "tests/regression/test_issue_942_execute_sync_wait_for_warning.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "b303d0cc01876e42c0ba609e77c15e4faa9f855ff9ecf19b746f8fa7d8210b0d"
+    },
+    {
+      "path": "tests/regression/test_issue_workflow_parameters_envelope_parity.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "6bb9df13dfa8537114cb3bfb2a847bd18729e692565f1d666cd392f423bc434e"
+    },
+    {
+      "path": "tests/regression/test_redteam_2026_08_09_integration_findings.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "c4a66fca0ff628f2bf5801456a8a3eee70e456d2e682101885a5bb62f90a834a"
+    },
+    {
+      "path": "tests/security/test_connection_validation.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "c96ed7918ae4520bbe02b50171a7d3135c58bfc0cc860cb808192a45a34a46a0"
+    },
+    {
+      "path": "tests/tier2_integration/runtime/test_access_controlled.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "5433373f26d0d538b40540cb5554f8ca73600b6eb1cf2412a0c875583ab7f982"
+    },
+    {
+      "path": "tests/tier2_integration/tracking/test_tracking_consolidated.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "56e9ffb57060d708d453f5b1d749314398ad900e383c91e16d97f5300e30ddf8"
+    },
+    {
+      "path": "tests/trust/integration/test_lifecycle.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "9a8bc838499fd6f8ddaf3ed105817e32d9818a6ad07a6e40dc156a4ca162f9e5"
+    },
+    {
+      "path": "tests/trust/pact/unit/test_sqlite_stores.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "1ad24fbbc218ccfeb8bf2ce5ed22c976543c7d6ede577a647716043bdb76222a"
+    },
+    {
+      "path": "tests/trust/plane/integration/test_compliance_export.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "3f1a43ec8d4c910e8fb5f50e21c22a1d0593e659fa7633d9c96877367748a151"
+    },
+    {
+      "path": "uv.lock",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "a169b691b1e35527bdc3ef09f1d970ab415792b706627bd92f4db3c2d5c2c9a7"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/integration/test_cache_prefix_forwarding.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "83092b7094520dd9c81cf7c7fe608a710ab90c51df9676566aba7ec7faa655fd"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/integration/test_inspector_catalog_backends.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "b4338e04b24d031d5d222d6eac6e4b01b401640160f2924f0cc0226c7aebda21"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/integration/test_mongodb_failed_connect_cleanup.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "ad34db675081434e752eebec6918ba86f3f89eb341a271559fcb49e003663691"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/integration/test_mongodb_health_failure_contract.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "f218f55e0c2e17a343ef7b942f04dc5820180e6737cf2bf72e6fcead0d09daf1"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/integration/test_redis_concurrent_close.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "d179a42a465be8a2aa0ee7a72896414b1bb37b007c5e890d746b2ac9c6fa525f"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/integration/test_redis_namespace_clear.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "6a99b4bca8ab063adbaf6210dfeeba9ef100f33d88031cefaf525e57e788932f"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/integration/test_redis_url_authentication.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "414d29468f3979a4e3ec4943e351ba634e68e1d7dc2709e6e176bfa94f72f05f"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_circuit_breaker_half_open_deadline.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "a18472e158cfe84a50c19f5259b0d981fa6d2e5d300420d3955648185d081f8e"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_displaced_sql_cleanup_retry.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "4afd570e199642779300a88ee09ed062c68b9abdc8b2de3def7717eb8df7cbb0"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_generated_model_value_validation.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "88a9a13179cb0621b3affc460b687dd34d651a027cae833f4179b94035f749a4"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_generic_json_field_roundtrip.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "e740c14d400c3fbf1025553f3752d3ec9260ac9bc78f3b945bb726ed6879c629"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_inspector_physical_truth.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "3e4563c07ca2b161d2ecf7fab0efb3a8b6c771f0c56ce1569fe5c8ec8067fdf1"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_optional_schema_nullability.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "047fb573b4eca69d468481e2c71514763ae7cff5429da3fb2b3d09265e33d9e0"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_public_workflow_test_utilities.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "41cf1bea2ea4ed556b9db4504c4a49a153eb4d91a8ced05b466b4c1c2220080b"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_retry_config_snapshot.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "91816679d263b507b4900f8f7d3f861e2dd8666ae3e44ff84c2efb7df5196d33"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_trust_column_metadata.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "8791237e7f0cce76a0f4856c8d95758b4c801958fc2584ca33116d20b13dcdc7"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/adapters/test_mongodb_diagnostic_siblings.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "35265f7b53f2fb50d3f2df43d453a2471951ab1ce5043edd9315e2da8250a0a5"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/adapters/test_mongodb_lifecycle.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "9f3de7de62c7f6d01ead577791282deb2ec1ab5ccc1d536fd63aa07051d23b52"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/cache/test_auto_detection_diagnostics.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "54ed78c91f6e480b4a5224c862091240cad839bcf5db348032225ad50a01b308"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/cache/test_redis_diagnostic_privacy.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "ccdabe462fc5b7e9f9af58a9f8bed797d604fb3801d4b6ff720a9414050dd1ff"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/cache/test_redis_owned_close.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "915f2524895891f6b4982f2656f0eb42a858ecec9e48e27034b9b5f396e1ee57"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/cache/test_redis_url_config.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "334edf0bb5d92528558cd63078c6b22d2f262b5e9855dcead698497f90c99ca7"
+    },
+    {
+      "path": "packages/kailash-kaizen/tests/unit/trust/test_ci_validation_boundaries.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "977f579f12b2846fe20cc1740ba10a9b4edc02aa1e5676cc9222c7b6a8d124eb"
+    },
+    {
+      "path": "packages/kailash-nexus/tests/regression/test_websocket_diagnostic_privacy.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "bfc04a53fae7464b309610363f6cb46202470d5f7fc0d65dd791ce4e5bf80f61"
+    },
+    {
+      "path": "scripts/ci/sdk_infrastructure.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "2bf9ff438a8cc760eace90da42c3bb1c80ec407c27fa840e1904336c5dd0c7c7"
+    },
+    {
+      "path": "src/kailash/utils/async_close.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "7334ca73d03bd49c3a9e5380701393abf6596ad2d24799613b0e13bf86b12572"
+    },
+    {
+      "path": "src/kailash/utils/log_identity.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "543fc9635b5f91014ae0fcb07a0ae12039e7e528f4a3a66a955c8842b00f23db"
+    },
+    {
+      "path": "tests/regression/test_access_controlled_runtime_enforcement.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "16a7ad020ca2e14e36b17948313ac8bfa9c9096a1d7bc45909dca208453356c8"
+    },
+    {
+      "path": "tests/regression/test_agent_ui_execution_resource_ownership.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "bd94307d8cfa60035b754f9e9b4d7c1f8ef37111eb664ed1ba3cb850b78cf9b1"
+    },
+    {
+      "path": "tests/regression/test_agent_ui_public_cancellation.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "7ea209506e238ef4ec099f903343b058184fb6552f56daf55841aa20d403ee0d"
+    },
+    {
+      "path": "tests/regression/test_api_channel_concurrent_terminal_close.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "bf307350361a83bfce0d4f3da18e861cb96155559b955bb69f3037f819aba23a"
+    },
+    {
+      "path": "tests/regression/test_api_channel_terminal_ownership.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "ea00baf1e4fad174d3a371d06f33d90ce2e919a253d9ec72147b4350153bd5e3"
+    },
+    {
+      "path": "tests/regression/test_channel_exception_diagnostic_privacy.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "a9274ae9f64ae59d2e5a2a23a89efc4dc824ba64ef3a07d367eaf603b6afab6f"
+    },
+    {
+      "path": "tests/regression/test_current_codeql_diagnostic_sinks.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "d557b97999a24013d1ec180036bdc2c294afeb65dacd4ba44d1aefa544ae855a"
+    },
+    {
+      "path": "tests/regression/test_governance_engine_store_ownership.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "be64463a189abb4cba0a420f489c55213757f5eef7a148bc0979e5d724bbad0b"
+    },
+    {
+      "path": "tests/regression/test_legacy_node_validation_diagnostics.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "d30cfd900334778cb34cfae9104c9c8fb7edae097c3d36cb7ce2be4172c88e22"
+    },
+    {
+      "path": "tests/regression/test_mcp_platform_sse_cli.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "4bb4a96b8e63d1b840d269fb41de007c76e7ad5c4006050083ed6d693b9ae288"
+    },
+    {
+      "path": "tests/regression/test_nexus_failed_initialization_cleanup.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "593e9160feb1f6062d3da09adf98e933f7e1911b9b7623d39fff5695f5de6b18"
+    },
+    {
+      "path": "tests/regression/test_node_logging_mixin_namespace.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "5b3f85f594b7521f35b2d8ca426369de5a8360122d2ec11baed474ed664a4e74"
+    },
+    {
+      "path": "tests/regression/test_pool_cleanup_diagnostic_truth.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "48d6e9dd0f46a12873829c1c1de2c41b01343aeb3880432ea24643078aa5a5a3"
+    },
+    {
+      "path": "tests/regression/test_realtime_webhook_signature_bytes.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "5501d5e277832d3561f01873a160f377f8893a29d04832cada776b2648373207"
+    },
+    {
+      "path": "tests/regression/test_runtime_node_metadata_log_privacy.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "8afaa8b9b599f4f4c3c54ef3792f60426d33389cf71deaf40916fc5b527426e0"
+    },
+    {
+      "path": "tests/regression/test_runtime_watchdog_log_format.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "7839eba71497758a2ef5c23de5a7260f23e7a32c2b9e9af2eb745314de415882"
+    },
+    {
+      "path": "tests/regression/test_runtime_watchdog_source_privacy.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "9df77c0c431830f7ec023e0becfa1ede3853ba3fb82097c17d95bdfffe9479a4"
+    },
+    {
+      "path": "tests/regression/test_same_loop_sql_owner_cleanup.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "9413645bbe4df3901ac2f7beaf189ac12ef567b95c98de22951275126be0d66d"
+    },
+    {
+      "path": "tests/regression/test_sdk_infrastructure_cleanup.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "041f598e8b32f63a37267752a104452ecc7d307088b87e9838455765a1a9ae85"
+    },
+    {
+      "path": "tests/regression/test_sqlite_bootstrap_and_dlq_close.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "cdc3c29c28de28c0e0896c496069c2cd3ad14639336fc865d8f4b6a71d40921e"
+    },
+    {
+      "path": "tests/regression/test_sqlite_native_uri_database_parameter.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "ca68442a527cba7d918959c7eaa7bdd72a1d5625c12223a9f9d1157deb6b36f5"
+    },
+    {
+      "path": "tests/regression/test_sqlite_worker_disposal.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "e481901d365259eaaa9111c1577e2d9f9c3437221b5115d55f9c1d2c6d4f48ee"
+    },
+    {
+      "path": "tests/regression/test_strict_connection_failure_propagation.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "776ea0636eecd7594d9da8060c53699d5418edfdba879c0a79c253241f66c043"
+    },
+    {
+      "path": "tests/regression/test_strict_cycle_validation_propagation.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "91e6b23f8f0b9c1eea2c0a1abca0a671fbdef643f3db4d42f6a302cf1e2d1020"
+    },
+    {
+      "path": "workspaces/issue-1720-llm-consolidation/04-validate/csq16-cache-key-format-decision.md",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "708d8754fa051d72da88ff420c27cb9df0e76581185fd836ac1881bc54e03f09"
+    },
+    {
+      "path": "workspaces/issue-1720-llm-consolidation/04-validate/csq16-codeql-current-false-positive-decision.md",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "cbbcee8bbe02f7679f04fc032cd8d2b2899802a36300417dd2cf4338cb9cf359"
+    },
+    {
+      "path": "workspaces/issue-1720-llm-consolidation/04-validate/csq16-current-hash-guard-control.json",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "1688e5bc8062de1243f30081f2ff8e4db2a65d8cbf52d35f610c059443f3eac0"
+    },
+    {
+      "path": "workspaces/issue-1720-llm-consolidation/04-validate/csq16-current-high-boundary-probe.json",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "233facecfef7d4ffd1a713362a9728216b611cb0eb0c065fb748fa10669590df"
+    },
+    {
+      "path": "workspaces/issue-1720-llm-consolidation/04-validate/csq16-current-high-triage-receipt.json",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "e51e11a29aa6d52374884916accfdadb48b8213082edbba992c16c0a42e75420"
+    },
+    {
+      "path": "workspaces/issue-1720-llm-consolidation/04-validate/csq16-scoped-review-checkpoint.json",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "43325220503a15ae30127f6b3babb42d758223d620628f8b5f83d2d76e050471"
+    },
+    {
+      "path": "workspaces/issue-1720-llm-consolidation/journal/0017-DISCOVERY-promotion-checks-and-error-paths.md",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "1afbe555773e69a46905432648de61133df011fcd145ee63fbd4eaeb99f0c7d9"
+    }
+  ],
+  "csq16-storage-ci": [
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/adapters/base_adapter.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "68c4b9176c76d9149b1f0197ed3ae287e94fac61f94adb273ccf25db9ba22412"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/adapters/mongodb.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "72e2b618a8f34e0a520ea792181a4d60ed66ed5668847f0399ffa60e3615dc67"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/cache/async_redis_adapter.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "b866338f3fe59cb15f0ffbfbf8ddf4dcafa188c46d4dc7ff4d1ebce9e44f9656"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/cache/auto_detection.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "7a46cd51962a7c4be31517828e89bd54f1ac5560f350beef70781647ccb079fa"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/cache/redis_manager.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "6defafaa2dd622d27218342bd51549a151376542877f10b528a38f5070859386"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/engine.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "132aeb748f2de8be3a0a58de57bd31d6e51f96542987fd0299010fc8b57de567"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/nodes.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "ddd21b647595b3e0dfad65d5f1b5c1ecda048f8362300c842ebb586869536511"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/protected_engine.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "c506bae00e970355f819104ed264a6c4fac2cbf5c1a27a92639aed369a1c49e9"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/schema_comparator.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "f8089042088f57ce307646e7a629c26602d81819868dbef07fcecccbad649e96"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/type_introspection.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "645d1e4ec7db9414278418e2fc159f17506821a8cf15c9f628450d798d750686"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/type_processor.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "e4573c2f0e7adbe39c85507507a3bc6fe6e051ac723ae581ea02937899121b77"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/workflow_binding.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "77d2d27067950f8a7acf934e8749914603b5536299724d16a676d901da35d0e6"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/features/express.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "a2dfc3acb51a2928576a5b2c62d3539ac16f7ff5b3914d419c2e063485dffd2c"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/platform/inspector.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "f1803806f192b48513d671ed5becabde8944b160c4e480a13ead303f9791d37c"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/platform/resilience.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "528fb299a18510e9021d79789891a8236364322dbee857f3cad58af36c05d4ca"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/testing/simple_test_utils.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "3976688f61b9cf7e71c404a321596899fc61024833ce442d96c359766ef5400d"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/trust/query_wrapper.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "5ba37d1f1fd3c0070ac737f7a502e743504a4ebe2dd38c71e8d42a0040d02cce"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_sqlite_address_consumer_parity.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "a94fd25daf37bed88596c36c181cfd012864bc6d4eb8f561dcc418360a515cc9"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_sqlite_schema_url_classification.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "01246cf470a191a5809029be413a2d403b5f48cf2a21be46b73f4c74b5bd8574"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/cache/test_auto_detection.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "1ea8d18bde5b7f4d668145e2548d0519d176a4412c1b525e5736e809ff379c2b"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/test_express_cache_wiring.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "5efef8e4d00d6881f7e370247465732e78de684c914bb455f5bf3fb80732a7ec"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/test_inspector_model_introspection.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "124ed6d42df8943d622c06315ec46cc906008e8e29779c380fbc69a380655f31"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/trust/test_query_executor.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "4f03ca8d0711c7d3b7a20f7548e7ca6e00e388eccbdac2efff922d9c7377b494"
+    },
+    {
+      "path": "packages/kailash-kaizen/tests/unit/trust/adversarial/test_constraint_gaming.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "d6f4b65da7787311a9e92e61041fb30306705da08fe00e8faa406f4a44da3164"
+    },
+    {
+      "path": "packages/kailash-ml/pyproject.toml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "83e490f4e11ac8e83feee488903db5c21ab38b7dff7c82fec634f1676942e9c6"
+    },
+    {
+      "path": "packages/kailash-ml/src/kailash_ml/interop.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "3e5304c0ab3bfc63da219ffd7209955f7babcfd0ce7d530150435cbbf6467acf"
+    },
+    {
+      "path": "packages/kailash-ml/tests/unit/test_interop.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "a966025eff0c769a8d3fd6d60e4bea264a4e930c29394699e39b813028cce8bd"
+    },
+    {
+      "path": "packages/kailash-nexus/src/nexus/transports/websocket.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "397f23a8608959e3c2ecc5b90393068623ac647d3f7150302f52f9e0bd08a84c"
+    },
+    {
+      "path": "packages/kailash-nexus/tests/unit/transports/test_websocket.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "0f66eb73f894d8cda43ab2062de0a08578725ffb154689aa5fec82473489590a"
+    },
+    {
+      "path": "pyproject.toml",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "76ef91b6555cd4ee37aaa3bcd721ca9cb2ad78f4e166e75e33c479183d3dfa40"
+    },
+    {
+      "path": "specs/dataflow-cache.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "51b2933a0424c6e23ac553f4fd5c835d0d342872cde632db9432a78b88b6d2ff"
+    },
+    {
+      "path": "specs/dataflow-core.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "7e9c54b7d98005c9be309186341634e7b3c6dc4fba40dc78a7feddd43eb8bf24"
+    },
+    {
+      "path": "specs/dataflow-express.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "d160c6cbd23845575db39fec06d4f0612634a0f1bb67796d8dc0b70af7faf355"
+    },
+    {
+      "path": "specs/dataflow-models.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "86bfce5d044da6dd640eeb357c51673e15efbf5e5f5ca01550756bff051c9caa"
+    },
+    {
+      "path": "specs/middleware.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "28841795f38b6de379ac360e141d2433de5167f9e2b40d29ca2f223b849c5812"
+    },
+    {
+      "path": "specs/trust-crypto.md",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "9c5e4d1098c5f4dc3db836b738a6c8853b05d15d8cf508da28087b2ea17865d5"
+    },
+    {
+      "path": "src/kailash/access_control.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "4f6183c8d24f2ca2067e066148cf88799e72d185ed60c42ee96bdcc811435c60"
+    },
+    {
+      "path": "src/kailash/access_control/managers.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "9ab39b0a8fe9b93983f63a5ea2757a94f02bd7c74162df76d934bd11c3ebbbf0"
+    },
+    {
+      "path": "src/kailash/access_control/rule_evaluators.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "d1cc607be1809fe3971dc15972fc35581fcf22ceed881143572b31bf3e1124d0"
+    },
+    {
+      "path": "src/kailash/api/workflow_api.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "f530ee8663566ada127edca890458e303a356ab54592ccf593026d0138f95d05"
+    },
+    {
+      "path": "src/kailash/channels/api_channel.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "87762349a425d6f162564cfc4fe40dc282daac87e9a7577fb533b17974c74951"
+    },
+    {
+      "path": "src/kailash/gateway/enhanced_gateway.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "41a3c090b39dbfef0651f79638db89dc5f7dc9e68ef1272e859be8583bb1f9f9"
+    },
+    {
+      "path": "src/kailash/middleware/communication/realtime.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "81db77cba81dd258bf5f6d32c048f466c737b2c78368373e22fe8fc8d61dd71d"
+    },
+    {
+      "path": "src/kailash/middleware/core/agent_ui.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "708cb8fbbc32e613e766f3bbbe11bb6d44b5e14854776a60550f195482704f1b"
+    },
+    {
+      "path": "src/kailash/middleware/gateway/durable_request.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "8428dc2e4afe3aa224608bdc41c37ae7d812a39a16984c3dfaf40dd9512ea575"
+    },
+    {
+      "path": "src/kailash/nodes/data/async_sql.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "a142886ab41a07a0c4a18ddf213ddad1289fae9487ca2aeaceed5d6441e0a743"
+    },
+    {
+      "path": "src/kailash/runtime/async_local.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "947eaff439e4e4e027b8fb3461a3d6c3f50dcc762adf308d9b6affef49a7093e"
+    },
+    {
+      "path": "src/kailash/runtime/hierarchical_switch_executor.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "fdf64efbf82ca3d87e5285ee98b6411f5084a3d86acf2ffa6f70ddc98b859029"
+    },
+    {
+      "path": "src/kailash/runtime/local.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "8b77cd7acce8eaef249cc5e27c3686d15e3fb526a0079bc68975c2e37ce21f32"
+    },
+    {
+      "path": "src/kailash/servers/enterprise_workflow_server.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "77938c161eb00541d625ecd9d64b1c4ca802edc991b9749051b662c89d7b01fb"
+    },
+    {
+      "path": "src/kailash/servers/workflow_server.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "0a1b77a97937ed3735af2fc9ea8099a53fa5efed7520bc62659db7c21c865f58"
+    },
+    {
+      "path": "src/kailash/trust/constraints/builtin.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "c69913698b709f9b64b973805dd45f8e4456f55d6613702bb968cfa0407ff39d"
+    },
+    {
+      "path": "src/kailash/trust/constraints/dimension.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "2e46507eb47f7760e160643ca93e2aae1b04a78ea9dfc051f8c003901a73ba19"
+    },
+    {
+      "path": "src/kailash/trust/constraints/evaluator.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "17ce9bb36435c7509fb79d57ec510daef11e97318154dd85ad1a7e7bb51c5296"
+    },
+    {
+      "path": "src/kailash/trust/governance/policy_engine.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "ca8da0bc84f7f2ea16c558b191755236357434045c3350597de7f16c9f4e3919"
+    },
+    {
+      "path": "tests/regression/test_async_sql_type_diagnostic_privacy.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "6c570c9ed91600d1e6aa6c692935677bdc1b8ccc376a9c06f4d7ae45f307ad03"
+    },
+    {
+      "path": "tests/regression/test_issue_2025_unauthenticated_proxy_route.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "25bcc211209ddd1a27ea724604fafa5215d70e89d609832fecd8abb0af2912fe"
+    },
+    {
+      "path": "tests/regression/test_issue_2088_sink_side_log_sanitizing.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "d6dcd1d837378cf65973041a839fc65dba885a7b483bcc7f66d950f895aef91f"
+    },
+    {
+      "path": "tests/regression/test_issue_2108_api_key_verification.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "3701e3073c8841aecfd4e5a11394ff42abecd0b23f75bb860ddd0911aebc8b6c"
+    },
+    {
+      "path": "tests/regression/test_issue_2145_session_ownership.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "7c02b4a2296fd4535f61b307caf38c710891c0fe7209a3ab60524c56dcf1a121"
+    },
+    {
+      "path": "tests/regression/test_issue_713_module_import_then_async_ddl.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "013adf9940f5e43c03f29927918b1baee2ffc80b251bc740483b09a303ea622c"
+    },
+    {
+      "path": "tests/regression/test_issue_713_subsystems_follow_runtime_swap.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "6d7e16dd0d1ad75d60fa1c62177c63ff847f009a778d43e15d3f11e6e357f3aa"
+    },
+    {
+      "path": "tests/regression/test_issue_750_express_list_cache_invalidation.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "f1a41f9ef224dd8eddd6695fed005d3b1445cd06e21394df15ef945257d4abff"
+    },
+    {
+      "path": "tests/regression/test_issue_workflow_parameters_envelope_parity.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "6bb9df13dfa8537114cb3bfb2a847bd18729e692565f1d666cd392f423bc434e"
+    },
+    {
+      "path": "tests/trust/integration/test_lifecycle.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "9a8bc838499fd6f8ddaf3ed105817e32d9818a6ad07a6e40dc156a4ca162f9e5"
+    },
+    {
+      "path": "tests/trust/plane/integration/test_compliance_export.py",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "3f1a43ec8d4c910e8fb5f50e21c22a1d0593e659fa7633d9c96877367748a151"
+    },
+    {
+      "path": "uv.lock",
+      "status": " M",
+      "matches_dev": false,
+      "dev_exists": true,
+      "sha256": "8a5b360f3a754c12127e301439e3bc16ee32f25de58812aac604d5fa674da287"
+    },
+    {
+      "path": "packages/kailash-dataflow/src/dataflow/core/schema_inspection.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "d771a1eeb30e48bff08d47f87371e2e95e67ace890cb819db611a1126bc0166c"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/integration/test_cache_prefix_forwarding.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "83092b7094520dd9c81cf7c7fe608a710ab90c51df9676566aba7ec7faa655fd"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/integration/test_inspector_catalog_backends.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "b4338e04b24d031d5d222d6eac6e4b01b401640160f2924f0cc0226c7aebda21"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/integration/test_mongodb_failed_connect_cleanup.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "ad34db675081434e752eebec6918ba86f3f89eb341a271559fcb49e003663691"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/integration/test_mongodb_health_failure_contract.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "f218f55e0c2e17a343ef7b942f04dc5820180e6737cf2bf72e6fcead0d09daf1"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/integration/test_redis_concurrent_close.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "d179a42a465be8a2aa0ee7a72896414b1bb37b007c5e890d746b2ac9c6fa525f"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/integration/test_redis_namespace_clear.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "6a99b4bca8ab063adbaf6210dfeeba9ef100f33d88031cefaf525e57e788932f"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/integration/test_redis_url_authentication.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "414d29468f3979a4e3ec4943e351ba634e68e1d7dc2709e6e176bfa94f72f05f"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_circuit_breaker_half_open_deadline.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "a8adf2519bfaec28f5bda77a03afab1ce8c6a933adaa1af8dfaaa882fcb125fe"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_displaced_sql_cleanup_retry.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "4afd570e199642779300a88ee09ed062c68b9abdc8b2de3def7717eb8df7cbb0"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_generated_model_value_validation.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "88a9a13179cb0621b3affc460b687dd34d651a027cae833f4179b94035f749a4"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_generic_json_field_roundtrip.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "e740c14d400c3fbf1025553f3752d3ec9260ac9bc78f3b945bb726ed6879c629"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_inspector_physical_truth.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "3e4563c07ca2b161d2ecf7fab0efb3a8b6c771f0c56ce1569fe5c8ec8067fdf1"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_optional_schema_nullability.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "047fb573b4eca69d468481e2c71514763ae7cff5429da3fb2b3d09265e33d9e0"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_public_workflow_test_utilities.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "41cf1bea2ea4ed556b9db4504c4a49a153eb4d91a8ced05b466b4c1c2220080b"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_retry_config_snapshot.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "91816679d263b507b4900f8f7d3f861e2dd8666ae3e44ff84c2efb7df5196d33"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_schema_inspection_cleanup_ownership.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "3f084d2d28c63d973a129775dada424612fd5d753148e0216c65ce8a14b7a107"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/regression/test_trust_column_metadata.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "59101c801d3891a7c2acca9dae2c375f7fb2cf21d5f81569a44266eff10094e0"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/adapters/test_mongodb_diagnostic_siblings.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "35265f7b53f2fb50d3f2df43d453a2471951ab1ce5043edd9315e2da8250a0a5"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/adapters/test_mongodb_lifecycle.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "9f3de7de62c7f6d01ead577791282deb2ec1ab5ccc1d536fd63aa07051d23b52"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/cache/test_auto_detection_diagnostics.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "54ed78c91f6e480b4a5224c862091240cad839bcf5db348032225ad50a01b308"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/cache/test_redis_diagnostic_privacy.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "ccdabe462fc5b7e9f9af58a9f8bed797d604fb3801d4b6ff720a9414050dd1ff"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/cache/test_redis_owned_close.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "915f2524895891f6b4982f2656f0eb42a858ecec9e48e27034b9b5f396e1ee57"
+    },
+    {
+      "path": "packages/kailash-dataflow/tests/unit/cache/test_redis_url_config.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "334edf0bb5d92528558cd63078c6b22d2f262b5e9855dcead698497f90c99ca7"
+    },
+    {
+      "path": "packages/kailash-kaizen/tests/unit/trust/test_ci_validation_boundaries.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "977f579f12b2846fe20cc1740ba10a9b4edc02aa1e5676cc9222c7b6a8d124eb"
+    },
+    {
+      "path": "packages/kailash-nexus/tests/regression/test_websocket_diagnostic_privacy.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "bfc04a53fae7464b309610363f6cb46202470d5f7fc0d65dd791ce4e5bf80f61"
+    },
+    {
+      "path": "src/kailash/utils/async_close.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "7334ca73d03bd49c3a9e5380701393abf6596ad2d24799613b0e13bf86b12572"
+    },
+    {
+      "path": "src/kailash/utils/log_identity.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "543fc9635b5f91014ae0fcb07a0ae12039e7e528f4a3a66a955c8842b00f23db"
+    },
+    {
+      "path": "tests/regression/test_agent_ui_execution_resource_ownership.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "bd94307d8cfa60035b754f9e9b4d7c1f8ef37111eb664ed1ba3cb850b78cf9b1"
+    },
+    {
+      "path": "tests/regression/test_agent_ui_public_cancellation.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "7ea209506e238ef4ec099f903343b058184fb6552f56daf55841aa20d403ee0d"
+    },
+    {
+      "path": "tests/regression/test_current_codeql_diagnostic_sinks.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "d557b97999a24013d1ec180036bdc2c294afeb65dacd4ba44d1aefa544ae855a"
+    },
+    {
+      "path": "tests/regression/test_realtime_webhook_signature_bytes.py",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "5501d5e277832d3561f01873a160f377f8893a29d04832cada776b2648373207"
+    },
+    {
+      "path": "workspaces/issue-1720-llm-consolidation/04-validate/csq16-cache-key-format-decision.md",
+      "status": "??",
+      "matches_dev": false,
+      "dev_exists": false,
+      "sha256": "708d8754fa051d72da88ff420c27cb9df0e76581185fd836ac1881bc54e03f09"
+    }
+  ]
+}
