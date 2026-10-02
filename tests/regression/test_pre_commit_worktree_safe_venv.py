@@ -104,6 +104,27 @@ def test_trestle_pytest_routing_preserves_arguments_and_failure(tmp_path):
         text=True,
     )
     assert result.returncode == 23, result.stderr
+    expected_extras = [
+        "dev",
+        "server",
+        "http-client",
+        "db-postgres",
+        "db-mysql",
+        "db-sqlite",
+        "redis",
+        "trust",
+        "auth",
+        "auth-azure",
+        "monitoring",
+        "telemetry",
+        "scheduler",
+        "mcp",
+        "data",
+        "rfc3161",
+        "dataflow",
+        "nexus",
+        "kaizen",
+    ]
     assert json.loads(receipt.read_text()) == [
         "run",
         "--",
@@ -114,10 +135,7 @@ def test_trestle_pytest_routing_preserves_arguments_and_failure(tmp_path):
         "uv",
         "run",
         "--frozen",
-        "--extra",
-        "dev",
-        "--extra",
-        "all",
+        *[argument for extra in expected_extras for argument in ("--extra", extra)],
         "python",
         *arguments,
     ]
