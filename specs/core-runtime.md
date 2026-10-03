@@ -1058,6 +1058,8 @@ When the primary node fails (after retry exhaustion), the runtime attempts execu
 
 `PersistentDLQ` -- SQLite-backed dead letter queue with crash-safe storage.
 
+`close()` and context exit release the owned SQLite connection idempotently and suppress the unclosed-owner warning only after successful disposal. Constructor setup failure closes an acquired connection before re-raising the original error. Sources: `src/kailash/workflow/dlq.py:108-132`, `src/kailash/workflow/dlq.py:396-429`.
+
 **Configuration**:
 
 - Path: `KAILASH_DLQ_PATH` env var, or system temp directory, or explicit `dlq_path` parameter

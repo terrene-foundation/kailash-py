@@ -1,30 +1,16 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
-"""Regression tests for issue #871 — SQLite job-store TOCTOU + WAL/SHM mode.
+"""SQLite job-store mode, static-symlink refusal, and writer-mode regressions.
 
-Two HIGH findings closed by this set:
-
-1. **TOCTOU on chmod.** Prior code used ``open(path, "a").close()`` followed
-   by ``os.chmod(path, 0o600)``. A parent-directory-controlling attacker
-   could swap the target between the two calls.
-   Fix: ``os.open(path, O_RDWR|O_CREAT|O_NOFOLLOW, 0o600)`` — atomic + symlink
-   refusal in one syscall.
-
-2. **WAL/SHM sidecars world-readable.** SQLAlchemy + SQLite in WAL mode
-   creates ``<db>-wal`` and ``<db>-shm`` at first write under default umask
-   (commonly ``0o644``). The sidecars carry the same job-data bytes the
-   main DB protects via ``0o600``.
-   Fix: pre-init WAL mode + chmod sidecars before APScheduler ever opens
-   the file.
-
-Per ``rules/testing.md`` § "Regression Testing" + § "Behavioral Regression
-Tests Over Source-Grep", these tests CALL the function and assert
-raise/return + actual filesystem mode bits — not grep source for literal
-substrings.
+These behavioral checks inspect real POSIX modes and a pre-existing symlink.
+They cover initial descriptor creation/tightening and live WAL/SHM modes after
+bootstrap closure. They do not simulate concurrent path replacement or prove
+a complete TOCTOU boundary; initialization assumes a trusted path lifetime.
 """
 
 from __future__ import annotations
 
+import asyncio
 import errno
 import os
 import stat
@@ -58,46 +44,38 @@ def test_secure_init_creates_main_db_with_0o600(tmp_path: Path) -> None:
 
     assert db.exists(), "main DB file MUST exist after secure init"
     mode = stat.S_IMODE(db.stat().st_mode)
-    assert (
-        mode == 0o600
-    ), f"main DB mode is 0o{mode:o}, expected 0o600 — TOCTOU window is open"
+    assert mode == 0o600, f"main DB mode is 0o{mode:o}, expected 0o600"
 
 
 @pytest.mark.regression
 def test_secure_init_creates_wal_shm_sidecars_with_0o600(tmp_path: Path) -> None:
-    """WAL + SHM sidecars are created and chmod'd to 0o600 before APScheduler
-    opens the file. Closes the world-readable-job-data leak on multi-user hosts.
-    """
+    """A subsequent real writer recreates private WAL and SHM sidecars."""
     from kailash.runtime.scheduler import _secure_init_sqlite_jobstore
 
     db = tmp_path / "schedules.db"
     _secure_init_sqlite_jobstore(str(db))
 
-    # WAL pre-init forces -wal + -shm into existence; both MUST be 0o600.
-    wal = Path(f"{db}-wal")
-    shm = Path(f"{db}-shm")
-    assert wal.exists(), "WAL sidecar MUST exist after WAL pre-init"
-    assert shm.exists(), "SHM sidecar MUST exist after WAL pre-init"
+    # Closing the bootstrap connection can checkpoint and remove sidecars.
+    # Verify the next real writer recreates them with the same private mode.
+    import sqlite3
+    from contextlib import closing
 
-    wal_mode = stat.S_IMODE(wal.stat().st_mode)
-    shm_mode = stat.S_IMODE(shm.stat().st_mode)
-    assert wal_mode == 0o600, (
-        f"WAL sidecar mode is 0o{wal_mode:o}, expected 0o600 — job-data bytes "
-        f"are world-readable on multi-user hosts"
-    )
-    assert shm_mode == 0o600, (
-        f"SHM sidecar mode is 0o{shm_mode:o}, expected 0o600 — job-data bytes "
-        f"are world-readable on multi-user hosts"
-    )
+    with closing(sqlite3.connect(db)) as connection:
+        connection.execute("INSERT INTO _kailash_secure_init VALUES (1)")
+        connection.commit()
+        wal = Path(f"{db}-wal")
+        shm = Path(f"{db}-shm")
+        assert wal.exists(), "Live WAL writer must have a sidecar"
+        assert shm.exists(), "Live WAL writer must have shared memory"
+        assert stat.S_IMODE(wal.stat().st_mode) == 0o600
+        assert stat.S_IMODE(shm.stat().st_mode) == 0o600
 
 
 @pytest.mark.regression
 def test_secure_init_refuses_symlinked_path(tmp_path: Path) -> None:
     """``O_NOFOLLOW`` MUST refuse to follow a symlink at the job-store path.
 
-    Verifies that a parent-directory-controlling attacker cannot swap the
-    target file between create and chmod — the very TOCTOU surface the
-    fix closes.
+    This tests an existing symlink, not a concurrent path replacement.
     """
     from kailash.runtime.scheduler import _secure_init_sqlite_jobstore
 
@@ -145,7 +123,7 @@ def test_secure_init_tightens_existing_loose_permissions(tmp_path: Path) -> None
 
 
 # ---------------------------------------------------------------------------
-# Tier 2 — full WorkflowScheduler lifecycle: instantiate, fire one job,
+# Tier 2 — full WorkflowScheduler lifecycle: instantiate, start the job store,
 # verify all three files (main DB + WAL + SHM) are 0o600.
 # Requires APScheduler + asyncio loop.
 # ---------------------------------------------------------------------------
@@ -158,18 +136,14 @@ apscheduler = pytest.importorskip(
 
 
 @pytest.mark.regression
-def test_workflow_scheduler_jobstore_files_have_0o600_after_init(
+@pytest.mark.asyncio
+async def test_workflow_scheduler_jobstore_files_have_0o600_after_start(
     tmp_path: Path,
 ) -> None:
-    """End-to-end through the public ``WorkflowScheduler`` constructor:
-    verify all three job-store files (main DB, WAL, SHM) ship at mode 0o600
-    BEFORE any job is added.
+    """The real scheduler writer inherits private modes after bootstrap closes.
 
-    This is the canonical user-flow regression — a deployment scheduling
-    real workflows on a multi-user host MUST NOT leak job-data bytes via
-    world-readable WAL/SHM sidecars. The pre-init runs at ``__init__``
-    time, so any file APScheduler subsequently writes inherits 0o600 from
-    the file already present on disk.
+    Starting APScheduler opens its SQLAlchemy job store and creates the job
+    table. Its live WAL/SHM files must remain private before jobs are added.
     """
     from kailash.runtime.scheduler import WorkflowScheduler
 
@@ -181,12 +155,12 @@ def test_workflow_scheduler_jobstore_files_have_0o600_after_init(
         main_mode = stat.S_IMODE(db_path.stat().st_mode)
         assert main_mode == 0o600, f"main DB mode is 0o{main_mode:o}, expected 0o600"
 
+        scheduler.start()
         for suffix in ("-wal", "-shm"):
             sidecar = Path(f"{db_path}{suffix}")
-            assert sidecar.exists(), (
-                f"{sidecar.name} MUST be pre-created by secure init so its "
-                f"permissions are tightened BEFORE APScheduler writes job data"
-            )
+            assert (
+                sidecar.exists()
+            ), f"{sidecar.name} must exist for the live scheduler writer"
             mode = stat.S_IMODE(sidecar.stat().st_mode)
             assert mode == 0o600, (
                 f"{sidecar.name} mode is 0o{mode:o}, expected 0o600 — "
@@ -194,6 +168,7 @@ def test_workflow_scheduler_jobstore_files_have_0o600_after_init(
             )
     finally:
         scheduler.shutdown(wait=False)
+        await asyncio.sleep(0)
 
 
 @pytest.mark.regression
