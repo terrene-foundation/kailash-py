@@ -79,3 +79,46 @@ Runtime audit proposes R1 access, R2 strict runtime, R3 SQLite ownership, R4 HTT
 | S4 Redis | Worker running | Isolated real Redis provisioning; no shared service changes |
 
 The separate headless adversarial review returned concrete findings but its final attempt was interrupted by the CLI safety filter. No clean verdict is counted from that process. The permitted follow-up is static review of repaired source and existing test assertions; no retry of the blocked action.
+
+- New disjoint lanes prepared: `fix/csq16-trust-sinks-recovery` owns direct S3 executor restrictions; `fix/csq16-cache-identity-recovery` owns S5 codec/producers/invalidation excluding engine; `fix/csq16-metadata-recovery` owns R13 manifests/lock then R11 categorical interop. All source/spec slices supplied, Trestle mandatory, reports returned via saved final files. Storage owns S7 types, engine and nodes.
+
+
+## Resumed execution receipt — 2026-10-03
+
+The live dev checkout is clean at `6e3e81119f527130113137af93dfccce7295f734`, which includes the ledger, generated chart and opt-in Trestle hook fixes. Production recovery branches are still awaiting final review/integration; branch commits alone do not establish landing. Main promotion PR #2229 remains separate.
+
+Delivered reports were read, not inferred from process status:
+
+| Lane | Delivered work | Current gate |
+| --- | --- | --- |
+| R3 runtime | `4d4327f3f`; 195 focused real SQLite/PostgreSQL tests | Union review with SQL dependency |
+| R3 SQL | `09b70d104`; 251 tests | Cleanup privacy follow-up resumed; 116 tests passed; manifest floor pending |
+| R4 HTTP | `a96673341`; 99 tests | Never-served executor/proxy resource fix remains uncommitted and is being verified |
+| R5 / R10 | `b408754b2`, `9e61dd24e`; 70 tests | Shared async_close dependency and independent review; broader MCP registration/runtime warnings remain findings |
+| R8 / R9 | `c173af79e`, `310382b9`; 209 and 122 tests | Independent correctness and security rounds |
+| R14 retry | `59d0b3d3b`; 195 tests, 18-failure negative control | Independent review |
+| S4 Redis | `77b90d273`; 95 tests | Cache identity/invalidation remains a separate open S5 obligation |
+| S7a types | `dcafe2a68`; 189 tests | Union review with R2 dependency |
+
+Prior cache-identity, trust-sink and metadata process logs explicitly returned `turn.failed` with `You’ve hit your usage limit`. They are not delivered implementations or clean reviews. The old HTTP/SQL follow-up processes also stopped; their existing partial edits and control scripts are preserved. SQL cleanup controls recorded `source_hits=19 intended_test_failures=16`; the resumed focused suite reports `116 passed`.
+
+Current native ownership: `schema_recovery` owns parser plus schema backend dispatch; `runtime_logging` owns hierarchical executor plus adjacent analyzer diagnostics; `metadata_recovery` owns manifests/lock. Root owns SQL/HTTP interrupted follow-up reconciliation and integration. Each lane uses an existing isolated sibling worktree and unpinned Trestle. No original dirty worktree has been removed.
+
+Coordination message queued to the user-confirmed independent session `01a0e705-6996-7092-95cd-d751936bcc09`, receipt `01a0ff28-653e-7e01-9e29-23d2341c569f`. Message repeats sweep, ledger/chart, zero-loss reaping and Trestle instructions. Queued is not acknowledged; no peer file ownership has been granted.
+
+Burndown verification on this continuation returned `burndown --check: block in csq16-recovery-burndown.md is current.` The frozen worktree obligations remain In progress; no owner acceptance is inferred from the delivered commits.
+
+
+### Continued integration and review findings
+
+- Core union branch `fix/csq16-core-integration` assembled the R1/R2/R3/R6/R14 commits plus dependency recovery. Its first union regression run returned `477 passed`; this is coverage for the named changed regression files, not a whole-repo or backend-parity claim.
+- SQL cleanup privacy committed `0ddb53a29`; HTTP terminal resource cleanup committed `fdc8031da` after `95 passed` and three source-reached omission controls. Neither is landed on dev yet.
+- Schema dispatch `a76969b00` and canonical engine URL selection `c378f5efc` delivered. Final focused run `305 passed, 4 skipped`; skipped cases need a Redis executable. Original-method control `39 failed, 49 passed` discriminated every selector group. True MySQL schema creation/verification parity remains a separately bounded S1c obligation; preserving fallback policy is not parity proof.
+- Dependency recovery `52ddf99b3` updates supported driver/server floors, trust timezone data, ML development HTTP client and Nexus pytest configuration. Root also recovered DataFlow's separate sqlite/dev driver floor in `3d8af3a3e`. Local offline metadata resolution took 126 ms; remote offline resolution had an empty-cache refusal and is not counted as verification. Behavioral old/new dependency controls and normal remote commit hooks passed.
+- Retry review found completed operations replayed on final observer failure, unstarted coordination denials counted as attempts, and stale backoff budget after observer work. Follow-up `bcae9ed58` reports `212 passed`; independent final review remains required. Failed-operation observer provenance is a further review question, not yet a reproduced finding.
+- Source security review found native async wrappers and the legacy validation decorator reconstructing terminal exceptions. Root fixed them in `9d8ea6f5c`: native control ran `9 failed, 3 passed` before repair; legacy decorator control ran `8 failed, 12 passed`; combined focused green `150 passed`. A first decorator probe imported the shadowing package and failed collection; corrected file-backed legacy loading supplied the actual negative evidence.
+- Identifier normalization erased credential delimiters before redaction. Root's URL/JSON credential controls ran `9 failed, 1 passed` before the shared-helper correction; focused corrected suite `78 passed`. Arbitrary unlabeled data embedded in short names remains outside recognized-credential masking claims.
+- R1's exported legacy/composition manager and controlled-runtime paths received two static security passes without additional findings. Whole-domain R1 stays open: public EnhancedAccessControlManager omits scope/expiry and allows before later DENY; legacy decorators skip missing identities and execute denied redirects. PACT operating-spec implementation is assigned in `csq16-access-siblings`; a new native PACT spawn was refused by thread capacity, so the existing generic worker loads the verified Read/Write/Edit/Bash specialist specification.
+- SQL automatic health/pool/analytics diagnostics still emitted opaque exception text outside the fixed cleanup sinks. DataFlow specialist owns their complete same-file repair. Nexus specialist owns recovered server diagnostic sinks in the existing HTTP tree. Root retains integration and shared terminal/identifier helpers. Reviews with findings remain non-clean.
+
+No additional original worktree has been reaped. Technical branch progress and acceptance remain separate; the frozen generated burndown source is unchanged. Main promotion remains separate from these dev recovery landings.
