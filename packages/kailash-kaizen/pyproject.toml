@@ -90,7 +90,7 @@ dependencies = [
     "aiohttp>=3.13.3",          # autonomy/control/transports/http + nodes/ai/semantic_memory
     "PyJWT>=2.8.0",             # security/authentication.py module-scope
     "cryptography>=41.0.0",     # security/encryption.py (AESGCM, PBKDF2HMAC, hashes)
-    "aiosqlite>=0.19.0",        # memory/persistent_tiers.py module-scope (multi-tier memory); pure-Python over stdlib sqlite3
+    "aiosqlite>=0.22.1",        # memory/persistent_tiers.py module-scope (multi-tier memory); pure-Python over stdlib sqlite3
 ]
 requires-python = ">=3.11"
 
@@ -125,7 +125,7 @@ providers-http = [
 # in-tree FastAPI surfaces here are auxiliary and behind this extra.
 server = [
     "fastapi>=0.104.0",
-    "uvicorn[standard]>=0.24.0",
+    "uvicorn[standard]>=0.52.4",
 ]
 
 # Observability — Prometheus metrics + OpenTelemetry tracing + structlog.

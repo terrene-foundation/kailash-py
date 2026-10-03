@@ -96,11 +96,11 @@ auth-oauth = [
 ]
 server = [
     "fastapi>=0.115.12",
-    "uvicorn[standard]>=0.31.0",
+    "uvicorn[standard]>=0.52.4",
 ]
 platform = [
     "fastapi>=0.115.12",
-    "uvicorn[standard]>=0.31.0",
+    "uvicorn[standard]>=0.52.4",
 ]
 # Operational monitoring (real Prometheus histogram for tool/resource/prompt
 # call duration — #1708 W2). Guarded via try/except ImportError in
