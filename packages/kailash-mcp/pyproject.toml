@@ -115,6 +115,7 @@ full = [
     "kailash-mcp[http,sse,websocket,auth-jwt,auth-oauth,server,platform,monitoring]",
 ]
 dev = [
+    "httpx2>=2.13.1",
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
     "pytest-cov>=4.0",
