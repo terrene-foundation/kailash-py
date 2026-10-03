@@ -79,3 +79,31 @@ Runtime audit proposes R1 access, R2 strict runtime, R3 SQLite ownership, R4 HTT
 | S4 Redis | Worker running | Isolated real Redis provisioning; no shared service changes |
 
 The separate headless adversarial review returned concrete findings but its final attempt was interrupted by the CLI safety filter. No clean verdict is counted from that process. The permitted follow-up is static review of repaired source and existing test assertions; no retry of the blocked action.
+
+- New disjoint lanes prepared: `fix/csq16-trust-sinks-recovery` owns direct S3 executor restrictions; `fix/csq16-cache-identity-recovery` owns S5 codec/producers/invalidation excluding engine; `fix/csq16-metadata-recovery` owns R13 manifests/lock then R11 categorical interop. All source/spec slices supplied, Trestle mandatory, reports returned via saved final files. Storage owns S7 types, engine and nodes.
+
+
+## Resumed execution receipt — 2026-10-03
+
+The live dev checkout is clean at `6e3e81119f527130113137af93dfccce7295f734`, which includes the ledger, generated chart and opt-in Trestle hook fixes. Production recovery branches are still awaiting final review/integration; branch commits alone do not establish landing. Main promotion PR #2229 remains separate.
+
+Delivered reports were read, not inferred from process status:
+
+| Lane | Delivered work | Current gate |
+| --- | --- | --- |
+| R3 runtime | `4d4327f3f`; 195 focused real SQLite/PostgreSQL tests | Union review with SQL dependency |
+| R3 SQL | `09b70d104`; 251 tests | Cleanup privacy follow-up resumed; 116 tests passed; manifest floor pending |
+| R4 HTTP | `a96673341`; 99 tests | Never-served executor/proxy resource fix remains uncommitted and is being verified |
+| R5 / R10 | `b408754b2`, `9e61dd24e`; 70 tests | Shared async_close dependency and independent review; broader MCP registration/runtime warnings remain findings |
+| R8 / R9 | `c173af79e`, `310382b9`; 209 and 122 tests | Independent correctness and security rounds |
+| R14 retry | `59d0b3d3b`; 195 tests, 18-failure negative control | Independent review |
+| S4 Redis | `77b90d273`; 95 tests | Cache identity/invalidation remains a separate open S5 obligation |
+| S7a types | `dcafe2a68`; 189 tests | Union review with R2 dependency |
+
+Prior cache-identity, trust-sink and metadata process logs explicitly returned `turn.failed` with `You’ve hit your usage limit`. They are not delivered implementations or clean reviews. The old HTTP/SQL follow-up processes also stopped; their existing partial edits and control scripts are preserved. SQL cleanup controls recorded `source_hits=19 intended_test_failures=16`; the resumed focused suite reports `116 passed`.
+
+Current native ownership: `schema_recovery` owns parser plus schema backend dispatch; `runtime_logging` owns hierarchical executor plus adjacent analyzer diagnostics; `metadata_recovery` owns manifests/lock. Root owns SQL/HTTP interrupted follow-up reconciliation and integration. Each lane uses an existing isolated sibling worktree and unpinned Trestle. No original dirty worktree has been removed.
+
+Coordination message queued to the user-confirmed independent session `01a0e705-6996-7092-95cd-d751936bcc09`, receipt `01a0ff28-653e-7e01-9e29-23d2341c569f`. Message repeats sweep, ledger/chart, zero-loss reaping and Trestle instructions. Queued is not acknowledged; no peer file ownership has been granted.
+
+Burndown verification on this continuation returned `burndown --check: block in csq16-recovery-burndown.md is current.` The frozen worktree obligations remain In progress; no owner acceptance is inferred from the delivered commits.
