@@ -2215,8 +2215,8 @@ security = [
 requires-dist = [
     { name = "aiokafka", marker = "extra == 'streaming'", specifier = ">=0.11" },
     { name = "aiomysql", marker = "extra == 'mysql'", specifier = ">=0.2.0" },
-    { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.19.0" },
-    { name = "aiosqlite", marker = "extra == 'sqlite'", specifier = ">=0.19.0" },
+    { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.22.1" },
+    { name = "aiosqlite", marker = "extra == 'sqlite'", specifier = ">=0.22.1" },
     { name = "asyncpg", specifier = ">=0.28.0" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
     { name = "boto3", marker = "extra == 'cloud'", specifier = ">=1.35" },
