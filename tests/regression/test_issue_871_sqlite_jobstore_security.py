@@ -1,26 +1,11 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
-"""Regression tests for issue #871 — SQLite job-store TOCTOU + WAL/SHM mode.
+"""SQLite job-store mode, static-symlink refusal, and writer-mode regressions.
 
-Two HIGH findings closed by this set:
-
-1. **TOCTOU on chmod.** Prior code used ``open(path, "a").close()`` followed
-   by ``os.chmod(path, 0o600)``. A parent-directory-controlling attacker
-   could swap the target between the two calls.
-   Fix: ``os.open(path, O_RDWR|O_CREAT|O_NOFOLLOW, 0o600)`` — atomic + symlink
-   refusal in one syscall.
-
-2. **WAL/SHM sidecars world-readable.** SQLAlchemy + SQLite in WAL mode
-   creates ``<db>-wal`` and ``<db>-shm`` at first write under default umask
-   (commonly ``0o644``). The sidecars carry the same job-data bytes the
-   main DB protects via ``0o600``.
-   Fix: pre-init WAL mode + chmod sidecars before APScheduler ever opens
-   the file.
-
-Per ``rules/testing.md`` § "Regression Testing" + § "Behavioral Regression
-Tests Over Source-Grep", these tests CALL the function and assert
-raise/return + actual filesystem mode bits — not grep source for literal
-substrings.
+These behavioral checks inspect real POSIX modes and a pre-existing symlink.
+They cover initial descriptor creation/tightening and live WAL/SHM modes after
+bootstrap closure. They do not simulate concurrent path replacement or prove
+a complete TOCTOU boundary; initialization assumes a trusted path lifetime.
 """
 
 from __future__ import annotations
@@ -59,16 +44,12 @@ def test_secure_init_creates_main_db_with_0o600(tmp_path: Path) -> None:
 
     assert db.exists(), "main DB file MUST exist after secure init"
     mode = stat.S_IMODE(db.stat().st_mode)
-    assert (
-        mode == 0o600
-    ), f"main DB mode is 0o{mode:o}, expected 0o600 — TOCTOU window is open"
+    assert mode == 0o600, f"main DB mode is 0o{mode:o}, expected 0o600"
 
 
 @pytest.mark.regression
 def test_secure_init_creates_wal_shm_sidecars_with_0o600(tmp_path: Path) -> None:
-    """WAL + SHM sidecars are created and chmod'd to 0o600 before APScheduler
-    opens the file. Closes the world-readable-job-data leak on multi-user hosts.
-    """
+    """A subsequent real writer recreates private WAL and SHM sidecars."""
     from kailash.runtime.scheduler import _secure_init_sqlite_jobstore
 
     db = tmp_path / "schedules.db"
@@ -94,9 +75,7 @@ def test_secure_init_creates_wal_shm_sidecars_with_0o600(tmp_path: Path) -> None
 def test_secure_init_refuses_symlinked_path(tmp_path: Path) -> None:
     """``O_NOFOLLOW`` MUST refuse to follow a symlink at the job-store path.
 
-    Verifies that a parent-directory-controlling attacker cannot swap the
-    target file between create and chmod — the very TOCTOU surface the
-    fix closes.
+    This tests an existing symlink, not a concurrent path replacement.
     """
     from kailash.runtime.scheduler import _secure_init_sqlite_jobstore
 
@@ -144,7 +123,7 @@ def test_secure_init_tightens_existing_loose_permissions(tmp_path: Path) -> None
 
 
 # ---------------------------------------------------------------------------
-# Tier 2 — full WorkflowScheduler lifecycle: instantiate, fire one job,
+# Tier 2 — full WorkflowScheduler lifecycle: instantiate, start the job store,
 # verify all three files (main DB + WAL + SHM) are 0o600.
 # Requires APScheduler + asyncio loop.
 # ---------------------------------------------------------------------------
