@@ -122,3 +122,18 @@ Burndown verification on this continuation returned `burndown --check: block in 
 - SQL automatic health/pool/analytics diagnostics still emitted opaque exception text outside the fixed cleanup sinks. DataFlow specialist owns their complete same-file repair. Nexus specialist owns recovered server diagnostic sinks in the existing HTTP tree. Root retains integration and shared terminal/identifier helpers. Reviews with findings remain non-clean.
 
 No additional original worktree has been reaped. Technical branch progress and acceptance remain separate; the frozen generated burndown source is unchanged. Main promotion remains separate from these dev recovery landings.
+
+### Continued review and repair — 2026-10-03, second checkpoint
+
+Dev is `5003a977da051659c231e38136bc706d85a59be2`; production recovery is still staged on isolated integration branches. The following are delivered receipts, not acceptance or landing claims:
+
+- Failed-attempt observer provenance repaired in `eeb9c565d`, integrated as `a0130bf28`: the original nested-engine control ran four failing cases; the repaired focused suite returned `216 passed`. Non-retriable, backoff, final-attempt and adaptive-strategy observers now retain their provenance. An earlier command used an invalid test path and supplied zero evidence.
+- Traceback filename review reproduced recognized credentials surviving path normalization. The source-reached regression returned `1 failed, 13 passed`; `f92bb8517` masks the original filename before path normalization and the focused suite returned `45 passed`. Arbitrary unlabeled data remains outside recognized-credential masking claims.
+- Enhanced access manager and legacy decorator follow-up `5a6641f78`, integrated as `8ac87857a`, delivered `149 passed`; original-source replay returned `18 failed, 2 passed`. Independent review is active; these tests do not establish a clean security round.
+- Native async review found a terminal failure returning while a sibling could still execute. A dedicated pattern-specialist lane owns registration, cancellation and draining of runtime-owned tasks, including the limits of already-running synchronous workers.
+- SQL review read every call in its 109-call logging inventory and returned two open classes: normal cleanup can disconnect a runtime-borrowed pool, and caller-controlled scalar/identity metadata still bypasses the logging boundary. The DataFlow specialist owns both repairs. The existing 66-test reviewer run does not resolve either new finding.
+- HTTP diagnostic recovery `2f00287e0` plus `301034823` delivered `44 passed`; old-source disclosure controls failed as intended. HTTP resource/diagnostic work remains separately unlanded.
+
+Fresh read-only census: 59 open issues, no exact-label deferred-quality issues, and one open promotion PR. PR #2229 still names `4df93818243fec527590876c0022f6d1f8cacb5a` and its CodeQL check reports `FAILURE`; it is not merge-ready. The forest report classifies all 22 registrations KEEP, with no automatic deletion applied; it measures 7,598,376 KiB and 222,197,396 KiB free. The four original dirty trees are preserved. The chart's frozen obligations remain unchanged and `burndown --check` reports current.
+
+Repeated the authorized peer coordination instructions (sweep, ledger/chart, Trestle and lossless cleanup) to session `01a0e705-6996-7092-95cd-d751936bcc09`, queue receipt `01a0ff50-bf65-73e2-9456-2b01f8485e91`. No acknowledgement has arrived; no peer ownership or completion is inferred.
