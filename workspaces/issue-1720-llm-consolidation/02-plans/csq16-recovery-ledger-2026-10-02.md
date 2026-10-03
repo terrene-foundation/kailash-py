@@ -8,11 +8,15 @@ Baseline dev and origin/dev: `cdcaeac6baf63911d1f43ed99542002bdcd361a1`. The ori
 
 | Lane | Branch | Task set | Agent roster | State |
 | --- | --- | --- | --- | --- |
-| Sweep | fix/csq16-runtime-recovery | All sweep surfaces, refs, forest, deferred-quality, release inventory | /root/recovery_sweep (running) | Sweep delivered; now owns R6 node/logging recovery |
-| Runtime | fix/csq16-access-recovery | Core, runtime, API, CI and non-DataFlow dirty variants; bounded repair decomposition | /root (implementation), /root/runtime_recovery_audit (review) | R1 access recovery tests running |
-| Storage | fix/csq16-storage-recovery | DataFlow engine, adapters, caching and tests across all original trees | /root/storage_recovery_audit (running) | S1 committed b91f949c2; S2 tested, awaiting hook routing |
-| Integration | fix/csq16-recovery-integration | Preservation, union assembly, ledger, generated chart, review, dev landing and zero-loss reaping | /root (running) | Owns ledger and burndown sources |
-| Independent Kailash-Py CLI | Pending current return address | Separate disjoint repair lane after acknowledgement | User-requested teammate (address pending) | No ownership granted until confirmed |
+| Sweep / ledger | fix/csq16-recovery-integration | Sweep, preservation receipts, ledger and generated chart | /root | Fresh sweep landed on dev `3cdb91336`; ledger remains active |
+| Core integration | fix/csq16-core-integration | Assemble reviewed Core/access/SQL/dependency work | /root | Candidate branch; final review repairs in progress |
+| Native task cleanup | fix/csq16-native-task-drain | Owned concurrent tasks and synchronous worker drain | /root/metadata_recovery | `0846ceb32` + `1316b409b` pass 113 tests on Python 3.11 and 3.13; cancellation-waiter and connection cleanup review findings being repaired |
+| Node control boundaries | fix/csq16-node-control-boundaries | Preserve terminal/observer identity through node execution and serialization | /root/runtime_logging | Source-reached 70 failing cases; repaired focused suite 183 passed; commit gates running |
+| SQL / resource pool boundaries | fix/csq16-pool-boundaries | Retry/cap ownership and runtime resource-manager diagnostics | /root/schema_recovery | Earlier SQL fixes integrated; new real SQLite peer-loss and runtime log findings being repaired |
+| Access predicates | fix/csq16-access-siblings and fix/csq16-core-integration | Canonical DENY failure semantics and built-in identity adapters | /root | `488b7070e` plus root comparison follow-up `dbee067f7`; independent final review pending |
+| Independent review | fix/csq16-core-correctness (detached snapshot) | Correctness and security review of frozen candidate | /root/http_diagnostics and cross-lane reviewers | Findings delivered; clean rounds required after repairs |
+| Remaining storage / transport | Existing recovery branches | S1–S8 and R4–R12 follow-through | Orchestrator assigns the next bounded shard | Delivered receipts below do not imply all work is complete |
+| Independent Kailash-Py CLI | Session `01a0e705-6996-7092-95cd-d751936bcc09` | Separate disjoint repair lane after acknowledgement | User-requested teammate | Instructions queued twice; no acknowledgement or ownership |
 
 ## Source preservation and recovery queue
 
@@ -137,3 +141,26 @@ Dev is `5003a977da051659c231e38136bc706d85a59be2`; production recovery is still 
 Fresh read-only census: 59 open issues, no exact-label deferred-quality issues, and one open promotion PR. PR #2229 still names `4df93818243fec527590876c0022f6d1f8cacb5a` and its CodeQL check reports `FAILURE`; it is not merge-ready. The forest report classifies all 22 registrations KEEP, with no automatic deletion applied; it measures 7,598,376 KiB and 222,197,396 KiB free. The four original dirty trees are preserved. The chart's frozen obligations remain unchanged and `burndown --check` reports current.
 
 Repeated the authorized peer coordination instructions (sweep, ledger/chart, Trestle and lossless cleanup) to session `01a0e705-6996-7092-95cd-d751936bcc09`, queue receipt `01a0ff50-bf65-73e2-9456-2b01f8485e91`. No acknowledgement has arrived; no peer ownership or completion is inferred.
+
+Preservation recheck compared every original entry and archive against the saved SHA-256 manifests: all 539 entry hashes and all four archive hashes match. This proves unchanged preserved bytes, not semantic landing. The candidate's second union regression run returned `573 passed`; subsequent ownership/task/predicate changes still require their own final integration checks.
+
+### Cross-layer review checkpoint
+
+- SQL fixes `654020048`, `01a88de94`, `616799396` delivered 101 passing tests and source-reached ownership/privacy/composition controls. The next review reproduced two caller-boundary ownership defects: query/batch retry and adapter-cap eviction each detached a real shared SQLite adapter with two references, after which the peer lost its table. Runtime resource-manager logs also exposed recognized DSN credentials and opaque exception messages. These are active fixes, not deferred work.
+- Native task drain `0846ceb32` initially passed the default interpreter but failed seven first-cancellation assertions on Python 3.11. A bounded trace identified the outer `wait_for` child-task bridge. Minimal follow-up `1316b409b` uses same-task `asyncio.timeout`; both Python 3.11 and 3.13 returned `113 passed`. A speculative exception override was removed. Independent follow-up then reproduced cancellation of the cancellation waiter interrupting worker drain, and repeated caller cancellation interrupting context connection cleanup; both remain active findings.
+- R1 predicate follow-up `488b7070e` delivered 127 dedicated passes, with original-source replay `80 failed, 47 passed`. Root review found incompatible present-subject comparisons still converted errors into false below checked evaluation. Follow-up `dbee067f7` preserves unchecked/missing-subject behavior and custom operator signatures while propagating checked comparison failures: `15 failed, 127 passed` before repair, `366 passed` on the repaired access suite.
+- Cross-layer node review reproduced terminal and observer exceptions becoming `NodeExecutionError`, followed by three executions under an outer retry engine. Python constructor/module diagnostics also retained recognized credential metadata. A dedicated pattern-specialist shard owns the complete transformation/logging boundary sweep, including synchronous bridges and serializers.
+- R13 dependencies have no findings in the delivered declaration reviews. The isolated ledger/integration branch now contains dependency commits `1fca7c602` and `3a767416b`; an isolated behavioral/lock check is running before separate landing. This does not declare the runtime/SQL shards clean.
+
+No original tree is deletion-ready. Frozen review snapshots retain their exact heads while active; implementation uses separate sibling trees. All newer failures above reset the affected review scope's clean-round count.
+
+
+### Dependency landing and first recovered lane reaped — 2026-10-03
+
+Dependency recovery is landed and pushed on dev at `8bd3308b5`. The reviewed lane contains `1fca7c602`, `3a767416b` and `4fa4d4a48`: supported SQLite/Uvicorn floors, timezone data, supported package test clients and Nexus pytest configuration. Two independent correctness/dependency-security rounds checked all six TestClient-owning packages, all nine version/Python support anchors, lock metadata and registry artifact integrity. The final manifest-derived request reported `CORRECTED_NEXUS_CLIENT_PASSED 1.7.0 2.13.1`; the pinned missing-client control fails. The normal commit hooks passed. Only Uvicorn and its required httptools resolution changed; the final three package-client declarations changed metadata only.
+
+The task-owned `csq16-metadata-recovery` worktree and branch were reaped after clean-status, exact-ref and remote patch-equivalence checks. Its single commit `52ddf99b3` is equivalent to the pushed dependency commit. Ignored local environment/operator files were copied and hash-verified in private Git recovery storage before normal worktree removal; their contents are not committed. The four original dirty CSQ16 trees remain preserved and none is deletion-ready. This is one completed technical lane, not completion of any frozen whole-worktree obligation.
+
+Native repeated-cancellation repair `540f79b93` delivered 134 passing tests on both Python 3.11 and 3.13, with an original-source control of 16 failing and three passing cases. It is integrated into the Core candidate as `8a546ff60`, awaiting independent review. Node execution-control/metadata repair delivered 183 passes and 70 original-source failures; independent review is active. Pool/shared-adapter repair reports 231 scoped passes; its caller review reproduced skipped lifecycle shutdown after a pool or monitor failure, and the bounded independent-stage correction is included in that lane. These production candidates are not yet landed.
+
+Live runs API before and after the dependency push returned the same latest historical run IDs, headed by `34586101469` on `9955e793d`; no new dependency-landing run was observed in that read. This is a pinned observation, not an inference from workflow trigger text. Main and promotion PR #2229 remain untouched.
