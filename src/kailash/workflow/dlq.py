@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from kailash.utils.finalizer import warn_unclosed
+from kailash.utils.secure_logging import safe_exception_frames
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +93,7 @@ class PersistentDLQ:
         # `_initialize_schema` could bypass the validator. This is the
         # single enforcement point for every DDL/DML interpolation site.
         from kailash.db.dialect import (
-            DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+            SQLITE_MAX_IDENTIFIER_LENGTH,
             _validate_identifier,
         )
 
@@ -102,13 +103,12 @@ class PersistentDLQ:
             "idx_dlq_next_retry",
             "idx_dlq_created",
         ):
-            _validate_identifier(
-                ident, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
-            )
+            _validate_identifier(ident, max_length=SQLITE_MAX_IDENTIFIER_LENGTH)
 
         self._db_path = db_path
         self._base_delay = base_delay
         self._lock = threading.Lock()
+        self._closed = False
 
         # Ensure parent directory exists.
         parent = os.path.dirname(os.path.abspath(db_path))
@@ -117,9 +117,19 @@ class PersistentDLQ:
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
 
-        self._enable_pragmas()
-        self._initialize_schema()
-        self._set_file_permissions()
+        try:
+            self._enable_pragmas()
+            self._initialize_schema()
+            self._set_file_permissions()
+        except BaseException:
+            try:
+                self.close()
+            except BaseException as cleanup_error:
+                logger.warning(
+                    "DLQ initialization cleanup failed: %s",
+                    safe_exception_frames(cleanup_error),
+                )
+            raise
 
     # ------------------------------------------------------------------
     # Setup helpers
@@ -386,8 +396,9 @@ class PersistentDLQ:
     def close(self) -> None:
         """Close the underlying database connection."""
         with self._lock:
-            if hasattr(self, "_conn"):
+            if getattr(self, "_conn", None) is not None and not self._closed:
                 self._conn.close()
+                self._closed = True
 
     def __enter__(self) -> "PersistentDLQ":
         return self
@@ -412,5 +423,7 @@ class PersistentDLQ:
         # deallocator once ``self._conn`` is unreachable, so dropping the
         # explicit close leaks nothing; close()/__exit__ remain the
         # deterministic path.
-        if getattr(self, "_conn", None) is not None:
+        if getattr(self, "_conn", None) is not None and not getattr(
+            self, "_closed", False
+        ):
             _warn(self, "Call close() or use 'with PersistentDLQ(...) as dlq:'.")

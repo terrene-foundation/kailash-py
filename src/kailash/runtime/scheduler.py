@@ -329,7 +329,7 @@ def _secure_init_sqlite_jobstore(db_abs: str) -> None:
     # and can chmod the resulting files before any other process opens them.
     # SQLAlchemy will reuse the WAL configuration on subsequent connections
     # (journal_mode is persistent in the SQLite database header).
-    with sqlite3.connect(db_abs) as conn:
+    with contextlib.closing(sqlite3.connect(db_abs)) as conn:
         conn.execute("PRAGMA journal_mode=WAL")
         # A committed write is required to actually create -wal / -shm.
         conn.execute(
@@ -337,13 +337,13 @@ def _secure_init_sqlite_jobstore(db_abs: str) -> None:
         )
         conn.commit()
 
-    # Sidecars were created by sqlite3 under the process umask; tighten them
-    # to match the main DB. We just created these files ourselves so there
-    # is no symlink-swap race here — chmod is the right tool.
-    for suffix in ("-wal", "-shm"):
-        sidecar = f"{db_abs}{suffix}"
-        if os.path.exists(sidecar):
-            os.chmod(sidecar, stat.S_IRUSR | stat.S_IWUSR)
+        # Sidecars were created by sqlite3 under the process umask; tighten them
+        # to match the main DB. We just created these files ourselves so there
+        # is no symlink-swap race here — chmod is the right tool.
+        for suffix in ("-wal", "-shm"):
+            sidecar = f"{db_abs}{suffix}"
+            if os.path.exists(sidecar):
+                os.chmod(sidecar, stat.S_IRUSR | stat.S_IWUSR)
 
 
 class ScheduleType(str, Enum):
