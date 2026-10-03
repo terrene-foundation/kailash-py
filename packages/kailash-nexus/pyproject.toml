@@ -65,7 +65,7 @@ dependencies = [
     # Server middleware stack (matches kailash[server] contents).
     "fastapi>=0.104.0",
     "starlette>=0.36.0",
-    "uvicorn[standard]>=0.24.0",
+    "uvicorn[standard]>=0.52.4",
     "aiohttp>=3.12.4",
     "aiohttp-cors>=0.7.0",
     "httpx>=0.25.0",
@@ -100,6 +100,7 @@ requires-python = ">=3.11"
 [project.optional-dependencies]
 metrics = ["prometheus_client>=0.20"]
 dev = [
+    "httpx2>=2.13.1",
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
     "pytest-cov>=4.0",
@@ -107,12 +108,4 @@ dev = [
     # — required for `pytest --collect-only` to return exit 0
     # (orphan-detection.md §5 merge gate).
     "pytest-httpserver>=1.0",
-]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-markers = [
-    "unit: Unit tests (fast, isolated)",
-    "integration: Integration tests (real services)",
-    "e2e: End-to-end tests (complete flows)",
 ]

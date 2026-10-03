@@ -43,7 +43,7 @@ dependencies = [
     # extra also covers it but kailash-ml does not depend on the [sqlite]
     # variant of dataflow.) Origin: 1.7.3 clean-venv install verification
     # surfaced ModuleNotFoundError: aiosqlite at module-import time.
-    "aiosqlite>=0.19.0",
+    "aiosqlite>=0.22.1",
     "polars>=1.0",
     "pyarrow>=14.0",
     "numpy>=1.24",
@@ -184,12 +184,14 @@ mlflow = ["pyyaml>=6.0"]
 huggingface = ["datasets>=2.0"]
 dashboard = [
     "starlette>=0.35",
-    "uvicorn>=0.27",
+    "uvicorn>=0.52.4",
 ]
 interop = ["pandas>=2.0"]
 all = ["kailash-ml[dl,xgb,catboost,stats,rl,rl-offline,rl-envpool,rl-distributed,grpc,automl-bayes,agents,hpo,mlflow,huggingface,dashboard,interop,imbalance,explain]"]
 all-gpu = ["kailash-ml[dl-gpu,xgb,catboost,stats,rl,rl-offline,rl-envpool,rl-distributed,grpc,automl-bayes,agents,hpo,mlflow,huggingface,dashboard,interop,imbalance,explain]"]
 dev = [
+    # Starlette TestClient uses httpx2; package-only CI does not install root dev.
+    "httpx2>=2.13.1",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "pytest-timeout>=2.0",

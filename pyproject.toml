@@ -61,7 +61,7 @@ server = [
     "aiohttp>=3.12.4",
     "aiohttp-cors>=0.7.0",
     "fastapi>=0.115.12",
-    "uvicorn[standard]>=0.31.0",
+    "uvicorn[standard]>=0.52.4",  # auto WebSocket backend avoids deprecated websockets.legacy
     "httpx>=0.25.0",
     "httpcore>=0.18.0",  # public async network backend for DNS pinning
     "anyio>=4.1",        # cancellable bounded DNS admission
@@ -89,7 +89,9 @@ db-postgres = [
     "psycopg[binary]>=3.2",  # SQLAlchemy 2.1 default sync driver
 ]
 db-mysql    = ["sqlalchemy>=2.0.0", "aiomysql>=0.2.0"]
-db-sqlite   = ["sqlalchemy>=2.0.0", "aiosqlite>=0.19.0"]
+
+# Async SQL cleanup uses Connection.stop() and the owned worker thread.
+db-sqlite   = ["sqlalchemy>=2.0.0", "aiosqlite>=0.22.1"]
 
 # Distributed cache + queues.
 redis = ["redis>=6.2.0"]
@@ -98,6 +100,8 @@ redis = ["redis>=6.2.0"]
 # All trust modules live under `kailash.trust.*` which is NOT in the eager
 # closure — these only import on `from kailash.trust import ...`.
 trust = [
+    # ZoneInfo uses this IANA database on hosts without system timezone data.
+    "tzdata>=2024.1",
     "cryptography>=41.0",
     "PyJWT>=2.8",
     "pynacl>=1.5",
