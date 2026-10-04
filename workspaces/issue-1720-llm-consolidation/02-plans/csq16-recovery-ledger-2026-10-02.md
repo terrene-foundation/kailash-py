@@ -8,8 +8,8 @@ Baseline dev and origin/dev: `cdcaeac6baf63911d1f43ed99542002bdcd361a1`. The ori
 
 | Lane | Branch / session | Owner | Current state |
 | --- | --- | --- | --- |
-| Sweep / ledger / burndown | fix/csq16-recovery-integration | /root | Complete ten-part sweep pushed at `cec190927`; frozen four-original chart remains in progress. |
-| Core integration | fix/csq16-core-integration | /root | Assembled through `e790470eb`, including `d214d030c` audit repair and five SQL/Local follow-ups; still unlanded pending corrected-source reviews and a new union check. |
+| Sweep / ledger / burndown | fix/csq16-recovery-integration | /root | Latest complete ten-part sweep pushed at `2ad95c9e6` (2026-10-05); frozen four-original chart remains in progress. |
+| Core integration | fix/csq16-core-integration | /root | Assembled through `a8b317e10`, including scoped tracing and pool-generation repairs; still unlanded. Latest 126-file union: 4,798 passes and three interpreter skips after capacity recovered; native readiness and acquisition/lifecycle follow-ups remain separate. |
 | LocalRuntime node finalization | fix/csq16-runtime-node-cleanup | /root | `4a38d22ef` integrated as `32db87535`; 398 scoped passes each Python 3.13/3.11, 28 original-source failures, two correctness rounds clean; independent security pending. |
 | Registry ownership | Core candidate `0d4ec0fd4` | /root | 310 passes each interpreter, three direct source failures; two correctness rounds and one independent security round clean. |
 | Authorization masking | fix/csq16-mask-fail-closed | /root/wrapper_introspection (implementation) | `902f9bf08` integrated as `36f0598ab`; 552 passes each interpreter, 61 source failures; two correctness rounds clean, independent security pending. |
@@ -30,7 +30,7 @@ Baseline dev and origin/dev: `cdcaeac6baf63911d1f43ed99542002bdcd361a1`. The ori
 
 ## Execution contract
 
-- Long commands use `trestle run -- <command>` with tracked-ignore preflight, no default host pins or ad-hoc SSH. Exit 114 is unknown; 116 means no run. Pipeline status must preserve actual test failures.
+- Long commands use Trestle with `--host esperie-ai` under the latest user instruction. Local placement is reserved for inherently local worktree/formatting operations; no ad-hoc SSH or Mac fallback for missing tools. Missing tooling is installed once shared across host slots. Exit 114 is unknown; 116 means no run. Pipeline status must preserve actual test failures.
 - Each implementation shard has explicit file ownership, relevant inline specs, a specialist and bounded invariants; fix root causes within the authorized scope.
 - Correctness and adversarial security review require actual evidence, two consecutive clean rounds, then holistic union review when multiple implementation waves land.
 - Land finished lanes into dev; do not convert old PR greens into current-head clearance.
@@ -380,3 +380,23 @@ The latest coordinator-policy reminder was queued through the verified recipient
 The [fresh ten-part sweep](../04-validate/recovery-2026-10-05-sweep.md) captures dev `816bfcef194bc226b23308b3a13046e9e8e74406`, 59 issues, one stale promotion PR and a 69-KEEP forest before two further isolated allocations. Current spec controls discriminate present and missing symbols. No original obligation closes. The ignore-rule task tree/branch is now reaped after clean-state and remote patch-equivalence proof, private receipt `reaped-tracked-ignore-receipt.json`; bounded technical landed/reaped lanes total five.
 
 The peer's durable handoff explicitly accepts the earlier expanded allocation and compute policy, superseding the acknowledgement-pending wording above. Transaction `f286a73bb`, Express `711127920` and tracking `6a20895a8` remain isolated with open producer/security findings. Root created tracking-storage and transaction-outcome siblings at the latter tracking/transaction heads and queued exact ownership as `01a107c4-b7f9-7130-9241-8d9955da7e01`. These newest expansions await acknowledgement. Root continues native/pool/tracing integration; original dirty sources remain read-only.
+
+
+### Shared-host execution and bounded repair checkpoint — 2026-10-05
+
+Both active coordinator conversations retain xhigh; new mechanical children use medium and complex repair/review children use xhigh. Three retained local agents are actively assigned to native admission, pool acquisition, and independent lifecycle/shared-service review. The compute policy and latest peer producer allocations were queued again to the verified peer route as `01a107e3-85ef-7c70-b803-2ea2cdf39fba`; this receipt alone does not establish a new acknowledgement. No missing-tool installation occurred.
+
+Core `a8b317e10bfc9b1b2b48698011213e1b3782beef` incorporates tracing author commits `5195bf048`, `2fb8a8237`, `400e8cc3c` and pool-generation closure `73aaf8b79`. Each bounded source scope has two independent correctness and two separate static-security passes; tracing has 197 passing tests per interpreter, and pool closure has 211 passes on 3.13 / 210 passes plus one eager-task skip on 3.11. These are isolated integration receipts, not dev landing or whole-Core security clearance.
+
+The eleventh union returned 4,797 passes, one temporary SQLite alias-fixture failure and three skips. An independent pure-SQLite two-thread control reproduced the same wrong query result without Kailash or cleanup; locking only execute/fetch removed it, while an early-close countercontrol still raised ProgrammingError. The corrected temporary fixture leaves cleanup unlocked. The twelfth union then returned **4,794 passed, four failed, three skipped**, with the failures reporting PostgreSQL `sorry, too many clients already`. This is not a green union. A subsequent read-only host audit measured max_connections 100, three reserved connections, ten idle clients and a successful one-connection probe; that later recovery does not establish the earlier peak's cause or rule out leaks. Broad overlapping DB retries are held while the focused live case and capacity audit complete.
+
+Native readiness is committed as `87c186eb3338466aafdf57cd2a21b401c61fd150` atop `a979a0fcb`: 282 passes on 3.13 / 281 passes plus one eager-task skip on 3.11, with one live PostgreSQL case explicitly deselected after the capacity failure. Exact prior-source controls produced eleven/ten intended failures respectively. Normal commit hooks passed; independent fresh review and a deeper cleanup-ancestry hypothesis remain open. No convergence or landing credit is claimed.
+
+Root lifecycle diagnostics now pass 145 cases on 3.13 / 144 plus one interpreter skip on 3.11. The first corrected candidate failed rollback completion, and independent ordinary pairs additionally reproduced deadline-token leakage and lost previous-transition failure order. The draft now guards rollback from forwarded cancellation, shares dependency outcomes and filters its own deadline before diagnostic publication. Final independent review is open. Pool acquisition remains in the worker-owned sibling with same-task validation and two-phase custody tests underway; direct wrapper-close ownership remains a separate root obligation.
+
+The original four acceptance rows remain In progress, and the five previously landed/reaped technical lanes are unchanged. No original or unlanded repair tree was deleted at this checkpoint. Main and PR #2229 remain untouched.
+
+
+The next correctly scoped Core union completed **4,798 passed and three PEP-649 skips** at `a8b317e10`, log `/tmp/csq16-core-union-fourteenth.log`, exit 0. It uses the same 126-file population plus 12 corrected temporary alias cases. The intervening thirteenth invocation selected the wrong checkout and ran no tests (exit 4); no evidence is credited from it. Native readiness’s previously held live PostgreSQL case also passed once per interpreter at `87c186eb3`. Capacity recovery enables those results; it does not prove service-wide leak freedom.
+
+Lifecycle follow-up now reports 149 passes / 148 plus one version skip after two more independently reproduced variants were fixed: reverse queued-transition order and pending self-cancellation before rollback. Final review is still open on canonical cancellation identity. Root created `fix/csq16-pool-wrapper-close-owner` at `a8b317e10` for direct wrapper closure; independent real-SQLite pairs reproduced early cancellation leaving the handle open and duplicate driver calls from overlapping callers. Its first four permanent cases returned three failures and one control pass on the old source. The bounded owner repair is being verified; no extra dev landing/reap follows from it.
