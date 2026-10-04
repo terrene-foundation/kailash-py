@@ -8,7 +8,6 @@ Provides comprehensive monitoring of MCP server performance including:
 - Error rates
 """
 
-import asyncio
 import functools
 import logging
 import threading
@@ -16,6 +15,8 @@ import time
 import types
 from collections import defaultdict, deque
 from typing import Any, Callable, Dict, List, Optional, TypeVar
+
+from kailash_mcp._async_compat import is_coroutine_function
 
 logger = logging.getLogger(__name__)
 
@@ -301,7 +302,7 @@ class MetricsCollector:
                     self.track_tool_call(actual_tool_name, latency, success, error_type)
 
             # Return appropriate wrapper based on function type
-            if asyncio.iscoroutinefunction(func):
+            if is_coroutine_function(func):
                 return async_wrapper  # type: ignore[return-value]
             else:
                 return sync_wrapper  # type: ignore[return-value]

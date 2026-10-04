@@ -76,6 +76,7 @@ import websockets
 
 from kailash.utils.command_safety import safe_command_ref
 from kailash.utils.url_credentials import fingerprint_value, mask_error_text, mask_url
+from kailash_mcp._async_compat import is_coroutine_function
 from kailash_mcp.auth.providers import AuthProvider
 from kailash_mcp.errors import MCPError, MCPErrorCode, TransportError
 from kailash_mcp.protocol.protocol import MetaData, ProtocolManager
@@ -1552,7 +1553,7 @@ class WebSocketServerTransport(BaseTransport):
             JSON-RPC response
         """
         try:
-            if asyncio.iscoroutinefunction(self.message_handler):
+            if is_coroutine_function(self.message_handler):
                 return await self.message_handler(request, client_id)
             else:
                 return self.message_handler(request, client_id)  # type: ignore[reportOptionalCall]

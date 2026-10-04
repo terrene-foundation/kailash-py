@@ -38,6 +38,8 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Dict, List, Optional, Type, Union
 
+from kailash_mcp._async_compat import is_coroutine_function
+
 logger = logging.getLogger(__name__)
 
 
@@ -511,7 +513,7 @@ class RetryableOperation:
 
             try:
                 # Execute function (handle both sync and async)
-                if asyncio.iscoroutinefunction(func):
+                if is_coroutine_function(func):
                     result = await func(*args, **kwargs)
                 else:
                     result = func(*args, **kwargs)
@@ -712,7 +714,7 @@ def wrap_with_error_handling(func):
 
     async def wrapper(*args, **kwargs):
         try:
-            if asyncio.iscoroutinefunction(func):
+            if is_coroutine_function(func):
                 return await func(*args, **kwargs)
             else:
                 return func(*args, **kwargs)

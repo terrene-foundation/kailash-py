@@ -66,6 +66,7 @@ from enum import Enum
 from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Union
 from urllib.parse import unquote, urlsplit
 
+from kailash_mcp._async_compat import is_coroutine_function
 from kailash_mcp.errors import MCPError, MCPErrorCode
 
 logger = logging.getLogger(__name__)
@@ -485,7 +486,7 @@ class ProgressManager:
         # Call callbacks
         for callback in self._progress_callbacks.get(progress_token, []):
             try:
-                if asyncio.iscoroutinefunction(callback):
+                if is_coroutine_function(callback):
                     await callback(notification)
                 else:
                     callback(notification)
@@ -614,7 +615,7 @@ class CancellationManager:
         # Call cancellation callbacks
         for callback in self._cancellation_callbacks.get(request_id, []):
             try:
-                if asyncio.iscoroutinefunction(callback):
+                if is_coroutine_function(callback):
                     await callback(notification)
                 else:
                     callback(notification)
@@ -624,7 +625,7 @@ class CancellationManager:
         # Run cleanup functions
         for cleanup in self._request_cleanup.get(request_id, []):
             try:
-                if asyncio.iscoroutinefunction(cleanup):
+                if is_coroutine_function(cleanup):
                     await cleanup()
                 else:
                     cleanup()
@@ -779,7 +780,7 @@ class CompletionManager:
             return []
 
         try:
-            if asyncio.iscoroutinefunction(provider):
+            if is_coroutine_function(provider):
                 completions = await provider(ref_name, filter_text)
             else:
                 completions = provider(ref_name, filter_text)
@@ -835,7 +836,7 @@ class SamplingManager:
         # Try each callback until one handles the request
         for callback in self._sampling_callbacks:
             try:
-                if asyncio.iscoroutinefunction(callback):
+                if is_coroutine_function(callback):
                     result = await callback(request)
                 else:
                     result = callback(request)
@@ -1070,7 +1071,7 @@ class RootsManager:
         for validator in self._access_validators:
             try:
                 accepts_context = len(inspect.signature(validator).parameters) >= 3
-                if asyncio.iscoroutinefunction(validator):
+                if is_coroutine_function(validator):
                     if accepts_context:
                         allowed = await validator(uri, operation, user_context)
                     else:
@@ -1203,7 +1204,7 @@ class ProtocolManager:
 
         try:
             # Call handler
-            if asyncio.iscoroutinefunction(handler):
+            if is_coroutine_function(handler):
                 result = await handler(request)
             else:
                 result = handler(request)

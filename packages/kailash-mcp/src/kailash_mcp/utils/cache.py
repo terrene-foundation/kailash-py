@@ -15,6 +15,7 @@ import time
 from typing import Any, Awaitable, Callable, Dict, Optional, Tuple, TypeVar
 
 from kailash.utils.redis_validation import validate_redis_url
+from kailash_mcp._async_compat import is_coroutine_function
 
 logger = logging.getLogger(__name__)
 
@@ -533,7 +534,7 @@ class CacheManager:
                 return result
 
             # Return appropriate wrapper based on function type
-            if asyncio.iscoroutinefunction(func):
+            if is_coroutine_function(func):
                 return async_wrapper  # type: ignore[return-value]
             else:
                 return sync_wrapper  # type: ignore[return-value]

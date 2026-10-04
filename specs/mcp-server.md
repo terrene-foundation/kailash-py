@@ -135,7 +135,7 @@ MCPServer(
 - Cannot specify both `required_permission` and `required_permissions` (raises `ValueError`).
 - `required_permission=""` (empty string) or `required_permissions=[]` (empty list) both raise `ValueError` at registration -- an empty permission spec would otherwise produce a completely ungated tool (no invoke-time check and a fully published `inputSchema`), which is never what declaring the argument means. Omit the argument entirely for an intentionally public tool.
 - Whichever form is used, permissions are normalized ONCE at decoration time into a single internal tuple (`Tuple[str, ...]`), stored in the tool registry under `required_permission`. A single string becomes a 1-tuple; a list becomes a tuple of the same length. **ALL entries in the tuple are enforced on every call** -- `AuthManager._authorize` iterates the full sequence and requires every listed permission, not just the first.
-- The decorator wraps both sync and async functions. Async detection uses `asyncio.iscoroutinefunction`.
+- The decorator wraps both sync and async functions. Async detection uses the shared `is_coroutine_function` helper, retaining native/`inspect` coroutine markers and the legacy asyncio marker by identity without calling the deprecated asyncio predicate (`packages/kailash-mcp/src/kailash_mcp/_async_compat.py:12-18`; dispatch: `packages/kailash-mcp/src/kailash_mcp/server.py:2996-3000`).
 - Each tool call gets a unique session ID for tracking.
 
 **Execution pipeline (in order):**

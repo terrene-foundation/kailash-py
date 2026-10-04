@@ -80,6 +80,7 @@ from urllib.parse import urlparse
 
 import jsonschema
 
+from kailash_mcp._async_compat import is_coroutine_function
 from kailash_mcp.errors import MCPError, MCPErrorCode, ValidationError
 from kailash_mcp.protocol.protocol import ProgressToken, get_protocol_manager
 
@@ -471,7 +472,7 @@ class StructuredTool:
             return result
 
         # Return appropriate wrapper
-        if asyncio.iscoroutinefunction(func):
+        if is_coroutine_function(func):
             return async_wrapper
         else:
             return sync_wrapper
@@ -602,7 +603,7 @@ class ResourceTemplate:
         # Notify all subscribers
         for callback in self._subscriptions[uri]:
             try:
-                if asyncio.iscoroutinefunction(callback):
+                if is_coroutine_function(callback):
                     await callback(change)
                 else:
                     callback(change)

@@ -82,6 +82,7 @@ from urllib.parse import urlparse
 # caller-facing defence — nothing derived from an exception is returned to an
 # unauthenticated caller; see ``MCPServer._internal_error_envelope``.
 from kailash.utils.url_credentials import mask_error_text
+from kailash_mcp._async_compat import is_coroutine_function
 from kailash_mcp.advanced.features import (
     ElicitationSystem,
     StructuredTool,
@@ -2993,7 +2994,7 @@ class MCPServer:
                     del self._active_sessions[session_id]
 
         # Return appropriate wrapper based on function type
-        if asyncio.iscoroutinefunction(func):
+        if is_coroutine_function(func):
             return async_wrapper  # type: ignore[return-value]
         else:
             return sync_wrapper  # type: ignore[return-value]
@@ -3479,7 +3480,7 @@ class MCPServer:
 
         try:
             # Execute the tool
-            if asyncio.iscoroutinefunction(handler):
+            if is_coroutine_function(handler):
                 # For async functions, we need to run in event loop
                 try:
                     loop = asyncio.get_event_loop()

@@ -9,6 +9,7 @@ Created: 2025-10-26
 """
 
 import asyncio
+import inspect
 import logging
 from io import StringIO
 from unittest.mock import AsyncMock, Mock, patch
@@ -290,14 +291,14 @@ class TestMethodSignatures:
         node = ConcreteAsyncNode()
 
         # SecurityMixin overrides
-        assert asyncio.iscoroutinefunction(node.audit_log)
-        assert asyncio.iscoroutinefunction(node.log_security_event)
-        assert asyncio.iscoroutinefunction(node.validate_and_sanitize_inputs)
+        assert inspect.iscoroutinefunction(node.audit_log)
+        assert inspect.iscoroutinefunction(node.log_security_event)
+        assert inspect.iscoroutinefunction(node.validate_and_sanitize_inputs)
 
         # LoggingMixin overrides
-        assert asyncio.iscoroutinefunction(node.log_with_context)
-        assert asyncio.iscoroutinefunction(node.log_node_execution)
-        assert asyncio.iscoroutinefunction(node.log_error_with_traceback)
-        assert asyncio.iscoroutinefunction(node.log_info)
-        assert asyncio.iscoroutinefunction(node.log_warning)
-        assert asyncio.iscoroutinefunction(node.log_error)
+        assert inspect.iscoroutinefunction(node.log_with_context)
+        assert inspect.iscoroutinefunction(node.log_node_execution)
+        assert inspect.iscoroutinefunction(node.log_error_with_traceback)
+        assert inspect.iscoroutinefunction(node.log_info)
+        assert inspect.iscoroutinefunction(node.log_warning)
+        assert inspect.iscoroutinefunction(node.log_error)

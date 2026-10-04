@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional, Protocol, Set, Union
 
+from kailash_mcp._async_compat import is_coroutine_function
+
 # Optional Redis support
 try:
     import redis.asyncio as redis
@@ -100,7 +102,7 @@ class DataEnrichmentTransformer(ResourceTransformer):
         # Add computed fields
         for field_name, function in self.enrichment_functions.items():
             try:
-                if asyncio.iscoroutinefunction(function):
+                if is_coroutine_function(function):
                     enriched_data[field_name] = await function(resource_data)
                 else:
                     enriched_data[field_name] = function(resource_data)
@@ -159,7 +161,7 @@ class FormatConverterTransformer(ResourceTransformer):
                 for pattern, converter in self.conversions.items():
                     if fnmatch.fnmatch(field_path, pattern):
                         try:
-                            if asyncio.iscoroutinefunction(converter):
+                            if is_coroutine_function(converter):
                                 converted_value = await converter(value)
                             else:
                                 converted_value = converter(value)
@@ -206,7 +208,7 @@ class AggregationTransformer(ResourceTransformer):
 
         for source_name, fetcher in self.data_sources.items():
             try:
-                if asyncio.iscoroutinefunction(fetcher):
+                if is_coroutine_function(fetcher):
                     source_data = await fetcher(uri)
                 else:
                     source_data = fetcher(uri)
@@ -1074,7 +1076,7 @@ class ResourceSubscriptionManager:
                 conn_id = subscription.connection_id
 
                 # Check if callback is async
-                if asyncio.iscoroutinefunction(self._notification_callback):
+                if is_coroutine_function(self._notification_callback):
                     await self._notification_callback(conn_id, notification)
                 else:
                     self._notification_callback(conn_id, notification)
