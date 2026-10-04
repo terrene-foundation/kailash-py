@@ -6,17 +6,19 @@ Baseline dev and origin/dev: `cdcaeac6baf63911d1f43ed99542002bdcd361a1`. The ori
 
 ## Lane ownership
 
-| Lane | Branch | Task set | Agent roster | State |
-| --- | --- | --- | --- | --- |
-| Sweep / ledger | fix/csq16-recovery-integration | Sweep, preservation receipts, ledger and generated chart | /root | Fresh sweep landed on dev `3cdb91336`; ledger remains active |
-| Core integration | fix/csq16-core-integration | Assemble reviewed Core/access/SQL/dependency work | /root | Candidate branch; final review repairs in progress |
-| Native task cleanup | fix/csq16-native-task-drain | Owned concurrent tasks and synchronous worker drain | /root/metadata_recovery | `0846ceb32` + `1316b409b` pass 113 tests on Python 3.11 and 3.13; cancellation-waiter and connection cleanup review findings being repaired |
-| Node control boundaries | fix/csq16-node-control-boundaries | Preserve terminal/observer identity through node execution and serialization | /root/runtime_logging | Source-reached 70 failing cases; repaired focused suite 183 passed; commit gates running |
-| SQL / resource pool boundaries | fix/csq16-pool-boundaries | Retry/cap ownership and runtime resource-manager diagnostics | /root/schema_recovery | Earlier SQL fixes integrated; new real SQLite peer-loss and runtime log findings being repaired |
-| Access predicates | fix/csq16-access-siblings and fix/csq16-core-integration | Canonical DENY failure semantics and built-in identity adapters | /root | `488b7070e` plus root comparison follow-up `dbee067f7`; independent final review pending |
-| Independent review | fix/csq16-core-correctness (detached snapshot) | Correctness and security review of frozen candidate | /root/http_diagnostics and cross-lane reviewers | Findings delivered; clean rounds required after repairs |
-| Remaining storage / transport | Existing recovery branches | S1–S8 and R4–R12 follow-through | Orchestrator assigns the next bounded shard | Delivered receipts below do not imply all work is complete |
-| Independent Kailash-Py CLI | Session `01a0e705-6996-7092-95cd-d751936bcc09` | Separate disjoint repair lane after acknowledgement | User-requested teammate | Instructions queued twice; no acknowledgement or ownership |
+| Lane | Branch / session | Owner | Current state |
+| --- | --- | --- | --- |
+| Sweep / ledger / burndown | fix/csq16-recovery-integration | /root | Complete ten-part sweep pushed at `cec190927`; frozen four-original chart remains in progress. |
+| Core integration | fix/csq16-core-integration | /root | Assembled through `01a803faf`; candidate remains unlanded pending remaining security repairs, reviews and union checks. |
+| LocalRuntime node finalization | fix/csq16-runtime-node-cleanup | /root | `4a38d22ef` integrated as `32db87535`; 398 scoped passes each Python 3.13/3.11, 28 original-source failures, two correctness rounds clean; independent security pending. |
+| Registry ownership | Core candidate `0d4ec0fd4` | /root | 310 passes each interpreter, three direct source failures; two correctness rounds and one independent security round clean. |
+| Authorization masking | fix/csq16-mask-fail-closed | /root/wrapper_introspection (implementation) | `902f9bf08` integrated as `36f0598ab`; 552 passes each interpreter, 61 source failures; two correctness rounds clean, independent security pending. |
+| Lifecycle/monitor follow-up | fix/csq16-lifecycle-security-followup | /root/wrapper_introspection | Reproduced deadline/monitor descendant/nonfinite-limit failures; bounded correction under independent correctness review. |
+| Built-in health probes | fix/csq16-health-controls | /root/lifecycle_monitor_controls | `b84ef9ab4` integrated as `01a803faf`; 137 focused passes each interpreter. Review confirmed missing-delete cache probes accumulate keys; same owner is fixing before review convergence. |
+| Correctness review | Read-only frozen candidates | /root/nodes_auth_correctness | Delivered scope-specific rounds; no correctness verdict substitutes for security. |
+| Independent security | Rotating generic workers with actual Read/Bash | Disjoint authors/reviewers | Auth/wrapper/stream and LocalRuntime/registry/health receive independent adversarial coverage; new findings reset affected clean rounds. |
+| Storage cache and transaction repair | fix/csq16-cache-invalidation-repair; session `01a0e77e-87be-7cc0-9f2f-1b84d5cf709d` | Independent Kailash-Py CLI | User-confirmed availability and explicit allocation; active commits observed through `aa05a526f`, completed handoff not yet read. Peer owns implementation/tests and cache spec section 6; root owns landing/ledger/reaping. |
+| Remaining storage / transport / trust / CI / ML | Existing recovery branches | Root allocates bounded next shards | Earlier delivered receipts below are historical evidence, not whole-lane completion. |
 
 ## Source preservation and recovery queue
 
@@ -214,3 +216,16 @@ Registry follow-up retains the name lock across factory replacement and owns hea
 A separate cancellation-token probe reproduced three failures where a cancellation subclass's `args` descriptor replaced the original control. Native exception-argument access now passes 223 focused checks on each interpreter. Lifecycle transition work reports 95 passes on Python 3.13 and 94 passes plus one unavailable-stdlib-feature skip on Python 3.11; its final normal commit and integration are pending. LocalRuntime per-node finalization is undergoing a distinct real-resource probe; no verdict is yet banked.
 
 The cache peer's tree shows active implementation, including `05153e953`; no completed handoff has been read. Queue acceptance is not delivery and branch activity is not a review receipt. The canonical frozen burndown still records all four original worktree obligations in progress. Two earlier technical lanes remain landed/reaped; no original tree or newly unlanded implementation branch has been deleted. Main and promotion PR #2229 remain untouched. This checkpoint does not claim a new complete ten-part sweep or whole-Core convergence.
+
+
+### Review convergence checkpoint — 2026-10-04
+
+The complete refreshed sweep is pushed at `cec190927`. Its report records 35 KEEP worktrees, 59 open issues, zero exact-label deferred-quality issues, 85 structurally checked specs/160 extracted symbols, and matching hashes for all 539 original file entries plus all four preservation archives. No original was reaped.
+
+Core integrated registry follow-up `0d4ec0fd4`, native cancellation argument handling `854f6e52e`, lifecycle transitions `c0f20578f`, protective masking `36f0598ab`, LocalRuntime node finalization `32db87535`, and built-in health probes `01a803faf`. LocalRuntime source controls produced 28 failures; corrected tests returned 398 passes on each interpreter. A separate two-failure probe showed an exception already handled by the caller could be misidentified as the workflow primary; explicit per-execution primary capture closes that failure. Import-error and missing-test-path attempts were corrected and earn no passing credit.
+
+Two fresh correctness rounds are clean for authorization, registry, wrapper introspection, SQL streaming and LocalRuntime node cleanup. Native cancellation classification has one scoped correctness round. Registry has one clean independent security round. These are explicit per-surface receipts, not a whole-Core verdict.
+
+Independent security reproduced three further lifecycle/monitor defects: a later shutdown deadline erased an earlier hook cancellation, a monitor finalizer could await a child requesting its own stop, and a NaN resource limit admitted positive usage under strict enforcement. The disjoint follow-up has 27 original-source failures/13 passes and reports 127 corrected passes on Python 3.13 and 126 plus one unavailable eager-task-factory case on Python 3.11. Independent review and normal commit remain in progress.
+
+Health review independently confirmed repeated set/get-only probes left three persistent keys. Its owner is adding a nonmutating ping route or explicit unhealthy result when safe deletion is unavailable, including declared noncallable deletion before mutation. No clean health verdict is claimed. The root refreshed source-backed specification descriptions in the Core candidate; final citation and union verification remain required before landing.
