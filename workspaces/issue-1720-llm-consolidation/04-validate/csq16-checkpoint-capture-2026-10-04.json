@@ -1,0 +1,51 @@
+{
+  "scope": "Supplied historical captures; this checkpoint did not rerun the forest or ten-part sweep.",
+  "preservation": {
+    "artifact": "csq16-preservation-latest-oct04.json",
+    "sha256": "04fbe7839e41cac600cb8d759e02227fecd9b0d38a93fa8f3cf4e1e3eef983aa",
+    "originals": [
+      {
+        "worktree": "csq16-promotion-verification",
+        "entries": 154,
+        "changed_since_preservation": [],
+        "archive_hash_matches": true
+      },
+      {
+        "worktree": "csq16-runtime-ci",
+        "entries": 86,
+        "changed_since_preservation": [],
+        "archive_hash_matches": true
+      },
+      {
+        "worktree": "csq16-source-integration",
+        "entries": 199,
+        "changed_since_preservation": [],
+        "archive_hash_matches": true
+      },
+      {
+        "worktree": "csq16-storage-ci",
+        "entries": 100,
+        "changed_since_preservation": [],
+        "archive_hash_matches": true
+      }
+    ],
+    "overlapping_entries": 539,
+    "unique_paths_from_intake": 202
+  },
+  "forest": {
+    "artifact": "csq16-forest-current-oct04.json",
+    "sha256": "06701af8dfd723d0909142fb2ceb8135e6211f43e8159846cef502df4352f05d",
+    "applied": false,
+    "scope": "all",
+    "counts": {
+      "total": 52,
+      "selected": 52,
+      "zero_loss": 0,
+      "tag_first": 0,
+      "keep": 52
+    },
+    "captured_core_head": "18eb6c6368c1e358c0f5eb3f520f8c252722021d",
+    "current_total_claimed": false
+  },
+  "landing": "Only dependency and scheduler/DLQ technical lanes previously recorded; no additional landing or reap."
+}

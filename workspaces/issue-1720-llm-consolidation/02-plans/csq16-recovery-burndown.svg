@@ -1,28 +1,34 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="900" height="450" viewBox="0 0 900 450">
-<rect width="900" height="450" fill="#f8fafc"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="510" viewBox="0 0 1000 510">
+<rect width="1000" height="510" fill="#f8fafc"/>
 <g font-family="sans-serif" fill="#0f172a">
 <text x="40" y="45" font-size="25" font-weight="bold">CSQ16 recovery burndown</text>
-<text x="40" y="77" font-size="14">Current acceptance snapshot · total 4⟨108e27⟩ original worktrees</text>
-<text x="40" y="128" font-size="15">Signed off</text>
-<rect x="285" y="105" width="430" height="33" rx="5" fill="#e2e8f0"/>
-<rect x="285" y="105" width="0.0" height="33" rx="5" fill="#15803d"/>
-<text x="735" y="128" font-size="14">0⟨d56000⟩</text>
-<text x="40" y="181" font-size="15">Built, awaiting owner walk</text>
-<rect x="285" y="158" width="430" height="33" rx="5" fill="#e2e8f0"/>
-<rect x="285" y="158" width="0.0" height="33" rx="5" fill="#0e7490"/>
-<text x="735" y="181" font-size="14">0⟨0755a2⟩</text>
-<text x="40" y="234" font-size="15">In progress</text>
-<rect x="285" y="211" width="430" height="33" rx="5" fill="#e2e8f0"/>
-<rect x="285" y="211" width="430.0" height="33" rx="5" fill="#2563eb"/>
-<text x="735" y="234" font-size="14">4⟨82c48b⟩</text>
-<text x="40" y="287" font-size="15">Not started</text>
-<rect x="285" y="264" width="430" height="33" rx="5" fill="#e2e8f0"/>
-<rect x="285" y="264" width="0.0" height="33" rx="5" fill="#64748b"/>
-<text x="735" y="287" font-size="14">0⟨ec58ad⟩</text>
-<text x="40" y="340" font-size="15">Blocked on owner</text>
-<rect x="285" y="317" width="430" height="33" rx="5" fill="#e2e8f0"/>
-<rect x="285" y="317" width="0.0" height="33" rx="5" fill="#b45309"/>
-<text x="735" y="340" font-size="14">0⟨9d80b1⟩</text>
-<text x="40" y="405" font-size="13">A technical merge is not owner acceptance. No original worktree has been reaped.</text>
-<text x="40" y="429" font-size="12" fill="#475569">Generated from the canonical burndown JSON; labels retain the canonical count tokens.</text>
+<text x="40" y="77" font-size="14">
+ALL PAGES — 4⟨108e27⟩ of 4 `total`</text>
+<text x="40" y="120" font-size="15">Signed off</text>
+<rect x="285" y="97" width="430" height="28" rx="5" fill="#e2e8f0"/>
+<rect x="285" y="97" width="0.0" height="28" rx="5" fill="#15803d"/>
+<text x="40" y="143" font-size="12">
+ALL PAGES — 0⟨d56000⟩ of 4 `Signed off`</text>
+<text x="40" y="185" font-size="15">Built-not-walked</text>
+<rect x="285" y="162" width="430" height="28" rx="5" fill="#e2e8f0"/>
+<rect x="285" y="162" width="0.0" height="28" rx="5" fill="#0e7490"/>
+<text x="40" y="208" font-size="12">
+ALL PAGES — 0⟨0755a2⟩ of 4 `Built-not-walked`</text>
+<text x="40" y="250" font-size="15">In progress</text>
+<rect x="285" y="227" width="430" height="28" rx="5" fill="#e2e8f0"/>
+<rect x="285" y="227" width="430.0" height="28" rx="5" fill="#2563eb"/>
+<text x="40" y="273" font-size="12">
+ALL PAGES — 4⟨82c48b⟩ of 4 `In progress`</text>
+<text x="40" y="315" font-size="15">Not started</text>
+<rect x="285" y="292" width="430" height="28" rx="5" fill="#e2e8f0"/>
+<rect x="285" y="292" width="0.0" height="28" rx="5" fill="#64748b"/>
+<text x="40" y="338" font-size="12">
+ALL PAGES — 0⟨ec58ad⟩ of 4 `Not started`</text>
+<text x="40" y="380" font-size="15">Blocked on you</text>
+<rect x="285" y="357" width="430" height="28" rx="5" fill="#e2e8f0"/>
+<rect x="285" y="357" width="0.0" height="28" rx="5" fill="#b45309"/>
+<text x="40" y="403" font-size="12">
+ALL PAGES — 0⟨9d80b1⟩ of 4 `Blocked on you`</text>
+<text x="40" y="460" font-size="13">A technical merge is not owner acceptance. No original worktree has been reaped.</text>
+<text x="40" y="486" font-size="12" fill="#475569">Generated from native builder JSON and canonical quotes; frozen original-worktree population.</text>
 </g></svg>

@@ -1,6 +1,6 @@
 # CSQ16 recovery sweep — 2026-10-04
 
-Captured against dev `fc9b638c7157a79a011d9d9eaf1a763c1db4ea60`. The user-authorized objective remains lossless recovery, verified dev landing and removal of recovered CSQ16 worktrees. Main promotion is separate.
+Original ten-part capture against dev `fc9b638c7157a79a011d9d9eaf1a763c1db4ea60`. The execution addendum below does not refresh that capture. The user-authorized objective remains lossless recovery, verified dev landing and removal of recovered CSQ16 worktrees. Main promotion is separate.
 
 ## Completion status
 
@@ -62,3 +62,20 @@ Continue the active parallel repairs, collect delivered evidence, converge indep
 Forest storage measured exactly 11,536,180 KiB, with 220,493,300 KiB free and no unknown/partial tree sizes. The estimated 1,130-tree headroom is free space divided by median linked-tree size, not a safe concurrency limit. The audit classified every registration KEEP at capture; it did not authorize deletion of currently active review trees.
 
 Trestle reported tracked-but-ignored repository artifacts, matching the previously recorded disclosure of snapshot behavior. Long commands used automatic host arbitration with mirror/cache reaping disabled. No passing result is attributed to queued, interrupted, import-failed or missing-path test attempts.
+
+
+## Execution addendum — later 2026-10-04 checkpoint
+
+**Completion is unchanged:** dependencies and scheduler/DLQ are the only landed/reaped technical lanes. All original-worktree obligations remain in progress. The latest Core integration is `e790470eb`, while the most recent 95-file union (`3424 passed, 3 skipped`) ran at the earlier `f82e205e7` snapshot. It cannot clear the newer integrations. The [canonical ledger](../02-plans/csq16-recovery-ledger-2026-10-02.md#latest-integration-and-preservation-checkpoint--2026-10-04) records each scoped positive/negative receipt and review boundary.
+
+**ETA:** a minimum of three further autonomous cycles remains a planning lower bound, not a delivery promise: finish active repairs and fresh independent reviews, verify and land the combined candidates, then reconcile original paths and reap safely. Newly reproduced ownership and error-ordering failures keep the upper bound unresolved.
+
+**Immediate queue:** finish SQL owner-phase and first-error ordering repairs; independently review audit persistence and preserve the bounded Local chronology verdict; complete independent review of SQL policy retry/batch changes (120 passes on each interpreter; 58 failures/24 passes on preceding methods; a separate public batch-gate mutation is still running). In parallel, the peer's committed typed callers `92f0b4790` await transaction prerequisites and combined checks; the Express allocation has queue acceptance under receipt `01a10726`, with recipient acknowledgement and delivery pending. Native-awaitable `09c1628f4` has two clean correctness and two distinct security rounds only for its bounded surface. Local chronology `805e45825` separately has two clean correctness and two source-only security rounds; these do not cover root audit `d214d030c`.
+
+**Deferred quality:** no new deferral is recorded. The original exact-label query and 59-issue census were not rerun for this addendum; neither is represented as a fresh tracker observation.
+
+**Preservation:** the supplied later capture reports all original file/archive hashes unchanged (539 overlapping entries; 202 established unique paths). Its report-only forest has 52 KEEP registrations at the older Core `18eb6c636` capture, not a new current total. [Portable capture receipt](csq16-checkpoint-capture-2026-10-04.json) preserves that distinction. No deletion is authorized by the capture.
+
+**Decision and recommendation:** no new permission is needed for these authorized bounded repairs. Continue disjoint work and corrected-source verification, then land valid work before any reap. This preserves recoverability while leaving the cleanup backlog visible. Keep main promotion separate and do not substitute focused test totals for whole-original acceptance.
+
+The next isolated candidate is `04b432a63`; a 106-file union is in progress. SQL policy review is now scoped clean after the reached public-batch-gate control (three failures/one unaffected pass). Local error-classification repair and an additional SQL owner-phase review remain active, so the broader Core gate is still open. This continuation changes no original acceptance counts.
