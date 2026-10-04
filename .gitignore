@@ -265,3 +265,44 @@ dist/
 !.claude/audit-fixtures/**
 .claude/audit-fixtures/**/.DS_Store
 # <<< coc:gitignore_additions <<<
+
+# Explicitly retained repository inputs and archived recovery evidence.
+# Keep new scratch files ignored; these exceptions cover existing tracked files.
+!/workspaces/_archive/eatp-merge/todos/
+/workspaces/_archive/eatp-merge/todos/*
+!/workspaces/_archive/eatp-merge/todos/completed/
+/workspaces/_archive/eatp-merge/todos/completed/*
+!/workspaces/_archive/kailash-pact/todos/
+/workspaces/_archive/kailash-pact/todos/*
+!/workspaces/_archive/kailash-pact/todos/completed/
+/workspaces/_archive/kailash-pact/todos/completed/*
+!/packages/kailash-dataflow/uv.lock
+!/packages/kailash-kaizen/uv.lock
+!/pyrightconfig.json
+!/tests/utils/test-env
+!/workspaces/_archive/connection-pool-prevention/.test-results
+!/workspaces/_archive/eatp-merge/.test-results
+!/workspaces/_archive/eatp-merge/todos/completed/milestone-0-git-ops.md
+!/workspaces/_archive/eatp-merge/todos/completed/milestone-1-directory-structure.md
+!/workspaces/_archive/eatp-merge/todos/completed/milestone-2-import-rewriting.md
+!/workspaces/_archive/eatp-merge/todos/completed/milestone-3-shims-consumers.md
+!/workspaces/_archive/eatp-merge/todos/completed/milestone-4-version-config.md
+!/workspaces/_archive/eatp-merge/todos/completed/milestone-4b-ci-docs-gaps.md
+!/workspaces/_archive/eatp-merge/todos/completed/milestone-5-security-verification.md
+!/workspaces/_archive/eatp-merge/todos/completed/milestone-7-cleanup-docs.md
+!/workspaces/_archive/issue-1002-aiosqlite-fixture-cleanup/.journal-skipped.log
+!/workspaces/_archive/issue-979-workstream-b-parallel/.journal-skipped.log
+!/workspaces/_archive/kailash-ml/.spec-coverage
+!/workspaces/_archive/kailash-pact/.test-results
+!/workspaces/_archive/kailash-pact/todos/completed/M1-type-extraction.md
+!/workspaces/_archive/kailash-pact/todos/completed/M2-import-rewiring.md
+!/workspaces/_archive/kailash-pact/todos/completed/M3-test-suite.md
+!/workspaces/_archive/kailash-pact/todos/completed/M4-ci-packaging.md
+!/workspaces/_archive/kailash-pact/todos/completed/M5-convention-compliance.md
+!/workspaces/_archive/kailash-pact/todos/completed/M6-cross-package.md
+!/workspaces/_archive/kailash-pact/todos/completed/M7-codification.md
+!/workspaces/_archive/kailash/.test-results
+!/workspaces/_archive/kaizen-agents/.test-results
+!/workspaces/_archive/kaizen-l3/.test-results
+!/workspaces/_archive/tool-agent-support/.test-results
+!/workspaces/_archive/trust-plane/.test-results
