@@ -460,14 +460,21 @@ class SQLiteStorage(StorageBackend):
         return ("text", str(value), None, None, None)
 
     def save_run(self, run: WorkflowRun) -> None:
-        """Save a workflow run."""
+        """Insert or update a run without replacing its parent row."""
         with self._lock:
             cursor = self.conn.cursor()
             cursor.execute(
                 """
-                INSERT OR REPLACE INTO workflow_runs
+                INSERT INTO workflow_runs
                 (run_id, workflow_name, status, started_at, ended_at, metadata, error)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(run_id) DO UPDATE SET
+                    workflow_name = excluded.workflow_name,
+                    status = excluded.status,
+                    started_at = excluded.started_at,
+                    ended_at = excluded.ended_at,
+                    metadata = excluded.metadata,
+                    error = excluded.error
             """,
                 (
                     run.run_id,

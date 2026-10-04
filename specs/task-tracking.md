@@ -526,6 +526,8 @@ class SQLiteStorage(StorageBackend):
 
 **Schema version management:** A `schema_version` table tracks the applied version. Schema upgrades run in `_initialize_schema()` if the stored version is older than `SCHEMA_VERSION = 2`.
 
+**Parent updates:** `SQLiteStorage.save_run` inserts new workflow runs and updates existing runs with `ON CONFLICT(run_id) DO UPDATE`, preserving the parent row and its original `created_at`. It updates every supplied mutable parent field, including clearing optional values, without deleting persisted tasks or disturbing associated audit/search rows. The existing lock, parameter binding, single-statement update and commit remain; foreign-key enforcement stays enabled. A failed constraint check leaves the parent and related rows unchanged. Source: `src/kailash/tracking/storage/database.py::SQLiteStorage.save_run` (`src/kailash/tracking/storage/database.py:462-489`).
+
 ### `FileSystemStorage` (`storage/filesystem.py`)
 
 ```python
