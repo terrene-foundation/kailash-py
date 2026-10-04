@@ -73,7 +73,8 @@ def test_find_venv_python_uses_git_common_dir_resolution():
 
 
 @pytest.mark.regression
-def test_trestle_pytest_routing_preserves_arguments_and_failure(tmp_path):
+@pytest.mark.parametrize("host", [None, "", "esperie-ai", "host with spaces; $(false)"])
+def test_trestle_pytest_routing_preserves_arguments_and_failure(tmp_path, host):
     """The opt-in sends the exact hook arguments and propagates fleet failure."""
     import json
     import os
@@ -91,15 +92,19 @@ def test_trestle_pytest_routing_preserves_arguments_and_failure(tmp_path):
     )
     launcher.chmod(0o755)
     arguments = ["-m", "pytest", "tests/unit/", "-m", "not (slow or integration)"]
+    environment = {
+        **os.environ,
+        "PATH": f"{tmp_path}:{os.environ['PATH']}",
+        "KAILASH_TRESTLE_TESTS": "1",
+        "TRESTLE_ARGUMENTS": str(receipt),
+    }
+    environment.pop("KAILASH_TRESTLE_HOST", None)
+    if host is not None:
+        environment["KAILASH_TRESTLE_HOST"] = host
     result = subprocess.run(
         [str(REPO_ROOT / "scripts/development/find-venv-python.sh"), *arguments],
         cwd=tmp_path,
-        env={
-            **os.environ,
-            "PATH": f"{tmp_path}:{os.environ['PATH']}",
-            "KAILASH_TRESTLE_TESTS": "1",
-            "TRESTLE_ARGUMENTS": str(receipt),
-        },
+        env=environment,
         capture_output=True,
         text=True,
     )
@@ -127,6 +132,7 @@ def test_trestle_pytest_routing_preserves_arguments_and_failure(tmp_path):
     ]
     assert json.loads(receipt.read_text()) == [
         "run",
+        *(["--host", host] if host else []),
         "--",
         "env",
         "-u",

@@ -26,7 +26,13 @@ set -euo pipefail
 # Unset the opt-in remotely to prevent recursion if a caller reuses this wrapper.
 if [ "${KAILASH_TRESTLE_TESTS:-0}" = "1" ] &&
    [ "${1:-}" = "-m" ] && [ "${2:-}" = "pytest" ]; then
-  exec trestle run -- env -u KAILASH_TRESTLE_TESTS UV_LINK_MODE=copy uv run --frozen \
+  # One shared launcher honors an optional fleet host for every worker slot.
+  # Keep the selector as one argument; never interpret it as shell syntax.
+  TRESTLE_ARGS=(run)
+  if [ -n "${KAILASH_TRESTLE_HOST:-}" ]; then
+    TRESTLE_ARGS+=(--host "${KAILASH_TRESTLE_HOST}")
+  fi
+  exec trestle "${TRESTLE_ARGS[@]}" -- env -u KAILASH_TRESTLE_TESTS UV_LINK_MODE=copy uv run --frozen \
     --extra dev --extra server --extra http-client \
     --extra db-postgres --extra db-mysql --extra db-sqlite --extra redis \
     --extra trust --extra auth --extra auth-azure --extra monitoring \
