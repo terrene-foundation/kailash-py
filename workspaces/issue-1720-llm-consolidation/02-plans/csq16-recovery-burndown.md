@@ -1,6 +1,6 @@
 # CSQ16 recovery burndown
 
-Generated from the frozen recovery register. Technical landing and cleanup evidence is tracked separately in the work ledger; owner signoff is not inferred from a merge.
+Generated from the frozen recovery register. Technical landing and cleanup evidence is tracked separately in the work ledger; owner signoff is not inferred from a merge. The current 2026-10-06 ledger checkpoint records the final native/RAG landings, preserved cleanup receipts and reopened wrapper findings.
 
 ![Generated recovery status chart](csq16-recovery-burndown.svg)
 
@@ -31,7 +31,7 @@ Each count is rendered `value⟨token⟩`. The token is derived from that count'
 
 A page is complete only when `Signed off` equals `total`. No page is complete: CSQ16 recovery is 0 of 4.
 
-generated_from_sha: 7bb954f5824b38ea09547b881f099da18eeef702
+generated_from_sha: adfd6671c7a6bbe62db770d4577360d49a1e7f4a
 sources_digest: afad6aec1570e1d13ebfb57039abaecba3d7de891b9110786e532120f69cd24d
 
 <!-- BURNDOWN:END -->
