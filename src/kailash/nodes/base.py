@@ -27,6 +27,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from collections.abc import Callable
 from datetime import UTC, datetime
+from types import ModuleType
 from typing import Any, TypeVar
 
 from pydantic import BaseModel, Field, ValidationError
@@ -45,6 +46,55 @@ from kailash.utils.secure_logging import (
 
 # ADR-002: Module-level logger for node registration messages
 _logger = logging.getLogger(__name__)
+
+
+_MISSING_ATTRIBUTE = object()
+
+
+def _get_execution_attribute(
+    obj: Any, name: str, default: Any = _MISSING_ATTRIBUTE, *, strict: bool = False
+) -> Any:
+    """Check controls, and optionally declared failures, before attribute fallback."""
+    from kailash.runtime.resource_manager import _raise_if_execution_control
+
+    try:
+        # getattr() invokes __getattr__ after a descriptor raises AttributeError.
+        # Pydantic's fallback can retry that descriptor, replaying its operation.
+        if (
+            isinstance(obj, ModuleType)
+            and type(obj).__getattribute__ is ModuleType.__getattribute__
+        ):
+            # ModuleType replaces a descriptor's AttributeError before invoking
+            # module-level __getattr__. Check the original descriptor first.
+            return object.__getattribute__(obj, name)
+        return type(obj).__getattribute__(obj, name)
+    except AttributeError as error:
+        _raise_if_execution_control(error)
+        if (
+            strict
+            and inspect.getattr_static(obj, name, _MISSING_ATTRIBUTE)
+            is not _MISSING_ATTRIBUTE
+        ):
+            raise
+
+    fallbacks = []
+    if isinstance(obj, ModuleType):
+        module_fallback = object.__getattribute__(obj, "__dict__").get("__getattr__")
+        if module_fallback is not None:
+            fallbacks.append((module_fallback, False))
+    class_fallback = inspect.getattr_static(type(obj), "__getattr__", None)
+    if class_fallback is not None:
+        fallbacks.append((class_fallback, True))
+    for fallback, needs_binding in fallbacks:
+        try:
+            if needs_binding:
+                bind = _get_execution_attribute(fallback, "__get__", None)
+                if bind is not None:
+                    fallback = bind(obj, type(obj))
+            return fallback(name)
+        except AttributeError as error:
+            _raise_if_execution_control(error)
+    return default
 
 
 class NodeMetadata(BaseModel):

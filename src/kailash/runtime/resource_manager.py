@@ -2637,6 +2637,13 @@ def _is_retry_observer_failure(exception: BaseException) -> bool:
         return not invocations or invocations[-1] in entry[1]
 
 
+def _exception_is(exception: BaseException, expected: Any) -> bool:
+    """Classify native exception ancestry without invoking user metadata."""
+    expected_types = expected if type(expected) is tuple else (expected,)
+    ancestry = type.__dict__["__mro__"].__get__(type(exception))
+    return any(base is target for base in ancestry for target in expected_types)
+
+
 def _raise_if_runtime_terminal(exception: BaseException) -> None:
     """Runtime controls cannot be overridden by configurable retry rules."""
     # LocalRuntime imports this module, so resolve its typed content error lazily.
@@ -2647,7 +2654,7 @@ def _raise_if_runtime_terminal(exception: BaseException) -> None:
         WorkflowCancelledError,
     )
 
-    if isinstance(
+    if _exception_is(
         exception,
         (
             asyncio.CancelledError,
@@ -2657,6 +2664,13 @@ def _raise_if_runtime_terminal(exception: BaseException) -> None:
             HardTimeLimitExceeded,
         ),
     ):
+        raise exception
+
+
+def _raise_if_execution_control(exception: BaseException) -> None:
+    """Keep runtime controls and scoped observer failures out of error wrappers."""
+    _raise_if_runtime_terminal(exception)
+    if _is_retry_observer_failure(exception):
         raise exception
 
 
