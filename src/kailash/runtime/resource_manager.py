@@ -33,6 +33,7 @@ except ImportError:
     psutil = None  # Included in base install
 
 from kailash.sdk_exceptions import CircuitBreakerOpenError, ResourceLimitExceededError
+from kailash.utils.async_types import _is_native_awaitable
 from kailash.utils.secure_logging import (
     safe_callable_name,
     safe_exception_frames,
@@ -41,6 +42,58 @@ from kailash.utils.secure_logging import (
 from kailash.utils.url_credentials import mask_url, process_local_config_key
 
 logger = logging.getLogger(__name__)
+
+
+async def _close_owned_pool(pool: Any, *, outcome=None) -> None:
+    """Attempt both driver close phases, preserving the first terminal failure."""
+    from kailash.nodes.base import _get_execution_attribute
+    from kailash.utils.resource_manager import (
+        _cleanup_control,
+        _cleanup_owner,
+        _CleanupOutcome,
+    )
+
+    context = _POOL_DRIVER_OUTCOME.get()
+    if outcome is None and context is not None and context[0] is asyncio.current_task():
+        outcome = context[1]
+    outcome = _CleanupOutcome() if outcome is None else outcome
+    first_error = None
+    stage = _CleanupOutcome()
+    detach = outcome.link(stage, controls_only=True)
+    try:
+        with _cleanup_owner(stage, controls_only=True):
+            for name in ("close", "wait_closed"):
+                try:
+                    callback = _get_execution_attribute(pool, name, None, strict=True)
+                    if callback is not None:
+                        result = callback()
+                        if _is_native_awaitable(result):
+                            await result
+                except BaseException as error:
+                    if first_error is None:
+                        first_error = error
+                    control = _cleanup_control(error)
+                    if control is not None:
+                        outcome.record(control)
+                try:
+                    # A callback can cancel its owner and return without suspending.
+                    await asyncio.sleep(0)
+                except BaseException as error:
+                    if first_error is None:
+                        first_error = error
+                    outcome.record(error)
+    finally:
+        detach()
+    failure = outcome.error()
+    if failure is not None:
+        raise failure
+    if first_error is not None:
+        raise first_error
+
+
+_POOL_DRIVER_OUTCOME = contextvars.ContextVar(
+    "kailash_pool_driver_outcome", default=None
+)
 
 
 class ResourceCoordinator:

@@ -1222,6 +1222,8 @@ with LocalRuntime(enable_cycles=True) as runtime:
 
 ---
 
+The internal `_close_owned_pool` provider attempts `close` and `wait_closed` through strict attribute discovery, classifies callback results with `_is_native_awaitable`, and selects a recorded cleanup outcome before its first phase error. Its ambient outcome is adopted only when the stored owner is the current task. This provider extraction does not migrate runtime consumers or certify their lifecycle behavior. Sources: `src/kailash/runtime/resource_manager.py:47-91`, `src/kailash/runtime/resource_manager.py:94-96`.
+
 ## 13. Key Invariants
 
 1. **Return structure**: Every runtime `execute` variant returns `tuple[dict[str, Any], str | None]`. No exceptions.
