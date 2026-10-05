@@ -5,6 +5,7 @@ management across the SDK, ensuring proper cleanup and preventing memory leaks.
 """
 
 import asyncio
+import contextvars
 import inspect
 import logging
 import threading
@@ -12,6 +13,8 @@ import weakref
 from collections import defaultdict
 from contextlib import asynccontextmanager, contextmanager
 from datetime import UTC, datetime
+from itertools import count
+from types import CoroutineType
 from typing import Any, Callable, Dict, Generic, Optional, Set, TypeVar
 
 from kailash.utils.secure_logging import safe_type_name
@@ -21,38 +24,523 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
-async def _await_cleanup(awaitable):
-    """Finish cleanup despite repeated caller cancellation, then propagate it."""
-    task = asyncio.ensure_future(awaitable)
-    cancelled = False
-    while not task.done():
-        completed = asyncio.get_running_loop().create_future()
+def _cleanup_observe(handle, operation, *args, **kwargs):
+    """Use native completion state, or a checked truthful opaque protocol."""
+    native_mro = type.__dict__["__mro__"].__get__(type(handle))
+    if any(base is asyncio.Future for base in native_mro):
+        return operation(handle, *args, **kwargs)
+
+    from kailash.nodes.base import _get_execution_attribute
+
+    method = _get_execution_attribute(handle, operation.__name__, strict=True)
+    if not callable(method):
+        raise TypeError(f"Cleanup owner must expose {operation.__name__}")
+    result = method(*args, **kwargs)
+    if operation is asyncio.Future.done and result is not True and result is not False:
+        raise TypeError("Cleanup owner done must return bool")
+    return result
+
+
+def _cleanup_admit(handle, loop):
+    """Refuse dependent native waits before observing or registering completion."""
+    if handle is asyncio.current_task():
+        raise RuntimeError("Cleanup cannot await its owner task")
+    native_mro = type.__dict__["__mro__"].__get__(type(handle))
+    if (
+        any(base is asyncio.Future for base in native_mro)
+        and not asyncio.Future.done(handle)
+        and asyncio.Future.get_loop(handle) is not loop
+    ):
+        raise RuntimeError("Cleanup cannot await pending work from another loop")
+
+
+def _cleanup_owner_pending(owner: Any) -> bool:
+    """Observe ancestry in a running loop; opaque owners retain their protocol."""
+    if owner is asyncio.current_task() and owner is not None:
+        return True
+    return not _cleanup_observe(owner, asyncio.Future.done)
+
+
+async def _await_cleanup(awaitable, *, on_cancel=None):
+    """Drain cleanup, optionally observing the first caller cancellation once.
+
+    ``on_cancel`` is a synchronous recorder for owners that order callback
+    controls with caller cancellation. It cannot replace the saved cancellation
+    or interrupt resource drain. Omission preserves caller-priority behavior.
+    """
+    if awaitable is asyncio.current_task():
+        raise RuntimeError("Cleanup cannot await its owner task")
+    # Keep existing native Future/Task custody. For other returned awaitables,
+    # hand task machinery a native coroutine: ensure_future's duck typing reads
+    # instance __class__ before it ever starts the owned cleanup.
+    owner = None
+    entered = False
+    loop = asyncio.get_running_loop()
+
+    async def close_unstarted():
+        first_error = None
+        if owner is not None and not entered:
+            for coroutine in (owner, awaitable):
+                coroutine_type = type(coroutine)
+                if coroutine_type is CoroutineType:
+                    try:
+                        coroutine.close()
+                    except BaseException as error:
+                        if first_error is None:
+                            first_error = error
+            awaitable_type = type(awaitable)
+            if awaitable_type is CoroutineType:
+                try:
+                    # A primed native input can cancel this caller while being
+                    # closed. Finish that close before returning its first error
+                    # or the earlier admission/task failure.
+                    await asyncio.sleep(0)
+                except BaseException as error:
+                    if first_error is None:
+                        first_error = error
+        return first_error
+
+    native_mro = type.__dict__["__mro__"].__get__(type(awaitable))
+    if any(base is asyncio.Future for base in native_mro):
+        task = awaitable
+    else:
+
+        async def finish_owned():
+            nonlocal entered
+            entered = True
+            return await awaitable
+
+        owner = finish_owned()
+        try:
+            task = asyncio.create_task(owner)
+        except BaseException:
+            await close_unstarted()
+            raise
+    try:
+        _cleanup_admit(task, loop)
+    except BaseException:
+        await close_unstarted()
+        raise
+
+    def observe(operation, *args):
+        return _cleanup_observe(task, operation, *args)
+
+    cancellation = None
+    while not observe(asyncio.Future.done):
+        completed = asyncio.Future(loop=loop)
 
         def finished(_task, completed=completed):
-            if not completed.done():
-                completed.set_result(None)
+            if not asyncio.Future.done(completed):
+                asyncio.Future.set_result(completed, None)
 
-        task.add_done_callback(finished)
+        observe(asyncio.Future.add_done_callback, finished)
         try:
             # Cancellation affects only this completion notification, never the
             # resource cleanup task. Its exception is retrieved exactly once.
             await completed
-        except asyncio.CancelledError:
-            cancelled = True
+        except asyncio.CancelledError as error:
+            if cancellation is None:
+                cancellation = error
+                if on_cancel is not None:
+                    try:
+                        on_cancel(error)
+                    except BaseException:
+                        # The observer is secondary to the saved cancellation.
+                        pass
+                    try:
+                        # Consume observer cancel-and-return while still owning
+                        # the wait; later caller cancellations remain secondary.
+                        await asyncio.sleep(0)
+                    except BaseException:
+                        pass
         finally:
-            task.remove_done_callback(finished)
+            observe(asyncio.Future.remove_done_callback, finished)
+    # Task acceptance alone does not consume the nested native coroutine: a
+    # factory may cancel the wrapper before its first step. Release that custody
+    # after settlement, without invoking custom close methods or replaying work.
+    unstarted_error = await close_unstarted()
     try:
-        result = task.result()
-    except Exception as exc:
-        if cancelled:
-            logger.error(
-                "Error cleaning up cancelled resource: %s", safe_type_name(exc)
-            )
-            raise asyncio.CancelledError from exc
+        result = observe(asyncio.Future.result)
+    except BaseException as exc:
+        if cancellation is not None:
+            try:
+                logger.error(
+                    "Error cleaning up cancelled resource: %s", safe_type_name(exc)
+                )
+            except BaseException:
+                # A diagnostic sink cannot replace the already-owned cancellation.
+                pass
+            try:
+                # Consume a sink's synchronous self-cancel before the caller can
+                # catch the primary and continue using this task.
+                await asyncio.sleep(0)
+            except BaseException:
+                pass
+            if cancellation is exc:
+                raise cancellation
+            raise cancellation from exc
         raise
-    if cancelled:
-        raise asyncio.CancelledError
+    if cancellation is not None:
+        raise cancellation
+    if unstarted_error is not None:
+        raise unstarted_error
     return result
+
+
+_CLEANUP_CONTROL_ORDER = count()
+
+
+_CLEANUP_GRAPH_LOCK = threading.RLock()
+
+
+_CLEANUP_OBSERVATION = contextvars.ContextVar("cleanup_observation", default=())
+
+
+_CLEANUP_CANCELLATION = contextvars.ContextVar("cleanup_cancellation", default=())
+
+
+class _CleanupOutcome:
+    """Retain ordered errors and task-classified controls across owned edges."""
+
+    def __init__(self):
+        self.control = None
+        self._terminal = None
+        self.children = []
+        self._links = []
+
+    def record(self, error):
+        terminal = _cleanup_control(error) is not None
+        with _CLEANUP_GRAPH_LOCK:
+            self._record_preclassified(error, terminal)
+
+    def _record_preclassified(self, error, terminal):
+        event = (next(_CLEANUP_CONTROL_ORDER), error)
+        self._retain(event, event if terminal else None)
+
+    @staticmethod
+    def _check(outcome):
+        outcome_type = type(outcome)
+        if outcome_type is not _CleanupOutcome:
+            raise TypeError("Cleanup links require a native cleanup outcome")
+
+    def _walk(self, controls_only=False):
+        active, visited = set(), set()
+        stack = [(self, controls_only, False)]
+        while stack:
+            node, projected, leaving = stack.pop()
+            self._check(node)
+            key = (id(node), projected)
+            if leaving:
+                active.remove(id(node))
+                continue
+            if id(node) in active:
+                raise RuntimeError("Cleanup outcome dependency cycle")
+            if key in visited:
+                continue
+            visited.add(key)
+            active.add(id(node))
+            yield node, projected
+            stack.append((node, projected, True))
+            stack.extend((child, projected, False) for child in node.children)
+            stack.extend(
+                (child, projected or filtered, False)
+                for _, child, filtered in node._links
+            )
+
+    def _snapshot(self, controls_only=False):
+        first = terminal = None
+        for node, projected in self._walk(controls_only):
+            event = node._terminal if projected else node.control
+            if event is not None and (first is None or event[0] < first[0]):
+                first = event
+            control = node._terminal
+            if control is not None and (terminal is None or control[0] < terminal[0]):
+                terminal = control
+        return first, terminal
+
+    def first(self, controls_only=False):
+        with _CLEANUP_GRAPH_LOCK:
+            return self._snapshot(controls_only)[0]
+
+    def error(self):
+        event = self.first()
+        return event[1] if event is not None else None
+
+    def _retain(self, event, terminal):
+        if event is not None and (self.control is None or event[0] < self.control[0]):
+            self.control = event
+        if terminal is not None and (
+            self._terminal is None or terminal[0] < self._terminal[0]
+        ):
+            self._terminal = terminal
+
+    def link(self, child, *, controls_only=False):
+        """Return a detacher for this exact edge, retaining original ordering."""
+        self._check(child)
+        token = object()
+        with _CLEANUP_GRAPH_LOCK:
+            if any(node is self for node, _ in child._walk()):
+                raise RuntimeError("Cleanup outcome dependency cycle")
+            self._links.append((token, child, controls_only))
+
+        def detach():
+            with _CLEANUP_GRAPH_LOCK:
+                for index, (owned, _, _) in enumerate(self._links):
+                    if owned is token:
+                        self._retain(child.first(controls_only), child.first(True))
+                        del self._links[index]
+                        break
+
+        return detach
+
+    def compact(self):
+        """Drop completed graphs without recreating their first event."""
+        with _CLEANUP_GRAPH_LOCK:
+            first, terminal = self.first(), self.first(True)
+            self._retain(first, terminal)
+            self.children.clear()
+            self._links.clear()
+
+
+class _CleanupScope:
+    def __init__(self, outcome):
+        self.outcome = outcome
+        self.task = asyncio.current_task()
+        self.active = True
+
+
+def _current_cleanup_scope():
+    try:
+        task = asyncio.current_task()
+    except RuntimeError:
+        return None
+    for scope in reversed(_CLEANUP_OBSERVATION.get()):
+        if scope.active and scope.task is task:
+            return scope
+    return None
+
+
+def _current_cleanup_outcome():
+    scope = _current_cleanup_scope()
+    return scope.outcome if scope is not None else None
+
+
+def _record_cleanup_primary(error):
+    """Declare a body failure before isolating its secondary cleanup work."""
+    outcome = _current_cleanup_outcome()
+    if error is not None and outcome is not None:
+        outcome.record(error)
+
+
+class _CleanupCancellationScope:
+    def __init__(self, token):
+        self.token = token
+        self.task = asyncio.current_task()
+        self.active = True
+
+
+class _cleanup_cancel_scope:
+    """Exclude one task-local deadline without touching escaping error metadata."""
+
+    def __init__(self, token):
+        self.token = token
+
+    def __enter__(self):
+        self.policy = _CleanupCancellationScope(self.token)
+        self.reset = _CLEANUP_CANCELLATION.set(
+            (*_CLEANUP_CANCELLATION.get(), self.policy)
+        )
+
+    def __exit__(self, exc_type, error, traceback):
+        self.policy.active = False
+        _CLEANUP_CANCELLATION.reset(self.reset)
+        return False
+
+
+class _CleanupObservation:
+    """Prepared cancellation metadata; operations below run under graph custody."""
+
+    def __init__(self, error):
+        from kailash.runtime.resource_manager import _exception_is
+
+        self.error = error
+        self.terminal = _cleanup_control(error) is not None
+        self.event = self.control = None
+        self.excluded = False
+        if _exception_is(error, asyncio.CancelledError):
+            values = BaseException.args.__get__(error)
+            task = asyncio.current_task()
+            self.excluded = len(values) == 1 and any(
+                policy.active and policy.task is task and values[0] is policy.token
+                for policy in _CLEANUP_CANCELLATION.get()
+            )
+
+    def snapshot(self, outcome, *, controls_only=False):
+        if outcome is not None:
+            self.event, self.control = outcome._snapshot(controls_only)
+        return self.event[1] if self.event is not None else None
+
+    def publish(self, expected_parent=None):
+        parent = _current_cleanup_outcome()
+        if parent is None or (
+            expected_parent is not None and parent is not expected_parent
+        ):
+            return
+        if self.event is not None:
+            parent._retain(self.event, self.control)
+        elif not self.excluded:
+            self.record(parent)
+
+    def record(self, outcome):
+        outcome._record_preclassified(self.error, self.terminal)
+
+
+@contextmanager
+def _cleanup_observation(error):
+    # Classification can acquire the retry-scope lock and lazily import types.
+    # Resolve it before taking the graph lock; the transaction is native data only.
+    observation = _CleanupObservation(error)
+    with _CLEANUP_GRAPH_LOCK:
+        yield observation
+
+
+def _publish_cleanup_cancel(error, *, observed=None):
+    """Publish actual callback cancellation, excluding private deadline tokens."""
+    from kailash.runtime.resource_manager import _exception_is
+
+    outcome = _current_cleanup_outcome()
+    if outcome is None:
+        return
+    if observed is not None:
+        outcome.record(observed)
+        return
+    if _exception_is(error, asyncio.CancelledError):
+        values = BaseException.args.__get__(error)
+        if len(values) == 1 and any(
+            policy.active
+            and policy.task is asyncio.current_task()
+            and values[0] is policy.token
+            for policy in _CLEANUP_CANCELLATION.get()
+        ):
+            return
+    outcome.record(error)
+
+
+class _cleanup_owner:
+    """Bind actual-task publication without touching escaping error metadata.
+
+    Inherited scopes reject recursive waits but grant no publication authority.
+    Quiet boundaries project controls classified at their original record site.
+    """
+
+    def __init__(self, outcome, *, controls_only=False):
+        self.outcome = outcome
+        self.controls_only = controls_only
+        self.detach = None
+        self.joined = False
+
+    def __enter__(self):
+        parent = _current_cleanup_scope()
+        if parent is not None and parent.outcome is self.outcome:
+            self.joined = True
+            return parent
+        if (
+            self.outcome is not None
+            and parent is not None
+            and parent.outcome is not None
+        ):
+            self.detach = parent.outcome.link(
+                self.outcome, controls_only=self.controls_only
+            )
+        self.scope = _CleanupScope(self.outcome)
+        self.token = _CLEANUP_OBSERVATION.set((*_CLEANUP_OBSERVATION.get(), self.scope))
+        return self.scope
+
+    def __exit__(self, exc_type, error, traceback):
+        if not self.joined:
+            self.scope.active = False
+            _CLEANUP_OBSERVATION.reset(self.token)
+            try:
+                if self.outcome is not None:
+                    self.outcome.compact()
+            finally:
+                if self.detach is not None:
+                    self.detach()
+        return False
+
+
+async def _await_cleanup_outcome(awaitable, outcome):
+    """Drain a shared owner while keeping external cancellation private."""
+    native_mro = type.__dict__["__mro__"].__get__(type(awaitable))
+    completed = any(
+        base is asyncio.Future for base in native_mro
+    ) and asyncio.Future.done(awaitable)
+    try:
+        for scope in _CLEANUP_OBSERVATION.get():
+            if scope.active and scope.outcome is outcome and not completed:
+                raise RuntimeError("Cleanup cannot await its own active outcome")
+        parent = _current_cleanup_outcome()
+        detach = (
+            parent.link(outcome)
+            if parent is not None and parent is not outcome
+            else None
+        )
+    except BaseException:
+        awaitable_type = type(awaitable)
+        if awaitable_type is CoroutineType:
+            try:
+                awaitable.close()
+            except BaseException:
+                # Admission failed first; native close cannot replace that error.
+                pass
+            try:
+                await asyncio.sleep(0)
+            except BaseException:
+                # Native close may cancel-and-return/raise on this same task.
+                # Consume its pending request before exposing the first rejection.
+                pass
+        raise
+    first_terminal = None
+
+    def cancelled(error):
+        nonlocal first_terminal
+        if first_terminal is None:
+            with _cleanup_observation(error) as observation:
+                observed = observation.snapshot(outcome)
+                first_terminal = error if observed is None else observed
+                if parent is not None:
+                    observation.publish(parent)
+
+    try:
+        try:
+            result = await _await_cleanup(awaitable, on_cancel=cancelled)
+        except BaseException as error:
+            if first_terminal is None:
+                observed = outcome.error()
+                first_terminal = error if observed is None else observed
+            raise first_terminal
+        if first_terminal is not None:
+            raise first_terminal
+        return result
+    finally:
+        if detach is not None:
+            detach()
+
+
+def _cleanup_control(error):
+    """Return a terminal failure without consulting exception instance metadata."""
+    from kailash.runtime.resource_manager import (
+        _exception_is,
+        _raise_if_execution_control,
+    )
+
+    if not _exception_is(error, Exception):
+        return error
+    try:
+        _raise_if_execution_control(error)
+    except BaseException as control:
+        return control
+    return None
 
 
 class ResourcePool(Generic[T]):
