@@ -1161,3 +1161,267 @@ class AsyncConcurrencyLimiter:
         """Get concurrency statistics."""
         async with self._lock:
             return {"active": self._active, "peak": self._peak}
+
+
+class _CleanupInvocation:
+    """Retain one native worker and its original returned-work coordinator.
+
+    The consumer must retain this request before calling ``start``. ``wait`` can
+    report uncertain submission or unclassified worker settlement while the
+    coordinator remains owned here; only ``drained`` permits releasing custody.
+    Callback completion alone does not settle a returned awaitable. Rejected,
+    unentered requests may be replaced; all others must be observed, not replayed.
+    """
+
+    def __init__(self, callback, args=()):
+        from concurrent.futures import Future
+
+        if not callable(callback):
+            raise TypeError("Cleanup invocation callback must be callable")
+        if type(args) is not tuple:
+            raise TypeError("Cleanup invocation arguments must be a tuple")
+        self.callback = callback
+        self.args = args
+        self.outcome = _CleanupOutcome()
+        self.coordinator = None
+        self.worker = None
+        self.worker_thread = None
+        self.submission = "not_submitted"
+        self.unclassified = False
+        self.callback_entered = False
+        self.callback_completed = Future()
+        self.completion = Future()
+        self.observation = Future()
+        self.returned_started = False
+        self.returned_succeeded = False
+        self.deadline_requested = False
+        self._deadline_sent = False
+        self.deadline_token = object()
+        self._lock = threading.RLock()
+        self._ready = Future()
+        self._started = False
+        self._entered = False
+        self._gate = None
+        self._runner = None
+        self._returned = None
+        self._returned_future = False
+        self._value = None
+
+    @property
+    def drained(self):
+        return self.completion.done()
+
+    @property
+    def retry_safe(self):
+        return self.drained and self.submission == "not_submitted"
+
+    @property
+    def unresolved(self):
+        return (
+            self.submission == "uncertain" or self.unclassified
+        ) and not self.drained
+
+    def _notify_observers(self):
+        # This notification conveys no completion or retry authority. Existing
+        # observers must wake even if they joined before the worker failed.
+        with self._lock:
+            if not self.observation.done():
+                self.observation.set_result(None)
+
+    def _record(self, error):
+        from kailash.runtime.resource_manager import _exception_is
+
+        # A copied worker context has no deadline authority. This exclusion
+        # requires the actual coordinator and a deadline requested on this owner.
+        if self.deadline_requested and _exception_is(error, asyncio.CancelledError):
+            try:
+                actual_owner = asyncio.current_task() is self.coordinator
+            except RuntimeError:
+                actual_owner = False
+            values = BaseException.args.__get__(error)
+            if actual_owner and len(values) == 1 and values[0] is self.deadline_token:
+                return
+        self.outcome.record(error)
+
+    def _invoke(self):
+        with self._lock:
+            self.worker_thread = threading.current_thread()
+            self.callback_entered = True
+        try:
+            result = (True, self.callback(*self.args))
+        except BaseException as error:
+            # Explicit worker ownership permits private publication before either
+            # the native acknowledgement or executor Future notifies its observer.
+            self._record(error)
+            result = (False, error)
+        self.callback_completed.set_result(result)
+
+    def start(self):
+        """Publish a gated coordinator once; never retry an existing request."""
+        loop = asyncio.get_running_loop()
+        with self._lock:
+            if self._started:
+                return
+            try:
+                self._started = True
+                self._gate = asyncio.Future(loop=loop)
+                self._runner = self._run()
+                self.coordinator = loop.create_task(self._runner)
+                _cleanup_admit(self.coordinator, loop)
+                if _cleanup_observe(self.coordinator, asyncio.Future.done):
+                    loop.call_soon(self._finished, self.coordinator)
+                else:
+                    _cleanup_observe(
+                        self.coordinator,
+                        asyncio.Future.add_done_callback,
+                        self._finished,
+                    )
+            except BaseException as error:
+                self._record(error)
+                if self._runner is not None:
+                    self._runner.close()
+                self._ready.set_result(None)
+                self.completion.set_result((None, self.outcome.error()))
+                self._notify_observers()
+                raise
+            asyncio.Future.set_result(self._gate, None)
+
+    def _finished(self, task):
+        try:
+            _cleanup_observe(task, asyncio.Future.result)
+        except BaseException as error:
+            self._record(error)
+        if not self._entered:
+            # Accepted then cancelled before its first step: no submission began.
+            self._runner.close()
+        if not self._ready.done():
+            self._ready.set_result(None)
+        if not self.completion.done():
+            self.completion.set_result((self._value, self.outcome.error()))
+        self._notify_observers()
+
+    async def _checkpoint(self):
+        try:
+            await asyncio.sleep(0)
+        except BaseException as error:
+            self._record(error)
+
+    async def _run(self):
+        await self._gate
+        self._entered = True
+        with _cleanup_owner(self.outcome), _cleanup_cancel_scope(self.deadline_token):
+            try:
+                # Set uncertainty BEFORE the call. An exception after this point
+                # does not prove whether a native worker was accepted or started.
+                self.submission = "uncertain"
+                try:
+                    self.worker = asyncio.get_running_loop().run_in_executor(
+                        None, contextvars.copy_context().run, self._invoke
+                    )
+                except BaseException as error:
+                    self._record(error)
+                else:
+                    self.submission = "accepted"
+                self._ready.set_result(None)
+                if self.submission == "uncertain":
+                    self._notify_observers()
+                if self.worker is not None:
+                    try:
+                        await _await_cleanup(self.worker, on_cancel=self._record)
+                    except BaseException as error:
+                        self._record(error)
+                        if not self.callback_completed.done():
+                            # A settled/cancelled loop handle cannot establish
+                            # native rejection or callback non-entry. Report its
+                            # original failure, retaining any late callback here.
+                            self.unclassified = True
+                            self._notify_observers()
+                # The independent acknowledgement keeps custody even if native
+                # submission raised without returning the executor Future.
+                acknowledgement = asyncio.wrap_future(self.callback_completed)
+                try:
+                    result = await _await_cleanup(
+                        acknowledgement, on_cancel=self._record
+                    )
+                except BaseException as error:
+                    self._record(error)
+                    if not self.callback_completed.done():
+                        raise
+                    result = self.callback_completed.result()
+                succeeded, value = result
+                if succeeded:
+                    self._returned = value
+                    await self._checkpoint()
+                    if _is_native_awaitable(value):
+                        native_mro = type.__dict__["__mro__"].__get__(type(value))
+                        self._returned_future = any(
+                            base is asyncio.Future for base in native_mro
+                        )
+                        if self._returned_future:
+                            _cleanup_admit(value, asyncio.get_running_loop())
+                        self.returned_started = True
+                        if self.deadline_requested:
+                            asyncio.get_running_loop().call_soon(self.cancel_returned)
+                        if self._returned_future:
+                            value = await _await_cleanup(value, on_cancel=self._record)
+                        else:
+                            # Raw returned work stays in this admitted Task/Context.
+                            value = await value
+                    self._value = value
+                    self.returned_succeeded = True
+            except BaseException as error:
+                self._record(error)
+            await self._checkpoint()
+
+    def cancel_returned(self):
+        """Request a private cooperative deadline, never cancelling the worker."""
+        with self._lock:
+            self.deadline_requested = True
+            if not self.returned_started or self.drained or self._deadline_sent:
+                return False
+            self._deadline_sent = True
+        if self._returned_future:
+            return asyncio.Future.cancel(self._returned, self.deadline_token)
+        return _cleanup_observe(
+            self.coordinator, asyncio.Task.cancel, self.deadline_token
+        )
+
+    async def wait(self):
+        """Report unresolved work without abandoning its original coordinator."""
+        if not self._started:
+            raise RuntimeError("Cleanup invocation must start before observation")
+        loop = asyncio.get_running_loop()
+        ready = asyncio.wrap_future(self._ready, loop=loop)
+        first = None
+        try:
+            await _await_cleanup_outcome(ready, self.outcome)
+        except BaseException as error:
+            first = error
+        if not self.unresolved:
+            # Observe either full settlement or a later unclassified worker
+            # failure. Waiting only on completion would strand joined observers.
+            observed = asyncio.wrap_future(self.observation, loop=loop)
+            try:
+                await _await_cleanup_outcome(observed, self.outcome)
+            except BaseException as error:
+                if first is None:
+                    first = error
+        if self.unresolved:
+            # Returning this failure does not cancel the original coordinator or
+            # make a new invocation safe. The consumer must retain this request.
+            error = first if first is not None else self.outcome.error()
+            if error is None:
+                raise RuntimeError("Native cleanup submission remains unresolved")
+            raise error
+        pending = asyncio.wrap_future(self.completion, loop=loop)
+        try:
+            value, error = await _await_cleanup_outcome(pending, self.outcome)
+        except BaseException:
+            if first is not None:
+                raise first
+            raise
+        if first is not None:
+            raise first
+        if error is not None:
+            raise error
+        return value
