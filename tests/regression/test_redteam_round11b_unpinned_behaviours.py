@@ -1,21 +1,18 @@
-"""Round-11b: nine behaviours that were correct but pinned by NOTHING.
+"""Regression cases retained from the historical round-11b report.
 
-Found by the round-11 mutation lens (62 mutations, 13 proven-reachable gaps),
-re-derived against this HEAD: every mutation below left the entire 59-pin suite
-GREEN while measurably changing behaviour. Per `instrument-discipline.md`
-MUST-2(b) that is a pin gap, not an inert mutation.
+The original round-11b mutation report concerns the original test context.
+Its mutation results are historical and are not re-verified by the CSQ16
+source-only reporting correction.
 
-These are DIFFERENT from the round-11 security findings. Those were behaviours
-that were WRONG. These are behaviours that are RIGHT and undefended -- so a
-future refactor removes them silently. Several are the module's whole stated
-purpose (the `_relative_frame_path` disclosure guards are its entire privacy
-property; `_DEFAULT_FRAME_LIMIT` is the live bound on 5 of 7 sinks).
+The retained virtual `type(obj).__name__` control reaches the raising metaclass
+property. `safe_type_name` uses the canonical type descriptor instead, and its
+existing assertion expects the declared `Hostile` name. Source:
+src/kailash/utils/secure_logging.py:651-672 (`safe_type_name`). The separate
+raising-str case retains the identifier fallback assertion.
 
-ONE OF THEM PROVES A PIN OF MINE WAS VACUOUS. `test_safe_type_name_never_raises`
-used `@property def __class__`, and `type()` NEVER consults `__class__` -- so that
-object cannot make the guarded expression raise, and the pin passed identically
-with the guard present or absent. Replaced here with a metaclass whose `__name__`
-raises, which does reach it.
+The CSQ16 edits change source expectations and commentary only. This regression
+module remains NOT_RUN in that correction; stock Tier 1 hook results do not
+establish results for these regression cases.
 """
 
 import os
@@ -118,15 +115,19 @@ class TestRelativeFramePathDisclosureGuards:
 
 
 class TestTotalityGuardsAreReallyReached:
-    """MED-4 / MED-5: two guards whose only pin could not reach them."""
+    """Canonical type names and the separate raising-str fallback.
+
+    The historical class name is retained. The name case keeps its virtual-lookup
+    control while the helper bypasses the metaclass property. The identifier case
+    retains its raising-str guard pin.
+    """
 
     def test_safe_type_name_survives_a_raising_metaclass_name(self):
-        """REPLACES a vacuous pin.
+        """Canonical type names bypass a raising metaclass property.
 
-        The prior pin used `@property def __class__`. `type(obj)` does NOT
-        consult `__class__` -- it reads the real type slot -- so that object
-        could never make the guarded expression raise, and the pin passed with
-        the guard removed. A metaclass whose `__name__` raises DOES reach it.
+        The virtual `type(obj).__name__` lookup below still reaches the
+        property. The canonical type descriptor used by `safe_type_name`
+        instead reads the declared `Hostile` name without consulting it.
         """
 
         class Meta(type):
@@ -137,11 +138,11 @@ class TestTotalityGuardsAreReallyReached:
         class Hostile(metaclass=Meta):
             pass
 
-        # Establish the vector really does raise, so the pin cannot go vacuous.
+        # Preserve the virtual-lookup control: the property still raises here.
         with pytest.raises(RuntimeError):
             _ = type(Hostile()).__name__
 
-        assert safe_type_name(Hostile()) == "<unrepresentable>"
+        assert safe_type_name(Hostile()) == "Hostile"
 
     def test_safe_identifier_survives_a_raising_str(self):
         class Boom:

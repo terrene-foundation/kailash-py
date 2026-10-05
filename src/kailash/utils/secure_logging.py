@@ -236,6 +236,14 @@ def _safe_identifier(value: object, *, allow_pseudo: bool = False) -> str:
     # allowlist past its stated purpose for free.
     if allow_pseudo and text in _CPYTHON_PSEUDO_IDENTIFIERS:
         return text
+    # Mask while URL/JSON delimiters still identify credentials. Replacing
+    # punctuation first would preserve the credential but erase its context.
+    # Unlabelled caller-chosen names remain bounded identifiers, not secrets
+    # this formatter can reliably recognize.
+    try:
+        text = mask_error_text(text)
+    except Exception:
+        return "<unrepresentable>"
     cleaned = _UNSAFE_IDENTIFIER_CHARS.sub("?", text)
     # ``len`` on a str SUBCLASS is overridable, so the bound below could in
     # principle be decided by attacker code. Measured: it cannot -- ``re.sub``
@@ -657,7 +665,7 @@ def safe_type_name(obj: object) -> str:
     field is the only place it appears.
     """
     try:
-        return _safe_identifier(type(obj).__name__)
+        return _safe_identifier(type.__dict__["__name__"].__get__(type(obj)))
     except Exception:
         # Total for the same reason safe_callable_name is: this is called from
         # inside ``except`` blocks, where raising REPLACES the handled exception.
