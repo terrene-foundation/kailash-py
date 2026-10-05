@@ -31,7 +31,7 @@ Each count is rendered `value⟨token⟩`. The token is derived from that count'
 
 A page is complete only when `Signed off` equals `total`. No page is complete: CSQ16 recovery is 0 of 4.
 
-generated_from_sha: cade567ab4b6af0475ee13cfbda4da6fed1011b9
+generated_from_sha: ae4649bffff6f452b8d94c38cecc1e0f2c11a73d
 sources_digest: afad6aec1570e1d13ebfb57039abaecba3d7de891b9110786e532120f69cd24d
 
 <!-- BURNDOWN:END -->
