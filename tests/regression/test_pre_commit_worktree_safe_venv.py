@@ -74,7 +74,8 @@ def test_find_venv_python_uses_git_common_dir_resolution():
 
 @pytest.mark.regression
 @pytest.mark.parametrize("host", [None, "", "esperie-ai", "host with spaces; $(false)"])
-def test_trestle_pytest_routing_preserves_arguments_and_failure(tmp_path, host):
+@pytest.mark.parametrize("python", [None, "", "3.13", "python with spaces; $(false)"])
+def test_trestle_pytest_routing_preserves_arguments_and_failure(tmp_path, host, python):
     """The opt-in sends the exact hook arguments and propagates fleet failure."""
     import json
     import os
@@ -91,6 +92,8 @@ def test_trestle_pytest_routing_preserves_arguments_and_failure(tmp_path, host):
         "sys.exit(23)\n"
     )
     launcher.chmod(0o755)
+    checkout = tmp_path / "checkout with spaces; $(false)"
+    subprocess.run(["git", "init", "--quiet", str(checkout)], check=True)
     arguments = ["-m", "pytest", "tests/unit/", "-m", "not (slow or integration)"]
     environment = {
         **os.environ,
@@ -99,11 +102,14 @@ def test_trestle_pytest_routing_preserves_arguments_and_failure(tmp_path, host):
         "TRESTLE_ARGUMENTS": str(receipt),
     }
     environment.pop("KAILASH_TRESTLE_HOST", None)
+    environment.pop("UV_PYTHON", None)
     if host is not None:
         environment["KAILASH_TRESTLE_HOST"] = host
+    if python is not None:
+        environment["UV_PYTHON"] = python
     result = subprocess.run(
         [str(REPO_ROOT / "scripts/development/find-venv-python.sh"), *arguments],
-        cwd=tmp_path,
+        cwd=checkout,
         env=environment,
         capture_output=True,
         text=True,
@@ -132,6 +138,10 @@ def test_trestle_pytest_routing_preserves_arguments_and_failure(tmp_path, host):
     ]
     assert json.loads(receipt.read_text()) == [
         "run",
+        "--no-reap-cache",
+        "--no-reap-mirrors",
+        "--repo",
+        str(checkout.resolve()),
         *(["--host", host] if host else []),
         "--",
         "env",
@@ -141,7 +151,26 @@ def test_trestle_pytest_routing_preserves_arguments_and_failure(tmp_path, host):
         "uv",
         "run",
         "--frozen",
+        *(["--python", python] if python else []),
         *[argument for extra in expected_extras for argument in ("--extra", extra)],
         "python",
         *arguments,
     ]
+
+
+@pytest.mark.regression
+def test_trestle_pytest_routing_refuses_missing_checkout(tmp_path):
+    """Fleet routing must not dispatch tests outside a Git checkout."""
+    import os
+    import subprocess
+
+    environment = {**os.environ, "KAILASH_TRESTLE_TESTS": "1"}
+    result = subprocess.run(
+        [str(REPO_ROOT / "scripts/development/find-venv-python.sh"), "-m", "pytest"],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 64
+    assert "not inside a git repository" in result.stderr

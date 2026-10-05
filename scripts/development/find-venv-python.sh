@@ -28,11 +28,27 @@ if [ "${KAILASH_TRESTLE_TESTS:-0}" = "1" ] &&
    [ "${1:-}" = "-m" ] && [ "${2:-}" = "pytest" ]; then
   # One shared launcher honors an optional fleet host for every worker slot.
   # Keep the selector as one argument; never interpret it as shell syntax.
-  TRESTLE_ARGS=(run)
+  # Preserve pathname newlines: command substitution only trims record
+  # delimiters after a fixed non-newline suffix has protected the payload.
+  FLEET_REPO=$(git rev-parse --show-toplevel 2>/dev/null && printf '.') || FLEET_REPO=""
+  FLEET_REPO=${FLEET_REPO%.}
+  FLEET_REPO=${FLEET_REPO%$'\n'}
+  if [ -z "${FLEET_REPO}" ]; then
+    echo "find-venv-python.sh: not inside a git repository" >&2
+    exit 64
+  fi
+  FLEET_REPO=$(CDPATH='' cd -- "${FLEET_REPO}" && pwd -P && printf '.')
+  FLEET_REPO=${FLEET_REPO%.}
+  FLEET_REPO=${FLEET_REPO%$'\n'}
+  TRESTLE_ARGS=(run --no-reap-cache --no-reap-mirrors --repo "${FLEET_REPO}")
   if [ -n "${KAILASH_TRESTLE_HOST:-}" ]; then
     TRESTLE_ARGS+=(--host "${KAILASH_TRESTLE_HOST}")
   fi
-  exec trestle "${TRESTLE_ARGS[@]}" -- env -u KAILASH_TRESTLE_TESTS UV_LINK_MODE=copy uv run --frozen \
+  UV_ARGS=(run --frozen)
+  if [ -n "${UV_PYTHON:-}" ]; then
+    UV_ARGS+=(--python "${UV_PYTHON}")
+  fi
+  exec trestle "${TRESTLE_ARGS[@]}" -- env -u KAILASH_TRESTLE_TESTS UV_LINK_MODE=copy uv "${UV_ARGS[@]}" \
     --extra dev --extra server --extra http-client \
     --extra db-postgres --extra db-mysql --extra db-sqlite --extra redis \
     --extra trust --extra auth --extra auth-azure --extra monitoring \
@@ -41,14 +57,18 @@ if [ "${KAILASH_TRESTLE_TESTS:-0}" = "1" ] &&
 fi
 
 # Resolve the main checkout root via git-common-dir (worktree-safe).
-GIT_COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null || true)
+GIT_COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null && printf '.') || GIT_COMMON_DIR=""
+GIT_COMMON_DIR=${GIT_COMMON_DIR%.}
+GIT_COMMON_DIR=${GIT_COMMON_DIR%$'\n'}
 if [ -z "${GIT_COMMON_DIR}" ]; then
   echo "find-venv-python.sh: not inside a git repository" >&2
   exit 64
 fi
 
 # `--git-common-dir` returns .git (relative). Resolve to the main checkout root.
-MAIN_CHECKOUT=$(cd "${GIT_COMMON_DIR}/.." && pwd -P)
+MAIN_CHECKOUT=$(CDPATH='' cd -- "${GIT_COMMON_DIR}/.." && pwd -P && printf '.')
+MAIN_CHECKOUT=${MAIN_CHECKOUT%.}
+MAIN_CHECKOUT=${MAIN_CHECKOUT%$'\n'}
 VENV_PYTHON="${MAIN_CHECKOUT}/.venv/bin/python"
 
 if [ ! -x "${VENV_PYTHON}" ]; then
@@ -73,13 +93,26 @@ fi
 # PYTHONPATH entries precede site-packages `.pth` paths in `sys.path`, so
 # prepending the worktree's source roots makes the checkout under test the one
 # whose tests are being collected. No-op in the main checkout.
-TOPLEVEL=$(git rev-parse --show-toplevel 2>/dev/null || true)
+TOPLEVEL=$(git rev-parse --show-toplevel 2>/dev/null && printf '.') || TOPLEVEL=""
+TOPLEVEL=${TOPLEVEL%.}
+TOPLEVEL=${TOPLEVEL%$'\n'}
 if [ -n "${TOPLEVEL}" ] && [ "${TOPLEVEL}" != "${MAIN_CHECKOUT}" ]; then
   WT_PATHS=""
-  [ -d "${TOPLEVEL}/src" ] && WT_PATHS="${TOPLEVEL}/src"
+  # PYTHONPATH is a path list, so a colon in an individual source path cannot
+  # be represented. Refuse before importing from a different checkout.
+  append_worktree_source() {
+    case "$1" in
+      *:*)
+        printf 'find-venv-python.sh: source path contains an unrepresentable colon: %q\n' "$1" >&2
+        exit 66
+        ;;
+    esac
+    WT_PATHS="${WT_PATHS:+${WT_PATHS}:}$1"
+  }
+  [ -d "${TOPLEVEL}/src" ] && append_worktree_source "${TOPLEVEL}/src"
   for pkg_src in "${TOPLEVEL}"/packages/*/src; do
     [ -d "${pkg_src}" ] || continue
-    WT_PATHS="${WT_PATHS:+${WT_PATHS}:}${pkg_src}"
+    append_worktree_source "${pkg_src}"
   done
   if [ -n "${WT_PATHS}" ]; then
     export PYTHONPATH="${WT_PATHS}${PYTHONPATH:+:${PYTHONPATH}}"
