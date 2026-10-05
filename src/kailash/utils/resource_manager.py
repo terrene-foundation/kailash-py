@@ -17,7 +17,12 @@ from itertools import count
 from types import CoroutineType
 from typing import Any, Callable, Dict, Generic, Optional, Set, TypeVar
 
-from kailash.utils.secure_logging import safe_type_name
+from kailash.utils.async_types import _is_native_awaitable
+from kailash.utils.secure_logging import (
+    safe_exception_frames,
+    safe_log_field,
+    safe_type_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -543,6 +548,151 @@ def _cleanup_control(error):
     return None
 
 
+def _report_cleanup_failure(
+    error, primary=None, resource_type="resource", *, reporter=None
+):
+    """Keep body/control ownership even when the diagnostic sink fails."""
+    terminal = _cleanup_control(error) if primary is None else None
+    report = logger if reporter is None else reporter
+    try:
+        report.error(
+            "Error cleaning up %s: %s",
+            safe_log_field(resource_type),
+            safe_exception_frames(error),
+        )
+    except BaseException as diagnostic:
+        if primary is None and terminal is None:
+            terminal = _cleanup_control(diagnostic)
+    if terminal is not None:
+        raise terminal
+
+
+async def _report_cleanup_failure_async(
+    error, primary=None, resource_type="resource", *, reporter=None, on_control=None
+):
+    """Own diagnostic self-cancellation before the asynchronous caller resumes."""
+    terminal = None
+    try:
+        _report_cleanup_failure(error, primary, resource_type, reporter=reporter)
+    except BaseException as caught:
+        terminal = caught
+        if on_control is not None:
+            on_control(terminal)
+    try:
+        await asyncio.sleep(0)
+    except BaseException as caught:
+        if primary is None and terminal is None:
+            terminal = caught
+            if on_control is not None:
+                on_control(terminal)
+    if terminal is not None:
+        raise terminal
+
+
+async def _run_resource_cleanup(
+    callback,
+    resource,
+    primary=None,
+    resource_type="resource",
+    *,
+    outcome=None,
+    already_owned=False,
+    on_admitted=None,
+):
+    """Own callback, diagnostics and pending cancellation in the same task."""
+    _record_cleanup_primary(primary)
+    first_terminal = primary
+    stage = _CleanupOutcome() if primary is None else None
+    detach = (
+        outcome.link(stage, controls_only=True)
+        if outcome is not None and stage is not None
+        else None
+    )
+
+    parent = _current_cleanup_outcome()
+    parent_link = (
+        parent.link(stage, controls_only=True)
+        if parent is not None and stage is not None
+        else None
+    )
+
+    def record(error):
+        nonlocal first_terminal
+        with _cleanup_observation(error) as observation:
+            observed = observation.snapshot(stage, controls_only=True)
+            if stage is not None:
+                observation.record(stage)
+            if first_terminal is None:
+                first_terminal = error if observed is None else observed
+
+    def cancelled(error):
+        nonlocal first_terminal
+        with _cleanup_observation(error) as observation:
+            observed = observation.snapshot(stage, controls_only=True)
+            if first_terminal is None:
+                first_terminal = error if observed is None else observed
+            if primary is None and parent is not None:
+                observation.publish(parent)
+
+    async def drain():
+        with _cleanup_owner(stage, controls_only=True):
+            if on_admitted is not None:
+                on_admitted()
+            error = None
+            try:
+                result = callback(resource)
+                try:
+                    # Retain a returned finalizer before consuming a callback's
+                    # pending self-cancel; it must still enter and settle.
+                    await asyncio.sleep(0)
+                except BaseException as caught:
+                    record(caught)
+                    error = caught
+                if _is_native_awaitable(result):
+                    native_mro = type.__dict__["__mro__"].__get__(type(result))
+                    if any(base is asyncio.Future for base in native_mro):
+                        # Accepted native work keeps its completion custody even
+                        # if the callback owner is cancelled during the wait.
+                        await _await_cleanup(result, on_cancel=record)
+                    else:
+                        # Raw coroutines retain the callback's Task/Context.
+                        await result
+            except BaseException as caught:
+                error = caught
+                terminal = _cleanup_control(error)
+                if terminal is not None:
+                    record(terminal)
+            try:
+                await asyncio.sleep(0)
+            except BaseException as caught:
+                record(caught)
+                if error is None:
+                    error = caught
+            if error is not None:
+                try:
+                    await _report_cleanup_failure_async(
+                        error, first_terminal, resource_type, on_control=record
+                    )
+                except BaseException as caught:
+                    record(caught)
+
+    try:
+        try:
+            if already_owned:
+                await drain()
+            else:
+                await _await_cleanup(drain(), on_cancel=cancelled)
+        except BaseException as caught:
+            cancelled(caught)
+        if primary is None and first_terminal is not None:
+            raise first_terminal
+    finally:
+        if parent_link is not None:
+            parent_link()
+        if detach is not None:
+            detach()
+
+
 class ResourcePool(Generic[T]):
     """Generic resource pool for connection pooling and resource reuse.
 
@@ -932,16 +1082,15 @@ async def async_managed_resource(
     """
     _resource_tracker.register(resource_type, resource)
 
+    primary = None
     try:
         yield resource
+    except BaseException as error:
+        primary = error
+        raise
     finally:
-        if cleanup:
-            try:
-                result = cleanup(resource)
-                if inspect.isawaitable(result):
-                    await _await_cleanup(result)
-            except Exception as e:
-                logger.error(f"Error cleaning up {resource_type}: {e}")
+        if cleanup is not None:
+            await _run_resource_cleanup(cleanup, resource, primary, resource_type)
 
 
 class ConcurrencyLimiter:
