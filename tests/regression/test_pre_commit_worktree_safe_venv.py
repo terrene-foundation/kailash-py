@@ -73,9 +73,18 @@ def test_find_venv_python_uses_git_common_dir_resolution():
 
 
 @pytest.mark.regression
-@pytest.mark.parametrize("host", [None, "", "esperie-ai", "host with spaces; $(false)"])
-@pytest.mark.parametrize("python", [None, "", "3.13", "python with spaces; $(false)"])
-def test_trestle_pytest_routing_preserves_arguments_and_failure(tmp_path, host, python):
+@pytest.mark.parametrize(
+    "host,python,platform",
+    [
+        (host, python, None)
+        for host in [None, "", "esperie-ai", "host with spaces; $(false)"]
+        for python in [None, "", "3.13", "python with spaces; $(false)"]
+    ]
+    + [(None, None, ""), (None, None, "linux"), (None, None, "platform with spaces")],
+)
+def test_trestle_pytest_routing_preserves_arguments_and_failure(
+    tmp_path, host, python, platform
+):
     """The opt-in sends the exact hook arguments and propagates fleet failure."""
     import json
     import os
@@ -102,11 +111,14 @@ def test_trestle_pytest_routing_preserves_arguments_and_failure(tmp_path, host, 
         "TRESTLE_ARGUMENTS": str(receipt),
     }
     environment.pop("KAILASH_TRESTLE_HOST", None)
+    environment.pop("KAILASH_TRESTLE_OS", None)
     environment.pop("UV_PYTHON", None)
     if host is not None:
         environment["KAILASH_TRESTLE_HOST"] = host
     if python is not None:
         environment["UV_PYTHON"] = python
+    if platform is not None:
+        environment["KAILASH_TRESTLE_OS"] = platform
     result = subprocess.run(
         [str(REPO_ROOT / "scripts/development/find-venv-python.sh"), *arguments],
         cwd=checkout,
@@ -142,6 +154,7 @@ def test_trestle_pytest_routing_preserves_arguments_and_failure(tmp_path, host, 
         "--no-reap-mirrors",
         "--repo",
         str(checkout.resolve()),
+        *(["--os", platform] if platform else []),
         *(["--host", host] if host else []),
         "--",
         "env",

@@ -41,6 +41,10 @@ if [ "${KAILASH_TRESTLE_TESTS:-0}" = "1" ] &&
   FLEET_REPO=${FLEET_REPO%.}
   FLEET_REPO=${FLEET_REPO%$'\n'}
   TRESTLE_ARGS=(run --no-reap-cache --no-reap-mirrors --repo "${FLEET_REPO}")
+  # Filter the fleet for platform-gated checks while retaining host arbitration.
+  if [ -n "${KAILASH_TRESTLE_OS:-}" ]; then
+    TRESTLE_ARGS+=(--os "${KAILASH_TRESTLE_OS}")
+  fi
   if [ -n "${KAILASH_TRESTLE_HOST:-}" ]; then
     TRESTLE_ARGS+=(--host "${KAILASH_TRESTLE_HOST}")
   fi
