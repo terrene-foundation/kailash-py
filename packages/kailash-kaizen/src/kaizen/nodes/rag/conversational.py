@@ -333,7 +333,6 @@ def _track_conversation_topic(current_query="", session_context=None) -> dict:
 
     # Determine if topic changed.
     topic_changed = False
-    transition_type = "continuation"
 
     if not current_topic and query_topics:
         # First topic.
