@@ -1,0 +1,11 @@
+# CSQ16 sweep and review instrument corrections — 2026-10-06
+
+User approved correcting documentation/deprecating the unused Kaizen baseline_data/risk_threshold settings while preserving calls. Author3f and final dev-context96ad carry this choice; security R1 is NONCLEAN on actual log/refusal-delivery findings, so correctness CLEAN cannot close the wrapper lane. Source: behavior wrapper404-406/315-328/478-492; threat wrapper324-338/471-485 at96ad.
+
+The root initially assumed the host security-reviewer role had Bash+Read. Its actual operating specification forbids Bash/report mutations; the dispatch inspected no SDK source and returned zero evidence. Untouched review trees were transferred to the existing generic worker with actual Bash+Read and a source-only adversarial brief. The role refusal is not a security all-clear.
+
+Native correctness R1 was NONCLEAN after a source transport omitted the contextmanager decorator and a later mirror lacked canonical .venv/bin/python (helper65). Corrected full-source/author binding identities and an explicitly changed canonical frozen UV environment completed the same R1 on esperie-ai, source-only. Requested Python3.13.13 is not observed metadata when logs are silent. Old NONCLEAN/raw failures remain immutable; zero old clean-round transfer.
+
+The native initial writer indexed its own stdout before its final print. Its interim empty hash cannot certify the completed output. The already-retained immutable writer and actual full terminal stdout are kept with an explicit zero-credit limitation; archive failures were corrected without rewriting original reports or source. Fresh archive832 files was hash-verified, receipt e0738a129e36e2c6a10b81f8453fb74816d5602c406794b04a9d71299c5e5806.
+
+RAG's allocation wording called the source generated text; current source is a lifted `_track_conversation_topic` helper. The owned8c delta remains exactly one initializer deletion, preserving four exhaustive assignments and the full continuation phrase table. Source: `packages/kailash-kaizen/src/kaizen/nodes/rag/conversational.py:293-380` at8c. These are brief corrections, not a new behavior claim. Full sweep report records all ten scopes, opposite controls, zero deferred-quality items and nine unknown-owner forest candidates held for custody.

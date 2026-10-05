@@ -1,3 +1,11 @@
+# Current CSQ16 recovery checkpoint — 2026-10-06
+
+This checkpoint supersedes historical fleet/checkout descriptions below. Current source dev7bb has thirteen bounded prerequisite landings and original Signed off0⟨d56000⟩ of total4⟨108e27⟩. Full ten-area sweep and canonical ledger are at `04-validate/sweep-2026-10-06-current-dev.md` and `02-plans/csq16-recovery-ledger-2026-10-02.md`; the generated burndown remains tied to the frozen original register. Original four dirty trees, peer ownership and unresolved source/physical/release gates stay held. Root alone integrates and reaps after source/evidence custody plus actual owner/job release. No new executable SDK/native/security probes or main promotion are authorized by this checkpoint.
+
+| ID | owner | item | value_anchor | status |
+| --- | --- | --- | --- | --- |
+| CSQ16 | esperie | CSQ16 worktree recovery | User: "Finish and clean up the CSQ16 worktrees" / "Keep burning down" | OPEN; follow canonical recovery ledger and sweep report, not historical fleet claims below. |
+
 # Session Notes — cont-33 (WIP ceilings re-based onto LANES; d684ce20f reconciled)
 
 ## cont-33 — the work-ledger / WIP-discipline change (READ FIRST)
