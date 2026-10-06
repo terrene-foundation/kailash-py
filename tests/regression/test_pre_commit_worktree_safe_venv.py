@@ -18,12 +18,28 @@ lands as part of the W7 follow-up cycle.
 """
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _isolated_routing_environment() -> dict[str, str]:
+    """Fixture cwd and parameters own Git discovery and routing selectors."""
+    selectors = {
+        "KAILASH_TRESTLE_HOST",
+        "KAILASH_TRESTLE_OS",
+        "KAILASH_TRESTLE_TESTS",
+        "UV_PYTHON",
+    }
+    return {
+        name: value
+        for name, value in os.environ.items()
+        if not name.startswith("GIT_") and name not in selectors
+    }
 
 
 @pytest.mark.regression
@@ -103,7 +119,6 @@ def test_trestle_python_routing_preserves_arguments_and_failure(
 ):
     """Default fleet routing preserves argv/status and refuses old selectors."""
     import json
-    import os
     import subprocess
     import sys
 
@@ -118,17 +133,17 @@ def test_trestle_python_routing_preserves_arguments_and_failure(
     )
     launcher.chmod(0o755)
     checkout = tmp_path / "checkout with spaces; $(false)\n"
-    subprocess.run(["git", "init", "--quiet", str(checkout)], check=True)
-    environment = {
-        **os.environ,
-        "PATH": f"{tmp_path}:{os.environ['PATH']}",
-        "TRESTLE_ARGUMENTS": str(receipt),
-        "TRESTLE_EXIT": str(exit_code),
-    }
-    environment.pop("KAILASH_TRESTLE_HOST", None)
-    environment.pop("KAILASH_TRESTLE_OS", None)
-    environment.pop("KAILASH_TRESTLE_TESTS", None)
-    environment.pop("UV_PYTHON", None)
+    environment = _isolated_routing_environment()
+    subprocess.run(
+        ["git", "init", "--quiet", str(checkout)], check=True, env=environment
+    )
+    environment.update(
+        {
+            "PATH": f"{tmp_path}:{environment['PATH']}",
+            "TRESTLE_ARGUMENTS": str(receipt),
+            "TRESTLE_EXIT": str(exit_code),
+        }
+    )
     if host is not None:
         environment["KAILASH_TRESTLE_HOST"] = host
     if python is not None:
@@ -214,10 +229,10 @@ def test_trestle_python_routing_preserves_arguments_and_failure(
 @pytest.mark.regression
 def test_trestle_python_routing_refuses_missing_checkout(tmp_path):
     """Fleet routing must not dispatch tests outside a Git checkout."""
-    import os
     import subprocess
 
-    environment = {**os.environ, "KAILASH_TRESTLE_TESTS": "1"}
+    environment = _isolated_routing_environment()
+    environment["KAILASH_TRESTLE_TESTS"] = "1"
     result = subprocess.run(
         [str(REPO_ROOT / "scripts/development/find-venv-python.sh"), "-m", "pytest"],
         cwd=tmp_path,
