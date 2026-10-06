@@ -113,6 +113,7 @@ from kailash.runtime.validation.error_categorizer import ErrorCategorizer
 from kailash.runtime.validation.metrics import get_metrics_collector
 from kailash.runtime.validation.suggestion_engine import ValidationSuggestionEngine
 from kailash.sdk_exceptions import (
+    ContentAwareExecutionError,
     HardTimeLimitExceeded,
     RuntimeExecutionError,
     SoftTimeLimitExceeded,
@@ -280,13 +281,6 @@ def _resolve_exception_class(exc_name: str) -> type:
             f"Allowed: {sorted(_EXCEPTION_ALLOWLIST.keys())}"
         )
     return _EXCEPTION_ALLOWLIST[exc_name]
-
-
-class ContentAwareExecutionError(WorkflowExecutionError, RuntimeExecutionError):
-    """Exception raised when content-aware success detection identifies a failure."""
-
-    node_id: str
-    failure_data: Any
 
 
 def detect_success(result):

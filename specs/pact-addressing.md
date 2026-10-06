@@ -80,7 +80,7 @@ class Address:
 
 ### 1.6 Error Hierarchy
 
-- `PactError` -- base PACT error, inherits from `TrustError`
+- `PactError` -- base PACT error, inherits directly from `Exception`; its structured `details` contract is parallel to `TrustError`, rather than inheriting from it. The canonical definition is in `src/kailash/_governance_errors.py:10-20`; `src/kailash/trust/pact/exceptions.py:16-24` reexports that class at the legacy public path. Legacy class and constructor `__module__` metadata is pinned in `src/kailash/_governance_errors.py:52-55`; this relocation does not promise identical private introspection objects or universal pickle round trips.
 - `AddressError(PactError, ValueError)` -- malformed address
 - `GrammarError(AddressError)` -- D/T/R grammar violation
 - `CompilationError(PactError)` -- org compilation structural error

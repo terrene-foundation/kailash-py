@@ -73,6 +73,8 @@ See Also:
     - :doc:`/guides/error_handling` for comprehensive error handling patterns
 """
 
+from typing import Any as _Any
+
 
 class KailashException(Exception):
     """Base exception for all Kailash SDK errors."""
@@ -194,6 +196,16 @@ class RuntimeExecutionError(RuntimeException):
     - Resources are unavailable
     - Execution is interrupted
     """
+
+
+class ContentAwareExecutionError(WorkflowExecutionError, RuntimeExecutionError):
+    """Exception raised when content-aware success detection identifies a failure."""
+
+    # Preserve the public class and serialized lookup path after relocation.
+    __module__ = "kailash.runtime.local"
+
+    node_id: str
+    failure_data: _Any
 
 
 class ResourceLimitExceededError(RuntimeException):
@@ -596,6 +608,7 @@ __all__ = [
     "WorkflowException",
     "WorkflowValidationError",
     "WorkflowExecutionError",
+    "ContentAwareExecutionError",
     "CyclicDependencyError",
     "ConnectionError",
     "CycleConfigurationError",
