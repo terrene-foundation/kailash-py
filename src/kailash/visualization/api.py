@@ -44,6 +44,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import BaseModel
 
+from kailash._execution_controls import _raise_if_execution_control
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskStatus
 from kailash.utils.http_errors import safe_http_detail
@@ -397,6 +398,7 @@ class DashboardAPIServer:
 
                 return run_responses
             except Exception as e:
+                _raise_if_execution_control(e)
                 raise HTTPException(
                     status_code=500,
                     detail=safe_http_detail(e, logger=self.logger, context="list runs"),
@@ -429,6 +431,7 @@ class DashboardAPIServer:
             except HTTPException:
                 raise
             except Exception as e:
+                _raise_if_execution_control(e)
                 raise HTTPException(
                     status_code=500,
                     detail=safe_http_detail(e, logger=self.logger, context="get run"),
@@ -466,6 +469,7 @@ class DashboardAPIServer:
             except HTTPException:
                 raise
             except Exception as e:
+                _raise_if_execution_control(e)
                 raise HTTPException(
                     status_code=500,
                     detail=safe_http_detail(
@@ -801,6 +805,7 @@ class DashboardAPIServer:
                     path=output_path, filename=filename, media_type="text/html"
                 )
             except Exception as e:
+                _raise_if_execution_control(e)
                 raise HTTPException(
                     status_code=500,
                     detail=safe_http_detail(
@@ -919,6 +924,7 @@ class DashboardAPIServer:
 
             self.logger.info(f"Generated background report: {output_path}")
         except Exception as e:
+            _raise_if_execution_control(e)
             self.logger.error(f"Background report generation failed: {e}")
 
     async def _broadcast_metrics(self):

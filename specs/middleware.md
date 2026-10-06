@@ -155,13 +155,15 @@ Note: in the actual source, the session state (`self.sessions`, `self.shared_wor
 
 **Workflow execution:**
 
-- `async execute(session_id: str, workflow_id: str, inputs: Optional[Dict[str, Any]] = None, config_overrides: Optional[Dict[str, Any]] = None) -> str` — preferred execution entry. Delegates to internal async execution helpers that use `self.runtime`.
+- `async execute(session_id: str, workflow_id: str, inputs: Optional[Dict[str, Any]] = None, config_overrides: Optional[Dict[str, Any]] = None) -> str` — preferred execution entry. Schedules `_execute_workflow_async` as a background task (`src/kailash/middleware/core/agent_ui.py:592-687`).
 - `async _execute_workflow_async(execution_id: str)` — internal
-- `async _execute_with_sdk_runtime(...)` — internal, delegates to `self.runtime`
+- `async _execute_with_sdk_runtime(...)` — internal, constructs a local `LocalRuntime` and awaits its `execute_async`; it does not delegate to `self.runtime` (`src/kailash/middleware/core/agent_ui.py:767-809`). This helper's resource cleanup remains outside the caller-control policy below.
 - `_setup_task_event_handlers(...)` — subscribes to task progress events
 - `async _emit_execution_event(...)` — emits through `self.event_stream`
 - `async get_execution_status(execution_id: str, session_id: str)` — returns current status/progress for the execution
 - `async cancel_execution(execution_id: str, session_id: str)` — cancels a running execution
+
+`AgentUIMiddleware._execute_workflow_async` classifies the original caught exception with the shared `kailash._execution_controls._raise_if_execution_control` before failure formatting, logging, session/persistence updates, or `WORKFLOW_FAILED` emission. Recognized controls propagate while the existing active-execution cleanup remains in `finally`; ordinary failures retain their existing handling (`src/kailash/middleware/core/agent_ui.py:743-765`, `_execute_workflow_async`; `src/kailash/_execution_controls.py:56-89`, `_raise_if_runtime_terminal` and `_raise_if_execution_control`). This caller policy does not establish runtime resource settlement or authorize retry, reuse, or drain.
 
 **Node discovery:**
 

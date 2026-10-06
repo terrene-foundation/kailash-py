@@ -29,6 +29,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from kailash._execution_controls import _raise_if_execution_control
 from kailash._math_utils import mean
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskStatus
@@ -171,6 +172,7 @@ class RealTimeDashboard:
                     try:
                         callback(metrics)
                     except Exception as e:
+                        _raise_if_execution_control(e)
                         self.logger.warning(f"Metrics callback failed: {e}")
 
                 # Check for status changes
@@ -179,6 +181,7 @@ class RealTimeDashboard:
                 time.sleep(self.config.update_interval)
 
             except Exception as e:
+                _raise_if_execution_control(e)
                 self.logger.error(f"Monitoring loop error: {e}")
                 time.sleep(self.config.update_interval)
 
@@ -252,6 +255,7 @@ class RealTimeDashboard:
                         ) / time_diff
 
         except Exception as e:
+            _raise_if_execution_control(e)
             self.logger.warning(f"Failed to collect metrics: {e}")
 
         return metrics
@@ -273,6 +277,7 @@ class RealTimeDashboard:
                         current.completed_tasks - previous.completed_tasks,
                     )
                 except Exception as e:
+                    _raise_if_execution_control(e)
                     self.logger.warning(f"Status callback failed: {e}")
 
         if current.failed_tasks > previous.failed_tasks:
@@ -282,6 +287,7 @@ class RealTimeDashboard:
                         "task_failed", current.failed_tasks - previous.failed_tasks
                     )
                 except Exception as e:
+                    _raise_if_execution_control(e)
                     self.logger.warning(f"Status callback failed: {e}")
 
     def add_metrics_callback(self, callback: Any):
@@ -948,6 +954,7 @@ class DashboardExporter:
                 )
                 assets.update(chart_outputs)
             except Exception as e:
+                _raise_if_execution_control(e)
                 self.logger.warning(f"Failed to generate static charts: {e}")
 
         self.logger.info(f"Created dashboard snapshot in: {output_dir}")
