@@ -172,6 +172,7 @@ class RealTimeDashboard:
                     try:
                         callback(metrics)
                     except Exception as e:
+                        _raise_if_execution_control(e)
                         self.logger.warning(f"Metrics callback failed: {e}")
 
                 # Check for status changes
@@ -276,6 +277,7 @@ class RealTimeDashboard:
                         current.completed_tasks - previous.completed_tasks,
                     )
                 except Exception as e:
+                    _raise_if_execution_control(e)
                     self.logger.warning(f"Status callback failed: {e}")
 
         if current.failed_tasks > previous.failed_tasks:
@@ -285,6 +287,7 @@ class RealTimeDashboard:
                         "task_failed", current.failed_tasks - previous.failed_tasks
                     )
                 except Exception as e:
+                    _raise_if_execution_control(e)
                     self.logger.warning(f"Status callback failed: {e}")
 
     def add_metrics_callback(self, callback: Any):
