@@ -8,9 +8,9 @@ not exist inside worktrees, so a bare-path entry raises
 ``No such file or directory`` and blocks every commit until the user
 bypasses via ``git -c core.hooksPath=/dev/null``.
 
-The fix uses ``scripts/development/find-venv-python.sh``, which resolves
-the canonical interpreter via ``git rev-parse --git-common-dir`` —
-worktree-safe by construction.
+The shared ``scripts/development/find-venv-python.sh`` wrapper routes Python
+hooks through unpinned Trestle, shipping the current checkout and using its
+frozen uv environment and editable sources.
 
 Origin: 2026-04-27 W7 worktrees both required ``core.hooksPath=/dev/null``
 bypass per ``rules/git.md`` § Pre-Commit Hook Workarounds. Wrapper script
@@ -59,33 +59,49 @@ def test_find_venv_python_wrapper_exists_and_executable():
 
 
 @pytest.mark.regression
-def test_find_venv_python_uses_git_common_dir_resolution():
-    """Wrapper MUST use ``git rev-parse --git-common-dir`` so worktrees
-    resolve to the main checkout's ``.venv/``. A simpler ``readlink -f .venv``
-    or ``./.venv/bin/python`` would NOT survive worktree cwds."""
+def test_find_venv_python_routes_current_checkout_to_fleet():
+    """The wrapper must snapshot the checkout whose hooks are running."""
     wrapper = REPO_ROOT / "scripts" / "development" / "find-venv-python.sh"
     text = wrapper.read_text()
-    assert "git rev-parse --git-common-dir" in text, (
-        f"wrapper at {wrapper} no longer uses --git-common-dir resolution. "
-        f"Other resolution mechanisms (readlink, GIT_DIR, find . -maxdepth) "
-        f"are NOT worktree-safe. See rules/git.md § Pre-Commit Hook Workarounds."
-    )
+    assert "git rev-parse --show-toplevel" in text
+    assert "git rev-parse --git-common-dir" not in text
+    assert 'TRESTLE_ARGS=(run --repo "${FLEET_REPO}")' in text
 
 
 @pytest.mark.regression
 @pytest.mark.parametrize(
-    "host,python,platform",
+    "host,python,platform,tests_setting,exit_code",
     [
-        (host, python, None)
+        (host, python, None, None, 23)
         for host in [None, "", "esperie-ai", "host with spaces; $(false)"]
         for python in [None, "", "3.13", "python with spaces; $(false)"]
     ]
-    + [(None, None, ""), (None, None, "linux"), (None, None, "platform with spaces")],
+    + [
+        (None, None, "", "", 23),
+        (None, None, "linux", "1", 23),
+        (None, None, "darwin", None, 23),
+        (None, None, "platform with spaces", None, 23),
+        (None, None, None, "0", 23),
+        (None, None, None, None, 114),
+        (None, None, None, None, 116),
+    ],
 )
-def test_trestle_pytest_routing_preserves_arguments_and_failure(
-    tmp_path, host, python, platform
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["-m", "pytest", "tests/unit/", "-m", "not (slow or integration)"],
+        ["scripts/spec_drift_gate.py", "--format", "human", "specs/path\nname.md"],
+        ["scripts/ci/job_budget_audit.py"],
+        ["tools/lint-delegate-fences.py"],
+        ["tools/check_pin_consistency.py"],
+        [],
+        [""],
+    ],
+)
+def test_trestle_python_routing_preserves_arguments_and_failure(
+    tmp_path, host, python, platform, tests_setting, exit_code, arguments
 ):
-    """The opt-in sends the exact hook arguments and propagates fleet failure."""
+    """Default fleet routing preserves argv/status and refuses old selectors."""
     import json
     import os
     import subprocess
@@ -98,20 +114,20 @@ def test_trestle_pytest_routing_preserves_arguments_and_failure(
         "import json, os, sys\n"
         "with open(os.environ['TRESTLE_ARGUMENTS'], 'w') as output:\n"
         "    json.dump(sys.argv[1:], output)\n"
-        "sys.exit(23)\n"
+        "sys.exit(int(os.environ['TRESTLE_EXIT']))\n"
     )
     launcher.chmod(0o755)
-    checkout = tmp_path / "checkout with spaces; $(false)"
+    checkout = tmp_path / "checkout with spaces; $(false)\n"
     subprocess.run(["git", "init", "--quiet", str(checkout)], check=True)
-    arguments = ["-m", "pytest", "tests/unit/", "-m", "not (slow or integration)"]
     environment = {
         **os.environ,
         "PATH": f"{tmp_path}:{os.environ['PATH']}",
-        "KAILASH_TRESTLE_TESTS": "1",
         "TRESTLE_ARGUMENTS": str(receipt),
+        "TRESTLE_EXIT": str(exit_code),
     }
     environment.pop("KAILASH_TRESTLE_HOST", None)
     environment.pop("KAILASH_TRESTLE_OS", None)
+    environment.pop("KAILASH_TRESTLE_TESTS", None)
     environment.pop("UV_PYTHON", None)
     if host is not None:
         environment["KAILASH_TRESTLE_HOST"] = host
@@ -119,6 +135,8 @@ def test_trestle_pytest_routing_preserves_arguments_and_failure(
         environment["UV_PYTHON"] = python
     if platform is not None:
         environment["KAILASH_TRESTLE_OS"] = platform
+    if tests_setting is not None:
+        environment["KAILASH_TRESTLE_TESTS"] = tests_setting
     result = subprocess.run(
         [str(REPO_ROOT / "scripts/development/find-venv-python.sh"), *arguments],
         cwd=checkout,
@@ -126,7 +144,22 @@ def test_trestle_pytest_routing_preserves_arguments_and_failure(
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 23, result.stderr
+    if not arguments or not arguments[0]:
+        refusal = "a Python module or script argument is required"
+    elif tests_setting not in (None, "", "1"):
+        refusal = "KAILASH_TRESTLE_TESTS no longer disables fleet execution"
+    elif host:
+        refusal = "host pinning is disabled"
+    elif platform not in (None, "", "linux", "darwin"):
+        refusal = "KAILASH_TRESTLE_OS must be linux or darwin"
+    else:
+        refusal = None
+    if refusal is not None:
+        assert result.returncode == 64, result.stderr
+        assert refusal in result.stderr
+        assert not receipt.exists(), "refused invocation reached the launcher"
+        return
+    assert result.returncode == exit_code, result.stderr
     expected_extras = [
         "dev",
         "server",
@@ -150,19 +183,26 @@ def test_trestle_pytest_routing_preserves_arguments_and_failure(
     ]
     assert json.loads(receipt.read_text()) == [
         "run",
-        "--no-reap-cache",
-        "--no-reap-mirrors",
         "--repo",
         str(checkout.resolve()),
         *(["--os", platform] if platform else []),
-        *(["--host", host] if host else []),
         "--",
         "env",
         "-u",
         "KAILASH_TRESTLE_TESTS",
+        "-u",
+        "PYTHONPATH",
+        "-u",
+        "PYTHONHOME",
+        "-u",
+        "VIRTUAL_ENV",
+        "-u",
+        "UV_PROJECT_ENVIRONMENT",
         "UV_LINK_MODE=copy",
         "uv",
         "run",
+        "--project",
+        ".",
         "--frozen",
         *(["--python", python] if python else []),
         *[argument for extra in expected_extras for argument in ("--extra", extra)],
@@ -172,7 +212,7 @@ def test_trestle_pytest_routing_preserves_arguments_and_failure(
 
 
 @pytest.mark.regression
-def test_trestle_pytest_routing_refuses_missing_checkout(tmp_path):
+def test_trestle_python_routing_refuses_missing_checkout(tmp_path):
     """Fleet routing must not dispatch tests outside a Git checkout."""
     import os
     import subprocess

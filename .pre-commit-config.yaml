@@ -112,10 +112,9 @@ repos:
         description: "Block fabricated symbol/test-path references in specs/**.md"
         # Read-only sweep: never modifies the working tree (sidesteps the
         # auto-stash interaction documented in rules/git.md § Pre-Commit Hook
-        # Workarounds). Stdlib-only — resolves the canonical .venv via
-        # find-venv-python.sh so worktrees (.claude/worktrees/<X>/) inherit
-        # the main checkout's .venv automatically, avoiding the
-        # core.hooksPath=/dev/null bypass W7 worktrees needed on 2026-04-27.
+        # Workarounds). The shared find-venv-python.sh wrapper offloads
+        # Python hooks through unpinned Trestle with this checkout's frozen
+        # uv environment (scripts/development/find-venv-python.sh:52-70).
         entry: scripts/development/find-venv-python.sh scripts/spec_drift_gate.py --format human
         language: system
         files: ^specs/.*\.md$
@@ -125,8 +124,8 @@ repos:
   # kailash.delegate architectural fences (#1035): Apache-2.0 substrate
   # purity + conformance zero-engine-deps. Runs whenever the delegate
   # package or the lint script itself changes. Pure-stdlib script; no
-  # external dependencies; resolves the venv via find-venv-python.sh
-  # for worktree compatibility (same pattern as spec-drift-gate above).
+  # external dependencies; uses the shared fleet wrapper
+  # (scripts/development/find-venv-python.sh:52-70).
   # CI job-budget census (loom#1877). Fires only on workflow edits, so a new
   # CI job becomes a DECLARED act instead of an unremarked one. Deliberately a
   # pre-commit hook rather than a CI job: this repo has an active CI-spend
@@ -191,17 +190,9 @@ repos:
     hooks:
       - id: pytest-check
         name: Run Tier 1 unit tests
-        # Resolve the project .venv's Python via the worktree-safe wrapper.
-        # Plain `python -m pytest` resolves via PATH and can pick up a pyenv
-        # or global Python that lacks the workspace editable installs
-        # (kailash_mcp, kaizen, nexus, etc.), which breaks any test that
-        # imports those packages. `uv run python` would also work but has a
-        # side effect of regenerating uv.lock on every invocation, which
-        # pre-commit flags as "files were modified by this hook".
-        # find-venv-python.sh resolves to <main-checkout>/.venv/bin/python
-        # via git rev-parse --git-common-dir so worktrees
-        # (.claude/worktrees/<X>/) work without bypass. See
-        # .claude/rules/python-environment.md.
+        # The shared wrapper offloads through unpinned Trestle using the
+        # current checkout's frozen uv environment and editable sources
+        # (scripts/development/find-venv-python.sh:52-70).
         entry: scripts/development/find-venv-python.sh -m pytest
         language: system
         args: [
