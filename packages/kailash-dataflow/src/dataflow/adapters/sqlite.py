@@ -14,7 +14,7 @@ import sys
 import traceback
 import warnings
 import weakref
-from contextlib import asynccontextmanager
+from contextlib import AsyncContextDecorator, asynccontextmanager
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -211,6 +211,39 @@ class SQLiteConnectionPoolStats:
     connection_reuse_rate: float
     avg_connection_time_ms: float
     wal_checkpoint_frequency: int
+
+
+class _SQLiteConnectionContext(AsyncContextDecorator):
+    """Select a checkout at entry and forward its context protocol directly."""
+
+    def __init__(self, adapter: "SQLiteAdapter") -> None:
+        self._adapter = adapter
+        self._entered = False
+        self._delegate: Optional[Any] = None
+
+    def _recreate_cm(self) -> "_SQLiteConnectionContext":
+        return _SQLiteConnectionContext(self._adapter)
+
+    async def __aenter__(self) -> Any:
+        if self._entered:
+            raise RuntimeError("SQLite connection checkout cannot be entered twice")
+        self._entered = True
+        pool = self._adapter._sqlite_pool
+        delegate = (
+            pool.acquire_write()
+            if pool is not None
+            else self._adapter._get_legacy_connection()
+        )
+        connection = await delegate.__aenter__()
+        self._delegate = delegate
+        return connection
+
+    async def __aexit__(self, exc_type: Any, exc_value: Any, exc_tb: Any) -> Any:
+        delegate = self._delegate
+        if delegate is None:
+            raise RuntimeError("SQLite connection checkout is not entered")
+        self._delegate = None
+        return await delegate.__aexit__(exc_type, exc_value, exc_tb)
 
 
 class SQLiteAdapter(DatabaseAdapter):
@@ -432,16 +465,13 @@ class SQLiteAdapter(DatabaseAdapter):
             self.is_connected = False
             logger.info("Disconnected from SQLite with cleanup completed")
 
-    @asynccontextmanager
-    async def _get_connection(self):
+    def _get_connection(self) -> _SQLiteConnectionContext:
         """Get connection from pool or create new one."""
-        # Prefer AsyncSQLitePool when available (handles read/write routing,
-        # health checks, connection recycling, and memory DB mode)
-        if self._sqlite_pool is not None:
-            async with self._sqlite_pool.acquire_write() as conn:
-                yield conn
-            return
+        return _SQLiteConnectionContext(self)
 
+    @asynccontextmanager
+    async def _get_legacy_connection(self):
+        """Get connection through the legacy pool or a temporary connection."""
         if self.enable_connection_pooling and self._connection_pool:
             # Try to get connection from pool
             async with self._pool_lock:
