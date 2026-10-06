@@ -1246,6 +1246,7 @@ class Workflow:
                 logger.info(f"Node '{safe_log_field(node_id)}' completed successfully")
 
             except Exception as e:
+                _raise_if_execution_control(e)
                 failed_nodes.append(node_id)
                 if task:
                     task.update_status(TaskStatus.FAILED, error=str(e))
