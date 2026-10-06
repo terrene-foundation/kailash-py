@@ -881,15 +881,15 @@ class NodeCompletionHookRegistry:
     async def dispatch_async(self, event: NodeCompletionEvent) -> None:
         """Dispatch ``event`` to all subscribers, awaiting any coroutines.
 
-        Subscriber exceptions are logged at WARN (per
-        ``rules/observability.md`` Rule 7 — partial failure across
-        subscribers MUST emit a WARN line) and do NOT abort the runtime;
-        a misbehaving metrics subscriber MUST NOT take down the workflow
-        execution that the user cares about. Failed subscribers are
-        counted and surfaced in the WARN log.
+        Ordinary subscriber errors are logged at WARN without aborting
+        the runtime. Failed subscribers are counted; missing-run-id errors
+        retain their dedicated warning and metric signal. Ordinary
+        metrics failures do not mask that signal. See the handlers at
+        ``src/kailash/runtime/durable.py:912-975`` and dispatch summary at
+        ``src/kailash/runtime/durable.py:977-985``.
 
-        Per ``rules/zero-tolerance.md`` Rule 3 we still raise
-        ``CancelledError`` / ``KeyboardInterrupt`` / ``SystemExit``.
+        Cancellation/interrupt/exit and composed controls propagate unchanged;
+        scoped observer failures do too: ``src/kailash/runtime/resource_manager.py:2696-2704``.
         """
         if not self._callbacks:
             return
@@ -901,6 +901,7 @@ class NodeCompletionHookRegistry:
 
         # Import here to avoid an import cycle (sdk_exceptions sits below
         # runtime in the import tree).  Issue #876 C-2b.
+        from kailash.runtime.resource_manager import _raise_if_execution_control
         from kailash.sdk_exceptions import MissingRunIdError
 
         for cb in callbacks:
@@ -911,6 +912,7 @@ class NodeCompletionHookRegistry:
             except (asyncio.CancelledError, KeyboardInterrupt, SystemExit):
                 raise
             except MissingRunIdError as exc:
+                _raise_if_execution_control(exc)
                 # Issue #876 C-2b — typed handler precedence.  An audit-log
                 # write skipped because the event had no run_id is NOT a
                 # subscriber failure in the operational sense: the runtime
@@ -943,12 +945,14 @@ class NodeCompletionHookRegistry:
                     from kailash.runtime.metrics import get_metrics_bridge
 
                     get_metrics_bridge().record_history_store_dropped()
-                except Exception:  # noqa: BLE001 — metrics MUST NOT mask
+                except Exception as metrics_exc:  # noqa: BLE001 — metrics MUST NOT mask
+                    _raise_if_execution_control(metrics_exc)
                     # Metric-bridge failure MUST NOT mask the actual
                     # subscriber-error observation.  The WARN log above
                     # is the durable signal.
                     pass
             except Exception as exc:  # noqa: BLE001 — see WARN below
+                _raise_if_execution_control(exc)
                 # Issue #876 same-class follow-on (review-surfaced LOW-2/MEDIUM):
                 # the bare-Exception branch lives in the same function the C-1
                 # hashing-symmetry sweep just touched.  Per autonomous-execution.md

@@ -32,6 +32,14 @@ try:
 except ImportError:
     psutil = None  # Included in base install
 
+from kailash._execution_controls import (
+    _RETRY_EXECUTION_SCOPE as _RETRY_EXECUTION_SCOPE,
+    _RETRY_INVOCATIONS as _RETRY_INVOCATIONS,
+    _exception_is as _exception_is,
+    _is_retry_observer_failure as _is_retry_observer_failure,
+    _raise_if_execution_control as _raise_if_execution_control,
+    _raise_if_runtime_terminal as _raise_if_runtime_terminal,
+)
 from kailash.sdk_exceptions import CircuitBreakerOpenError, ResourceLimitExceededError
 from kailash.utils.async_types import _is_native_awaitable
 from kailash.utils.secure_logging import (
@@ -929,6 +937,7 @@ class CircuitBreaker:
             return result
 
         except self.expected_exception as e:
+            _raise_if_execution_control(e)
             self._on_failure()
             raise e
 
@@ -1067,12 +1076,12 @@ class RetryPolicy:
                 return result
 
             except self.retriable_exceptions as e:
+                _raise_if_execution_control(e)
                 last_exception = e
-
                 if attempt < self.max_attempts:
                     delay = self._calculate_delay(attempt)
                     logger.warning(
-                        f"Attempt {attempt} failed, retrying in {delay:.2f}s: {e}"
+                        f"Attempt {attempt} failed, retrying in {delay:.2f}s: {safe_exception_frames(e)}"
                     )
                     await asyncio.sleep(delay)
                 else:
@@ -2620,29 +2629,48 @@ class _RetryExecutionOwner:
         self.lock = threading.RLock()
 
 
-_RETRY_EXECUTION_SCOPE = contextvars.ContextVar("retry_execution_scope", default=None)
-_RETRY_INVOCATIONS = contextvars.ContextVar("retry_invocations", default=())
+class _RetryExecutionScope:
+    """Keep provenance alive through the public execution boundary's guards."""
+
+    def __enter__(self):
+        self.parent_owner = _RETRY_EXECUTION_SCOPE.get()
+        self.owner = _RetryExecutionOwner()
+        self.token = _RETRY_EXECUTION_SCOPE.set(self.owner)
+        self.invocations = _RETRY_INVOCATIONS.set(())
+        return self
+
+    def __exit__(self, exception_type, exception, traceback):
+        # Teardown must not assign to a caller's __traceback__.
+        # Transfer only the escaping original observer, after restoring the
+        # enclosing owner and invocation. Successful children transfer nothing.
+        observer_error = (
+            exception
+            if exception is not None and _is_retry_observer_failure(exception)
+            else None
+        )
+        with self.owner.lock:
+            self.owner.failures.clear()
+        _RETRY_INVOCATIONS.reset(self.invocations)
+        _RETRY_EXECUTION_SCOPE.reset(self.token)
+        if observer_error is not None and self.parent_owner is not None:
+            _mark_retry_observer_failure(observer_error)
+        return False
 
 
 def _retry_execution_scope(function):
-    @functools.wraps(function)
-    async def scoped(*args, **kwargs):
-        parent_owner = _RETRY_EXECUTION_SCOPE.get()
-        token = _RETRY_EXECUTION_SCOPE.set(_RetryExecutionOwner())
-        invocations = _RETRY_INVOCATIONS.set(())
-        observer_error = None
-        try:
-            return await function(*args, **kwargs)
-        except BaseException as error:
-            if _is_retry_observer_failure(error):
-                observer_error = error
-            raise
-        finally:
-            _RETRY_EXECUTION_SCOPE.get().failures.clear()
-            _RETRY_INVOCATIONS.reset(invocations)
-            _RETRY_EXECUTION_SCOPE.reset(token)
-            if observer_error is not None and parent_owner is not None:
-                _mark_retry_observer_failure(observer_error)
+    if asyncio.iscoroutinefunction(function):
+
+        @functools.wraps(function)
+        async def scoped(*args, **kwargs):
+            with _RetryExecutionScope():
+                return await function(*args, **kwargs)
+
+    else:
+
+        @functools.wraps(function)
+        def scoped(*args, **kwargs):
+            with _RetryExecutionScope():
+                return function(*args, **kwargs)
 
     return scoped
 
@@ -2674,57 +2702,6 @@ def _mark_retry_observer_failure(exception: BaseException) -> None:
         with owner.lock:
             entry = owner.failures.setdefault(id(exception), (exception, set()))
             entry[1].update(_RETRY_INVOCATIONS.get())
-
-
-def _is_retry_observer_failure(exception: BaseException) -> bool:
-    owner = _RETRY_EXECUTION_SCOPE.get()
-    if owner is None:
-        return False
-    with owner.lock:
-        entry = owner.failures.get(id(exception))
-        if entry is None or entry[0] is not exception:
-            return False
-        invocations = _RETRY_INVOCATIONS.get()
-        # A new engine invocation must classify a reused ordinary exception
-        # afresh. Ancestors of the actual observer failure still propagate it.
-        return not invocations or invocations[-1] in entry[1]
-
-
-def _exception_is(exception: BaseException, expected: Any) -> bool:
-    """Classify native exception ancestry without invoking user metadata."""
-    expected_types = expected if type(expected) is tuple else (expected,)
-    ancestry = type.__dict__["__mro__"].__get__(type(exception))
-    return any(base is target for base in ancestry for target in expected_types)
-
-
-def _raise_if_runtime_terminal(exception: BaseException) -> None:
-    """Runtime controls cannot be overridden by configurable retry rules."""
-    # LocalRuntime imports this module, so resolve its typed content error lazily.
-    from kailash.runtime.local import ContentAwareExecutionError
-    from kailash.sdk_exceptions import (
-        HardTimeLimitExceeded,
-        SoftTimeLimitExceeded,
-        WorkflowCancelledError,
-    )
-
-    if _exception_is(
-        exception,
-        (
-            asyncio.CancelledError,
-            ContentAwareExecutionError,
-            WorkflowCancelledError,
-            SoftTimeLimitExceeded,
-            HardTimeLimitExceeded,
-        ),
-    ):
-        raise exception
-
-
-def _raise_if_execution_control(exception: BaseException) -> None:
-    """Keep runtime controls and scoped observer failures out of error wrappers."""
-    _raise_if_runtime_terminal(exception)
-    if _is_retry_observer_failure(exception):
-        raise exception
 
 
 class RetryPolicyEngine:
@@ -2900,7 +2877,7 @@ class RetryPolicyEngine:
                                 attempts=attempts,
                             )
                 except Exception as e:
-                    _raise_if_runtime_terminal(e)
+                    _raise_if_execution_control(e)
                     logger.error(
                         f"Error checking resource limits: {safe_exception_frames(e)}"
                     )
@@ -2925,9 +2902,7 @@ class RetryPolicyEngine:
                 else:
                     result = await invoke_operation()
             except Exception as e:
-                if _is_retry_observer_failure(e):
-                    raise
-                _raise_if_runtime_terminal(e)
+                _raise_if_execution_control(e)
                 if operation_completed:
                     _mark_retry_observer_failure(e)
                     raise
@@ -2977,6 +2952,7 @@ class RetryPolicyEngine:
                         attempts=attempts,
                     )
                 except Exception as e:
+                    _raise_if_execution_control(e)
                     _mark_retry_observer_failure(e)
                     raise
 

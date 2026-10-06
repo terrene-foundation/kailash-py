@@ -10,12 +10,9 @@ import logging
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from kailash.analysis import ConditionalBranchAnalyzer
-from kailash.runtime.local import ContentAwareExecutionError
-from kailash.runtime.resource_manager import _is_retry_observer_failure
-from kailash.sdk_exceptions import (
-    HardTimeLimitExceeded,
-    SoftTimeLimitExceeded,
-    WorkflowCancelledError,
+from kailash.runtime.resource_manager import (
+    _exception_is,
+    _raise_if_execution_control,
 )
 from kailash.tracking import TaskManager
 from kailash.workflow.dag import WorkflowDAG
@@ -180,18 +177,9 @@ class HierarchicalSwitchExecutor:
 
                         # Process results
                         for (switch_id, _), result in zip(chunk, chunk_results):
-                            if isinstance(
-                                result,
-                                (
-                                    ContentAwareExecutionError,
-                                    WorkflowCancelledError,
-                                    SoftTimeLimitExceeded,
-                                    HardTimeLimitExceeded,
-                                    asyncio.CancelledError,
-                                ),
-                            ) or _is_retry_observer_failure(result):
-                                raise result
-                            if isinstance(result, Exception):
+                            if _exception_is(result, BaseException):
+                                _raise_if_execution_control(result)
+                            if _exception_is(result, Exception):
                                 logger.error(
                                     f"Error executing switch {switch_id}: {result}"
                                 )
@@ -205,7 +193,8 @@ class HierarchicalSwitchExecutor:
                                 all_results[switch_id] = result
                                 switch_results[switch_id] = result
 
-                    except asyncio.TimeoutError:
+                    except asyncio.TimeoutError as error:
+                        _raise_if_execution_control(error)
                         logger.error(
                             f"Layer {layer_index + 1} execution timed out after {self.layer_timeout}s"
                         )
@@ -348,16 +337,7 @@ class HierarchicalSwitchExecutor:
                 return None
 
         except Exception as e:
-            if isinstance(
-                e,
-                (
-                    ContentAwareExecutionError,
-                    WorkflowCancelledError,
-                    SoftTimeLimitExceeded,
-                    HardTimeLimitExceeded,
-                ),
-            ) or _is_retry_observer_failure(e):
-                raise
+            _raise_if_execution_control(e)
             logger.error(f"Error executing node {node_id}: {e}")
             return {"error": str(e)}
 

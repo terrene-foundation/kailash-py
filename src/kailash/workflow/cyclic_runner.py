@@ -103,6 +103,7 @@ from copy import copy
 from datetime import UTC, datetime
 from typing import Any, Optional
 
+from kailash._execution_controls import _raise_if_execution_control
 from kailash.sdk_exceptions import WorkflowExecutionError, WorkflowValidationError
 from kailash.tracking import TaskManager, TaskStatus
 from kailash.tracking.metrics_collector import MetricsCollector
@@ -212,14 +213,7 @@ class CyclicWorkflowExecutor:
             return results, run_id
 
         except Exception as e:
-            from kailash.runtime.resource_manager import (
-                _is_retry_observer_failure,
-                _raise_if_runtime_terminal,
-            )
-
-            _raise_if_runtime_terminal(e)
-            if _is_retry_observer_failure(e):
-                raise
+            _raise_if_execution_control(e)
             logger.error(
                 "Cyclic workflow execution failed: %s", safe_exception_frames(e)
             )
@@ -277,7 +271,8 @@ class CyclicWorkflowExecutor:
                 if source_node and source_node.__class__.__name__ in ["SwitchNode"]:
                     has_conditional_inputs = True
                     break
-            except Exception:
+            except Exception as e:
+                _raise_if_execution_control(e)
                 continue
 
         # If no conditional inputs, don't skip
@@ -683,6 +678,7 @@ class CyclicWorkflowExecutor:
                             cycle_task_id, TaskStatus.RUNNING
                         )
                 except Exception as e:
+                    _raise_if_execution_control(e)
                     logger.warning(
                         f"Failed to create cycle group task: {safe_exception_frames(e)}"
                     )
@@ -717,6 +713,7 @@ class CyclicWorkflowExecutor:
                                 iteration_task_id, TaskStatus.RUNNING
                             )
                     except Exception as e:
+                        _raise_if_execution_control(e)
                         logger.warning(
                             f"Failed to create iteration task: {safe_exception_frames(e)}"
                         )
@@ -827,6 +824,7 @@ class CyclicWorkflowExecutor:
                             },
                         )
                     except Exception as e:
+                        _raise_if_execution_control(e)
                         logger.warning(
                             f"Failed to update iteration task: {safe_exception_frames(e)}"
                         )
@@ -1084,6 +1082,7 @@ class CyclicWorkflowExecutor:
                         },
                     )
                 except Exception as e:
+                    _raise_if_execution_control(e)
                     logger.warning(
                         f"Failed to update cycle group task: {safe_exception_frames(e)}"
                     )
@@ -1313,6 +1312,7 @@ class CyclicWorkflowExecutor:
                 if task:
                     task_manager.update_task_status(task.task_id, TaskStatus.RUNNING)
             except Exception as e:
+                _raise_if_execution_control(e)
                 logger.warning(
                     f"Failed to create task for node '{node_id}': {safe_exception_frames(e)}"
                 )
@@ -1380,11 +1380,13 @@ class CyclicWorkflowExecutor:
                     # Update task metrics
                     task_manager.update_task_metrics(task.task_id, task_metrics)
                 except Exception as e:
+                    _raise_if_execution_control(e)
                     logger.warning(
                         f"Failed to update task for node '{node_id}': {safe_exception_frames(e)}"
                     )
 
         except Exception as e:
+            _raise_if_execution_control(e)
             # Update task status on failure
             if task and task_manager:
                 try:
@@ -1395,6 +1397,7 @@ class CyclicWorkflowExecutor:
                         ended_at=datetime.now(UTC),
                     )
                 except Exception as update_error:
+                    _raise_if_execution_control(update_error)
                     logger.warning(
                         f"Failed to update task status on error: {safe_exception_frames(update_error)}"
                     )
@@ -1689,7 +1692,8 @@ class CycleGroup:
         # Try topological sort on the subgraph
         try:
             return cycle_subgraph.topological_sort()
-        except (CycleDetectedError, Exception):
+        except (CycleDetectedError, Exception) as e:
+            _raise_if_execution_control(e)
             # Fall back to entry nodes first, then others
             order = list(self.entry_nodes)
             for node in self.nodes:

@@ -207,14 +207,9 @@ class CycleExecutionMixin:
 
         except Exception as e:
             # Phase 6: Error Handling - Wrap executor exceptions with context
-            from kailash.runtime.resource_manager import (
-                _is_retry_observer_failure,
-                _raise_if_runtime_terminal,
-            )
+            from kailash.runtime.resource_manager import _raise_if_execution_control
 
-            _raise_if_runtime_terminal(e)
-            if _is_retry_observer_failure(e):
-                raise
+            _raise_if_execution_control(e)
             self.logger.error(
                 "Cyclic workflow execution failed: %s", safe_exception_frames(e)
             )
@@ -357,14 +352,9 @@ class CycleExecutionMixin:
             drain.result()
             raise
         except Exception as error:
-            from kailash.runtime.resource_manager import (
-                _is_retry_observer_failure,
-                _raise_if_runtime_terminal,
-            )
+            from kailash.runtime.resource_manager import _raise_if_execution_control
 
-            _raise_if_runtime_terminal(error)
-            if _is_retry_observer_failure(error):
-                raise
+            _raise_if_execution_control(error)
             self.logger.error(
                 "Cyclic workflow execution failed: %s", safe_exception_frames(error)
             )

@@ -441,9 +441,12 @@ unsubscribe()  # remove the subscriber
 `kailash.runtime.durable.NodeCompletionEvent`. Both sync and async
 callbacks are supported — the registry detects coroutine returns and
 awaits them. The registry supports multiple subscribers; subscribers
-fire in registration order. Subscriber exceptions are caught and logged
-at WARN level — a misbehaving subscriber MUST NOT take down workflow
-execution.
+fire in registration order. Ordinary subscriber exceptions are caught and
+logged at WARN level so dispatch can continue. Execution-control exceptions
+propagate as their original objects before ordinary subscriber-error handling.
+Sources: `NodeCompletionHookRegistry.dispatch_async`,
+`src/kailash/runtime/durable.py:881-985`; `_raise_if_execution_control`,
+`src/kailash/_execution_controls.py:11-89`.
 
 The event passed to subscribers is **post-redaction** — classified PKs
 are hashed via `pk:` prefix and classified field names are partitioned
