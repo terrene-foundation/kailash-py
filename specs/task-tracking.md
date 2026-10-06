@@ -302,6 +302,8 @@ The constructor propagates execution-control exceptions before wrapping ordinary
 
 The cache attribute names are exactly `_runs` and `_tasks`. Any code referencing `_run_cache` or `_task_cache` is wrong.
 
+At the guarded TaskManager caller boundaries in the parallel runtimes, Workflow, CLI task commands and performance report comparison, the shared execution-control guard runs before ordinary warning, failure-result, wrapper or CLI exit handling. Ordinary errors retain those existing policies; controls classified by the canonical helper propagate as their original outer objects. Sources: `src/kailash/_execution_controls.py:85-89`, `src/kailash/runtime/parallel.py:450-542`, `src/kailash/runtime/parallel_cyclic.py:468-532`, `src/kailash/workflow/graph.py:1100-1146`, `src/kailash/cli/commands.py:110-144`, `src/kailash/visualization/reports.py:790-799`. This describes those handler boundaries, excludes LocalRuntime and transitive supplier behavior, and grants no cleanup, retry or reuse guarantee.
+
 ### Run management
 
 **Method: `create_run(workflow_name: str, metadata: dict | None = None) -> str`**

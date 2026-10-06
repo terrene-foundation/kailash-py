@@ -12,6 +12,7 @@ from collections import deque
 from datetime import UTC, datetime
 from typing import Any
 
+from kailash._execution_controls import _raise_if_execution_control
 from kailash.nodes.base_async import AsyncNode
 from kailash.runtime._time_limits import (
     _TimeLimitClassifier,
@@ -149,6 +150,7 @@ class ParallelRuntime:
                             },
                         )
                     except Exception as e:
+                        _raise_if_execution_control(e)
                         self.logger.warning(f"Failed to create task run: {e}")
                         # Continue without tracking
 
@@ -167,6 +169,7 @@ class ParallelRuntime:
                         execution_time = end_time - start_time
                         task_manager.update_run_status(run_id, "completed")
                     except Exception as e:
+                        _raise_if_execution_control(e)
                         self.logger.warning(f"Failed to update run status: {e}")
 
                 # #912 Shard 6: post-completion poll for hard-deadline-
@@ -198,7 +201,8 @@ class ParallelRuntime:
                         task_manager.update_run_status(
                             run_id, "failed", error="Time limit exceeded"
                         )
-                    except Exception:
+                    except Exception as tracking_error:
+                        _raise_if_execution_control(tracking_error)
                         pass
                 raise
             except WorkflowCancelledError as cancel_exc:
@@ -216,15 +220,18 @@ class ParallelRuntime:
                         task_manager.update_run_status(
                             run_id, "failed", error="Validation failed"
                         )
-                    except Exception:
+                    except Exception as tracking_error:
+                        _raise_if_execution_control(tracking_error)
                         pass
                 raise
             except Exception as e:
+                _raise_if_execution_control(e)
                 # Mark run as failed
                 if task_manager and run_id:
                     try:
                         task_manager.update_run_status(run_id, "failed", error=str(e))
-                    except Exception:
+                    except Exception as tracking_error:
+                        _raise_if_execution_control(tracking_error)
                         pass
 
                 # Wrap other errors in RuntimeExecutionError
@@ -365,6 +372,7 @@ class ParallelRuntime:
                                 ready_nodes,
                             )
                     except Exception as e:
+                        _raise_if_execution_control(e)
                         # Handle unexpected task exceptions
                         failed_nodes.add(completed_node_id)
                         self.logger.error(
@@ -442,6 +450,7 @@ class ParallelRuntime:
                     started_at=datetime.now(UTC),
                 )
         except Exception as e:
+            _raise_if_execution_control(e)
             self.logger.warning(f"Failed to create task for node '{node_id}': {e}")
 
         try:
@@ -514,6 +523,7 @@ class ParallelRuntime:
                 return outputs, True
 
         except Exception as e:
+            _raise_if_execution_control(e)
             self.logger.error(f"Node {node_id} failed: {e}", exc_info=self.debug)
 
             # Update task status

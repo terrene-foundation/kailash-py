@@ -29,6 +29,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from kailash._execution_controls import _raise_if_execution_control
 from kailash._math_utils import mean, median, percentile, stdev
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskRun, TaskStatus
@@ -794,6 +795,7 @@ class WorkflowPerformanceReporter:
                 summary = self._calculate_workflow_summary(run, tasks)
                 run_summaries.append(summary)
             except Exception as e:
+                _raise_if_execution_control(e)
                 self.logger.warning(f"Failed to analyze run {run_id}: {e}")
 
         if len(run_summaries) < 2:

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import click
 
+from kailash._execution_controls import _raise_if_execution_control
 from kailash.nodes import NodeRegistry
 from kailash.runtime.local import LocalRuntime
 from kailash.sdk_exceptions import (
@@ -109,6 +110,7 @@ def run(workflow_file: str, params: str | None, debug: bool, no_tracking: bool):
             try:
                 task_manager = TaskManager()
             except Exception as e:
+                _raise_if_execution_control(e)
                 logger.warning(f"Failed to create task manager: {e}")
                 click.echo("Warning: Task tracking disabled due to error", err=True)
 
@@ -128,12 +130,15 @@ def run(workflow_file: str, params: str | None, debug: bool, no_tracking: bool):
         _display_results(results)
 
     except RuntimeExecutionError as e:
+        _raise_if_execution_control(e)
         click.echo(f"Workflow execution failed: {e}", err=True)
         sys.exit(1)
     except CLIException as e:
+        _raise_if_execution_control(e)
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
     except Exception as e:
+        _raise_if_execution_control(e)
         click.echo(f"Unexpected error: {get_error_message(e)}", err=True)
         logger.error(f"Failed to run workflow: {e}", exc_info=True)
         sys.exit(1)
@@ -267,9 +272,11 @@ def list_tasks(workflow: str | None, status: str | None, limit: int):
                 click.echo(f"  Error: {run.error}")
 
     except TaskException as e:
+        _raise_if_execution_control(e)
         click.echo(f"Task error: {e}", err=True)
         sys.exit(1)
     except Exception as e:
+        _raise_if_execution_control(e)
         click.echo(f"Error listing tasks: {get_error_message(e)}", err=True)
         logger.error(f"Failed to list tasks: {e}", exc_info=True)
         sys.exit(1)
@@ -345,12 +352,15 @@ def show_tasks(run_id: str, verbose: bool):
                         click.echo(f"  Error: {task.error}")
 
     except TaskException as e:
+        _raise_if_execution_control(e)
         click.echo(f"Task error: {e}", err=True)
         sys.exit(1)
     except CLIException as e:
+        _raise_if_execution_control(e)
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
     except Exception as e:
+        _raise_if_execution_control(e)
         click.echo(f"Error showing tasks: {get_error_message(e)}", err=True)
         logger.error(f"Failed to show tasks: {e}", exc_info=True)
         sys.exit(1)
@@ -366,6 +376,7 @@ def clear_tasks():
         click.echo("Task history cleared")
 
     except Exception as e:
+        _raise_if_execution_control(e)
         click.echo(f"Error clearing tasks: {get_error_message(e)}", err=True)
         logger.error(f"Failed to clear tasks: {e}", exc_info=True)
         sys.exit(1)
