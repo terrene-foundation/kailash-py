@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from kailash.sdk_exceptions import StorageException, TaskException, TaskStateError
+from kailash.utils.secure_logging import safe_exception_frames
 
 from .models import (
     RunSummary,
@@ -18,6 +19,15 @@ from .storage.base import StorageBackend
 from .storage.database import SQLiteStorage
 
 logger = logging.getLogger(__name__)
+
+
+def _raise_if_execution_control(exception: BaseException) -> None:
+    """Reuse the runtime control policy without an eager runtime import."""
+    from kailash.runtime.resource_manager import (
+        _raise_if_execution_control as raise_if_execution_control,
+    )
+
+    raise_if_execution_control(exception)
 
 
 class TaskManager:
@@ -42,6 +52,7 @@ class TaskManager:
             self._runs: dict[str, WorkflowRun] = {}
             self._tasks: dict[str, TaskRun] = {}
         except Exception as e:
+            _raise_if_execution_control(e)
             raise TaskException(f"Failed to initialize task manager: {e}") from e
 
     def create_run(
@@ -66,6 +77,7 @@ class TaskManager:
         try:
             run = WorkflowRun(workflow_name=workflow_name, metadata=metadata or {})
         except Exception as e:
+            _raise_if_execution_control(e)
             raise TaskException(f"Failed to create workflow run: {e}") from e
 
         # Store in memory and persist
@@ -74,8 +86,11 @@ class TaskManager:
         try:
             self.storage.save_run(run)
         except Exception as e:
-            # Remove from cache if storage fails
-            self._runs.pop(run.run_id, None)
+            try:
+                _raise_if_execution_control(e)
+            finally:
+                # Remove from cache even when the runtime control is re-raised.
+                self._runs.pop(run.run_id, None)
             raise StorageException(f"Failed to persist workflow run: {e}") from e
 
         self.logger.info(f"Created workflow run: {run.run_id}")
@@ -104,6 +119,7 @@ class TaskManager:
             try:
                 run = self.storage.load_run(run_id)
             except Exception as e:
+                _raise_if_execution_control(e)
                 raise StorageException(f"Failed to load run '{run_id}': {e}") from e
 
             if not run:
@@ -115,15 +131,18 @@ class TaskManager:
         try:
             run.update_status(status, error)
         except ValueError as e:
+            _raise_if_execution_control(e)
             raise TaskStateError(
                 f"Invalid status transition for run '{run_id}': {e}"
             ) from e
         except Exception as e:
+            _raise_if_execution_control(e)
             raise TaskException(f"Failed to update run status: {e}") from e
 
         try:
             self.storage.save_run(run)
         except Exception as e:
+            _raise_if_execution_control(e)
             raise StorageException(f"Failed to persist run status update: {e}") from e
 
         self.logger.info(f"Updated run {run_id} status to: {status}")
@@ -170,6 +189,7 @@ class TaskManager:
                 dependencies=dependencies or [],
             )
         except Exception as e:
+            _raise_if_execution_control(e)
             raise TaskException(f"Failed to create task: {e}") from e
 
         # Store in memory and persist
@@ -178,8 +198,11 @@ class TaskManager:
         try:
             self.storage.save_task(task)
         except Exception as e:
-            # Remove from cache if storage fails
-            self._tasks.pop(task.task_id, None)
+            try:
+                _raise_if_execution_control(e)
+            finally:
+                # Remove from cache even when the runtime control is re-raised.
+                self._tasks.pop(task.task_id, None)
             raise StorageException(f"Failed to persist task: {e}") from e
 
         # Add task to run
@@ -189,7 +212,10 @@ class TaskManager:
                 run.add_task(task.task_id)
                 self.storage.save_run(run)
             except Exception as e:
-                self.logger.warning(f"Failed to add task to run: {e}")
+                _raise_if_execution_control(e)
+                self.logger.warning(
+                    f"Failed to add task to run: {safe_exception_frames(e)}"
+                )
                 # Continue - task is created, just not linked to run
 
         self.logger.info(f"Created task: {task.task_id} for node {node_id}")
@@ -227,6 +253,7 @@ class TaskManager:
             try:
                 task = self.storage.load_task(task_id)
             except Exception as e:
+                _raise_if_execution_control(e)
                 raise StorageException(f"Failed to load task '{task_id}': {e}") from e
 
             if not task:
@@ -238,15 +265,18 @@ class TaskManager:
         try:
             task.update_status(status, result, error, ended_at, metadata)
         except ValueError as e:
+            _raise_if_execution_control(e)
             raise TaskStateError(
                 f"Invalid status transition for task '{task_id}': {e}"
             ) from e
         except Exception as e:
+            _raise_if_execution_control(e)
             raise TaskException(f"Failed to update task status: {e}") from e
 
         try:
             self.storage.save_task(task)
         except Exception as e:
+            _raise_if_execution_control(e)
             raise StorageException(f"Failed to persist task status update: {e}") from e
 
         self.logger.info(f"Updated task {task_id} status to: {status}")
@@ -271,7 +301,10 @@ class TaskManager:
             try:
                 run = self.storage.load_run(run_id)
             except Exception as e:
-                self.logger.error(f"Failed to load run '{run_id}': {e}")
+                _raise_if_execution_control(e)
+                self.logger.error(
+                    f"Failed to load run '{run_id}': {safe_exception_frames(e)}"
+                )
                 raise StorageException(f"Failed to load run '{run_id}': {e}") from e
 
             if run:
@@ -298,7 +331,10 @@ class TaskManager:
             try:
                 task = self.storage.load_task(task_id)
             except Exception as e:
-                self.logger.error(f"Failed to load task '{task_id}': {e}")
+                _raise_if_execution_control(e)
+                self.logger.error(
+                    f"Failed to load task '{task_id}': {safe_exception_frames(e)}"
+                )
                 raise StorageException(f"Failed to load task '{task_id}': {e}") from e
 
             if task:
@@ -327,6 +363,7 @@ class TaskManager:
         try:
             runs = self.storage.list_runs(workflow_name, status)
         except Exception as e:
+            _raise_if_execution_control(e)
             raise StorageException(f"Failed to list runs: {e}") from e
 
         summaries = []
@@ -342,16 +379,18 @@ class TaskManager:
                         if task_run:
                             task_runs.append(task_run)
                     except Exception as e:
+                        _raise_if_execution_control(e)
                         self.logger.warning(
-                            f"Failed to load task '{task.task_id}': {e}"
+                            f"Failed to load task '{task.task_id}': {safe_exception_frames(e)}"
                         )
 
                 summary = RunSummary.from_workflow_run(run, task_runs)
                 summaries.append(summary)
 
             except Exception as e:
+                _raise_if_execution_control(e)
                 self.logger.warning(
-                    f"Failed to create summary for run '{run.run_id}': {e}"
+                    f"Failed to create summary for run '{run.run_id}': {safe_exception_frames(e)}"
                 )
 
         if limit is not None:
@@ -384,6 +423,7 @@ class TaskManager:
         try:
             tasks = self.storage.list_tasks(run_id, node_id, status)
         except Exception as e:
+            _raise_if_execution_control(e)
             raise StorageException(
                 f"Failed to list tasks for run '{run_id}': {e}"
             ) from e
@@ -394,8 +434,9 @@ class TaskManager:
                 summary = TaskSummary.from_task_run(task)
                 summaries.append(summary)
             except Exception as e:
+                _raise_if_execution_control(e)
                 self.logger.warning(
-                    f"Failed to create summary for task '{task.task_id}': {e}"
+                    f"Failed to create summary for task '{task.task_id}': {safe_exception_frames(e)}"
                 )
 
         return summaries
@@ -418,7 +459,10 @@ class TaskManager:
         try:
             run = self.get_run(run_id)
         except Exception as e:
-            self.logger.error(f"Failed to get run '{run_id}': {e}")
+            _raise_if_execution_control(e)
+            self.logger.error(
+                f"Failed to get run '{run_id}': {safe_exception_frames(e)}"
+            )
             return None
 
         if not run:
@@ -434,12 +478,18 @@ class TaskManager:
                     if task_run:
                         task_runs.append(task_run)
                 except Exception as e:
-                    self.logger.warning(f"Failed to load task '{task.task_id}': {e}")
+                    _raise_if_execution_control(e)
+                    self.logger.warning(
+                        f"Failed to load task '{task.task_id}': {safe_exception_frames(e)}"
+                    )
 
             return RunSummary.from_workflow_run(run, task_runs)
 
         except Exception as e:
-            self.logger.error(f"Failed to create run summary for '{run_id}': {e}")
+            _raise_if_execution_control(e)
+            self.logger.error(
+                f"Failed to create run summary for '{run_id}': {safe_exception_frames(e)}"
+            )
             return None
 
     def clear_cache(self) -> None:
@@ -474,6 +524,7 @@ class TaskManager:
         try:
             self.storage.save_task(task)
         except Exception as e:
+            _raise_if_execution_control(e)
             raise StorageException(f"Failed to save completed task: {e}") from e
 
         self.logger.info(f"Completed task {task_id}")
@@ -498,6 +549,7 @@ class TaskManager:
         try:
             self.storage.save_task(task)
         except Exception as e:
+            _raise_if_execution_control(e)
             raise StorageException(f"Failed to save failed task: {e}") from e
 
         self.logger.info(f"Failed task {task_id}: {error_message}")
@@ -522,6 +574,7 @@ class TaskManager:
         try:
             self.storage.save_task(task)
         except Exception as e:
+            _raise_if_execution_control(e)
             raise StorageException(f"Failed to save cancelled task: {e}") from e
 
         self.logger.info(f"Cancelled task {task_id}: {reason}")
@@ -548,6 +601,7 @@ class TaskManager:
         try:
             self.storage.save_task(retry_task)
         except Exception as e:
+            _raise_if_execution_control(e)
             raise StorageException(f"Failed to save retry task: {e}") from e
 
         self._tasks[retry_task.task_id] = retry_task
@@ -571,6 +625,7 @@ class TaskManager:
         try:
             self.storage.delete_task(task_id)
         except Exception as e:
+            _raise_if_execution_control(e)
             raise StorageException(f"Failed to delete task: {e}") from e
 
         self.logger.info(f"Deleted task {task_id}")
@@ -594,6 +649,7 @@ class TaskManager:
                 # Fallback for MockStorage
                 return [t for t in self.storage.get_all_tasks() if t.status == status]
         except Exception as e:
+            _raise_if_execution_control(e)
             raise StorageException(f"Failed to query tasks by status: {e}") from e
 
     def get_tasks_by_node(self, node_id: str) -> list[TaskRun]:
@@ -615,6 +671,7 @@ class TaskManager:
                 # Fallback for MockStorage
                 return [t for t in self.storage.get_all_tasks() if t.node_id == node_id]
         except Exception as e:
+            _raise_if_execution_control(e)
             raise StorageException(f"Failed to query tasks by node: {e}") from e
 
     def get_task_history(self, task_id: str) -> list[TaskRun]:
@@ -709,6 +766,7 @@ class TaskManager:
                         tasks.append(t)
                 return tasks
         except Exception as e:
+            _raise_if_execution_control(e)
             raise StorageException(f"Failed to query tasks by timerange: {e}") from e
 
     def get_task_statistics(self) -> dict[str, Any]:
@@ -726,6 +784,7 @@ class TaskManager:
         try:
             tasks = self.storage.get_all_tasks()
         except Exception as e:
+            _raise_if_execution_control(e)
             raise StorageException(f"Failed to get tasks for statistics: {e}") from e
 
         by_status = {}
@@ -757,6 +816,7 @@ class TaskManager:
         try:
             tasks = self.storage.get_all_tasks()
         except Exception as e:
+            _raise_if_execution_control(e)
             raise StorageException(f"Failed to get tasks for cleanup: {e}") from e
 
         cutoff = datetime.now(UTC) - timedelta(days=days)
@@ -774,8 +834,9 @@ class TaskManager:
                         self.delete_task(task.task_id)
                         deleted += 1
                     except Exception as e:
+                        _raise_if_execution_control(e)
                         self.logger.warning(
-                            f"Failed to delete old task {task.task_id}: {e}"
+                            f"Failed to delete old task {task.task_id}: {safe_exception_frames(e)}"
                         )
 
         return deleted
@@ -800,6 +861,7 @@ class TaskManager:
         try:
             self.storage.save_task(task)
         except Exception as e:
+            _raise_if_execution_control(e)
             raise StorageException(f"Failed to update task metrics: {e}") from e
 
         self.logger.info(f"Updated metrics for task {task_id}")
@@ -867,6 +929,7 @@ class TaskManager:
                 self.storage.save_run(run)
 
         except Exception as e:
+            _raise_if_execution_control(e)
             raise StorageException(f"Failed to save task: {e}") from e
 
     def get_run_tasks(self, run_id: str) -> list[TaskRun]:
@@ -916,6 +979,7 @@ class TaskManager:
         except ValueError:
             raise
         except Exception as e:
+            _raise_if_execution_control(e)
             raise StorageException(
                 f"Failed to set search attributes for run '{run_id}': {e}"
             ) from e
@@ -957,6 +1021,7 @@ class TaskManager:
         except ValueError:
             raise
         except Exception as e:
+            _raise_if_execution_control(e)
             raise StorageException(f"Failed to search runs: {e}") from e
 
     def get_execution_audit_trail(self, run_id: str) -> list[dict]:
@@ -1037,6 +1102,7 @@ class TaskManager:
             trail.sort(key=sort_key)
 
         except Exception as e:
+            _raise_if_execution_control(e)
             raise StorageException(
                 f"Failed to get execution audit trail for run '{run_id}': {e}"
             ) from e
@@ -1066,4 +1132,5 @@ class TaskManager:
             # In a real implementation, we'd need to track workflow_id in tasks or runs
             return all_tasks
         except Exception as e:
+            _raise_if_execution_control(e)
             raise StorageException(f"Failed to get workflow tasks: {e}") from e

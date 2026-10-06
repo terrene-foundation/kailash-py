@@ -283,8 +283,11 @@ class TaskManager:
             self._runs: dict[str, WorkflowRun] = {}
             self._tasks: dict[str, TaskRun] = {}
         except Exception as e:
+            _raise_if_execution_control(e)
             raise TaskException(f"Failed to initialize task manager: {e}") from e
 ```
+
+The constructor propagates execution-control exceptions before wrapping ordinary failures as `TaskException`. The module's lazy `_raise_if_execution_control` facade delegates to the canonical runtime policy; it does not define another classifier. Sources: `src/kailash/tracking/manager.py:24-30`, `src/kailash/tracking/manager.py:33-56`; canonical policy `src/kailash/_execution_controls.py:56-89`.
 
 **Constructor parameters** (exactly as in source):
 
@@ -323,7 +326,7 @@ There are NO `workflow_id` or `parameters` parameters. `workflow_name` is the on
 1. Validates `workflow_name` is non-empty (raises `TaskException`).
 2. Constructs `WorkflowRun(workflow_name=workflow_name, metadata=metadata or {})`.
 3. Caches the run in `self._runs[run.run_id]`.
-4. Calls `self.storage.save_run(run)`. On storage failure, pops the run from the cache and re-raises as `StorageException`.
+4. Calls `self.storage.save_run(run)`. On an ordinary storage failure, wraps it as `StorageException`; execution-control exceptions propagate through the canonical guard. Both paths pop the run from the cache in `finally`. Source: `src/kailash/tracking/manager.py:84-94`.
 5. Returns `run.run_id`.
 
 **Method: `update_run_status(run_id, status, error=None)`**
@@ -347,7 +350,7 @@ def create_task(
 ) -> TaskRun:
 ```
 
-The `run_id` and `node_type` defaults are legacy backward-compat placeholders for older tests — production code supplies them explicitly. Returns the constructed `TaskRun`. Persists via `self.storage.save_task(task)`; adds the task to its run via `run.add_task(task.task_id)` and re-saves the run if the run is cached.
+The `run_id` and `node_type` defaults are legacy backward-compat placeholders for older tests — production code supplies them explicitly. Returns the constructed `TaskRun`. Persists via `self.storage.save_task(task)`; adds the task to its run via `run.add_task(task.task_id)` and re-saves the run if the run is cached. Execution-control exceptions propagate before ordinary failure handling; a failed task persistence removes the task from the cache in `finally`, while an ordinary run-link failure remains a warning followed by continuation. Source: `src/kailash/tracking/manager.py:150-222`.
 
 **Method: `update_task_status(task_id, status, result=None, error=None, ended_at=None, metadata=None)`**
 
