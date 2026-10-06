@@ -29,6 +29,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from kailash._execution_controls import _raise_if_execution_control
 from kailash._math_utils import mean
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskStatus
@@ -179,6 +180,7 @@ class RealTimeDashboard:
                 time.sleep(self.config.update_interval)
 
             except Exception as e:
+                _raise_if_execution_control(e)
                 self.logger.error(f"Monitoring loop error: {e}")
                 time.sleep(self.config.update_interval)
 
@@ -252,6 +254,7 @@ class RealTimeDashboard:
                         ) / time_diff
 
         except Exception as e:
+            _raise_if_execution_control(e)
             self.logger.warning(f"Failed to collect metrics: {e}")
 
         return metrics
@@ -948,6 +951,7 @@ class DashboardExporter:
                 )
                 assets.update(chart_outputs)
             except Exception as e:
+                _raise_if_execution_control(e)
                 self.logger.warning(f"Failed to generate static charts: {e}")
 
         self.logger.info(f"Created dashboard snapshot in: {output_dir}")

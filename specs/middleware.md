@@ -163,6 +163,8 @@ Note: in the actual source, the session state (`self.sessions`, `self.shared_wor
 - `async get_execution_status(execution_id: str, session_id: str)` — returns current status/progress for the execution
 - `async cancel_execution(execution_id: str, session_id: str)` — cancels a running execution
 
+`AgentUIMiddleware._execute_workflow_async` classifies the original caught exception with the shared `kailash._execution_controls._raise_if_execution_control` before failure formatting, logging, session/persistence updates, or `WORKFLOW_FAILED` emission. Recognized controls propagate while the existing active-execution cleanup remains in `finally`; ordinary failures retain their existing handling (`src/kailash/middleware/core/agent_ui.py:743-765`, `_execute_workflow_async`; `src/kailash/_execution_controls.py:56-89`, `_raise_if_runtime_terminal` and `_raise_if_execution_control`). This caller policy does not establish runtime resource settlement or authorize retry, reuse, or drain.
+
 **Node discovery:**
 
 - `async get_available_nodes() -> List[Dict[str, Any]]`

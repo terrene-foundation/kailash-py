@@ -355,6 +355,8 @@ Each constructs a `MermaidVisualizer(self)` internally.
 
 ## Execution metrics visualization (`src/kailash/visualization/`)
 
+The tracking callers use the shared `kailash._execution_controls._raise_if_execution_control` on the original caught exception before ordinary error handling. `DashboardAPIServer` applies it in `list_runs`, `get_run`, `get_run_tasks`, `get_live_dashboard`, and `_generate_report_background`, preserving ordinary HTTP status/detail/chaining and background error logging (`src/kailash/visualization/api.py:400-405`, `list_runs`; `src/kailash/visualization/api.py:433-438`, `get_run`; `src/kailash/visualization/api.py:471-478`, `get_run_tasks`; `src/kailash/visualization/api.py:807-814`, `get_live_dashboard`; `src/kailash/visualization/api.py:926-928`, `_generate_report_background`). `RealTimeDashboard._collect_live_metrics` and its enclosing `_monitor_loop`, plus `DashboardExporter.create_dashboard_snapshot`, classify before warning/error logging, partial-result return, or ordinary loop sleep (`src/kailash/visualization/dashboard.py:182-185`, `_monitor_loop`; `src/kailash/visualization/dashboard.py:256-260`, `_collect_live_metrics`; `src/kailash/visualization/dashboard.py:953-958`, `create_dashboard_snapshot`). Classification uses the existing canonical policy (`src/kailash/_execution_controls.py:56-89`, `_raise_if_runtime_terminal` and `_raise_if_execution_control`); this caller policy does not establish resource settlement or authorize retry, reuse, or drain.
+
 ### Public exports (`__init__.py`)
 
 ```python
