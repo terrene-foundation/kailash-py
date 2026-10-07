@@ -59,6 +59,382 @@ def _cleanup_admit(handle, loop):
         raise RuntimeError("Cleanup cannot await pending work from another loop")
 
 
+_CLEANUP_ADMISSION_LOCK = threading.RLock()
+_CLEANUP_ADMISSIONS = {}
+
+
+def _cleanup_admission_custody(loop):
+    """Retainable private receipts, including unresolved and prepared requests."""
+    with _CLEANUP_ADMISSION_LOCK:
+        return tuple(
+            item for item in _CLEANUP_ADMISSIONS.values() if item._loop is loop
+        )
+
+
+def _cleanup_loop_quiescent(loop):
+    """A factual producer query; callers must integrate their own reuse barrier."""
+    return not _cleanup_admission_custody(loop)
+
+
+class _CleanupTaskAdmission:
+    """Unused producer prerequisite: own one original task admission, not retries.
+
+    Completion is notification only; ``result`` reads cached native state and
+    ordered outcome. No consumer is migrated merely by defining this primitive.
+    """
+
+    def __init__(self, original, *, loop=None, outcome=None):
+        if type(self) is not _CleanupTaskAdmission:
+            raise TypeError("Cleanup admission requires its native receipt type")
+        self._loop = asyncio.get_running_loop() if loop is None else loop
+        self._original = original
+        self._desired_outcome = outcome
+        self._token = object()
+        self._outcome = None
+        self._detach = None
+        self._runner = self._task = self._returned = None
+        self._submitter = None
+        self._calls = 0
+        self._used = self._inflight = self._entered = self._exited = False
+        self._settled = self._processing = self._cached = self._native = False
+        self._contradictory = False
+        self._value = self._task_error = self._admission_error = None
+        self._observation_error = None
+        self._phase = "reserved"
+        self.observation = self.completion = None
+        # This record owns the input/loop before signals or runner preparation.
+        with _CLEANUP_ADMISSION_LOCK:
+            _CLEANUP_ADMISSIONS[self._token] = self
+
+    def prepare(self):
+        """Prepare once, after the caller retains this exact reserved receipt."""
+        with _CLEANUP_ADMISSION_LOCK:
+            if self._phase != "reserved" or self._inflight or self._used:
+                raise RuntimeError("Cleanup admission cannot be prepared again")
+            self._inflight = True
+            self._phase = "preparing"
+        try:
+            from concurrent.futures import Future
+
+            native_outcome = (
+                _CleanupOutcome()
+                if self._desired_outcome is None
+                else self._desired_outcome
+            )
+            _CleanupOutcome._check(native_outcome)
+            self._outcome = native_outcome
+            parent = _current_cleanup_outcome()
+            if parent is not None and parent is not self._outcome:
+                self._detach = parent.link(self._outcome)
+            self.observation = Future()
+            self.completion = Future()
+            with _CLEANUP_ADMISSION_LOCK:
+                self._phase = "prepared"
+        except BaseException as error:
+            self._failed(error)
+            raise
+        finally:
+            with _CLEANUP_ADMISSION_LOCK:
+                self._inflight = False
+        return self
+
+    @property
+    def outcome(self):
+        return self._outcome
+
+    @property
+    def admission_error(self):
+        return self._admission_error
+
+    @property
+    def observation_error(self):
+        """First original diagnostic; no native body-result authority."""
+        return self._observation_error
+
+    @property
+    def owner(self):
+        """The associated native owner, never an unrelated returned handle."""
+        return self._task
+
+    @property
+    def settled(self):
+        return self._settled
+
+    @property
+    def retry_safe(self):
+        return (
+            self._settled
+            and not self._calls
+            and not self._native
+            and not self._entered
+            and not self._contradictory
+        )
+
+    def validate(self, original, loop):
+        """Require this exact unused native receipt before producer adoption."""
+        with _CLEANUP_ADMISSION_LOCK:
+            valid = (
+                type(self) is _CleanupTaskAdmission
+                and _CLEANUP_ADMISSIONS.get(self._token) is self
+                and self._original is original
+                and self._loop is loop
+                and not self._used
+                and self._phase == "prepared"
+                and not self._inflight
+            )
+        if not valid:
+            raise TypeError("Cleanup admission requires its unused native receipt")
+
+    def snapshot(self):
+        """Immutable native facts and safe metadata, never exception formatting."""
+        with _CLEANUP_ADMISSION_LOCK:
+            facts = (
+                self._phase,
+                self._settled,
+                self._calls,
+                self._inflight,
+                self._entered,
+                self._exited,
+                self._contradictory,
+            )
+            error = self._admission_error
+            observation = self._observation_error
+        return (
+            *facts,
+            None if error is None else safe_type_name(error),
+            None if observation is None else safe_type_name(observation),
+        )
+
+    def _record(self, error):
+        if self._outcome is not None:
+            self._outcome.record(error)
+
+    def _observe_failure(self, error):
+        control = _cleanup_control(error)
+        with _CLEANUP_ADMISSION_LOCK:
+            if self._observation_error is None:
+                self._observation_error = error
+        if control is not None:
+            self._record(control)
+
+    def _notify(self, signal):
+        # Future callbacks are opaque effects, always outside the registry lock.
+        if signal is not None and not signal.done():
+            try:
+                signal.set_result(None)
+            except BaseException as error:
+                self._observe_failure(error)
+
+    def _failed(self, error):
+        control = _cleanup_control(error)
+        with _CLEANUP_ADMISSION_LOCK:
+            if self._admission_error is None:
+                self._admission_error = error
+            self._phase = (
+                "uncertain"
+                if self._calls or self._task is not None
+                else "preparation_failed"
+            )
+        if control is not None:
+            self._record(control)
+        self._notify(self.observation)
+
+    def _watch(self, task):
+        # Only the associated native handle can trigger reconciliation.
+        asyncio.Future.add_done_callback(task, self._finished)
+
+    def _associate(self, handle):
+        native_mro = type.__dict__["__mro__"].__get__(type(handle))
+        associated = (
+            any(base is asyncio.Task for base in native_mro)
+            and asyncio.Future.get_loop(handle) is self._loop
+            and handle is not self._submitter
+            and (
+                handle is self._task
+                or (
+                    self._runner is not None
+                    and asyncio.Task.get_coro(handle) is self._runner
+                )
+            )
+        )
+        if not associated:
+            self._contradictory = True
+            raise RuntimeError("Cleanup returned handle is not its original owner")
+        if self._task is not None and self._task is not handle:
+            self._contradictory = True
+            raise RuntimeError("Cleanup original owner contradicts returned handle")
+        self._task = handle
+        if not self._entered:
+            self._phase = "returned"
+        self._watch(handle)
+
+    async def _run(self):
+        try:
+            task = asyncio.current_task()
+            native_mro = type.__dict__["__mro__"].__get__(type(task))
+            if (
+                not any(base is asyncio.Task for base in native_mro)
+                or task is self._submitter
+                or asyncio.Future.get_loop(task) is not self._loop
+            ):
+                self._contradictory = True
+                raise RuntimeError("Cleanup entry requires its actual owner task")
+            if self._task is not None and self._task is not task:
+                self._contradictory = True
+                raise RuntimeError("Cleanup entry contradicts its retained owner")
+            self._task = task
+            self._entered = True
+            self._phase = "entered"
+            self._watch(task)
+            with _cleanup_owner(self._outcome):
+                return await self._original
+        except BaseException as error:
+            self._record(error)
+            raise
+        finally:
+            self._exited = True
+
+    def submit(self):
+        """Submit once through the ordinary loop factory; never replay a receipt."""
+        if asyncio.get_running_loop() is not self._loop:
+            raise RuntimeError("Cleanup submission requires its original loop")
+        with _CLEANUP_ADMISSION_LOCK:
+            if self._inflight:
+                raise RuntimeError("Cleanup admission preparation is still active")
+            if self._used:
+                return self._task
+            self.validate(self._original, self._loop)
+            self._used = self._inflight = True
+        self._submitter = asyncio.current_task()
+        try:
+            native_mro = type.__dict__["__mro__"].__get__(type(self._original))
+            if any(base is asyncio.Future for base in native_mro):
+                self._native = True
+                _cleanup_admit(self._original, self._loop)
+                self._task = self._returned = self._original
+                self._phase = "returned"
+                self._watch(self._task)
+            else:
+                self._runner = self._run()
+                self._phase = "submitting"
+                self._calls = 1
+                self._returned = self._loop.create_task(self._runner)
+                _cleanup_admit(self._returned, self._loop)
+                self._associate(self._returned)
+        except BaseException as error:
+            self._failed(error)
+            raise
+        finally:
+            self._inflight = False
+            try:
+                self.reconcile()
+            except BaseException as error:
+                # A secondary observation cannot replace the creator's failure.
+                self._observe_failure(error)
+                self._notify(self.observation)
+        return self._task
+
+    def _finished(self, task):
+        if task is self._task:
+            try:
+                self.reconcile()
+            except BaseException as error:
+                self._observe_failure(error)
+                self._notify(self.observation)
+
+    def _close_unentered(self):
+        for value in (self._runner, self._original):
+            if type(value) is CoroutineType:
+                try:
+                    value.close()
+                except BaseException as error:
+                    self._record(error)
+                if CoroutineType.__dict__["cr_frame"].__get__(value) is not None:
+                    return False
+        return True
+
+    def _complete(self):
+        self._phase = "settling"
+        self._notify(self.observation)
+        self._notify(self.completion)
+        if self._detach is not None:
+            self._detach()
+            self._detach = None
+        self._settled = True
+        self._phase = "terminal"
+        with _CLEANUP_ADMISSION_LOCK:
+            _CLEANUP_ADMISSIONS.pop(self._token, None)
+        # Cached result/outcome remain inspectable; release execution references.
+        self._runner = self._original = self._returned = self._submitter = None
+        self._desired_outcome = None
+
+    def reconcile(self):
+        """Inspect the original owner only; no Task scan, submission or timeout."""
+        with _CLEANUP_ADMISSION_LOCK:
+            active = not self._inflight and not self._settled and not self._processing
+            task = self._task
+            if active and task is not None:
+                self._processing = True
+            else:
+                active = False
+        if active:
+            try:
+                if asyncio.Future.done(task):
+                    if not self._cached:
+                        self._cached = True
+                        try:
+                            self._value = asyncio.Future.result(task)
+                        except BaseException as error:
+                            self._task_error = error
+                            self._record(error)
+                    # Actual entry/finally or associated native pre-entry proof.
+                    if self._native or self._entered and self._exited:
+                        self._complete()
+                    elif not self._entered and self._close_unentered():
+                        self._complete()
+            finally:
+                with _CLEANUP_ADMISSION_LOCK:
+                    self._processing = False
+        return self.snapshot()
+
+    def reject_prepared(self):
+        """Close only with proof no Task-factory submission ever began."""
+        with _CLEANUP_ADMISSION_LOCK:
+            rejected = (
+                not self._settled
+                and not self._native
+                and not self._calls
+                and self._task is None
+                and not self._inflight
+                and self._phase in ("reserved", "prepared", "preparation_failed")
+            )
+            if rejected:
+                # Reserve rejection before native close can re-enter submission.
+                self._used = self._inflight = True
+        if not rejected:
+            raise RuntimeError("Possibly admitted cleanup cannot be rejected")
+        try:
+            if self._close_unentered():
+                self._complete()
+        finally:
+            self._inflight = False
+        return self.snapshot()
+
+    def result(self):
+        """Notification is not authority: reconcile and read fresh cached state."""
+        self.reconcile()
+        error = self._outcome.error() if self._outcome is not None else None
+        if error is not None:
+            raise error
+        if not self._settled:
+            if self._admission_error is not None:
+                raise self._admission_error
+            raise RuntimeError("Cleanup Task admission remains unresolved")
+        if self._admission_error is not None:
+            raise self._admission_error
+        return self._value
+
+
 def _cleanup_owner_pending(owner: Any) -> bool:
     """Observe ancestry in a running loop; opaque owners retain their protocol."""
     if owner is asyncio.current_task() and owner is not None:
