@@ -77,10 +77,10 @@ def _cleanup_loop_quiescent(loop):
 
 
 class _CleanupTaskAdmission:
-    """Unused producer prerequisite: own one original task admission, not retries.
+    """Own one original task admission, retaining its exact reservation.
 
     Completion is notification only; ``result`` reads cached native state and
-    ordered outcome. No consumer is migrated merely by defining this primitive.
+    ordered outcome. Consumers retain this receipt before preparing admission.
     """
 
     def __init__(self, original, *, loop=None, outcome=None, controls_only=False):
@@ -461,6 +461,7 @@ async def _await_cleanup(awaitable, *, on_cancel=None):
     # hand task machinery a native coroutine: ensure_future's duck typing reads
     # instance __class__ before it ever starts the owned cleanup.
     owner = None
+    receipt = None
     entered = False
     loop = asyncio.get_running_loop()
 
@@ -498,15 +499,26 @@ async def _await_cleanup(awaitable, *, on_cancel=None):
             return await awaitable
 
         owner = finish_owned()
+        receipt = _CleanupTaskAdmission(owner, loop=loop, controls_only=True)
         try:
-            task = asyncio.create_task(owner)
+            receipt.prepare()
+            receipt.validate(owner, loop)
+            task = receipt.submit()
         except BaseException:
-            await close_unstarted()
+            if not receipt._calls and receipt.owner is None:
+                try:
+                    receipt.reject_prepared()
+                except BaseException:
+                    # Failed rejection leaves the same original input in custody.
+                    pass
+            if receipt.settled:
+                await close_unstarted()
             raise
     try:
         _cleanup_admit(task, loop)
     except BaseException:
-        await close_unstarted()
+        if receipt is None or receipt.settled:
+            await close_unstarted()
         raise
 
     def observe(operation, *args):
@@ -545,9 +557,14 @@ async def _await_cleanup(awaitable, *, on_cancel=None):
     # Task acceptance alone does not consume the nested native coroutine: a
     # factory may cancel the wrapper before its first step. Release that custody
     # after settlement, without invoking custom close methods or replaying work.
-    unstarted_error = await close_unstarted()
+    unstarted_error = None
     try:
-        result = observe(asyncio.Future.result)
+        if receipt is not None:
+            receipt.reconcile()
+        unstarted_error = (
+            await close_unstarted() if receipt is None or receipt.settled else None
+        )
+        result = observe(asyncio.Future.result) if receipt is None else receipt.result()
     except BaseException as exc:
         if cancellation is not None:
             try:
@@ -1003,17 +1020,25 @@ async def _run_resource_cleanup(
         nonlocal first_terminal
         with _cleanup_observation(error) as observation:
             observed = observation.snapshot(stage, controls_only=True)
-            if stage is not None:
+            if stage is not None and not observation.excluded:
                 observation.record(stage)
             if first_terminal is None:
-                first_terminal = error if observed is None else observed
+                first_terminal = (
+                    observed
+                    if observed is not None
+                    else None if observation.excluded else error
+                )
 
     def cancelled(error):
         nonlocal first_terminal
         with _cleanup_observation(error) as observation:
             observed = observation.snapshot(stage, controls_only=True)
             if first_terminal is None:
-                first_terminal = error if observed is None else observed
+                first_terminal = (
+                    observed
+                    if observed is not None
+                    else None if observation.excluded else error
+                )
             if primary is None and parent is not None:
                 observation.publish(parent)
 
@@ -1593,27 +1618,61 @@ class _CleanupInvocation:
         self._returned = None
         self._returned_future = False
         self._value = None
+        self._receipt = None
+        self._owner_loop = None
+        self._coordinator_entered = self._factory_unwound = False
+        self._gate_opened = self._settlement_queued = False
+        self._observation_sent = False
+        self._start_error = self._observation_error = None
 
     @property
     def drained(self):
-        return self.completion.done()
+        receipt = self._receipt
+        return receipt is not None and receipt.settled and self.completion.done()
 
     @property
     def retry_safe(self):
+        # This is worker-submission policy, not permission to replay a Task factory.
         return self.drained and self.submission == "not_submitted"
 
     @property
     def unresolved(self):
         return (
-            self.submission == "uncertain" or self.unclassified
+            self._receipt is None
+            or self._receipt.admission_error is not None
+            or self._start_error is not None
+            or self._observation_error is not None
+            or self.submission == "uncertain"
+            or self.unclassified
         ) and not self.drained
+
+    def _observe_failure(self, error):
+        with self._lock:
+            if self._observation_error is None:
+                self._observation_error = error
+        control = _cleanup_control(error)
+        if control is not None:
+            self._record(control)
+
+    def _notify_ready(self):
+        try:
+            if not self._ready.done():
+                self._ready.set_result(None)
+        except BaseException as error:
+            self._observe_failure(error)
 
     def _notify_observers(self):
         # This notification conveys no completion or retry authority. Existing
         # observers must wake even if they joined before the worker failed.
         with self._lock:
+            if self._observation_sent:
+                return
+            self._observation_sent = True
+        try:
             if not self.observation.done():
                 self.observation.set_result(None)
+        except BaseException as error:
+            self._observe_failure(error)
 
     def _record(self, error):
         from kailash.runtime.resource_manager import _exception_is
@@ -1631,8 +1690,9 @@ class _CleanupInvocation:
         self.outcome.record(error)
 
     def _invoke(self):
+        worker_thread = threading.current_thread()
         with self._lock:
-            self.worker_thread = threading.current_thread()
+            self.worker_thread = worker_thread
             self.callback_entered = True
         try:
             result = (True, self.callback(*self.args))
@@ -1649,43 +1709,144 @@ class _CleanupInvocation:
         with self._lock:
             if self._started:
                 return
-            try:
-                self._started = True
-                self._gate = asyncio.Future(loop=loop)
-                self._runner = self._run()
-                self.coordinator = loop.create_task(self._runner)
-                _cleanup_admit(self.coordinator, loop)
-                if _cleanup_observe(self.coordinator, asyncio.Future.done):
-                    loop.call_soon(self._finished, self.coordinator)
-                else:
-                    _cleanup_observe(
-                        self.coordinator,
-                        asyncio.Future.add_done_callback,
-                        self._finished,
-                    )
-            except BaseException as error:
-                self._record(error)
-                if self._runner is not None:
-                    self._runner.close()
-                self._ready.set_result(None)
-                self.completion.set_result((None, self.outcome.error()))
-                self._notify_observers()
-                raise
-            asyncio.Future.set_result(self._gate, None)
-
-    def _finished(self, task):
+            self._started = True
+            self._owner_loop = loop
         try:
-            _cleanup_observe(task, asyncio.Future.result)
+            self._runner = self._run()
+            self._receipt = _CleanupTaskAdmission(
+                self._runner, loop=loop, outcome=self.outcome, controls_only=True
+            )
+            self._receipt.prepare()
+            self._gate = asyncio.Future(loop=loop)
+            self._receipt.validate(self._runner, loop)
+            self._receipt.observation.add_done_callback(self._finished)
+            self._receipt.completion.add_done_callback(self._finished)
+            self._receipt.submit()
         except BaseException as error:
-            self._record(error)
-        if not self._entered:
-            # Accepted then cancelled before its first step: no submission began.
-            self._runner.close()
-        if not self._ready.done():
-            self._ready.set_result(None)
-        if not self.completion.done():
-            self.completion.set_result((self._value, self.outcome.error()))
-        self._notify_observers()
+            self._start_error = error
+            self._observe_failure(error)
+            receipt = self._receipt
+            if receipt is not None and not receipt._calls and receipt.owner is None:
+                try:
+                    receipt.reject_prepared()
+                except BaseException as secondary:
+                    self._observe_failure(secondary)
+            self._notify_ready()
+            self._notify_observers()
+            raise
+        finally:
+            with self._lock:
+                self._factory_unwound = True
+            try:
+                self._handoff()
+            except BaseException as error:
+                self._observe_failure(error)
+                self._notify_ready()
+                self._notify_observers()
+            self._queue_settlement()
+
+    def _handoff(self):
+        with self._lock:
+            if (
+                not self._coordinator_entered
+                or not self._factory_unwound
+                or self._gate_opened
+            ):
+                return
+            receipt, owner, gate = self._receipt, self.coordinator, self._gate
+        if (
+            receipt.owner is not owner
+            or receipt._original is not self._runner
+            or asyncio.Future.get_loop(owner) is not self._owner_loop
+        ):
+            raise RuntimeError("Cleanup gate requires its original coordinator")
+        with self._lock:
+            if self._gate_opened:
+                return
+            self._gate_opened = True
+        asyncio.Future.set_result(gate, None)
+
+    def _finished(self, _signal):
+        # The receipt notifies BEFORE settled. Read back on its original loop.
+        self._queue_settlement()
+        receipt = self._receipt
+        if receipt is not None and receipt.admission_error is not None:
+            self._notify_ready()
+            self._notify_observers()
+
+    def _queue_settlement(self):
+        with self._lock:
+            if self._owner_loop is None or self._settlement_queued:
+                return
+            self._settlement_queued = True
+            loop = self._owner_loop
+        try:
+            loop.call_soon_threadsafe(self._reconcile_settlement)
+        except BaseException as error:
+            with self._lock:
+                self._settlement_queued = False
+            self._observe_failure(error)
+            self._notify_ready()
+            self._notify_observers()
+
+    def _reconcile_settlement(self):
+        with self._lock:
+            self._settlement_queued = False
+            receipt = self._receipt
+        if receipt is None:
+            return
+        try:
+            if asyncio.get_running_loop() is not self._owner_loop:
+                raise RuntimeError("Cleanup settlement requires its original loop")
+            receipt.reconcile()
+            if not receipt.settled or receipt._inflight:
+                return
+            try:
+                receipt.result()
+            except BaseException as error:
+                first = self.outcome.error()
+                first = error if first is None else first
+            else:
+                first = self.outcome.error()
+            if first is None:
+                first = self._start_error
+            self._notify_ready()
+            if not self.completion.done():
+                if not self._coordinator_entered:
+                    if type(self._runner) is not CoroutineType:
+                        raise RuntimeError("Cleanup no-entry runner must be native")
+                    if (
+                        CoroutineType.__dict__["cr_frame"].__get__(self._runner)
+                        is not None
+                    ):
+                        # A native watcher can fail before our runner enters.
+                        # Neither a notification nor an unrelated/refused handle
+                        # proves this exact runner may be closed.
+                        if not (
+                            self._factory_unwound
+                            and receipt.owner is not None
+                            and not receipt._native
+                            and not receipt._contradictory
+                            and receipt._entered
+                            and receipt._exited
+                            and receipt._cached
+                            and receipt._task_error is not None
+                            and asyncio.Future.get_loop(receipt.owner)
+                            is self._owner_loop
+                        ):
+                            raise RuntimeError("Cleanup no-entry custody unresolved")
+                        CoroutineType.close(self._runner)
+                        if (
+                            CoroutineType.__dict__["cr_frame"].__get__(self._runner)
+                            is not None
+                        ):
+                            raise RuntimeError("Cleanup no-entry runner remains owned")
+                self.completion.set_result((self._value, first))
+            self._notify_observers()
+        except BaseException as error:
+            self._observe_failure(error)
+            self._notify_ready()
+            self._notify_observers()
 
     async def _checkpoint(self):
         try:
@@ -1694,6 +1855,19 @@ class _CleanupInvocation:
             self._record(error)
 
     async def _run(self):
+        receipt = self._receipt
+        task = asyncio.current_task()
+        if (
+            receipt is None
+            or receipt.owner is not task
+            or receipt._original is not self._runner
+            or asyncio.get_running_loop() is not self._owner_loop
+        ):
+            raise RuntimeError("Cleanup entry requires its original coordinator")
+        self.coordinator = task
+        with self._lock:
+            self._coordinator_entered = True
+        self._handoff()
         await self._gate
         self._entered = True
         with _cleanup_owner(self.outcome), _cleanup_cancel_scope(self.deadline_token):
@@ -1709,7 +1883,7 @@ class _CleanupInvocation:
                     self._record(error)
                 else:
                     self.submission = "accepted"
-                self._ready.set_result(None)
+                self._notify_ready()
                 if self.submission == "uncertain":
                     self._notify_observers()
                 if self.worker is not None:
@@ -1762,9 +1936,10 @@ class _CleanupInvocation:
 
     def cancel_returned(self):
         """Request a private cooperative deadline, never cancelling the worker."""
+        drained = self.drained
         with self._lock:
             self.deadline_requested = True
-            if not self.returned_started or self.drained or self._deadline_sent:
+            if not self.returned_started or drained or self._deadline_sent:
                 return False
             self._deadline_sent = True
         if self._returned_future:
@@ -1778,6 +1953,7 @@ class _CleanupInvocation:
         if not self._started:
             raise RuntimeError("Cleanup invocation must start before observation")
         loop = asyncio.get_running_loop()
+        self._queue_settlement()
         ready = asyncio.wrap_future(self._ready, loop=loop)
         first = None
         try:
@@ -1798,6 +1974,13 @@ class _CleanupInvocation:
             # make a new invocation safe. The consumer must retain this request.
             error = first if first is not None else self.outcome.error()
             if error is None:
+                receipt = self._receipt
+                error = self._start_error
+                if error is None and receipt is not None:
+                    error = receipt.admission_error
+                if error is None:
+                    error = self._observation_error
+            if error is None:
                 raise RuntimeError("Native cleanup submission remains unresolved")
             raise error
         pending = asyncio.wrap_future(self.completion, loop=loop)
@@ -1809,6 +1992,9 @@ class _CleanupInvocation:
             raise
         if first is not None:
             raise first
+        if error is not None:
+            raise error
+        error = self.outcome.error()
         if error is not None:
             raise error
         return value
