@@ -57,6 +57,7 @@ from kailash.runtime.local import (
 from kailash.runtime.metrics import get_metrics_bridge
 from kailash.runtime.resource_manager import (
     _is_retry_observer_failure,
+    _raise_if_execution_control,
     _retry_execution_scope,
 )
 from kailash.sdk_exceptions import (
@@ -68,6 +69,7 @@ from kailash.sdk_exceptions import (
 )
 from kailash.tracking import TaskManager, TaskStatus
 from kailash.utils.finalizer import warn_unclosed
+from kailash.utils.resource_manager import _run_resource_cleanup
 from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
 
 logger = logging.getLogger(__name__)
@@ -730,6 +732,7 @@ class AsyncLocalRuntime(LocalRuntime):
                 except (asyncio.CancelledError, KeyboardInterrupt, SystemExit):
                     raise
                 except Exception as save_err:
+                    _raise_if_execution_control(save_err)
                     logger.warning(
                         "durable.checkpoint.save_failed",
                         extra={
@@ -1103,6 +1106,7 @@ class AsyncLocalRuntime(LocalRuntime):
                                 checkpoint_key
                             )
                         except Exception as load_err:  # pragma: no cover — defensive
+                            _raise_if_execution_control(load_err)
                             logger.warning(
                                 "durable.checkpoint.load_failed",
                                 extra={"error_type": safe_type_name(load_err)},
@@ -1236,6 +1240,7 @@ class AsyncLocalRuntime(LocalRuntime):
                 raise
 
             except Exception as e:
+                _raise_if_execution_control(e)
                 if preparing_checkpoint:
                     # Preparation errors keep their original public identity.
                     raise
@@ -1369,6 +1374,7 @@ class AsyncLocalRuntime(LocalRuntime):
             ):
                 raise
             except Exception as error:
+                _raise_if_execution_control(error)
                 if _is_retry_observer_failure(error):
                     raise
                 logger.warning(
@@ -1492,6 +1498,7 @@ class AsyncLocalRuntime(LocalRuntime):
             try:
                 await asyncio.gather(*tasks, return_exceptions=False)
             except Exception as e:
+                _raise_if_execution_control(e)
                 logger.error(
                     f"Level {level.level} execution failed: {safe_exception_frames(e)}"
                 )
@@ -1640,7 +1647,8 @@ class AsyncLocalRuntime(LocalRuntime):
                             trust_context=self._get_effective_trust_context(),
                         )
                     )
-            except RuntimeError:
+            except RuntimeError as error:
+                _raise_if_execution_control(error)
                 # No event loop available, create one for the check
                 _check_loop = _asyncio.new_event_loop()
                 try:
@@ -1666,6 +1674,7 @@ class AsyncLocalRuntime(LocalRuntime):
                 results[node_id] = result
                 node_outputs[node_id] = result
             except Exception as e:
+                _raise_if_execution_control(e)
                 if isinstance(
                     e, ContentAwareExecutionError
                 ) or _is_retry_observer_failure(e):
@@ -1830,107 +1839,133 @@ class AsyncLocalRuntime(LocalRuntime):
         node_instance = None
 
         async with self.execution_semaphore:
+            node_primary = None
             try:
-                # === W1: resume short-circuit ===
-                # On a durable resume, skip nodes already completed on the
-                # prior run and replay their checkpointed output.  Mirrors
-                # the sync LocalRuntime gate.
-                if await self._w1_resume_short_circuit(node_id, tracker, context):
-                    return
+                try:
+                    # === W1: resume short-circuit ===
+                    # On a durable resume, skip nodes already completed on the
+                    # prior run and replay their checkpointed output.  Mirrors
+                    # the sync LocalRuntime gate.
+                    if await self._w1_resume_short_circuit(node_id, tracker, context):
+                        return
 
-                node_instance = workflow._node_instances.get(node_id)
-                if not node_instance:
-                    raise WorkflowExecutionError(f"Node instance '{node_id}' not found")
-
-                # Prepare inputs
-                inputs = await self._prepare_async_node_inputs(
-                    workflow, node_id, tracker, context
-                )
-
-                # CONDITIONAL EXECUTION: Skip nodes that only receive None inputs from conditional routing
-                # Uses shared mixin method (ConditionalExecutionMixin._should_skip_conditional_node)
-                # Pass tracker.results for transitive dependency checking
-                if self._should_skip_conditional_node(
-                    workflow, node_id, inputs, tracker.results
-                ):
-                    logger.info(
-                        f"Skipping node {node_id} - all conditional inputs are None"
-                    )
-                    await tracker.record_result(node_id, None, 0.0)
-                    return
-
-                # CARE-039: Node-level trust verification before execution
-                node_type = node_instance.__class__.__name__
-                node_trust_allowed = await self._verify_node_trust(
-                    node_id=node_id,
-                    node_type=node_type,
-                    trust_context=self._get_effective_trust_context(),
-                )
-                if not node_trust_allowed:
-                    raise WorkflowExecutionError(
-                        f"Trust verification denied execution of node '{node_id}' (type={node_type})"
-                    )
-
-                # Execute async node
-                if isinstance(node_instance, AsyncNode):
-                    # Add resource registry to inputs if available
-                    # (execute_async will merge node.config and validate inputs)
-                    if context.resource_registry:
-                        inputs["resource_registry"] = context.resource_registry
-
-                    # BUGFIX v0.9.26: Call execute_async() instead of async_run()
-                    # execute_async() merges node.config with runtime inputs (base_async.py:190)
-                    # This matches LocalRuntime's pattern (local.py:1362)
-                    # Previous behavior: async_run() was called directly, bypassing config merge
-                    result = await node_instance.execute_async(**inputs)
-                else:
-                    # Shouldn't happen in fully async workflow, but handle gracefully
-                    result = await self._execute_sync_node_in_thread(
-                        node_instance, inputs
-                    )
-
-                self._check_node_result(node_id, result)
-                execution_time = time.time() - start_time
-                await tracker.record_result(node_id, result, execution_time)
-
-                # === W1: emit checkpoint + dispatch hook event ===
-                await self._w1_emit_node_completion(
-                    workflow=workflow,
-                    node_id=node_id,
-                    node_type=node_instance.__class__.__name__,
-                    result=result,
-                    started_at=node_started_at,
-                    ended_at=datetime.now(UTC),
-                    context=context,
-                    error=None,
-                )
-
-                logger.debug(f"Node '{node_id}' completed in {execution_time:.2f}s")
-
-            except Exception as e:
-                execution_time = time.time() - start_time
-                await tracker.record_error(node_id, e)
-                logger.error(
-                    f"Node '{node_id}' failed after {execution_time:.2f}s: {safe_exception_frames(e)}"
-                )
-                if isinstance(
-                    e, ContentAwareExecutionError
-                ) or _is_retry_observer_failure(e):
-                    raise
-                raise WorkflowExecutionError(
-                    f"Node '{node_id}' execution failed: {e}"
-                ) from e
-            finally:
-                _cleanup = (
-                    getattr(node_instance, "cleanup", None) if node_instance else None
-                )
-                if _cleanup is not None:
-                    try:
-                        await _cleanup()
-                    except Exception as cleanup_error:
-                        logger.warning(
-                            f"Error during node '{node_id}' cleanup: {safe_exception_frames(cleanup_error)}"
+                    node_instance = workflow._node_instances.get(node_id)
+                    if not node_instance:
+                        raise WorkflowExecutionError(
+                            f"Node instance '{node_id}' not found"
                         )
+
+                    # Prepare inputs
+                    inputs = await self._prepare_async_node_inputs(
+                        workflow, node_id, tracker, context
+                    )
+
+                    # CONDITIONAL EXECUTION: Skip nodes that only receive None inputs from conditional routing
+                    # Uses shared mixin method (ConditionalExecutionMixin._should_skip_conditional_node)
+                    # Pass tracker.results for transitive dependency checking
+                    if self._should_skip_conditional_node(
+                        workflow, node_id, inputs, tracker.results
+                    ):
+                        logger.info(
+                            f"Skipping node {node_id} - all conditional inputs are None"
+                        )
+                        await tracker.record_result(node_id, None, 0.0)
+                        return
+
+                    # CARE-039: Node-level trust verification before execution
+                    node_type = node_instance.__class__.__name__
+                    node_trust_allowed = await self._verify_node_trust(
+                        node_id=node_id,
+                        node_type=node_type,
+                        trust_context=self._get_effective_trust_context(),
+                    )
+                    if not node_trust_allowed:
+                        raise WorkflowExecutionError(
+                            f"Trust verification denied execution of node '{node_id}' (type={node_type})"
+                        )
+
+                    # Execute async node
+                    if isinstance(node_instance, AsyncNode):
+                        # Add resource registry to inputs if available
+                        # (execute_async will merge node.config and validate inputs)
+                        if context.resource_registry:
+                            inputs["resource_registry"] = context.resource_registry
+
+                        # BUGFIX v0.9.26: Call execute_async() instead of async_run()
+                        # execute_async() merges node.config with runtime inputs (base_async.py:190)
+                        # This matches LocalRuntime's pattern (local.py:1362)
+                        # Previous behavior: async_run() was called directly, bypassing config merge
+                        result = await node_instance.execute_async(**inputs)
+                    else:
+                        # Shouldn't happen in fully async workflow, but handle gracefully
+                        result = await self._execute_sync_node_in_thread(
+                            node_instance, inputs
+                        )
+
+                    self._check_node_result(node_id, result)
+                    execution_time = time.time() - start_time
+                    await tracker.record_result(node_id, result, execution_time)
+
+                    # === W1: emit checkpoint + dispatch hook event ===
+                    await self._w1_emit_node_completion(
+                        workflow=workflow,
+                        node_id=node_id,
+                        node_type=node_instance.__class__.__name__,
+                        result=result,
+                        started_at=node_started_at,
+                        ended_at=datetime.now(UTC),
+                        context=context,
+                        error=None,
+                    )
+
+                    logger.debug(f"Node '{node_id}' completed in {execution_time:.2f}s")
+
+                except Exception as e:
+                    _raise_if_execution_control(e)
+                    execution_time = time.time() - start_time
+                    await tracker.record_error(node_id, e)
+                    logger.error(
+                        f"Node '{node_id}' failed after {execution_time:.2f}s: {safe_exception_frames(e)}"
+                    )
+                    if isinstance(
+                        e, ContentAwareExecutionError
+                    ) or _is_retry_observer_failure(e):
+                        raise
+                    raise WorkflowExecutionError(
+                        f"Node '{node_id}' execution failed: {e}"
+                    ) from e
+            except BaseException as error:
+                node_primary = error
+                raise
+            finally:
+                cleanup_error = None
+
+                async def cleanup_node(resource):
+                    nonlocal cleanup_error
+                    try:
+                        _cleanup = (
+                            getattr(resource, "cleanup", None) if resource else None
+                        )
+                        if _cleanup is not None:
+                            await _cleanup()
+                    except BaseException as error:
+                        cleanup_error = error
+                        raise
+
+                class NodeCleanupReporter:
+                    def error(self, *_args):
+                        if cleanup_error is not None:
+                            _raise_if_execution_control(cleanup_error)
+                            logger.warning(
+                                f"Error during node '{node_id}' cleanup: {safe_exception_frames(cleanup_error)}"
+                            )
+
+                await _run_resource_cleanup(
+                    cleanup_node,
+                    node_instance,
+                    node_primary,
+                    reporter=NodeCleanupReporter(),
+                )
 
     async def _execute_sync_node_async(
         self,
@@ -2009,6 +2044,7 @@ class AsyncLocalRuntime(LocalRuntime):
                 )
 
             except Exception as e:
+                _raise_if_execution_control(e)
                 execution_time = time.time() - start_time
                 await tracker.record_error(node_id, e)
                 logger.error(
