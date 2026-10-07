@@ -83,12 +83,16 @@ class _CleanupTaskAdmission:
     ordered outcome. No consumer is migrated merely by defining this primitive.
     """
 
-    def __init__(self, original, *, loop=None, outcome=None):
+    def __init__(self, original, *, loop=None, outcome=None, controls_only=False):
         if type(self) is not _CleanupTaskAdmission:
             raise TypeError("Cleanup admission requires its native receipt type")
+        projection_type = type(controls_only)
+        if projection_type is not bool:
+            raise TypeError("Cleanup admission projection requires a native bool")
         self._loop = asyncio.get_running_loop() if loop is None else loop
         self._original = original
         self._desired_outcome = outcome
+        self._controls_only = controls_only
         self._token = object()
         self._outcome = None
         self._detach = None
@@ -125,7 +129,9 @@ class _CleanupTaskAdmission:
             self._outcome = native_outcome
             parent = _current_cleanup_outcome()
             if parent is not None and parent is not self._outcome:
-                self._detach = parent.link(self._outcome)
+                self._detach = parent.link(
+                    self._outcome, controls_only=self._controls_only
+                )
             self.observation = Future()
             self.completion = Future()
             with _CLEANUP_ADMISSION_LOCK:
