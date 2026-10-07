@@ -283,8 +283,11 @@ class TaskManager:
             self._runs: dict[str, WorkflowRun] = {}
             self._tasks: dict[str, TaskRun] = {}
         except Exception as e:
+            _raise_if_execution_control(e)
             raise TaskException(f"Failed to initialize task manager: {e}") from e
 ```
+
+The constructor propagates execution-control exceptions before wrapping ordinary failures as `TaskException`. The module's lazy `_raise_if_execution_control` facade delegates to the canonical runtime policy; it does not define another classifier. Sources: `src/kailash/tracking/manager.py:24-30`, `src/kailash/tracking/manager.py:33-56`; canonical policy `src/kailash/_execution_controls.py:56-89`.
 
 **Constructor parameters** (exactly as in source):
 
@@ -298,6 +301,8 @@ class TaskManager:
 - `self._tasks: dict[str, TaskRun]` — in-memory cache of tasks (NOT `_task_cache`)
 
 The cache attribute names are exactly `_runs` and `_tasks`. Any code referencing `_run_cache` or `_task_cache` is wrong.
+
+At the guarded TaskManager caller boundaries in the parallel runtimes, Workflow, CLI task commands and performance report comparison and chart generation, the shared execution-control guard runs before ordinary warning, failure-result, wrapper or CLI exit handling. Workflow also guards its node-execution and returned-task status boundary before failure-state conversion or wrapping. Ordinary errors retain those existing policies; controls classified by the canonical helper propagate as their original outer objects. Sources: `src/kailash/_execution_controls.py:85-89`, `src/kailash/runtime/parallel.py:450-542`, `src/kailash/runtime/parallel_cyclic.py:468-532`, `src/kailash/workflow/graph.py:1100-1260`, `src/kailash/cli/commands.py:110-144`, `src/kailash/visualization/reports.py:787-800`, `_compare_runs`; `src/kailash/visualization/reports.py:771-785`, `_generate_analysis_charts`. The reporter supplies its same TaskManager to `PerformanceVisualizer` (`src/kailash/visualization/reports.py:137-147`); that supplier stores it and calls `get_run` and `get_run_tasks` in `create_run_performance_summary` (`src/kailash/visualization/performance.py:26-43`). The chart handler guards the original caught exception before the existing warning-and-partial-chart-result policy. This describes those handler boundaries, excludes LocalRuntime and any broader transitive supplier behavior, and grants no cleanup, retry or reuse guarantee.
 
 ### Run management
 
@@ -323,7 +328,7 @@ There are NO `workflow_id` or `parameters` parameters. `workflow_name` is the on
 1. Validates `workflow_name` is non-empty (raises `TaskException`).
 2. Constructs `WorkflowRun(workflow_name=workflow_name, metadata=metadata or {})`.
 3. Caches the run in `self._runs[run.run_id]`.
-4. Calls `self.storage.save_run(run)`. On storage failure, pops the run from the cache and re-raises as `StorageException`.
+4. Calls `self.storage.save_run(run)`. On an ordinary storage failure, wraps it as `StorageException`; execution-control exceptions propagate through the canonical guard. Both paths pop the run from the cache in `finally`. Source: `src/kailash/tracking/manager.py:84-94`.
 5. Returns `run.run_id`.
 
 **Method: `update_run_status(run_id, status, error=None)`**
@@ -347,7 +352,7 @@ def create_task(
 ) -> TaskRun:
 ```
 
-The `run_id` and `node_type` defaults are legacy backward-compat placeholders for older tests — production code supplies them explicitly. Returns the constructed `TaskRun`. Persists via `self.storage.save_task(task)`; adds the task to its run via `run.add_task(task.task_id)` and re-saves the run if the run is cached.
+The `run_id` and `node_type` defaults are legacy backward-compat placeholders for older tests — production code supplies them explicitly. Returns the constructed `TaskRun`. Persists via `self.storage.save_task(task)`; adds the task to its run via `run.add_task(task.task_id)` and re-saves the run if the run is cached. Execution-control exceptions propagate before ordinary failure handling; a failed task persistence removes the task from the cache in `finally`, while an ordinary run-link failure remains a warning followed by continuation. Source: `src/kailash/tracking/manager.py:150-222`.
 
 **Method: `update_task_status(task_id, status, result=None, error=None, ended_at=None, metadata=None)`**
 

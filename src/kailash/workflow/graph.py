@@ -11,6 +11,7 @@ from typing import Any, ClassVar
 import yaml
 from pydantic import BaseModel, Field, ValidationError
 
+from kailash._execution_controls import _raise_if_execution_control
 from kailash.nodes.base import Node
 from kailash.workflow.dag import CycleDetectedError, WorkflowDAG
 
@@ -1108,6 +1109,7 @@ class Workflow:
                     workflow_name=self.name, metadata={"inputs": inputs}
                 )
             except Exception as e:
+                _raise_if_execution_control(e)
                 logger.warning(f"Failed to create task run: {safe_exception_frames(e)}")
                 # Continue without task tracking
 
@@ -1138,6 +1140,7 @@ class Workflow:
                     )
                     task.update_status(TaskStatus.RUNNING)
                 except Exception as e:
+                    _raise_if_execution_control(e)
                     logger.warning(
                         f"Failed to create task for node '{safe_log_field(node_id)}': {safe_exception_frames(e)}"
                     )
@@ -1243,6 +1246,7 @@ class Workflow:
                 logger.info(f"Node '{safe_log_field(node_id)}' completed successfully")
 
             except Exception as e:
+                _raise_if_execution_control(e)
                 failed_nodes.append(node_id)
                 if task:
                     task.update_status(TaskStatus.FAILED, error=str(e))

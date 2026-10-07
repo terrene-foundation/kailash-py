@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from typing import Any
 
+from kailash._execution_controls import _raise_if_execution_control
 from kailash.nodes.base import Node
 from kailash.runtime._time_limits import (
     _TimeLimitClassifier,
@@ -203,6 +204,7 @@ class ParallelCyclicRuntime:
                         raise classified from cancel_exc
                 raise
             except Exception as e:
+                _raise_if_execution_control(e)
                 raise RuntimeExecutionError(
                     f"Parallel runtime execution failed: {e}"
                 ) from e
@@ -270,6 +272,7 @@ class ParallelCyclicRuntime:
                     },
                 )
             except Exception as e:
+                _raise_if_execution_control(e)
                 self.logger.warning(f"Failed to create task run: {e}")
 
         try:
@@ -314,6 +317,7 @@ class ParallelCyclicRuntime:
                             group_results[node_id] = node_result
                             self.logger.debug(f"Node {node_id} completed successfully")
                         except Exception as e:
+                            _raise_if_execution_control(e)
                             self.logger.error(f"Node {node_id} failed: {e}")
                             # Decide whether to continue or fail the entire workflow
                             if self._should_stop_on_group_error(
@@ -337,16 +341,19 @@ class ParallelCyclicRuntime:
                 try:
                     task_manager.update_run_status(run_id, "completed")
                 except Exception as e:
+                    _raise_if_execution_control(e)
                     self.logger.warning(f"Failed to update run status: {e}")
 
             return results, run_id
 
         except Exception as e:
+            _raise_if_execution_control(e)
             # Mark run as failed
             if task_manager and run_id:
                 try:
                     task_manager.update_run_status(run_id, "failed", error=str(e))
-                except Exception:
+                except Exception as tracking_error:
+                    _raise_if_execution_control(tracking_error)
                     pass
             raise
 
@@ -461,6 +468,7 @@ class ParallelCyclicRuntime:
                 if task:
                     task_manager.update_task_status(task.task_id, TaskStatus.RUNNING)
             except Exception as e:
+                _raise_if_execution_control(e)
                 self.logger.warning(f"Failed to create task for node '{node_id}': {e}")
 
         try:
@@ -508,6 +516,7 @@ class ParallelCyclicRuntime:
             return outputs
 
         except Exception as e:
+            _raise_if_execution_control(e)
             # Update task status
             if task and task_manager:
                 task_manager.update_task_status(

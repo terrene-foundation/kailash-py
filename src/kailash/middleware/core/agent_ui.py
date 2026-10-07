@@ -142,6 +142,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Union
 
+from kailash._execution_controls import _raise_if_execution_control
+
 from ...nodes.base import Node, NodeRegistry
 from ...nodes.data import AsyncSQLDatabaseNode
 from ...nodes.security import CredentialManagerNode
@@ -739,6 +741,7 @@ class AgentUIMiddleware:
             )
 
         except Exception as e:
+            _raise_if_execution_control(e)
             error_msg = str(e)
             logger.error(f"Workflow execution {execution_id} failed: {error_msg}")
 
