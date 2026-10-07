@@ -779,6 +779,7 @@ class WorkflowPerformanceReporter:
             chart_outputs = self.performance_viz.create_run_performance_summary(run_id)
             charts.update(chart_outputs)
         except Exception as e:
+            _raise_if_execution_control(e)
             self.logger.warning(f"Failed to generate charts: {e}")
 
         return charts
