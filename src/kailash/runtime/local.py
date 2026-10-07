@@ -1723,7 +1723,10 @@ class LocalRuntime(
             for pool_key in list(shared_pools.keys()):
                 if pool_key.startswith(loop_id_prefix):
                     self._created_async_sql_pools.add(pool_key)
-        except Exception:  # noqa: BLE001 — best-effort observability hook
+        except (
+            Exception
+        ) as snapshot_error:  # noqa: BLE001 — best-effort observability hook
+            _raise_if_execution_control(snapshot_error)
             # Cleanup tracking is observability-only; never poison the
             # workflow execution path with a tracking-helper failure.
             # The absent-WARN cost is bounded; a raise here would break
@@ -3355,16 +3358,6 @@ class LocalRuntime(
                         f"Failed to create task for node '{node_id}': {safe_exception_frames(e)}"
                     )
 
-            # OpenTelemetry tracing: per-node span (DETAILED+ level)
-            _node_span = _tracer.start_node_span(
-                node_id=node_id,
-                node_type=node_instance.__class__.__name__,
-                parent_span=_wf_span,
-            )
-
-            # W1: capture per-node start timestamp for NodeCompletionEvent
-            _node_started_at = datetime.now(UTC)
-
             inputs: dict[str, Any] = {}
             _node_primary: BaseException | None = None
             _node_error: Exception | None = None
@@ -3372,16 +3365,28 @@ class LocalRuntime(
             _node_pool_snapshot = False
 
             def _cleanup_node_resources(node: Node) -> Any:
-                # Existing body snapshots stay in place. Newly covered control
-                # exits must also observe pool keys before invoking cleanup.
-                if not _node_pool_snapshot:
-                    self._snapshot_async_sql_pool_keys()
                 cleanup = _get_execution_attribute(node, "cleanup", None, strict=True)
                 if cleanup is not None:
                     return cleanup()
                 return None
 
+            class _NodeFinalizerReporter:
+                def error(_reporter: Any, *args: Any, **kwargs: Any) -> None:
+                    # Resolve the runtime sink inside canonical reporting.
+                    self.logger.error(*args, **kwargs)
+
+            _node_finalizer_reporter = _NodeFinalizerReporter()
+
+            # OpenTelemetry tracing: per-node span (DETAILED+ level)
+            _node_span = _tracer.start_node_span(
+                node_id=node_id,
+                node_type=node_instance.__class__.__name__,
+                parent_span=_wf_span,
+            )
             try:
+                # W1: capture per-node start timestamp for NodeCompletionEvent.
+                # Preserve its raw escaping error outside ordinary node policy.
+                _node_started_at = datetime.now(UTC)
                 try:
                     # Prepare inputs
                     inputs = self._prepare_node_inputs(
@@ -3680,7 +3685,7 @@ class LocalRuntime(
                         _node_span,
                         primary=_finalizer_primary,
                         resource_type="node span",
-                        reporter=self.logger,
+                        reporter=_node_finalizer_reporter,
                     )
                 except BaseException as span_error:
                     _finalizer_primary = span_error
@@ -3689,13 +3694,29 @@ class LocalRuntime(
                     # Conditional-input skips retain their existing outer
                     # cleanup owner; only the admitted span ends here.
                     if _node_cleanup_enabled:
-                        await _run_resource_cleanup(
-                            _cleanup_node_resources,
-                            node_instance,
-                            primary=_finalizer_primary,
-                            resource_type="node",
-                            reporter=self.logger,
-                        )
+                        _cleanup_primary = _finalizer_primary
+                        try:
+                            # Preserve the original body snapshots. A fallback
+                            # observation cannot prevent cleanup discovery.
+                            if not _node_pool_snapshot:
+                                await _run_resource_cleanup(
+                                    lambda node: self._snapshot_async_sql_pool_keys(),
+                                    node_instance,
+                                    primary=_cleanup_primary,
+                                    resource_type="node pool observation",
+                                    reporter=_node_finalizer_reporter,
+                                )
+                        except BaseException as snapshot_error:
+                            _cleanup_primary = snapshot_error
+                            raise
+                        finally:
+                            await _run_resource_cleanup(
+                                _cleanup_node_resources,
+                                node_instance,
+                                primary=_cleanup_primary,
+                                resource_type="node",
+                                reporter=_node_finalizer_reporter,
+                            )
 
         # Clean up workflow context
         self._current_workflow_context = None
