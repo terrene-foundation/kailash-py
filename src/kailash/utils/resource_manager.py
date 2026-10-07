@@ -598,6 +598,7 @@ async def _run_resource_cleanup(
     outcome=None,
     already_owned=False,
     on_admitted=None,
+    reporter=None,
 ):
     """Own callback, diagnostics and pending cancellation in the same task."""
     _record_cleanup_primary(primary)
@@ -671,7 +672,11 @@ async def _run_resource_cleanup(
             if error is not None:
                 try:
                     await _report_cleanup_failure_async(
-                        error, first_terminal, resource_type, on_control=record
+                        error,
+                        first_terminal,
+                        resource_type,
+                        reporter=reporter,
+                        on_control=record,
                     )
                 except BaseException as caught:
                     record(caught)
