@@ -51,6 +51,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Tuple
 
 from kailash.runtime.resource_manager import (
     _is_retry_observer_failure,
+    _raise_if_execution_control,
     _retry_execution_scope,
 )
 from kailash.utils.secure_logging import (
@@ -67,6 +68,7 @@ if TYPE_CHECKING:
     from kailash.runtime.shutdown import ShutdownCoordinator
 
 from kailash.nodes import Node
+from kailash.nodes.base import _get_execution_attribute
 from kailash.runtime._time_limits import (
     _TimeLimitClassifier,
     _validate_limits,
@@ -126,6 +128,7 @@ from kailash.tracking.metrics_collector import MetricsCollector
 from kailash.tracking.models import TaskMetrics
 from kailash.utils.data_validation import DataTypeValidator
 from kailash.utils.finalizer import warn_unclosed
+from kailash.utils.resource_manager import _run_resource_cleanup
 from kailash.workflow import Workflow
 from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor
 
@@ -3363,288 +3366,336 @@ class LocalRuntime(
             _node_started_at = datetime.now(UTC)
 
             inputs: dict[str, Any] = {}
+            _node_primary: BaseException | None = None
+            _node_error: Exception | None = None
+            _node_cleanup_enabled = True
+            _node_pool_snapshot = False
+
+            def _cleanup_node_resources(node: Node) -> Any:
+                # Existing body snapshots stay in place. Newly covered control
+                # exits must also observe pool keys before invoking cleanup.
+                if not _node_pool_snapshot:
+                    self._snapshot_async_sql_pool_keys()
+                cleanup = _get_execution_attribute(node, "cleanup", None, strict=True)
+                if cleanup is not None:
+                    return cleanup()
+                return None
+
             try:
-                # Prepare inputs
-                inputs = self._prepare_node_inputs(
-                    workflow=workflow,
-                    node_id=node_id,
-                    node_instance=node_instance,
-                    node_outputs=node_outputs,
-                    parameters=parameters,  # Pass full dict - filtering happens inside
-                    _node_ids=_node_ids,  # P0A-005: Pre-computed node IDs
-                )
+                try:
+                    # Prepare inputs
+                    inputs = self._prepare_node_inputs(
+                        workflow=workflow,
+                        node_id=node_id,
+                        node_instance=node_instance,
+                        node_outputs=node_outputs,
+                        parameters=parameters,  # Pass full dict - filtering happens inside
+                        _node_ids=_node_ids,  # P0A-005: Pre-computed node IDs
+                    )
 
-                # CRITICAL FIX: DO NOT modify node_instance.config with runtime parameters!
-                # The node instance is reused across executions (especially in Nexus deployments).
-                # Modifying config causes parameter persistence across requests, leading to data leakage.
-                # Runtime parameters are already properly merged in inputs and passed to execute().
-                # Bug report: PythonCodeNode Variable Persistence (P0)
+                    # CRITICAL FIX: DO NOT modify node_instance.config with runtime parameters!
+                    # The node instance is reused across executions (especially in Nexus deployments).
+                    # Modifying config causes parameter persistence across requests, leading to data leakage.
+                    # Runtime parameters are already properly merged in inputs and passed to execute().
+                    # Bug report: PythonCodeNode Variable Persistence (P0)
 
-                # Parameter filtering now handled inside _prepare_node_inputs() to prevent
-                # cross-node parameter leaks while maintaining proper scoping
+                    # Parameter filtering now handled inside _prepare_node_inputs() to prevent
+                    # cross-node parameter leaks while maintaining proper scoping
 
-                if self.debug:
-                    self.logger.debug("Node %s inputs prepared", node_id)
-
-                # CONDITIONAL EXECUTION: Skip nodes that only receive None inputs from conditional routing
-                # Uses shared mixin method (ConditionalExecutionMixin._should_skip_conditional_node)
-                if self._should_skip_conditional_node(
-                    workflow, node_id, inputs, self._current_results
-                ):
                     if self.debug:
-                        self.logger.debug("Skipping conditional node %s", node_id)
-                    self.logger.info(
-                        f"Skipping node {node_id} - all conditional inputs are None"
-                    )
-                    # Store None result to indicate the node was skipped
-                    results[node_id] = None
-                    node_outputs[node_id] = None
+                        self.logger.debug("Node %s inputs prepared", node_id)
 
-                    # Update task status if tracking is enabled
-                    if task and task_manager:
-                        task_manager.update_task_status(
-                            task.task_id,
-                            TaskStatus.COMPLETED,
-                            result=None,
-                            ended_at=datetime.now(UTC),
-                            metadata={"skipped": True, "reason": "conditional_routing"},
+                    # CONDITIONAL EXECUTION: Skip nodes that only receive None inputs from conditional routing
+                    # Uses shared mixin method (ConditionalExecutionMixin._should_skip_conditional_node)
+                    if self._should_skip_conditional_node(
+                        workflow, node_id, inputs, self._current_results
+                    ):
+                        if self.debug:
+                            self.logger.debug("Skipping conditional node %s", node_id)
+                        self.logger.info(
+                            f"Skipping node {node_id} - all conditional inputs are None"
                         )
-                    continue
+                        # Store None result to indicate the node was skipped
+                        results[node_id] = None
+                        node_outputs[node_id] = None
 
-                # Execute node with unified async/sync support and metrics collection
-                with _shared_collector.collect(node_id=node_id) as metrics_context:
-                    # Unified async/sync execution
-                    # P0B-001: Removed VP#1 (DataTypeValidator.validate_node_input)
-                    # Node.execute() performs authoritative validation via VP#3
-
-                    # Set workflow context on the node instance
-                    if hasattr(node_instance, "_workflow_context"):
-                        node_instance._workflow_context = workflow_context
-                    else:
-                        # Initialize the workflow context if it doesn't exist
-                        node_instance._workflow_context = workflow_context
-
-                    # CARE-039: Node-level trust verification before execution
-                    # P0D-004: Only call _verify_node_trust when trust is enabled.
-                    # When DISABLED (default), this entire block is skipped,
-                    # avoiding 2 lazy imports + function calls per node.
-                    if _trust_enabled:
-                        node_type = node_instance.__class__.__name__
-                        node_trust_allowed = await self._verify_node_trust(
-                            node_id=node_id,
-                            node_type=node_type,
-                            trust_context=_trust_context,
-                        )
-                        if not node_trust_allowed:
-                            raise WorkflowExecutionError(
-                                f"Trust verification denied execution of node '{node_id}' (type={node_type})"
-                            )
-
-                    if self.enable_async and hasattr(node_instance, "execute_async"):
-                        outputs = await node_instance.execute_async(**inputs)
-                    else:
-                        outputs = node_instance.execute(**inputs)
-
-                # Get performance metrics
-                performance_metrics = metrics_context.result()
-
-                # Content-aware success detection (CRITICAL FIX)
-                if self.content_aware_success_detection:
-                    should_stop, error_message = should_stop_on_content_failure(
-                        result=outputs,
-                        content_aware_mode=True,
-                        stop_on_error=True,  # Always stop on content failures when content-aware mode is enabled
-                    )
-
-                    if should_stop:
-                        # Create detailed error for content-aware failure
-                        error = create_content_aware_error(
-                            node_id=node_id,
-                            result=(
-                                outputs
-                                if isinstance(outputs, dict)
-                                else {"error": error_message}
-                            ),
-                            error_message=error_message,
-                        )
-
-                        # Log the content-aware failure
-                        self.logger.error(
-                            "Content-aware failure detected in node %s: %s",
-                            node_id,
-                            safe_exception_frames(error),
-                        )
-
-                        # Update task status to failed if task manager exists
+                        # Update task status if tracking is enabled
                         if task and task_manager:
                             task_manager.update_task_status(
                                 task.task_id,
-                                TaskStatus.FAILED,
-                                error=str(error),
+                                TaskStatus.COMPLETED,
+                                result=None,
                                 ended_at=datetime.now(UTC),
+                                metadata={
+                                    "skipped": True,
+                                    "reason": "conditional_routing",
+                                },
+                            )
+                        _node_cleanup_enabled = False
+                        continue
+
+                    # Execute node with unified async/sync support and metrics collection
+                    with _shared_collector.collect(node_id=node_id) as metrics_context:
+                        # Unified async/sync execution
+                        # P0B-001: Removed VP#1 (DataTypeValidator.validate_node_input)
+                        # Node.execute() performs authoritative validation via VP#3
+
+                        # Set workflow context on the node instance
+                        if hasattr(node_instance, "_workflow_context"):
+                            node_instance._workflow_context = workflow_context
+                        else:
+                            # Initialize the workflow context if it doesn't exist
+                            node_instance._workflow_context = workflow_context
+
+                        # CARE-039: Node-level trust verification before execution
+                        # P0D-004: Only call _verify_node_trust when trust is enabled.
+                        # When DISABLED (default), this entire block is skipped,
+                        # avoiding 2 lazy imports + function calls per node.
+                        if _trust_enabled:
+                            node_type = node_instance.__class__.__name__
+                            node_trust_allowed = await self._verify_node_trust(
+                                node_id=node_id,
+                                node_type=node_type,
+                                trust_context=_trust_context,
+                            )
+                            if not node_trust_allowed:
+                                raise WorkflowExecutionError(
+                                    f"Trust verification denied execution of node '{node_id}' (type={node_type})"
+                                )
+
+                        if self.enable_async and hasattr(
+                            node_instance, "execute_async"
+                        ):
+                            outputs = await node_instance.execute_async(**inputs)
+                        else:
+                            outputs = node_instance.execute(**inputs)
+
+                    # Get performance metrics
+                    performance_metrics = metrics_context.result()
+
+                    # Content-aware success detection (CRITICAL FIX)
+                    if self.content_aware_success_detection:
+                        should_stop, error_message = should_stop_on_content_failure(
+                            result=outputs,
+                            content_aware_mode=True,
+                            stop_on_error=True,  # Always stop on content failures when content-aware mode is enabled
+                        )
+
+                        if should_stop:
+                            # Create detailed error for content-aware failure
+                            error = create_content_aware_error(
+                                node_id=node_id,
+                                result=(
+                                    outputs
+                                    if isinstance(outputs, dict)
+                                    else {"error": error_message}
+                                ),
+                                error_message=error_message,
                             )
 
-                        # Raise the content-aware execution error
-                        raise error
+                            # Log the content-aware failure
+                            self.logger.error(
+                                "Content-aware failure detected in node %s: %s",
+                                node_id,
+                                safe_exception_frames(error),
+                            )
 
-                # Store outputs
-                node_outputs[node_id] = outputs
-                results[node_id] = outputs
-                completed_nodes.append(node_id)
+                            # Update task status to failed if task manager exists
+                            if task and task_manager:
+                                task_manager.update_task_status(
+                                    task.task_id,
+                                    TaskStatus.FAILED,
+                                    error=str(error),
+                                    ended_at=datetime.now(UTC),
+                                )
 
-                await self._publish_node_completion(
-                    workflow=workflow,
-                    node_id=node_id,
-                    node_instance=node_instance,
-                    outputs=outputs,
-                    run_id=run_id,
-                    started_at=_node_started_at,
-                    execution_state=execution_state,
-                )
+                            # Raise the content-aware execution error
+                            raise error
 
-                if self.debug:
-                    self.logger.debug("Node %s outputs available", node_id)
+                    # Store outputs
+                    node_outputs[node_id] = outputs
+                    results[node_id] = outputs
+                    completed_nodes.append(node_id)
 
-                # Update task status with enhanced metrics
-                if task and task_manager:
-                    # Convert performance metrics to TaskMetrics format
-                    task_metrics_data = performance_metrics.to_task_metrics()
-                    task_metrics = TaskMetrics(**task_metrics_data)
-
-                    # Update task with metrics.  `outputs` is typed as
-                    # Mapping[str, Any] (per the per-node execution
-                    # contract); update_task_status expects dict|None.
-                    # Coerce at the call site so pyright sees the
-                    # narrow type without changing behavior — an empty
-                    # mapping still produces an empty dict, never None.
-                    task_manager.update_task_status(
-                        task.task_id,
-                        TaskStatus.COMPLETED,
-                        result=dict(outputs) if outputs else None,
-                        ended_at=datetime.now(UTC),
-                        metadata={"execution_time": performance_metrics.duration},
+                    await self._publish_node_completion(
+                        workflow=workflow,
+                        node_id=node_id,
+                        node_instance=node_instance,
+                        outputs=outputs,
+                        run_id=run_id,
+                        started_at=_node_started_at,
+                        execution_state=execution_state,
                     )
 
-                    # Update task metrics separately
-                    task_manager.update_task_metrics(task.task_id, task_metrics)
+                    if self.debug:
+                        self.logger.debug("Node %s outputs available", node_id)
 
-                self.logger.info(
-                    f"Node {node_id} completed successfully in {performance_metrics.duration:.3f}s"
-                )
+                    # Update task status with enhanced metrics
+                    if task and task_manager:
+                        # Convert performance metrics to TaskMetrics format
+                        task_metrics_data = performance_metrics.to_task_metrics()
+                        task_metrics = TaskMetrics(**task_metrics_data)
 
-                # Execution audit trail: NODE_EXECUTED event
-                _audit_events.append(
-                    {
-                        "type": "NODE_EXECUTED",
-                        "node_id": node_id,
-                        "node_type": node_instance.__class__.__name__,
-                        "inputs": _safe_serialize(inputs),
-                        "outputs": _safe_serialize(outputs),
-                        "duration_ms": performance_metrics.duration * 1000,
-                        "timestamp": datetime.now(UTC).isoformat(),
-                    }
-                )
-
-                # OpenTelemetry tracing: end node span on success
-                _tracer.set_attribute(
-                    _node_span, "node.duration_s", performance_metrics.duration
-                )
-                _tracer.end_span(_node_span, status="ok")
-
-                # Issue #953: snapshot AsyncSQL pool keys BEFORE per-node
-                # cleanup decrements ref-counts and removes pools from
-                # ``_shared_pools``. Without this snapshot the tracking
-                # set stays empty for short-workflows (single execute
-                # ends with ref_count → 0 → pool gone), defeating the
-                # leak-WARN signal the issue mandates.
-                self._snapshot_async_sql_pool_keys()
-
-                # Clean up async resources if the node has a cleanup method
-                if hasattr(node_instance, "cleanup"):
-                    try:
-                        await node_instance.cleanup()
-                    except Exception as cleanup_error:
-                        self.logger.warning(
-                            f"Error during node {node_id} cleanup: {safe_exception_frames(cleanup_error)}"
+                        # Update task with metrics.  `outputs` is typed as
+                        # Mapping[str, Any] (per the per-node execution
+                        # contract); update_task_status expects dict|None.
+                        # Coerce at the call site so pyright sees the
+                        # narrow type without changing behavior — an empty
+                        # mapping still produces an empty dict, never None.
+                        task_manager.update_task_status(
+                            task.task_id,
+                            TaskStatus.COMPLETED,
+                            result=dict(outputs) if outputs else None,
+                            ended_at=datetime.now(UTC),
+                            metadata={"execution_time": performance_metrics.duration},
                         )
 
-            except Exception as e:
-                # OpenTelemetry tracing: end node span on error
-                _tracer.end_span(_node_span, status="error", error=e)
+                        # Update task metrics separately
+                        task_manager.update_task_metrics(task.task_id, task_metrics)
 
-                failed_nodes.append(node_id)
-                self.logger.error(f"Node {node_id} failed: {safe_exception_frames(e)}")
-
-                # Execution audit trail: NODE_FAILED event
-                _node_fail_time = time.monotonic()
-                _audit_events.append(
-                    {
-                        "type": "NODE_FAILED",
-                        "node_id": node_id,
-                        "node_type": node_instance.__class__.__name__,
-                        "inputs": _safe_serialize(inputs),
-                        "error": str(e),
-                        "timestamp": datetime.now(UTC).isoformat(),
-                    }
-                )
-
-                # Update task status
-                if task and task_manager:
-                    task_manager.update_task_status(
-                        task.task_id,
-                        TaskStatus.FAILED,
-                        error=str(e),
-                        ended_at=datetime.now(UTC),
+                    self.logger.info(
+                        f"Node {node_id} completed successfully in {performance_metrics.duration:.3f}s"
                     )
 
-                # Issue #953: snapshot AsyncSQL pool keys BEFORE the
-                # failure-path cleanup (same reason as the success-path
-                # snapshot above — pools may still be present in
-                # ``_shared_pools`` when execution fails and we MUST
-                # capture them before cleanup disposes them).
-                self._snapshot_async_sql_pool_keys()
+                    # Execution audit trail: NODE_EXECUTED event
+                    _audit_events.append(
+                        {
+                            "type": "NODE_EXECUTED",
+                            "node_id": node_id,
+                            "node_type": node_instance.__class__.__name__,
+                            "inputs": _safe_serialize(inputs),
+                            "outputs": _safe_serialize(outputs),
+                            "duration_ms": performance_metrics.duration * 1000,
+                            "timestamp": datetime.now(UTC).isoformat(),
+                        }
+                    )
 
-                # Clean up async resources even on failure
-                if hasattr(node_instance, "cleanup"):
-                    try:
-                        await node_instance.cleanup()
-                    except Exception as cleanup_error:
-                        self.logger.warning(
-                            f"Error during node {node_id} cleanup after failure: {safe_exception_frames(cleanup_error)}"
+                    # Keep duration observation in the existing node body policy.
+                    _tracer.set_attribute(
+                        _node_span, "node.duration_s", performance_metrics.duration
+                    )
+
+                    # Issue #953: snapshot AsyncSQL pool keys BEFORE per-node
+                    # cleanup decrements ref-counts and removes pools from
+                    # ``_shared_pools``. Without this snapshot the tracking
+                    # set stays empty for short-workflows (single execute
+                    # ends with ref_count → 0 → pool gone), defeating the
+                    # leak-WARN signal the issue mandates.
+                    self._snapshot_async_sql_pool_keys()
+                    _node_pool_snapshot = True
+
+                except Exception as e:
+                    _node_error = e
+                    _raise_if_execution_control(e)
+
+                    failed_nodes.append(node_id)
+                    self.logger.error(
+                        f"Node {node_id} failed: {safe_exception_frames(e)}"
+                    )
+
+                    # Execution audit trail: NODE_FAILED event
+                    _node_fail_time = time.monotonic()
+                    _audit_events.append(
+                        {
+                            "type": "NODE_FAILED",
+                            "node_id": node_id,
+                            "node_type": node_instance.__class__.__name__,
+                            "inputs": _safe_serialize(inputs),
+                            "error": str(e),
+                            "timestamp": datetime.now(UTC).isoformat(),
+                        }
+                    )
+
+                    # Update task status
+                    if task and task_manager:
+                        task_manager.update_task_status(
+                            task.task_id,
+                            TaskStatus.FAILED,
+                            error=str(e),
+                            ended_at=datetime.now(UTC),
                         )
 
-                # Content-aware execution errors should always stop execution
-                if isinstance(
-                    e, ContentAwareExecutionError
-                ) or _is_retry_observer_failure(e):
+                    # Issue #953: snapshot AsyncSQL pool keys BEFORE the
+                    # failure-path cleanup (same reason as the success-path
+                    # snapshot above — pools may still be present in
+                    # ``_shared_pools`` when execution fails and we MUST
+                    # capture them before cleanup disposes them).
+                    self._snapshot_async_sql_pool_keys()
+                    _node_pool_snapshot = True
+
+                    # Content-aware execution errors should always stop execution
+                    if isinstance(
+                        e, ContentAwareExecutionError
+                    ) or _is_retry_observer_failure(e):
+                        raise
+
+                    # CARE-039: Trust verification denials must always stop execution
+                    if "Trust verification denied" in str(e):
+                        raise WorkflowExecutionError(str(e)) from e
+
+                    # Determine if we should continue for other exceptions
+                    if self._should_stop_on_error(workflow, node_id):
+                        error_msg = f"Node '{node_id}' failed: {e}"
+                        if len(failed_nodes) > 1:
+                            error_msg += (
+                                f" (Previously failed nodes: {failed_nodes[:-1]})"
+                            )
+
+                        raise WorkflowExecutionError(error_msg) from e
+                    else:
+                        # Continue execution but record error.
+                        # Issue #941: preserve the actual exception object under a
+                        # private key so callers (e.g. distributed Worker retry
+                        # classification) can re-raise the original error and walk
+                        # its __cause__/__context__ chain to recover the user-
+                        # meaningful root exception (the SDK wraps user errors in
+                        # NodeExecutionError, which hides ZeroDivisionError etc.
+                        # from lifecycle-hook consumers).
+                        results[node_id] = {
+                            "error": str(e),
+                            "error_type": type(e).__name__,
+                            "failed": True,
+                            "_exception": e,
+                        }
+            except BaseException as escaping:
+                # Capture the value actually leaving the complete body/error
+                # policy. A handled error that continues is not a primary.
+                _node_primary = escaping
+                raise
+            finally:
+                _finalizer_primary = _node_primary
+                try:
+                    # One adapter attempt per admitted span. Its ordinary
+                    # diagnostic failure must not enter the node error policy.
+                    await _run_resource_cleanup(
+                        lambda span: _tracer.end_span(
+                            span,
+                            status=(
+                                "error"
+                                if _node_error is not None or _node_primary is not None
+                                else "ok"
+                            ),
+                            error=_node_error,
+                        ),
+                        _node_span,
+                        primary=_finalizer_primary,
+                        resource_type="node span",
+                        reporter=self.logger,
+                    )
+                except BaseException as span_error:
+                    _finalizer_primary = span_error
                     raise
-
-                # CARE-039: Trust verification denials must always stop execution
-                if "Trust verification denied" in str(e):
-                    raise WorkflowExecutionError(str(e)) from e
-
-                # Determine if we should continue for other exceptions
-                if self._should_stop_on_error(workflow, node_id):
-                    error_msg = f"Node '{node_id}' failed: {e}"
-                    if len(failed_nodes) > 1:
-                        error_msg += f" (Previously failed nodes: {failed_nodes[:-1]})"
-
-                    raise WorkflowExecutionError(error_msg) from e
-                else:
-                    # Continue execution but record error.
-                    # Issue #941: preserve the actual exception object under a
-                    # private key so callers (e.g. distributed Worker retry
-                    # classification) can re-raise the original error and walk
-                    # its __cause__/__context__ chain to recover the user-
-                    # meaningful root exception (the SDK wraps user errors in
-                    # NodeExecutionError, which hides ZeroDivisionError etc.
-                    # from lifecycle-hook consumers).
-                    results[node_id] = {
-                        "error": str(e),
-                        "error_type": type(e).__name__,
-                        "failed": True,
-                        "_exception": e,
-                    }
+                finally:
+                    # Conditional-input skips retain their existing outer
+                    # cleanup owner; only the admitted span ends here.
+                    if _node_cleanup_enabled:
+                        await _run_resource_cleanup(
+                            _cleanup_node_resources,
+                            node_instance,
+                            primary=_finalizer_primary,
+                            resource_type="node",
+                            reporter=self.logger,
+                        )
 
         # Clean up workflow context
         self._current_workflow_context = None
@@ -4349,7 +4400,8 @@ class LocalRuntime(
                     user_context=self.user_context,
                     timestamp=datetime.now(UTC),
                 )
-        except ImportError:
+        except ImportError as audit_import_error:
+            _raise_if_execution_control(audit_import_error)
             # Audit logging not available, fall back to standard logging
             self.logger.info(
                 "AUDIT: %s - data_fields=%d",
@@ -4357,6 +4409,7 @@ class LocalRuntime(
                 len(event_data),
             )
         except Exception as e:
+            _raise_if_execution_control(e)
             # Audit logging failures shouldn't stop execution
             self.logger.warning(f"Audit logging failed: {safe_exception_frames(e)}")
 
