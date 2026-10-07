@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, Union
 
-from kailash.nodes.base import Node
+from kailash.nodes.base import Node, _get_execution_attribute
 from kailash.nodes.base_async import AsyncNode
 from kailash.resources import ResourceRegistry
 from kailash.runtime._time_limits import (
@@ -56,6 +56,7 @@ from kailash.runtime.local import (
 )
 from kailash.runtime.metrics import get_metrics_bridge
 from kailash.runtime.resource_manager import (
+    _exception_is,
     _is_retry_observer_failure,
     _raise_if_execution_control,
     _retry_execution_scope,
@@ -68,8 +69,19 @@ from kailash.sdk_exceptions import (
     WorkflowExecutionError,
 )
 from kailash.tracking import TaskManager, TaskStatus
+from kailash.utils.async_types import _is_native_awaitable
 from kailash.utils.finalizer import warn_unclosed
-from kailash.utils.resource_manager import _run_resource_cleanup
+from kailash.utils.resource_manager import (
+    _await_cleanup,
+    _cleanup_admit,
+    _cleanup_control,
+    _cleanup_observation,
+    _cleanup_observe,
+    _cleanup_owner,
+    _CleanupOutcome,
+    _current_cleanup_outcome,
+    _run_resource_cleanup,
+)
 from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
 
 logger = logging.getLogger(__name__)
@@ -152,6 +164,12 @@ class ExecutionContext:
 
         # Cleanup state
         self._cleaned_up = False
+        self._cleanup_started = False
+        self._cleanup_outcome = _CleanupOutcome()
+        self._connection_cleanup: Dict[str, Dict[str, Any]] = {}
+        self._task_cleanup: Dict[int, Dict[str, Any]] = {}
+        self._cleanup_phases: Dict[str, Dict[str, Any]] = {}
+        self._cleanup_callers: Set[asyncio.Task] = set()
 
         # W1: durable-execution context attached via attributes (NOT
         # ``variables``) so node-input sanitisation never sees the
@@ -174,6 +192,7 @@ class ExecutionContext:
 
     async def get_resource(self, name: str) -> Any:
         """Get resource from registry."""
+        self._require_active()
         if not self.resource_registry:
             raise RuntimeError("No resource registry available in execution context")
 
@@ -190,6 +209,7 @@ class ExecutionContext:
 
         P0 Component 1: Explicit connection acquisition.
         """
+        self._require_active()
         # Placeholder for future connection pooling integration
         # Currently no explicit acquisition needed as connections are lazy
         logger.debug("Connection acquisition (placeholder for future pooling)")
@@ -200,24 +220,67 @@ class ExecutionContext:
 
         P0 Component 1: Connection cleanup in finally blocks.
         """
-        if not self.connections:
-            return
+        self._cleanup_started = True
+        caller = asyncio.current_task()
+        self._cleanup_callers.add(caller)
+        try:
+            with _cleanup_owner(_CleanupOutcome()):
+                if self.connections:
+                    await self._cleanup_diagnostic(
+                        "connections_start",
+                        lambda: logger.debug(
+                            f"Releasing {len(self.connections)} connections"
+                        ),
+                    )
+                for conn_id, conn in list(self.connections.items()):
+                    request = self._connection_cleanup.get(conn_id)
+                    if request is None:
+                        request = self._new_cleanup_request(conn)
+                        self._connection_cleanup[conn_id] = request
+                    elif request["resource"] is not conn:
+                        self._record_cleanup_error(
+                            RuntimeError("Connection changed during retained cleanup")
+                        )
+                        continue
 
-        logger.debug(f"Releasing {len(self.connections)} connections")
+                    async def release(record, conn_id=conn_id, conn=conn):
+                        missing = object()
+                        callback = _get_execution_attribute(
+                            conn, "close", missing, strict=True
+                        )
+                        if callback is missing:
+                            callback = _get_execution_attribute(
+                                conn, "disconnect", missing, strict=True
+                            )
+                        if callback is missing:
+                            raise TypeError("Connection has no cleanup callback")
+                        result = callback()
+                        if _is_native_awaitable(result):
+                            native_mro = type.__dict__["__mro__"].__get__(type(result))
+                            if any(base is asyncio.Future for base in native_mro):
+                                await _await_cleanup(
+                                    result, on_cancel=self._record_wait_cancel
+                                )
+                            else:
+                                await result
+                        elif result is not None:
+                            raise TypeError(
+                                "Connection cleanup returned non-awaitable work"
+                            )
+                        record["operation_complete"] = True
+                        if self.connections.get(conn_id) is conn:
+                            del self.connections[conn_id]
+                        logger.debug(f"Released connection: {conn_id}")
 
-        for conn_id, conn in list(self.connections.items()):
-            try:
-                if hasattr(conn, "close"):
-                    await conn.close()
-                elif hasattr(conn, "disconnect"):
-                    await conn.disconnect()
-                logger.debug(f"Released connection: {conn_id}")
-            except Exception as e:
-                logger.warning(
-                    f"Error releasing connection {conn_id}: {safe_exception_frames(e)}"
-                )
+                    def report(e, conn_id=conn_id):
+                        logger.warning(
+                            f"Error releasing connection {conn_id}: {safe_exception_frames(e)}"
+                        )
 
-        self.connections.clear()
+                    await self._run_cleanup_request(request, release, report)
+                self._raise_cleanup_failure()
+        finally:
+            self._cleanup_callers.discard(caller)
 
     def get_connection_state(self) -> Dict[str, Any]:
         """
@@ -231,7 +294,7 @@ class ExecutionContext:
         return {
             "connection_count": len(self.connections),
             "connections": list(self.connections.keys()),
-            "active": not self._cleaned_up,
+            "active": not self._cleanup_started,
         }
 
     async def cancel_all_tasks(self) -> None:
@@ -240,31 +303,87 @@ class ExecutionContext:
 
         P0 Component 1: Task cancellation.
         """
-        if not self.tasks:
-            return
+        self._cleanup_started = True
+        caller = asyncio.current_task()
+        self._cleanup_callers.add(caller)
+        try:
+            with _cleanup_owner(_CleanupOutcome()):
+                targets = list(self.tasks)
+                if targets:
+                    await self._cleanup_diagnostic(
+                        "tasks_start",
+                        lambda: logger.info(
+                            f"Cancelling {len(self.tasks)} running tasks"
+                        ),
+                    )
+                # Publish each request before cancellation, and request every
+                # eligible target before beginning any retained join.
+                for task in targets:
+                    if id(task) in self._task_cleanup:
+                        continue
+                    request = self._new_cleanup_request(task)
+                    request["token"] = object()
+                    request["requested"] = False
+                    self._task_cleanup[id(task)] = request
+                    try:
+                        _cleanup_admit(task, asyncio.get_running_loop())
+                        if task in self._cleanup_callers:
+                            raise RuntimeError("Cleanup cannot cancel its active owner")
+                        if not _cleanup_observe(task, asyncio.Future.done):
+                            if asyncio.Task.cancelling(task) == 0:
+                                request["requested"] = asyncio.Task.cancel(
+                                    task, request["token"]
+                                )
+                    except BaseException as error:
+                        request["admission_error"] = error
+                        control = _cleanup_control(error)
+                        if control is not None:
+                            self._record_cleanup_admission(control, request["outcome"])
 
-        logger.info(f"Cancelling {len(self.tasks)} running tasks")
+                for i, task in enumerate(targets):
+                    request = self._task_cleanup[id(task)]
 
-        # Cancel all tasks
-        for task in self.tasks:
-            if not task.done():
-                task.cancel()
+                    async def observe(record, task=task):
+                        if record.get("admission_error") is not None:
+                            raise record["admission_error"]
+                        try:
+                            result = await _await_cleanup(
+                                task, on_cancel=self._record_wait_cancel
+                            )
+                        except BaseException as caught:
+                            result = caught
+                        record["operation_complete"] = _cleanup_observe(
+                            task, asyncio.Future.done
+                        )
+                        if _exception_is(result, BaseException):
+                            record["result_error"] = result
+                            if record["requested"] and _exception_is(
+                                result, asyncio.CancelledError
+                            ):
+                                values = BaseException.args.__get__(result)
+                                if len(values) == 1 and values[0] is record["token"]:
+                                    return
+                            raise result
 
-        # Wait for cancellation to complete
-        results = await asyncio.gather(*self.tasks, return_exceptions=True)
+                    def report(result, i=i):
+                        logger.warning(
+                            "Task %s raised error during cancellation: %s",
+                            i,
+                            safe_exception_frames(result),
+                        )
 
-        # Log any errors (besides CancelledError)
-        for i, result in enumerate(results):
-            if isinstance(result, Exception) and not isinstance(
-                result, asyncio.CancelledError
-            ):
-                logger.warning(
-                    "Task %s raised error during cancellation: %s",
-                    i,
-                    safe_exception_frames(result),
-                )
-
-        logger.info("All tasks cancelled successfully")
+                    await self._run_cleanup_request(request, observe, report)
+                if targets and all(
+                    self._request_complete(self._task_cleanup[id(task)])
+                    for task in targets
+                ):
+                    await self._cleanup_diagnostic(
+                        "tasks_complete",
+                        lambda: logger.info("All tasks cancelled successfully"),
+                    )
+                self._raise_cleanup_failure()
+        finally:
+            self._cleanup_callers.discard(caller)
 
     async def cleanup(self) -> None:
         """
@@ -273,40 +392,220 @@ class ExecutionContext:
         P0 Component 1: Cleanup guarantees.
         Safe to call multiple times.
         """
-        if self._cleaned_up:
-            logger.debug("ExecutionContext already cleaned up, skipping")
-            return
-
-        logger.debug("Cleaning up ExecutionContext")
-
+        self._cleanup_started = True
+        caller = asyncio.current_task()
+        self._cleanup_callers.add(caller)
         try:
-            # Cancel running tasks first
-            await self.cancel_all_tasks()
-        except Exception as e:
-            logger.warning(
-                f"Error cancelling tasks during cleanup: {safe_exception_frames(e)}"
+            with _cleanup_owner(_CleanupOutcome()):
+                if self._cleaned_up:
+                    await self._cleanup_diagnostic(
+                        "already_cleaned",
+                        lambda: logger.debug(
+                            "ExecutionContext already cleaned up, skipping"
+                        ),
+                    )
+                    self._raise_cleanup_failure()
+                    return
+                await self._cleanup_diagnostic(
+                    "context_start",
+                    lambda: logger.debug("Cleaning up ExecutionContext"),
+                )
+                for name, callback, report in (
+                    (
+                        "cancel_tasks",
+                        lambda _: self.cancel_all_tasks(),
+                        lambda e: logger.warning(
+                            f"Error cancelling tasks during cleanup: {safe_exception_frames(e)}"
+                        ),
+                    ),
+                    (
+                        "release_connections",
+                        lambda _: self.release_connections(),
+                        lambda e: logger.warning(
+                            f"Error releasing connections during cleanup: {safe_exception_frames(e)}"
+                        ),
+                    ),
+                ):
+                    request = self._cleanup_phases.setdefault(
+                        name, self._new_cleanup_request(self)
+                    )
+                    await self._run_cleanup_request(request, callback, report)
+                if (
+                    not self.connections
+                    and all(
+                        self._request_complete(r)
+                        for r in self._connection_cleanup.values()
+                    )
+                    and all(
+                        self._request_complete(r) for r in self._task_cleanup.values()
+                    )
+                    and all(
+                        self._request_complete(self._cleanup_phases[name])
+                        for name in ("cancel_tasks", "release_connections")
+                    )
+                ):
+                    self._cleaned_up = True
+                    await self._cleanup_diagnostic(
+                        "context_complete",
+                        lambda: logger.debug("ExecutionContext cleanup complete"),
+                    )
+                self._raise_cleanup_failure()
+        finally:
+            self._cleanup_callers.discard(caller)
+
+    def _require_active(self) -> None:
+        if self._cleanup_started:
+            raise RuntimeError(
+                "ExecutionContext cleanup has started; reuse is not allowed"
             )
 
-        try:
-            # Release connections
-            await self.release_connections()
-        except Exception as e:
-            logger.warning(
-                f"Error releasing connections during cleanup: {safe_exception_frames(e)}"
-            )
+    @staticmethod
+    def _new_cleanup_request(resource):
+        return {
+            "resource": resource,
+            "outcome": _CleanupOutcome(),
+            "attempted": False,
+            "task": None,
+            "error": None,
+            "settled": False,
+            "operation_complete": False,
+        }
 
-        self._cleaned_up = True
-        logger.debug("ExecutionContext cleanup complete")
+    @staticmethod
+    def _request_complete(request):
+        return request["settled"] and request["operation_complete"]
+
+    def _raise_cleanup_failure(self):
+        control = self._cleanup_outcome.first(controls_only=True)
+        failure = control[1] if control is not None else self._cleanup_outcome.error()
+        if failure is not None:
+            raise failure
+
+    def _record_wait_cancel(self, error):
+        with _cleanup_observation(error) as observation:
+            if not observation.excluded:
+                observation.record(self._cleanup_outcome)
+            observation.snapshot(self._cleanup_outcome, controls_only=True)
+            observation.publish()
+
+    def _record_cleanup_error(self, error, outcome=None):
+        if outcome is None:
+            outcome = self._cleanup_outcome
+        with _cleanup_observation(error) as observation:
+            if not observation.excluded:
+                observation.record(outcome)
+
+    def _record_cleanup_admission(self, error, outcome):
+        with _cleanup_observation(error) as observation:
+            if not observation.excluded:
+                observation.record(outcome)
+            if observation.snapshot(outcome, controls_only=True) is not None:
+                observation.publish()
+
+    async def _run_cleanup_request(self, request, callback, report):
+        detach = self._cleanup_outcome.link(request["outcome"], controls_only=True)
+        owner_detach = None
+        try:
+            owner = _current_cleanup_outcome()
+            if owner is not None:
+                # Refuse an ancestor dependency before callback admission or
+                # observation, using the canonical graph's cycle check.
+                owner_detach = owner.link(request["outcome"], controls_only=True)
+            if request["attempted"]:
+                if request["task"] is not None and not request["settled"]:
+                    try:
+                        await _await_cleanup(
+                            request["task"], on_cancel=self._record_wait_cancel
+                        )
+                    except BaseException as error:
+                        self._record_cleanup_error(error)
+                return
+            request["attempted"] = True
+
+            async def owned(_):
+                request["task"] = asyncio.current_task()
+                try:
+                    result = callback(request)
+                    if _is_native_awaitable(result):
+                        await result
+                    request["operation_complete"] = True
+                except BaseException as error:
+                    request["error"] = error
+                    raise
+
+            context = self
+
+            class Reporter:
+                def error(self, *_args):
+                    error = request["error"]
+                    if error is None:
+                        return
+                    control = _cleanup_control(error)
+                    if control is not None:
+                        raise control
+                    try:
+                        report(error)
+                    except BaseException as diagnostic:
+                        context._record_cleanup_error(diagnostic)
+                        raise
+
+            try:
+                await _run_resource_cleanup(
+                    owned,
+                    request["resource"],
+                    outcome=request["outcome"],
+                    reporter=Reporter(),
+                )
+            except BaseException as error:
+                self._record_cleanup_error(error)
+        except BaseException as error:
+            self._record_cleanup_error(error)
+        finally:
+            task = request["task"]
+            if task is not None:
+                request["settled"] = _cleanup_observe(task, asyncio.Future.done)
+            try:
+                if owner_detach is not None:
+                    owner_detach()
+            finally:
+                detach()
+
+    async def _cleanup_diagnostic(self, name, callback):
+        request = self._cleanup_phases.setdefault(name, self._new_cleanup_request(self))
+        await self._run_cleanup_request(
+            request, lambda _: callback(), self._record_cleanup_error
+        )
 
     # Context manager support (P0 Component 1: Connection Lifecycle)
     async def __aenter__(self):
         """Enter async context manager."""
+        self._require_active()
         await self.acquire_connections()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Exit async context manager."""
-        await self.cleanup()
+        caller = asyncio.current_task()
+        self._cleanup_callers.add(caller)
+        context = self
+
+        async def finish(_):
+            try:
+                await self.cleanup()
+            except BaseException as error:
+                context._record_cleanup_error(error)
+                raise
+
+        class Reporter:
+            def error(self, *_args):
+                context._raise_cleanup_failure()
+
+        try:
+            await _run_resource_cleanup(finish, self, exc_val, reporter=Reporter())
+            if exc_val is None:
+                self._raise_cleanup_failure()
+        finally:
+            self._cleanup_callers.discard(caller)
         return False
 
 
