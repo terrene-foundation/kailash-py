@@ -430,8 +430,8 @@ class ParallelRuntime:
             Tuple of (node_result, success)
 
         Note:
-            This method never raises exceptions - it returns success=False instead
-            to allow the caller to handle failures appropriately.
+            At the guarded failure handler, canonical controls propagate; ordinary errors use success=False.
+            Sources: src/kailash/runtime/parallel.py:525-542; src/kailash/_execution_controls.py:56-89.
         """
         # Get node instance
         node_instance = workflow._node_instances.get(node_id)
