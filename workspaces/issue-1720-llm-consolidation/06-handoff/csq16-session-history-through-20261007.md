@@ -1,6 +1,12 @@
-# CSQ16 recovery burndown
+# Current CSQ16 checkpoint — 2026-10-06
 
 Latest verified checkpoint: `dev`, `origin/dev` and the separately read live remote are at `664841b846f494bb276c9bc58451559cc3f4ae78`. Nineteen bounded Source changes are landed; Root has actually removed 54 worktrees and six task branches. Provider081 and runtime group664 each passed their enabled normal gates and two delivered/read correctness plus two separate STATIC-security Source rounds, then landed and their released author trees/refs were reaped. TaskManager436 remains held after NONCLEAN external-caller reviews. Caller72 received bounded correctness CLEAN and STATIC NONCLEAN at Workflow node/model handler1248; Root repaired it in normally committed `3aea85354d6876d79e1e289061f7fe12a38e5b8b`, with two fresh correctness and two separate STATIC-security Source rounds delivered and Root-read on its bounded31 caller boundaries. Global TaskManager/Local/UI closure remains OPEN; no earlier clean credit was transferred. UI67 independent correctness was NONCLEAN at three registered callback catches; Nexus author repaired them in normally committed c65c2904fc377f80aebce6855cf53ddcbc875a56. Fresh c65 correctness R1 is delivered and Root-read. Further independent correctness and separate STATIC-security Source reviews are in progress; this checkpoint grants no final paired acceptance or landing. Author checks grant zero clean credit. Local node/span finalizer source is held for the coordinated reporter prerequisite; its public reuse mechanics are unchanged. Whole-union clean credit remains zero. All AST/BYTES/hash/control/content-inventory validation runs through unpinned Trestle with default housekeeping enabled. Original acceptance remains ALL PAGES — 0⟨d56000⟩ of 4 `Signed off`; ALL PAGES — 4⟨108e27⟩ of 4 `total`; main promotion and release remain unauthorized.
+
+Main remains `50f98afe403a468bb478462182b73ebc4e0287d1`; the freshly read first-parent dev-to-main gap is315. Group664 was fast-forwarded/pushed/live-verified after its enabled normal gate and two correctness plus two separate STATIC Source rounds. Hook host/version/counts not printed remain UNKNOWN. Last pinned PR2229 observation remains OPEN/failed CodeQL; no new merge, promotion or release occurred.
+
+The original four acceptance rows remain In progress. Technical landings and cleanup counts do not change owner acceptance.
+
+Frozen dev-context `664841b846f494bb276c9bc58451559cc3f4ae78` preserves the six bcc code blobs and changes only the Core subscriber paragraph. Two complete correctness and two separate STATIC-security rounds were delivered and Root-read with actual terminal results, absolute inventories and reached inert opposites. Fresh group correctness R2 used `r-89a4c91cb229780c` and `r-7ab6a5f218d4fd98`; STATIC R2 used `r-56382d7ef3ecfc23` and `r-b6a70f25b01b7d25`. Earlier errored instruments remain zero credit. Exact664 was fast-forwarded, pushed and separately live-verified on dev. Nine selected Source invariants are covered; Task/Local/UI/secure_logging transitive boundaries remain unwaived. No runtime, hostile-metadata, pickle, startup, whole-union or UNKNOWN-admission retry/reuse/release authority follows.
 
 Canonical `.test-results/csq16-recovery-archive/pool-router-f5-20261006` and earlier completed-review archives retain landed and NONCLEAN evidence. Provider081 and batch3 completed ordinary removals are preserved. New group664 `root-operation-1791271918701138000/receipt.json` reports `DONE: true`, one ordinary author-tree removal and task-branch deletion, both exit0, after fresh double-clean/index/ignored checks and same-user Root-held positive/closed negative lsof controls. Full2C+2STATIC/author/consult/landing evidence moved losslessly into `group-664-20261006`; the retained Source bundle has SHA256 `b25bc8f0ecf82763276de1c25e1b6b54faf62b73307f0dd4c240da88cb6e565b`. Unpinned seals bound141 archive members; missing-clause and byte opposites fired. Total actual cleanup is54 worktrees/six task branches. Additional fleet compression and returned-file readback retained both exact Source captures as gzip, reducing149,332,333 logical bytes; exact decompressed-byte equality permitted deleting one more94,433,280-byte duplicate. The actual retirement receipt is `.pytest_cache/csq16_lossless_archive_compression_20261006/actual-retirement-receipt.json`. Cumulative redundant-file removals are1,771 files/400,680,669 logical bytes; total lossless-compression net reduction is274,679,056 logical bytes. Physical APFS reclamation remains UNKNOWN; no global quiescence or admission release is claimed.
 
@@ -8,7 +14,7 @@ Additional completed cleanup: the batch2 custody archive retains 65 full report/
 
 The other authorized CLI retains exclusive canonical shared-close and reserved SQLite-driver-helper ownership. Cheap actual-local Git observed author `2a3aaab47752ac2884dfb990c86e1c33ac9d4bbf` and helper `90b91b7c53a6738b9068e96b20ead4d807f2ba33`; no final Source/review result is accepted from those observations. Latest queued instruction `01a11051-4268-77f0-812b-30f47ab92e67` exited0 and carries the exact offload/default-housekeeping policy and narrow `_run_resource_cleanup` reporter-forwarding ownership request. Current Root return UUID/home were verified as01a0e528-3df4-7ff0-8569-8a12fa2e71cc/term-43076. Recipient ACK remains UNKNOWN; no shared provider edit has occurred. Pool0470/AsyncLocal16cc remain held without current qualifying review pairs. Four original dirty inputs, staged older group-author Source and active/unknown-owner trees remain preserved. Queue acceptance and reachability do not establish ownership release.
 
-![Generated recovery status chart](csq16-recovery-burndown.svg)
+This is a partial current management checkpoint, not a completed ten-area sweep or original acceptance. Fresh unpinned structural sweep `r-8faa972d3b24a782` returned terminal0 and `sweep-redteam:v1:OK specs=85 symbols=160 orphans=0 coverage_gaps=0 stubs=0`; known present/missing file and class controls fired. This covers structured citations/source presence, not semantic enforcement or independently controlled coverage/stub claims. Fresh forest-ledger membership and escalation tools `r-0b21c263011d102c` returned terminal0: one workspace scanned, zero stranded IDs;46 reports scanned, zero escalations; known invalid ledger value-anchor control returned1/L2. These are scoped tool observations, not whole-forest Source reconciliation. Full ten-area sweep, whole-union gates and original acceptance remain open. Generated owner-acceptance block and SVG are preserved; this refreshed document freeze still requires fresh offloaded byte/generator checks and independent reviews. No local DATA, host pin, SDK/security probe, bypass, global cache/config change, main promotion or release is authorized. Root owns ledger/integration/dev/reaping.
 
 Recorded process deviation: earlier Task correctness supplement used `--no-reap-mirrors --no-reap-cache`, with native messages `snapshot cache reap: OFF` and `mirror reap: OFF`. The invocation/report/logs remain preserved, the reviewer explicitly acknowledged correction, and new caller reviews use default enabled housekeeping. The original R1 was NONCLEAN and grants zero closure credit. This is corrected operating behavior, not erased history.
 
@@ -18,37 +24,244 @@ Additional released audit scratch cleanup: batch4 and batch5 copies are retained
 
 Additional completed scoped sweep checks: sweeps1/2 found no official immediate-workspace active todos/pending journals in both pinned dev664 and actual canonical FS; sixteen archived active paths (including two milestone trackers) and two archived pending entries are explicit exclusions, not closed work. Sweep8 mechanically selected latest stable v2.65.0 at4a98750d8cc4d6eca7000818602455cd44b851f3 from unfiltered version-sorted tags; both version anchors are2.65.0, and304 shippable paths/204 source-log rows differ afterward. Sweep9 owning gate returned `<!-- sweep-ecosystem:v1:N/A reason=resolver-module-absent -->`, with positive VERSION `type=coc-build` evidence; no resolver import or cross-repo read occurred. Corrected unpinned r-35f010fd4cb0d5af exited0; earlier select.py stdlib-shadowing failure remains zero credit. Full report is retained under `.pytest_cache/csq16_sweep_1289_20261006` in the audit sibling. Full ten-area sweep remains OPEN; these four scoped checks are complete.
 
-<!-- BURNDOWN:BEGIN generated by .claude/bin/burndown-build.mjs — DO NOT EDIT BY HAND -->
-## Burndown
+### Historical session notes retained as provenance
 
-These are the only counts. Any figure quoted anywhere is this block verbatim, or it is wrong.
+The following notes are retained verbatim as dated history. Their READ FIRST labels are superseded by the current checkpoint above; they grant no current allocation, acceptance or cleanup authority.
 
-Status vocabulary (CLOSED — a value outside this set is a build refusal, exit 2):
+# Session Notes — cont-33 (WIP ceilings re-based onto LANES; d684ce20f reconciled)
 
-- `Signed off` — the owner has accepted it. The ONLY status that counts toward completion.
-- `Built-not-walked` — built, not yet walked through with the owner. NOT complete.
-- `In progress` — actively being worked.
-- `Not started` — accepted into the register, no work begun.
-- `Blocked on you` — waiting on the owner; cannot proceed here.
-- `Open` — DERIVED, not assignable: `total` − `Signed off`.
+## cont-33 — the work-ledger / WIP-discipline change (READ FIRST)
 
-`done`, `complete`, `closed`, `finished` and `remaining` are NOT count labels here. Each named at least two different buckets in prior reports, which is why the generator refuses them.
+**Co-owner directive:** ceilings bind worktrees and branches, NOT agents; every repo's work
+ledger must let a lane pack DEPTH (more agents, more tasks/issues per lane); each lane is a
+MINI-ORCHESTRATOR, not a single serial worker. Landed `d94f597ff`.
 
-Every column below is a BUCKET and every row states its DENOMINATOR in `total`. A figure quoted without both is not a figure from this block.
+The ledger's ROW SHAPE was the binding constraint. The old
+`track → agent → branch → status` admitted exactly ONE agent and ONE task per ceiling-bound
+unit, so an orchestrator filling it CORRECTLY was structurally prevented from packing depth.
+`orchestration-launch-ledger.md` MUST-1 is now LANE-keyed
+(`lane → branch → TASK SET → AGENT ROSTER → status`) and MUST-6 carries the contract.
+`autonomous-execution.md` Rule 1 was amended in the same change: the shard budget binds one
+AGENT's implementation pass, NOT one worktree — that sentence would otherwise have forbidden
+packing. `agents.md` § Triad carries the always-on pointer (baseline, loads every session);
+the `fleet-drain` Stop advisory carries it at the refill moment.
 
-Each count is rendered `value⟨token⟩`. The token is derived from that count's own bucket, denominator, value and source digest, so a quoted figure is TAMPER-EVIDENT: change any of them and the token stops validating. Quote the token with the number — `burndown-build.mjs --quote <bucket>` prints a paste-ready sentence, and `--verify-quote <file|->` revalidates any text containing them.
+**Three bounds that did NOT move:** per-AGENT shard budget; adaptive concurrency back-off (a
+RATE signal, not a WIP ceiling — depth is packed over a lane's life, not fired at once); joint
+revert-safety on the lane's single branch.
 
-| page | total | Signed off | Built-not-walked | In progress | Not started | Blocked on you | Open | Open: from original register | Open: arrived since |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| CSQ16 recovery | 4⟨290bde⟩ | 0⟨fe7237⟩ | 0⟨b4f70a⟩ | 4⟨bce6c4⟩ | 0⟨103131⟩ | 0⟨b6f9a4⟩ | 4⟨93f445⟩ | 4⟨f957f1⟩ | 0⟨fa731b⟩ |
-| **ALL PAGES** | **4⟨108e27⟩** | **0⟨d56000⟩** | **0⟨0755a2⟩** | **4⟨82c48b⟩** | **0⟨ec58ad⟩** | **0⟨9d80b1⟩** | **4⟨f97d03⟩** | **4⟨15d450⟩** | **0⟨5c0bc1⟩** |
+**Deliberately NOT built:** a dispatch-time under-packing detector. Under-packing is a property
+of the DISPATCHABLE SET, which is nowhere in the tool-call input, so any detector would infer a
+counterfactual and be non-discriminating. Recorded in the Wiring as DECLINED, not deferred —
+do not "finish" it.
 
-A page is complete only when `Signed off` equals `total`. No page is complete: CSQ16 recovery is 0 of 4.
+**UNVERIFIED and owed:** `emit.mjs --all --dry-run` did NOT change its reported byte count after
+5000 bytes were appended to a baseline rule (control), so it is not measuring this repo's rule
+edits despite `REPO` resolving to the repo root. The headroom figures quoted mid-session are
+WITHDRAWN. If the gate really is inert here, `rule-authoring.md` Rule 10's proximity-band
+verdicts in this repo are unfounded. Lane L2 is investigating.
 
-generated_from_sha: 36b6f77dff8ec2099f227f55eb2ebc120c3f7a14
-sources_digest: afad6aec1570e1d13ebfb57039abaecba3d7de891b9110786e532120f69cd24d
+## cont-32 (d684ce20f reconciled; codify backlog cleared; a self-correction)
 
-<!-- BURNDOWN:END -->
+## Where we are
+
+**The d684ce20f security residual is CLOSED as a question.** All five archived findings were
+verified per-finding against `origin/dev` by independent lanes, each using an executed probe with
+a control rather than reading code. Four were already fixed on dev; one was genuinely open and is
+now fixed and landed.
+
+**Fleet: primary checkout only** (plus lane C's worktree if it is still listed — reap it).
+No `fix/*` remote heads. `dev` → `main` promotion gap is large and still owner-gated.
+
+## The d684ce20f verdict table (do NOT re-verify; this is the durable record)
+
+| Finding | Verdict | Evidence |
+| --- | --- | --- |
+| RT-276-1 CRITICAL (read-only view) | CLOSED (earlier, lane L13) | `ReadOnlyAttributeProxy` |
+| RT-276-3 HIGH (internals via fallthrough) | **CLOSED** | 7 private names resolve on raw engine, all denied through view; allowed pole works; escape routes closed; 41+37+36 tests |
+| RT-277-1 HIGH (pickle/deepcopy) | **CLOSED — dev is WIDER than the archived fix** | dev's `__reduce__` also blocks shallow copy, which the archived `__deepcopy__` alone would have left open |
+| RT-277-2 HIGH (`from_dict` warning) | **CLOSED** | docstring + runtime warning; mutation drops it to 0 |
+| RT-SERVE-1 HIGH (batch cap) | **CLOSED** | `_MAX_BATCH_PRODUCTS = 50` enforced at `serving.py:503` before fan-out; landed via `edf37fa3e`, independently re-derived |
+| RT-3a MED (rate-limit coercion) | **WAS OPEN → FIXED** (lane A, merged `f844ba302`) | fail-closed, not fail-open; see below |
+| RT-1b (cursor dedup) + sub-issue | **WAS OPEN → FIXED** (lane B, merged `3603cbc29`) | the sub-issue was far worse than the finding |
+| RT-6a LOW (empty-list bulk) | **WAS OPEN → FIXED** (lane C, merged `91fb53a30`) | wider than the finding: all FOUR bulk methods, and three of them really did dispatch a node on `[]` |
+
+**The "5 HIGH" in the commit subject is unrecoverable and probably an off-by-one.** Its own body
+labels only FOUR HIGH (RT-276-3, RT-277-1, RT-277-2, RT-SERVE-1). `RT-276-2` is missing from the
+numbering sequence (276-1 → 276-3). No document carrying the RT-* taxonomy exists anywhere in the
+archived tree — searched with a control grep that fired (6 hits for a known-present token), so the
+empty result is real. Do not go looking again; do not invent a fifth.
+
+## Landed this session (all pushed + fetch-verified)
+
+- `f3c3c16e7` test(pact): the mirror suite called `from_dict` bare, so deleting the security
+  warning left it GREEN. It looked like redundancy it was not.
+- `d12940438` test(dataflow): the batch-cap test derived its input from the constant under test,
+  so it passed for EVERY cap. Mutating to `10**9` left it green (115s runtime proved the mutation
+  reached the code). Now pinned: widening to 10000 reds.
+- `70591d790` codify: 4 folds + the triage report; 18 `.pending/` candidates cleared; #2084 closed.
+- `3603cbc29` merge lane B: sync REST pagination.
+- `bbec11e4b` **Revert** of `9b78c8011` — see § The mistake.
+- `2907b83e9` fix(api): pagination param coercion escaped as raw builtins (regression from B).
+- `f844ba302` merge lane A: fail-closed rate-limit/cost coercion.
+
+## The mistake — read this before touching async pagination
+
+Lane B found the async pagination path broken and DELIBERATELY STOPPED, saying it needed its own
+lane with review. **I overrode that and was wrong.** I committed a fix that was a NO-OP in
+production: `_extract_metadata` reads `response["content"]`/`["headers"]`, but the real
+`AsyncHTTPRequestNode` nests those inside `result["response"]` (`http.py:1058-1062`).
+
+My test passed only because my own double returned a shape the real transport never produces. I
+wrote a contract-pin test meant to catch exactly that and pinned the WRONG AXIS — signature
+PARAMETERS, while the mismatch was in the RETURN shape. That is the defect codified into
+`rules/testing.md` **in this same session**. Mutation testing did not save me: both mutations ran
+against the same wrong-shaped double, so neither could discriminate.
+
+Worse: fixing the shape ARMS a latent credential-exfiltration path, because
+`_handle_async_pagination` follows a response-body-supplied link with the caller's headers and no
+origin validation. The reverted test asserted following that link as CORRECT.
+
+**Lesson for the next session: lane B's judgment was better than the orchestrator's. When a lane
+says "this needs its own shard with review", that is evidence, not an obstacle.**
+
+## OPEN WORK — durable, filed, do not re-derive
+
+1. **#2230 (HIGH)** — async REST path: `RESTClientNode.async_run` returns `data=None` on EVERY
+   call (verified against the real transport shape); `AsyncRESTClientNode` cannot be constructed
+   at all (verified with the sync sibling as control). **Carries a hard ordering constraint: the
+   link-following guard must land BEFORE or WITH the shape fix, never after.**
+2. **#2231 (MED)** — sync pagination residuals: node-parameter auth (`auth_type`/`auth_token`)
+   dropped on follow-up pages → unauthenticated 401 → silent page-1 (the very bug B fixed,
+   surviving for that route); single-slot cursor dedup defeated by an A/B cycle; unmasked
+   exception sink (parity, NOT a demonstrated leak); a fourth silent swallow site; in-place
+   aliasing; a page-path test that never asserts `params`.
+3. **Disclosure note for the owner:** `bbec11e4b`'s commit body describes the latent
+   credential-exfiltration vector, including a sample payload, and **kailash-py is public**. It is
+   not exploitable in shipped code (the shape bug keeps the path unreachable, and the commit says
+   so), but if a private advisory is preferred, that text is the thing to consider rewriting.
+
+## cont-33 STATUS — two lanes LANDED, a third in flight
+
+**Landed and drained:** L2 `4ff0aa0d7` (27 identifier-budget sites) · L1 `613468d4d`
+(#2230 + #2231 + redirect hardening) · `dab1b679d` (red-test fix, below).
+
+**L3 `fix/rest-guard-parity` IN FLIGHT** — 12 findings from two independent gate reviews
+(adversarial security + correctness) of `613468d4d`. One packed lane per MUST-6.
+
+### The shape of the L3 finding set, in one sentence
+
+The origin guard L1 landed is **correct inside its own loop and bypassed at every surface
+outside it** — almost every finding is `security.md` § Enforcement-Surface Parity.
+
+- **S-HIGH-1** `allow_redirects` reached 1 of 5 request sites (confirmed: it appears EXACTLY
+  ONCE in `rest.py` and that is the one `=False`); `RESTClientNode` does not even DECLARE the
+  parameter, so a user cannot turn the control on.
+- **S-HIGH-2** cookies defeat the sticky rule from underneath — session pools are
+  process-global and reused, zero jar suppression in `nodes/api/`, so the jar re-attaches the
+  origin cookie BELOW the header strip. Also cross-caller.
+- **S-HIGH-3** DONE (R1): credential strip inverted from a 6-name denylist to a 10-name
+  allowlist. RED showed 9 vendor credentials forwarded verbatim. `X-Tenant` now dropped
+  (deliberate, pinning test flipped with a do-not-restore comment). The `api_key_header`
+  special case became dead under an allowlist and was deleted in 3 places, contract test kept.
+- S-MED-4/5/6/7, C-F2/F3/F5/F7, and the one DESIGN call (C-F4) — see `lane-ledger.md`.
+
+### Traced and REJECTED — do not re-raise
+
+`PROXY_CREDENTIAL_HEADERS` (`utils/proxy_guard.py:184`, used at `api/gateway.py:916`) is the
+same denylist SHAPE but NOT the same failure mode, and the module documents the asymmetry in
+place: a reverse proxy forwards to a CONFIGURED backend (not an attacker-chosen host),
+`forward_credentials=False` is the real control, and an allowlist there would break every
+backend relying on a custom application header. It is known-incomplete BY DESIGN. Left
+untouched deliberately.
+
+### Known false positives — verify before chasing either
+
+1. **`framework-first.md` hook: "raw SQL string detected"** fires on EVERY edit to
+   `src/kailash/nodes/api/rest.py`. There is no DB work in that file — it matches something
+   else in it. Seen by the orchestrator and two sub-agents. Do NOT restructure code to
+   silence it; if it is worth fixing, fix the hook's matcher.
+
+2. **Pyright "unknown import symbol" / "is not defined" on NEW symbols — 3 instances this
+   session, all false.** Pyright resolves `kailash`/`dataflow` against the INSTALLED
+   site-packages copy, which predates any symbol a lane just added. Measured examples:
+   `identifier_budget_for` reported unknown while defined at `adapters/dialect.py:597` and
+   imported correctly; `NodeParameter` reported undefined while imported at line 28 and the
+   suite passing 17/17. **The discriminating check is to RUN it** — `python -c "from X import Y"`
+   plus the actual test — not to read the diagnostic. This is the same site-packages trap the
+   lanes hit directly, which is why several now ship in-process provenance guards asserting
+   `__file__` resolves under the checkout.
+
+## SUPERSEDED — the original cont-33 dispatch (kept for the packing rationale)
+
+4 dispatchable tasks went to 2 ceiling slots, not 4 — the first application of MUST-6.
+
+| lane | branch | tasks | why packed this way |
+| --- | --- | --- | --- |
+| L1-rest | `fix/rest-pagination` | #2230, #2231 | CO-LOCATED, not merely packed: both touch `src/kailash/nodes/api/rest.py`, so splitting them across branches would GUARANTEE a conflict |
+| L2-df | `fix/dataflow-warns` | #1971, emit-forensics | packed by disjointness: `packages/kailash-dataflow/**` and `.claude/bin/**` share no file with each other or with L1 |
+
+Both briefed as mini-orchestrators (fan out internally, waves of ~3). On completion: merge
+`--no-ff` into dev, push, reap the worktree, delete the branch local+remote, re-census.
+
+**L1 carries a HARD ORDERING CONSTRAINT — do not let it reorder.** #2230's shape fix ARMS a
+latent credential-exfiltration path (`_handle_async_pagination` follows a response-body link
+with the caller's headers, no origin validation), unreachable today ONLY because the shape bug
+keeps the link out of metadata. The origin guard lands BEFORE or WITH the shape fix, never
+after. A prior attempt shipped the shape fix without the guard and was reverted (`bbec11e4b`).
+
+## NOT DISPATCHABLE — landed, awaiting promotion (verified cont-33)
+
+#2220 / #2221 / #2222 / #2225 / #2226 / #2227 read OPEN on GitHub but every one has a landing
+commit on `origin/dev` (checked by `git log --grep` per issue). They close when the promotion
+reaches `main`. Do NOT re-dispatch them.
+
+## FLEET (as of cont-33 dispatch)
+
+Primary checkout only. No `fix/*` remote heads, no lane worktrees, `.kailash-py-wt/` empty.
+Remote heads are `dev`, `main`, and the held `promote/2026-09-11-cont30`. Tree clean apart from
+the untracked `.git-merge-msg.tmp` (owner-gated removal).
+
+Lane C landed as `91fb53a30`. It needed ONE resume: its work was complete and staged but
+uncommitted, because a pre-commit isort rewrite aborted its first commit while the wrapper still
+exited 0 — the exact trap in § Traps. It caught that on its own `git rev-parse HEAD` check after
+being resumed. Per `agents.md` § Agent-Result-Delivery a stalled lane is RESUMED, never
+re-dispatched; that is what recovered ~57 minutes of completed work.
+
+**Pre-existing WARN on the bulk path, flagged by lane C, NOT in its diff and still open:**
+`packages/kailash-dataflow/src/dataflow/migrations/sync_ddl_executor.py:583` and
+`features/bulk.py:1570,1574` emit `identifier.unknown_dialect_budget` warnings (#1971) on every
+run. Live WARN output per `observability.md` Rule 5 — worth a lane.
+
+## Owner-gated — surfaced, NOT agent-actionable
+
+- **Promote #2229.** It is now materially stale: 22 commits on `dev` are NOT in it, including the
+  fail-closed audit-chain fix, the #2220 closure, and the L5 pool-leak work. `mergeStateStatus=BEHIND`,
+  `reviewDecision=REVIEW_REQUIRED`, CodeQL red on 4 pre-existing advisories.
+  **Recommendation: cut a FRESH `promote/<date>` branch at then-current `dev` rather than merging
+  #2229 as it stands**, so one gate run carries the whole wave instead of stranding 22 commits.
+- The archive-ref / stash prune; audit-chain keying; kaizen 2.47.0; AccessDecision schema.
+- `! rm .git-merge-msg.tmp` (the state-file guard blocks the agent on the `.git-` prefix).
+
+## STANDING ORDER (D0) — unchanged
+
+LAND ALL branches/refs/worktrees into `dev` and DRAIN on completion. Landing in `dev` costs ZERO
+CI. NEVER open a PR against `dev`. `dev` → `main` is the ONE owner-gated promotion.
+
+## Traps carried forward
+
+- A `dev → main` promotion DELETES the trunk (`delete_branch_on_merge` + PR head IS `dev`): always
+  cut a `promote/<date>` branch.
+- A pre-commit auto-formatter that modifies a staged file ABORTS the commit; `tail -N` hides the
+  line and a following no-op push reads "Everything up-to-date". Verify HEAD advanced + fetch.
+- **`git stash` is UNSAFE here — the stack is shared across all worktrees** (`worktree-isolation.md`
+  Rule 9). I used it once this session before the hook caught me. Capture to a patch file
+  (`git diff > x.patch` / `git apply`) or a `cp` backup instead. Lane A got this right unprompted.
+- Never name scratch files `.git*` (state-file guard trips on the prefix).
+- Pre-commit runs Tier-1 tests, so a commit can exceed a 120s foreground timeout. Background it
+  and verify HEAD afterwards rather than assuming failure.
+
+Current bounded-source gate update (2026-10-06): four delivered fca R1 reports are NONCLEAN, zero clean rounds. Legacy/nativece82, Local timer/bridge2b, and Kaizen toolcf730 are normal-gated and delivered; constructor/shared-class and persistent-cleanup repairs are active in separate root-created siblings. Ignored caches remain held, current source landings15/reaps19trees2refs/original0of4/dev36 unchanged. Peer queue01a10e2c accepted; actual ACK pending. Documentation/deprecation choice is explicitly user-approved; preserve existing calls and add no baseline/threshold behavior.
 
 ## Current landed recovery checkpoint — 2026-10-07
 
@@ -92,21 +305,3 @@ Complete custody compression retains3,113 entries/2,482 files/98,202,588 logical
 New workhorse ACKs were actually received/read after901: `487ee602-5a07-4de7-be6f-e011b2a11d71` delivered the seven-guard handoff; `cd13f2a5-b520-4aad-a7e3-52a91852e46a` accepted the ten-boundary expansion; `e6e06053-a7d9-4ea9-ac84-9daee08e2b44` accepted the subsequent workflow-context and lifecycle cleanup shards. These are task/result acknowledgements, not original owner signoff. The immutable ten-scope e215 source and its bounded review handoff are preserved; Root read the full handoff, while independent underlying reports are not transferred as final combined-scope credit. Integration is held pending the expanded source repairs and fresh final-scope reviews. Exclusive async_local.py ownership stays with the workhorse; Root owns dev/docs/reap. A separate Core specialist owns only LocalRuntime per-node canonical finalizer adoption; all-node/conditional release and pool ownership remain later open boundaries. Core audit `r-d44af09f40d0fea6` genuinely ran/exit0 with12,837 source lines and six inert opposite controls; its observed empty per-node finalizer and zero canonical-helper calls are source inference, not executed failure. No new SDK/native/security specimen is claimed.
 
 Registration-only metadata at2026-10-07T14:45:23.007980+00:00 observed199 registered trees/194 CSQ16/181 local branches and first-parent gap319. It predates batches5/6 and is not a current census or net-removal claim. The earlier dated48 DIRTY inputs remain preserved. The original register, manifest, SVG and generated block are unchanged: ALL PAGES — 0⟨d56000⟩ of 4 `Signed off`; ALL PAGES — 4⟨108e27⟩ of 4 `total`. Full ten-area sweep, holistic/global union, admission/SQLite custody, public floors, original owner acceptance, main promotion and release remain open. Main promotion/release are unauthorized.
-
-### Local node-finalizer landing and lossless review custody — 2026-10-08
-
-Dev and a separately read live remote now contain `91077aba8c1ba75b553d76d54c4bb028241a8e5e`; main remains `50f98afe403a468bb478462182b73ebc4e0287d1`. Technical Source landings advance21→22. The combined f43→cb→910 LocalRuntime repair is ONE bounded reviewed scope, not two commit credits. Rejected cb alone has zero clean credit. Native fast-forward41343, push94901 and separate remote read93937 all completed0; push printed `f43ef3d63..91077aba8 dev -> dev`. Root's dated publication receipt is `.test-results/csq16-recovery-archive/RESUMED-AFTER-910.md` in the retained canonical recovery tree.
-
-Fresh independent correctness `r-b9aeed5e2225b0de`/`r-c273c47189e79dfa` and separate adversarial STATIC-security `r-58eb1cd907a8a8f2`/`r-3eac9b221ec7caa2` genuinely ran/exit0. Complete reports and substantive output were Root-read. The final local blob is `af8c25b08007c9b3ad0343b268a7cf68075dc6bb`, SHA256 `f15e5112cf152e1c6e910695013faccaaa7f439cbbf84d565494f3416d587b9d`. Whole-parent AST/policy inversion, eight native module bindings and additional canonical async_types binding cover ordinary wrappers, causes, continuation, audit/snapshot tails and existing SQL/skip cardinality. Correctness rejected22+5 inert opposites; STATIC rejected14+22. These are Source/DATA controls, not SDK cases. The ordinary enabled final commit reported applicable stock checks/Tier1 Passed; hidden inner counts and placement remain UNKNOWN. Failed formatter/instrument attempts and rejected earlier freezes remain preserved with zero final independent credit.
-
-Allocated Source closure separates fallback observation from the strict cleanup callback, places later cleanup in unconditional applicable finally, defers runtime logger lookup through one synchronous plain reporter inside canonical protection, and immediately owns timestamp capture after a returned node span. Actual body primary outranks later controls; otherwise the first escaping finalizer control retains precedence. Both async audit catches and the best-effort snapshot catch classify their actual caught aliases first. The accepted Local audit producer is now the floor for subsequent async workflow-context reviews. One span adapter attempt does not certify physical span ending or status. Independent full reports remain in released siblings `resume-local-finalizer-correctness` and `resume-local-finalizer-security`, under `.temp_cleanup/local-finalizer-gates/final910`; their ignored evidence has not been retired.
-
-The three completed f43 checkpoint trees have complete lossless custody at `.test-results/csq16-recovery-archive/progress-review-retirement-final-20261007` in the canonical recovery tree. Its actual returned archive is2,715,913 bytes, SHA256 `f93663957fbaf7a8aaf2661342466e1acdf288e75cc512a4418dc30233bb5d3e`. All177 original entries/145 regular files/80,390,393 logical bytes are represented:175 packed entries/143 files/24,456,745 payload logical bytes plus two exact durable-base references/55,933,648 bytes. Retain the WHOLE canonical folder AND `resume-review-retirement-final-20261007/custody.tar.gz`, SHA256 `83b86ff12b96ec2ccd760bd6fc432edf7afee04e8cd614cc3e35bb25c5aeab4c`,27,966,824 bytes. Complete returned-native restoration compared every named file byte-for-byte and checked membership/types/original modes; ten missing/change/type/mode/extra/corrupt/reference opposites rejected. Unpinned default-housekeeping pack `r-967ac0fec2baffce`, returned readback `r-0eaf16760761377e`, literal history `r-7b78fecacc9acbcb` and integrated history controls `r-0eda5a154118ef64` completed0. Forty-one literal history files and lossless original stdout reconstruction are preserved, including failed attempts and finite final verifier products. Representation figures are not net savings or physical/APFS reclamation.
-
-Root-only native retirement completed terminal0 in19529:337 exact regular leaves/230,949,574 logical bytes and67 represented empty directories removed, followed by three ordinary non-force worktree removals, each exit0 and path/registration absent. These are337 original/copy duplicate leaves, not a new net-savings or physical/APFS amount. Actual cumulative worktree removals advance80→83; task branches remain10. The old docs/csq16-resume-checkpoint Source branch atf43 and all Source anchors remain retained. Receipt: `.pytest_cache/csq16_small_batch_reap_20261007/progress-retirement-1791390907809809000/receipt.json` in the canonical recovery tree. All407 operations are acknowledged REMOVED; there are no pending operations. Fresh whole-cohort native identity/mode/pathset, clean/allH/ignored, dev ancestry/ref floors, both permanent custody dependency floors, native held-positive/closed-negative/no-holder controls and immediate leaf identities passed. Default dry preflight86376 removed nothing; final execution used the explicitly reviewed Root-only flag. Supplementary unpinned full-byte/guard checks `r-dc1102e492f02967`/`r-612be13a268d80a3` completed0 with opposite controls; two prior held metadata gaps were verified before admission to this cohort. Permanent whole archives, reconstruction dependencies and unmanifested wrapper/current-proposal/new-supplement/history/final-product paths remain held. This is an owned-job/native occupancy snapshot, not global quiescence.
-
-Canonical Task-admission remains the next prerequisite: the frozen910 specialist report quotes `self._runner.close()` and completion publication in the broad `start()` handler; inference: these do not prove rejection when task creation might have accepted work without returning a handle. Its seven-bound producer-only repair is allocated to `resume-canonical-admission-author`, branch `fix/csq16-task-admission-custody`, starting910; it has no accepted implementation or independent clean credit at this checkpoint. Root read the complete Core contract and the independent DataFlow/Core pool consultation. The latter quotes disposal capacity decrement in `finally`, SQL registry unregister-before-close and shared-creator owned-adapter teardown after preserving other refcounts; these are bounded Source-path findings, not runtime or physical failure demonstrations. Subsequent pool reservation/retirement custody, SQL shared ownership, core registry and DataFlow owner migration remain explicit in-envelope work after the canonical prerequisite. Strong unresolved custody, no automatic replay/release/reuse and UNKNOWN liveness are the authorized defaults; producer retention alone will not certify every consumer.
-
-The workhorse remains exclusive owner of async_local.py. Actual received message `dd367f47-bff6-4f07-a1c2-c167dbbebe1a` reports immutable `1da250781554710e7d4f09ac0acaf289dc860004` and author Source/DATA runs `r-175dc3b597e46925`/`r-f5d9a7edecf6184c` terminal0, with fresh independent correctness and STATIC-security reviews starting. This is a received author handoff, zero final paired/landing credit. Earlier fe200/e54 freezes and first-control scope-blind instruments remain preserved with zero complete-scope credit. Expanded workflow-context and standalone runtime cleanup plus later union gates remain held. Root's current return thread is01a116a9-9c37-7463-86e7-64d13180d9ca; the resumed authority thread is01a0e528-3df4-7ff0-8569-8a12fa2e71cc. Old manager436 occupancy/custody remains unresolved; no stale CLI-success status authorizes removal.
-
-The307-line prior workspace note is preserved as exact original bytes in `06-handoff/csq16-session-history-through-20261007.md`; the current workspace note is shortened with a direct pointer. Historical READ FIRST/current labels retain their dates and do not override this current allocation or Root standing directives. Both continuity notes remain below300 lines. This checkpoint changes only six documentation paths; owner register, manifest, generated block, SVG and code remain unchanged. Original acceptance remains ALL PAGES — 0⟨d56000⟩ of 4 `Signed off`; ALL PAGES — 4⟨108e27⟩ of 4 `total`. All four original dirty inputs and the dated48 DIRTY inventory remain held. Full ten-area sweep, holistic/global union, arbitrary override affinity, admission/reuse/lifecycle integration, physical success, main promotion and release remain open; main promotion/release are unauthorized. Reviewed documentation publication requires fresh independent pairs at this final frozen six-document scope.
