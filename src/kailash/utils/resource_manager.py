@@ -106,6 +106,7 @@ class _CleanupTaskAdmission:
         self._observation_error = None
         self._phase = "reserved"
         self.observation = self.completion = None
+        self._settled_watchers = []
         self._inflight = True
         # This record owns the input/loop before signals or runner preparation.
         with _CLEANUP_ADMISSION_LOCK:
@@ -115,6 +116,79 @@ class _CleanupTaskAdmission:
         with _CLEANUP_ADMISSION_LOCK:
             self._outcome = native_outcome
             self._inflight = False
+
+    def add_settled_callback(self, callback):
+        """Retain one original-loop observation until its delivery attempt."""
+        if not callable(callback):
+            raise TypeError("Settlement callback must be callable")
+        _CleanupOutcome._check(self._outcome)
+        row = [callback, False, False]
+        with _CLEANUP_ADMISSION_LOCK:
+            self._settled_watchers.append(row)
+            _CLEANUP_ADMISSIONS[self._token] = self
+        self._flush_settled()
+
+    def _flush_settled(self):
+        with _CLEANUP_ADMISSION_LOCK:
+            if not (
+                self._settled
+                and not self._inflight
+                and not self._processing
+                and self._runner
+                is self._original
+                is self._returned
+                is self._submitter
+                is self._desired_outcome
+                is None
+            ):
+                return
+            rows = [row for row in self._settled_watchers if not row[1]]
+            for row in rows:
+                row[1] = True
+        errors = []
+        for row in rows:
+            try:
+                self._loop.call_soon_threadsafe(self._deliver_settled, row)
+            except BaseException as error:
+                errors.append(error)
+        for error in errors:
+            self._observe_failure(error)
+
+    def _deliver_settled(self, row):
+        delivered = False
+        try:
+            if asyncio.get_running_loop() is not self._loop:
+                raise RuntimeError("Settlement delivery requires its original loop")
+            with _CLEANUP_ADMISSION_LOCK:
+                if (
+                    not any(item is row for item in self._settled_watchers)
+                    or row[2]
+                    or not (
+                        self._settled
+                        and not self._inflight
+                        and not self._processing
+                        and self._runner
+                        is self._original
+                        is self._returned
+                        is self._submitter
+                        is self._desired_outcome
+                        is None
+                    )
+                ):
+                    return
+                row[2] = delivered = True
+            if row[0](self) is not None:
+                raise TypeError("Settlement callback must return None")
+        except BaseException as error:
+            self._observe_failure(error)
+        finally:
+            if delivered:
+                with _CLEANUP_ADMISSION_LOCK:
+                    self._settled_watchers[:] = [
+                        item for item in self._settled_watchers if item is not row
+                    ]
+                    if self._settled and not self._settled_watchers:
+                        _CLEANUP_ADMISSIONS.pop(self._token, None)
 
     def prepare(self):
         """Prepare once, after the caller retains this exact reserved receipt."""
@@ -375,7 +449,8 @@ class _CleanupTaskAdmission:
         self._settled = True
         self._phase = "terminal"
         with _CLEANUP_ADMISSION_LOCK:
-            _CLEANUP_ADMISSIONS.pop(self._token, None)
+            if self._settled and not self._settled_watchers:
+                _CLEANUP_ADMISSIONS.pop(self._token, None)
         # Cached result/outcome remain inspectable; release execution references.
         self._runner = self._original = self._returned = self._submitter = None
         self._desired_outcome = None
@@ -407,6 +482,7 @@ class _CleanupTaskAdmission:
             finally:
                 with _CLEANUP_ADMISSION_LOCK:
                     self._processing = False
+                self._flush_settled()
         return self.snapshot()
 
     def reject_prepared(self):
@@ -430,6 +506,7 @@ class _CleanupTaskAdmission:
                 self._complete()
         finally:
             self._inflight = False
+            self._flush_settled()
         return self.snapshot()
 
     def result(self):
