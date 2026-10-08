@@ -106,9 +106,15 @@ class _CleanupTaskAdmission:
         self._observation_error = None
         self._phase = "reserved"
         self.observation = self.completion = None
+        self._inflight = True
         # This record owns the input/loop before signals or runner preparation.
         with _CLEANUP_ADMISSION_LOCK:
             _CLEANUP_ADMISSIONS[self._token] = self
+        # Reserved receipts retain controls before admission preparation.
+        native_outcome = _CleanupOutcome()
+        with _CLEANUP_ADMISSION_LOCK:
+            self._outcome = native_outcome
+            self._inflight = False
 
     def prepare(self):
         """Prepare once, after the caller retains this exact reserved receipt."""
@@ -121,7 +127,7 @@ class _CleanupTaskAdmission:
             from concurrent.futures import Future
 
             native_outcome = (
-                _CleanupOutcome()
+                (_CleanupOutcome() if self._outcome is None else self._outcome)
                 if self._desired_outcome is None
                 else self._desired_outcome
             )
